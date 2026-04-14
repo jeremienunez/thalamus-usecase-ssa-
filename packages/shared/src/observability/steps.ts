@@ -19,12 +19,9 @@ export type StepName =
   | "suggestion.emit"
   | "swarm.fail-soft";
 
-export interface StepEntry {
-  frames: string[];
-  terminal: string;
-  error?: string;
-  instantaneous?: boolean;
-}
+export type StepEntry =
+  | { instantaneous: true; terminal: string; frames?: never; error?: never }
+  | { instantaneous?: false; frames: string[]; terminal: string; error: string };
 
 export const STEP_REGISTRY: Readonly<Record<StepName, StepEntry>> = Object.freeze({
   cycle: { frames: ["🧠", "💭", "🧠", "💫"], terminal: "🏁", error: "💥" },
@@ -35,7 +32,7 @@ export const STEP_REGISTRY: Readonly<Record<StepName, StepEntry>> = Object.freez
   "fetch.field": { frames: ["📡", "⚡", "📡", "🔭"], terminal: "📥", error: "🕳️" },
   "curator.dedup": { frames: ["🧹", "🧽", "🧹", "✂️"], terminal: "🧴", error: "⚠️" },
   "kg.write": { frames: ["📝", "✍️", "📝", "🖋️"], terminal: "📚", error: "❌" },
-  "guardrail.breach": { frames: [], terminal: "🚧", instantaneous: true },
+  "guardrail.breach": { terminal: "🚧", instantaneous: true },
   reflexion: { frames: ["🔁", "🌀", "🔁", "♻️"], terminal: "🪞", error: "⚠️" },
   swarm: { frames: ["🐟", "🐠", "🐡", "🦈"], terminal: "🏆", error: "🚨" },
   "fish.spawn": { frames: ["🐠", "🫧", "🐠", "💦"], terminal: "🐟", error: "💀" },
@@ -44,6 +41,6 @@ export const STEP_REGISTRY: Readonly<Record<StepName, StepEntry>> = Object.freez
   "fish.memory.read": { frames: ["🧠", "🔍", "🧠", "📖"], terminal: "📚", error: "⚠️" },
   "fish.memory.write": { frames: ["🫧", "💾", "🫧", "📥"], terminal: "💽", error: "⚠️" },
   aggregator: { frames: ["🕸️", "🧬", "🕸️", "🔬"], terminal: "🎯", error: "⚠️" },
-  "suggestion.emit": { frames: [], terminal: "💡", instantaneous: true },
-  "swarm.fail-soft": { frames: [], terminal: "🚨", instantaneous: true },
+  "suggestion.emit": { terminal: "💡", instantaneous: true },
+  "swarm.fail-soft": { terminal: "🚨", instantaneous: true },
 });

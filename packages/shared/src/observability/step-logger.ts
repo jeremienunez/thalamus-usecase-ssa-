@@ -33,9 +33,23 @@ export function stepLog(
       // eslint-disable-next-line no-console
       console.warn(`[stepLog] unknown step: ${step}`);
     }
-    logger.info({ step: "unknown", phase, frames: [], terminal: "❔", ...extra });
+    const event: StepEvent = {
+      step: "unknown",
+      phase,
+      frames: [],
+      terminal: "❔",
+      ...extra,
+    };
+    logger.info(event);
     return;
   }
   const terminal = phase === "error" ? (entry.error ?? entry.terminal) : entry.terminal;
-  logger.info({ step, phase, frames: entry.frames, terminal, ...extra });
+  const event: StepEvent = {
+    step,
+    phase,
+    frames: entry.frames ?? [],
+    terminal,
+    ...extra,
+  };
+  logger.info(event);
 }
