@@ -1,0 +1,211 @@
+% SPEC-TH-003 — Cortex Pattern
+
+\input{../preamble.tex}
+
+\specID{SPEC-TH-003}
+\specTitle{Cortex Pattern --- self-contained domain expert module}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+A \emph{cortex} is a self-contained domain expert inside Thalamus. Rather than growing N hand-written classes (one per specialty) with bespoke glue, the codebase has exactly one generic executor. Specialisation is provided by a declarative artefact: a skill file bundling the domain prompt, a reference to a data-access helper, a parameter schema, and an explicit budget envelope. Adding a new domain expert is therefore additive --- drop a folder, register a helper --- and never requires touching the core orchestrator or the registry (SPEC-TH-002). This spec defines the contract every cortex must satisfy so the generic executor can treat them uniformly.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Define a uniform \texttt{CortexInput} / \texttt{CortexOutput} contract across all cortices.
+  \item Encapsulate each cortex's assets (prompt, data helper, parameter schema, optional external source hooks) behind the registry + executor pair --- no direct imports from the orchestrator.
+  \item Guarantee that the executor applies the same pipeline for every cortex: fetch data, enrich, sanitise, pre-summarise, call the LLM, normalise findings.
+  \item Enforce a per-cortex budget envelope (timeout, max items to LLM, max findings) independent of the caller.
+  \item Make registration of a new cortex a purely additive operation: one skill file plus, if needed, one helper function; no changes to orchestrator or registry code.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+This spec does not prescribe which domains exist, how many cortices ship in a given release, or the internal shape of any particular domain prompt. It does not cover the planner's selection logic, nor the recursive research loop that chains multiple cortex executions across iterations.
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+Every cortex execution returns a \texttt{CortexOutput} with a findings array (possibly empty) and metadata carrying \texttt{tokensUsed}, \texttt{duration}, and \texttt{model}. The executor never throws to the caller for domain-level failures; empty findings and a neutral model marker indicate a no-op.
+\end{invariant}
+
+\begin{invariant}
+Every finding emitted upstream has been passed through the normaliser: enum fields are in their declared range, \texttt{confidence} $\in [0, 1]$, \texttt{impactScore} $\in [0, 10]$.
+\end{invariant}
+
+\begin{invariant}
+User-scoped cortices (those declaring a user-specific data scope) refuse to execute without a \texttt{userId} in \texttt{params}; they return an empty output instead of querying across users.
+\end{invariant}
+
+\begin{invariant}
+The raw data payload handed to the LLM has been sanitised: prompt-injection patterns stripped and the payload truncated to the configured item and character budget.
+\end{invariant}
+
+\section{Interface}
+
+\begin{lstlisting}[language=TypeScript]
+export interface CortexInput {
+  query: string;
+  params: Record<string, unknown>;
+  cycleId: string;
+  lang?: "fr" | "en";
+  mode?: "investment" | "audit";
+  context?: {
+    previousFindings?: Array<{
+      title: string;
+      summary: string;
+      confidence: number;
+    }>;
+  };
+}
+
+export interface CortexFinding {
+  title: string;
+  summary: string;
+  findingType: ResearchFindingType;
+  urgency: ResearchUrgency;
+  evidence: Array<{ source: string; data: unknown; weight: number }>;
+  confidence: number;   // [0, 1]
+  impactScore: number;  // [0, 10]
+  edges: Array<{
+    entityType: ResearchEntityType;
+    entityId: number;
+    relation: ResearchRelation;
+    context?: Record<string, unknown>;
+  }>;
+}
+
+export interface CortexOutput {
+  findings: CortexFinding[];
+  metadata: { tokensUsed: number; duration: number; model: string };
+}
+
+export class CortexExecutor {
+  constructor(registry: CortexRegistry, db: Database);
+  execute(cortexName: string, input: CortexInput): Promise<CortexOutput>;
+  runSkillFreeform(
+    cortexName: string,
+    userPrompt: string,
+    opts?: { enableWebSearch?: boolean; maxRetries?: number },
+  ): Promise<{ content: string; provider: string }>;
+}
+\end{lstlisting}
+
+A cortex folder contributes:
+\begin{itemize}[leftmargin=1.2em]
+  \item a Markdown skill file (header + domain prompt),
+  \item optionally, one entry in the data-helper map keyed by the header's \texttt{sqlHelper},
+  \item optionally, one entry in the external-source map for structured third-party enrichment.
+\end{itemize}
+No other integration point exists; the orchestrator and registry are untouched.
+
+\section{Scenarios}
+
+\begin{scenario}{Nominal execution produces findings}
+\Given a registered cortex whose data helper returns a non-empty dataset \\
+\When \texttt{execute(name, input)} is called \\
+\Then the result has $\geq 1$ finding, each normalised (valid enums, bounded confidence and impact) \\
+\And \texttt{metadata.model} identifies the LLM actually called.
+\end{scenario}
+
+\begin{scenario}{Unknown cortex yields a no-op}
+\Given a cortex name not present in the registry \\
+\When \texttt{execute(name, input)} is called \\
+\Then it returns \texttt{\{ findings: [], metadata: \{ model: "none", ... \} \}} \\
+\And no data helper and no LLM call is performed.
+\end{scenario}
+
+\begin{scenario}{User-scoped cortex without userId}
+\Given a cortex declared as user-scoped and an input whose \texttt{params.userId} is undefined \\
+\When \texttt{execute} is called \\
+\Then an empty output is returned \\
+\And the data helper is not invoked.
+\end{scenario}
+
+\begin{scenario}{Data helper failure is swallowed, web fallback attempted}
+\Given a cortex whose data helper throws \\
+\When \texttt{execute} is called \\
+\Then the executor logs the failure, treats the helper result as empty, \\
+\And attempts the web-enrichment fallback before deciding to return an empty output.
+\end{scenario}
+
+\begin{scenario}{Prompt-injection payload is sanitised}
+\Given a data row containing a known prompt-injection pattern \\
+\When \texttt{execute} is called \\
+\Then the pattern is stripped before the LLM call \\
+\And a guardrails warning is logged with the count of sanitised items.
+\end{scenario}
+
+\begin{scenario}{Adding a new cortex requires no core changes}
+\Given a new skill file dropped in the skills directory and, if needed, one new helper entry \\
+\When the process restarts \\
+\Then the new cortex appears in \texttt{registry.names()} \\
+\And \texttt{execute(newName, input)} returns a valid \texttt{CortexOutput} \\
+\And no file under the orchestrator or registry package has been modified.
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+For any \texttt{cortexName} and any \texttt{CortexInput}, \texttt{execute} resolves (never rejects) with a value whose shape matches \texttt{CortexOutput}.
+\end{ac}
+
+\begin{ac}{AC-2}
+Calling \texttt{execute} with a name absent from the registry returns \texttt{findings: []} and \texttt{metadata.model === "none"}.
+\end{ac}
+
+\begin{ac}{AC-3}
+Every finding in the returned array has \texttt{confidence} in $[0, 1]$ and \texttt{impactScore} in $[0, 10]$, and its enum-typed fields are in their declared enums.
+\end{ac}
+
+\begin{ac}{AC-4}
+For a user-scoped cortex executed without \texttt{params.userId}, the data helper is not invoked (verified via spy) and the output is empty.
+\end{ac}
+
+\begin{ac}{AC-5}
+If the data helper throws, \texttt{execute} does not reject; the web fallback is attempted, and the final output is a valid \texttt{CortexOutput}.
+\end{ac}
+
+\begin{ac}{AC-6}
+A data row containing a prompt-injection marker is not present verbatim in the LLM-bound payload captured by a transport spy.
+\end{ac}
+
+\begin{ac}{AC-7}
+Registering a new cortex by adding only a skill file (and, if needed, a helper map entry) causes \texttt{registry.names()} to include the new name after re-discovery, without any edit in orchestrator or registry sources.
+\end{ac}
+
+\begin{ac}{AC-8}
+The payload handed to the LLM is bounded: at most the configured \texttt{maxItemsToLLM} items and at most the configured \texttt{maxPayloadLength} characters.
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1 & \texttt{packages/thalamus/tests/cortex-pattern.spec.ts} & \texttt{execute always resolves with CortexOutput} \\
+AC-2 & \texttt{packages/thalamus/tests/cortex-pattern.spec.ts} & \texttt{unknown cortex yields empty output} \\
+AC-3 & \texttt{packages/thalamus/tests/cortex-pattern.spec.ts} & \texttt{findings are normalised} \\
+AC-4 & \texttt{packages/thalamus/tests/cortex-pattern.spec.ts} & \texttt{user-scoped requires userId} \\
+AC-5 & \texttt{packages/thalamus/tests/cortex-pattern.spec.ts} & \texttt{helper throw falls back to web} \\
+AC-6 & \texttt{packages/thalamus/tests/cortex-pattern.spec.ts} & \texttt{prompt injection stripped} \\
+AC-7 & \texttt{packages/thalamus/tests/cortex-pattern.spec.ts} & \texttt{additive registration of a new cortex} \\
+AC-8 & \texttt{packages/thalamus/tests/cortex-pattern.spec.ts} & \texttt{payload bounds respected} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Should the per-cortex budget envelope live in the skill frontmatter or stay centralised in the executor config?
+  \item What is the correct failure mode when both the data helper and the web fallback fail --- empty output, a synthetic "insufficient data" finding, or a caller-visible error code?
+  \item Should user-scoped status be declared in the skill header, or inferred from the parameter schema?
+\end{itemize}
+
+\end{document}

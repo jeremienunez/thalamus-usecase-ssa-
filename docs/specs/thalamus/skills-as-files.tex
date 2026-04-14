@@ -1,0 +1,217 @@
+% SPEC-TH-031 — Skills as Files
+
+\input{../preamble.tex}
+
+\specID{SPEC-TH-031}
+\specTitle{Skills as Files --- versioned markdown prompts as code artifacts}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+Thalamus cortices are driven by LLM system prompts. Embedding those prompts in TypeScript
+string literals makes them invisible to non-engineers, impossible to diff meaningfully, and
+awkward to review. This spec promotes prompts to first-class, versioned artifacts:
+markdown files under \texttt{packages/thalamus/src/cortices/skills/}, loaded at runtime by
+\texttt{cortex-llm.ts}, validated in CI, and reviewable by analysts and compliance without
+touching TypeScript.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Every cortex prompt lives in a dedicated \texttt{.md} file next to code.
+  \item Each skill file carries structured front-matter: \texttt{name}, \texttt{description},
+        \texttt{sqlHelper}, \texttt{params}.
+  \item The body declares \emph{purpose}, \emph{inputs}, \emph{outputs}, and
+        \emph{examples} in fixed sections.
+  \item CI validates the format so a malformed skill cannot reach \texttt{main}.
+  \item Non-engineers can open a PR editing only markdown and ship a behavior change safely.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+This spec does not define the DAG execution order, the transport to the LLM provider, or
+the structure of the knowledge graph writes (covered in SPEC-TH-030). It does not replace
+secret configuration --- API keys remain in the environment.
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+A skill file is the single source of truth for its cortex's prompt. The TypeScript code
+MUST load the file at runtime (or at build time via a typed registry) and MUST NOT duplicate
+the prompt as a string literal.
+\end{invariant}
+
+\begin{invariant}
+Every skill file satisfies the schema: YAML front-matter with
+\texttt{name, description, sqlHelper, params}, followed by a body that contains at least
+the sections \texttt{Purpose}, \texttt{Inputs}, \texttt{Output Format}, and \texttt{Examples}.
+Any deviation fails CI.
+\end{invariant}
+
+\begin{invariant}
+The \texttt{Output Format} section declares a JSON shape. The runtime parses LLM responses
+against that shape; rejections are logged with the skill name and a sample. No silent
+coercion.
+\end{invariant}
+
+\section{Interface}
+
+\textbf{File layout} --- a skill is a single markdown document:
+
+\begin{lstlisting}[language=TypeScript]
+---
+name: strategist              # required, kebab-case, matches filename
+description: >                # required, one-paragraph summary
+  Meta-synthesis cortex that reads findings from upstream cortices
+  and produces portfolio-level recommendations.
+sqlHelper: none               # required, a registered helper or "none"
+params:                       # required, may be empty
+  maxFindings: number
+  lang: "fr" | "en"
+---
+
+# Strategist
+
+## Purpose
+One paragraph. What does this cortex decide, and why does it exist.
+
+## Inputs
+Bulleted list of what arrives in the DATA payload.
+
+## Output Format
+Return JSON: `{ "findings": [...] }`. Each finding has fields
+title, summary, findingType, confidence, impactScore, evidence, edges.
+
+## Examples
+At least one worked example: input shape -> expected finding.
+\end{lstlisting}
+
+\textbf{Loader API} --- consumed by \texttt{cortex-llm.ts}:
+
+\begin{lstlisting}[language=TypeScript]
+// packages/thalamus/src/cortices/skills/registry.ts
+
+export interface SkillFile {
+  name: string;
+  description: string;
+  sqlHelper: string;          // key into sql-helpers registry, or "none"
+  params: Record<string, string>;
+  systemPrompt: string;       // the body, minus front-matter
+  sourcePath: string;         // for logs and traceability
+  sha256: string;             // content hash, stamped into provenance
+}
+
+export function loadSkill(name: string): SkillFile;
+export function listSkills(): SkillFile[];
+export function validateSkill(raw: string): {
+  ok: boolean; errors: string[];
+};
+\end{lstlisting}
+
+\section{Scenarios}
+
+\begin{scenario}{Analyst edits a skill}
+\Given an analyst updates the \texttt{Output Format} section of \texttt{strategist.md} \\
+\When the PR is opened \\
+\Then CI parses the front-matter and validates the required sections \\
+\And the diff is human-readable (markdown, not escaped strings) \\
+\And no TypeScript file needs to change for the update to ship.
+\end{scenario}
+
+\begin{scenario}{Missing required section fails CI}
+\Given a skill file lacks an \texttt{Output Format} section \\
+\When \texttt{validateSkill} runs in CI \\
+\Then the build fails \\
+\And the error message names the file and the missing section.
+\end{scenario}
+
+\begin{scenario}{Filename and \texttt{name} must match}
+\Given a file \texttt{strategist.md} declares \texttt{name: strategic-synth} in front-matter \\
+\When the validator runs \\
+\Then the build fails with \texttt{skill name must equal filename stem}.
+\end{scenario}
+
+\begin{scenario}{Runtime loads the file, not a literal}
+\Given \texttt{cortex-llm.ts} needs the strategist prompt \\
+\When \texttt{analyzeCortexData} is invoked \\
+\Then the system prompt is loaded via \texttt{loadSkill("strategist")} \\
+\And the finding's provenance records the skill's \texttt{sha256}.
+\end{scenario}
+
+\begin{scenario}{Prompt hash reaches the knowledge graph}
+\Given a cortex writes a finding to the graph (see SPEC-TH-030) \\
+\When the write lands \\
+\Then the row's provenance includes the \texttt{skillSha256} that produced it \\
+\And a later audit can diff the exact prompt version used at write time.
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+\texttt{validateSkill} applied to every file under
+\texttt{packages/thalamus/src/cortices/skills/} returns \texttt{ok: true} on a clean tree.
+\end{ac}
+
+\begin{ac}{AC-2}
+Seeding a malformed skill (missing \texttt{Output Format}) causes CI to fail with a message
+naming the file and the missing section.
+\end{ac}
+
+\begin{ac}{AC-3}
+\texttt{listSkills()} returns exactly the set of files in the skills directory; renaming
+a file and not updating \texttt{name} in front-matter fails validation.
+\end{ac}
+
+\begin{ac}{AC-4}
+No TypeScript file under \texttt{packages/thalamus/src/cortices/} contains a multi-line
+string literal longer than 200 characters that looks like a system prompt; a lint rule
+enforces this.
+\end{ac}
+
+\begin{ac}{AC-5}
+The \texttt{sha256} of each loaded skill is deterministic across machines (normalized line
+endings) and is included in provenance records.
+\end{ac}
+
+\begin{ac}{AC-6}
+An analyst-only PR (markdown-only diff) passes CI and deploys without requiring engineering
+sign-off beyond normal review.
+\end{ac}
+
+\begin{ac}{AC-7}
+When the LLM response fails to match the declared \texttt{Output Format}, the error log
+includes \texttt{skillName}, \texttt{skillSha256}, and a truncated sample of the response.
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1 & \texttt{packages/thalamus/tests/skills/validate.spec.ts} & \texttt{all shipped skills are valid} \\
+AC-2 & \texttt{packages/thalamus/tests/skills/validate.spec.ts} & \texttt{missing Output Format fails} \\
+AC-3 & \texttt{packages/thalamus/tests/skills/registry.spec.ts} & \texttt{filename must match name} \\
+AC-4 & \texttt{packages/thalamus/tests/lint/no-inline-prompts.spec.ts} & \texttt{no long prompt literals} \\
+AC-5 & \texttt{packages/thalamus/tests/skills/registry.spec.ts} & \texttt{sha256 is deterministic} \\
+AC-6 & \texttt{packages/thalamus/tests/ci/analyst-pr.spec.ts} & \texttt{markdown-only PR passes} \\
+AC-7 & \texttt{packages/thalamus/tests/cortex-llm/output-format.spec.ts} & \texttt{mismatch is logged with sha} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Should \texttt{params} use a JSON Schema or a lightweight DSL? JSON Schema is
+        standard but verbose in front-matter.
+  \item Do we version skills by semver in the front-matter as well as by git history?
+  \item Should the \texttt{Output Format} block be executable (e.g. an embedded Zod schema)
+        or remain prose plus a documented JSON shape?
+  \item Localization --- one file per language, or a single file with tagged sections?
+\end{itemize}
+
+\end{document}

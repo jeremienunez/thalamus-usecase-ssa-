@@ -1,0 +1,266 @@
+% SPEC-TH-041 — Field-Correlation Cortex
+% Real-time OSINT x Field corroboration with sub-second latency on critical events.
+
+\input{../preamble.tex}
+
+\specID{SPEC-TH-041}
+\specTitle{Field-Correlation Cortex --- real-time OSINT $\times$ Field corroboration}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+The OSINT nano-swarm emits hypothesis edges at scale from open sources --- noisy, high-volume, low-trust. A separate high-trust field stream carries events from a tactical data-link, a sensor-fusion bus, friendly-force tracking, mission debriefs, and C2 feeds --- authoritative, low-volume, restricted. The value of the system is in fusing the two: OSINT raises hypotheses, field events confirm or refute them, and the knowledge graph reflects the fusion in quasi-real-time. This spec defines the \textbf{field-correlation cortex}, a new cortex subscribed to the tactical message bus (abstract over Kafka, ZeroMQ, MQTT) that consumes incoming field events, finds matching edges, and invokes \texttt{ConfidenceService} (SPEC-TH-040) to promote or demote them under a strict latency budget.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item A new cortex \texttt{field-correlation} implementing the \texttt{Cortex} interface, registered alongside the other cortices.
+  \item Subscribes to a tactical message bus behind a transport-agnostic \texttt{FieldStreamSubscriber} interface (Kafka, ZeroMQ, MQTT adapters).
+  \item Matches incoming field events to candidate edges via \texttt{(subject, relation, object)} keying with configurable fuzziness (entity aliases, temporal windows).
+  \item Invokes \texttt{ConfidenceService.promote} or \texttt{demote} on matches. No direct writes to the edge table --- always through the service (SPEC-TH-040 I-5).
+  \item Meets a per-event latency budget: \textbf{$<$ 500 ms end-to-end} for \emph{critical} events, from bus arrival to provenance event emission.
+  \item Emits per-event metrics (\texttt{match\_hit}, \texttt{match\_miss}, \texttt{contradiction}, \texttt{latency\_ms}) for observability.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+This spec does \emph{not} define the wire-level payload of the tactical data-link, the authentication / encryption of the bus, or the classification-level controls on field ingestion --- those live in deployment-side documents. It also does \emph{not} re-specify the confidence model; that is SPEC-TH-040. Multi-hop inference (e.g.\ promoting edges two hops away from a field-matched edge) is out of scope for v0.1.
+\end{nongoal}
+
+\section{Invariants}
+
+\begin{invariant}
+\textbf{I-1 --- Service-only writes.} The cortex never mutates edge rows directly. Every promotion or demotion goes through \texttt{ConfidenceService}, which enforces the per-class invariants from SPEC-TH-040.
+\end{invariant}
+
+\begin{invariant}
+\textbf{I-2 --- Field dominance.} A field event always overrides OSINT confidence on a matching edge. The cortex must \emph{not} skip a promotion or demotion because of an older OSINT signal; field wins.
+\end{invariant}
+
+\begin{invariant}
+\textbf{I-3 --- OSINT cannot demote FIELD\_HIGH.} The field-correlation cortex rejects and logs any request --- internal or upstream --- that would demote \texttt{FIELD\_HIGH} from a non-field actor.
+\end{invariant}
+
+\begin{invariant}
+\textbf{I-4 --- Latency budget enforcement.} Every event carries a deadline derived from its \texttt{priority} ($\texttt{critical}$, $\texttt{routine}$, $\texttt{background}$). A processing path that exceeds its deadline emits a \texttt{LatencyBreach} event and continues; it does \emph{not} silently drop the event, and it does \emph{not} block the bus subscriber.
+\end{invariant}
+
+\begin{invariant}
+\textbf{I-5 --- At-least-once correlation.} The cortex processes each field event at least once. It is idempotent under replay: re-applying the same event to the same edge is a no-op in terms of class and confidence value.
+\end{invariant}
+
+\begin{invariant}
+\textbf{I-6 --- No cross-classification leakage.} Field events remain on their stream partition. A high-classification field event never produces a log line, metric label, or provenance field value that leaks content to a lower-classification observability sink. (Implementation: stream-tagged sinks; enforced by policy, asserted in tests.)
+\end{invariant}
+
+\section{Latency SLO table}
+
+Per-event deadline from bus arrival to \texttt{EdgeProvenanceEvent} emission (p99 targets).
+
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Priority} & \textbf{Examples} & \textbf{p50} & \textbf{p99 deadline} \\
+\midrule
+\texttt{critical}   & Engagement report, IFF anomaly, imminent-threat friendly-force track & 150 ms & \textbf{500 ms} \\
+\texttt{routine}    & Track update, EW contact, routine C2 status change                  & 500 ms & \textbf{2{,}000 ms} \\
+\texttt{background} & Post-mission debrief ingest, batched sensor-fusion replay           & 3 s    & \textbf{10 s} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Budget is split approximately as: bus deserialize $\leq 10\%$, candidate-edge lookup $\leq 40\%$, confidence service call $\leq 30\%$, provenance emission $\leq 20\%$.
+
+\section{Interface}
+
+\begin{lstlisting}[language=TypeScript]
+// packages/thalamus/src/cortices/field-correlation/types.ts
+
+import type { Cortex, CortexInput, CortexOutput } from "../types";
+import type { ConfidenceService, SourceClass } from "../confidence";
+
+export type FieldStream =
+  | "tactical-data-link"
+  | "sensor-fusion-bus"
+  | "friendly-force-tracking"
+  | "c2-feed"
+  | "mission-debrief"
+  | "ew-contact"
+  | "tactical-sigint";
+
+export type FieldEventPriority = "critical" | "routine" | "background";
+
+export interface FieldEvent {
+  id: string;
+  stream: FieldStream;
+  priority: FieldEventPriority;
+  receivedAt: Date;
+  subject: { type: string; id: string; aliases?: string[] };
+  relation: string;
+  object:  { type: string; id: string; aliases?: string[] };
+  outcome: "confirms" | "contradicts" | "partial";
+  // Opaque payload retained for audit; never logged at lower classification.
+  payload: Record<string, unknown>;
+}
+
+export interface FieldStreamSubscriber {
+  subscribe(
+    streams: FieldStream[],
+    onEvent: (event: FieldEvent) => Promise<void>,
+  ): Promise<void>;
+  close(): Promise<void>;
+}
+
+export interface CorrelationResult {
+  eventId: string;
+  matchedEdgeIds: number[];
+  outcome:
+    | { kind: "promoted"; to: SourceClass }
+    | { kind: "demoted";  to: SourceClass }
+    | { kind: "no-match" }
+    | { kind: "latency-breach"; budgetMs: number; actualMs: number };
+  latencyMs: number;
+}
+
+export interface FieldCorrelationCortex extends Cortex {
+  name: "field-correlation";
+  // Streaming entry point; orchestrator starts this at boot.
+  start(subscriber: FieldStreamSubscriber): Promise<void>;
+  stop(): Promise<void>;
+  // Cortex.execute is reused for replay / back-fill batches.
+  execute(input: CortexInput): Promise<CortexOutput>;
+}
+\end{lstlisting}
+
+\section{Registration}
+
+The cortex is registered in \texttt{CortexRegistry} by a \texttt{field-correlation.md} skill file declaring its name, description, and the SQL helper used for candidate-edge lookup. At boot, the orchestrator resolves \texttt{FieldStreamSubscriber} from DI (bus transport swappable) and calls \texttt{cortex.start(subscriber)}.
+
+\section{Scenarios}
+
+\begin{scenario}{Critical field event confirms an OSINT hypothesis}
+\Given an \texttt{OSINT\_CORROBORATED} edge at \texttt{confidence = 0.55} \\
+\When a \texttt{critical} friendly-force tracking event arrives on the bus confirming the triple \\
+\Then the cortex calls \texttt{ConfidenceService.promote} with \texttt{field-match} evidence \\
+\And the edge becomes \texttt{FIELD\_HIGH} \\
+\And end-to-end latency is below 500 ms (p99) \\
+\And a \texttt{correlation.match\_hit} metric is emitted with \texttt{priority=critical}
+\end{scenario}
+
+\begin{scenario}{Routine field event with partial match}
+\Given an \texttt{OSINT\_UNCORROBORATED} edge at \texttt{confidence = 0.30} \\
+\When a \texttt{routine} sensor-fusion event arrives with outcome \texttt{partial} \\
+\Then the edge is promoted to \texttt{FIELD\_LOW} \\
+\And \texttt{confidence} is set to \texttt{0.75} \\
+\And end-to-end latency is below 2{,}000 ms
+\end{scenario}
+
+\begin{scenario}{Field event contradicts a FIELD\_LOW edge}
+\Given a \texttt{FIELD\_LOW} edge backed by an older field event \\
+\When a contradicting field event arrives on the same stream \\
+\Then the cortex calls \texttt{ConfidenceService.demote} with \texttt{field-contradiction} evidence \\
+\And the edge drops to \texttt{OSINT\_UNCORROBORATED} with \texttt{confidence} $\leq 0.20$ \\
+\And the edge is flagged for Sweep analyst review
+\end{scenario}
+
+\begin{scenario}{No matching edge}
+\Given an incoming field event whose triple does not match any existing edge \\
+\When the cortex runs the candidate-edge lookup \\
+\Then no mutation is performed \\
+\And a \texttt{correlation.match\_miss} metric is emitted \\
+\And the event is retained on an unmatched-events queue for later correlation (bounded, TTL-gated)
+\end{scenario}
+
+\begin{scenario}{Latency breach on critical event}
+\Given a \texttt{critical} event with budget 500 ms \\
+\When the candidate-edge lookup exceeds the budget due to DB contention \\
+\Then the cortex still completes the promotion \\
+\And emits a \texttt{LatencyBreach} event with \texttt{budgetMs=500} and actual duration \\
+\And the observability bus records an SLO violation \\
+\And the event is not dropped
+\end{scenario}
+
+\begin{scenario}{OSINT attempts to demote FIELD\_HIGH}
+\Given a \texttt{FIELD\_HIGH} edge \\
+\When a late-arriving OSINT corroboration contradicts the field-confirmed relation \\
+\Then the cortex refuses the demotion \\
+\And logs a \texttt{rejected-demotion} event with actor \texttt{osint-swarm} \\
+\And the edge class and confidence remain unchanged
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+The cortex registers under name \texttt{field-correlation} and is discoverable via \texttt{CortexRegistry.names()}.
+\end{ac}
+
+\begin{ac}{AC-2}
+Starting the cortex with a mock \texttt{FieldStreamSubscriber} produces a delivered \texttt{critical} event routed through \texttt{ConfidenceService.promote}, ending in a \texttt{FIELD\_HIGH} edge within 500 ms (p99 over 1{,}000 synthetic events).
+\end{ac}
+
+\begin{ac}{AC-3}
+A \texttt{routine} event completes end-to-end within 2{,}000 ms (p99 over 1{,}000 synthetic events); \texttt{background} within 10 s.
+\end{ac}
+
+\begin{ac}{AC-4}
+A contradicting field event demotes a matching \texttt{FIELD\_*} edge to \texttt{OSINT\_UNCORROBORATED} with \texttt{confidence} $\leq 0.20$.
+\end{ac}
+
+\begin{ac}{AC-5}
+A request that would demote \texttt{FIELD\_HIGH} from a non-field actor is rejected; edge state is unchanged; a \texttt{rejected-demotion} metric is emitted.
+\end{ac}
+
+\begin{ac}{AC-6}
+Replaying the same \texttt{FieldEvent.id} produces no additional class or confidence change (idempotence under at-least-once delivery).
+\end{ac}
+
+\begin{ac}{AC-7}
+An event with no matching edge emits \texttt{correlation.match\_miss} and persists to the bounded unmatched-events queue with a TTL.
+\end{ac}
+
+\begin{ac}{AC-8}
+Every processed event emits an \texttt{EdgeProvenanceEvent} via \texttt{ConfidenceService} (when it mutates) with \texttt{actor = field-correlation}.
+\end{ac}
+
+\begin{ac}{AC-9}
+A latency breach emits a \texttt{LatencyBreach} event tagged with \texttt{priority} and does not cause event loss.
+\end{ac}
+
+\begin{ac}{AC-10}
+Observability sinks at lower classification never receive \texttt{FieldEvent.payload} content (asserted by a leakage test that inspects all emitted log lines and metric labels against an allow-list).
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file (planned) & Test name \\
+\midrule
+AC-1  & \texttt{packages/thalamus/tests/field-correlation/registry.spec.ts}         & \texttt{field-correlation registers} \\
+AC-2  & \texttt{packages/thalamus/tests/field-correlation/latency-critical.spec.ts} & \texttt{p99 $<$ 500ms on critical} \\
+AC-3  & \texttt{packages/thalamus/tests/field-correlation/latency-routine.spec.ts}  & \texttt{p99 $<$ 2s routine / $<$ 10s background} \\
+AC-4  & \texttt{packages/thalamus/tests/field-correlation/demote.spec.ts}           & \texttt{field contradiction demotes} \\
+AC-5  & \texttt{packages/thalamus/tests/field-correlation/invariants.spec.ts}       & \texttt{OSINT cannot demote FIELD\_HIGH} \\
+AC-6  & \texttt{packages/thalamus/tests/field-correlation/idempotence.spec.ts}      & \texttt{replay is no-op} \\
+AC-7  & \texttt{packages/thalamus/tests/field-correlation/no-match.spec.ts}         & \texttt{miss routes to unmatched queue} \\
+AC-8  & \texttt{packages/thalamus/tests/field-correlation/provenance.spec.ts}       & \texttt{provenance actor is field-correlation} \\
+AC-9  & \texttt{packages/thalamus/tests/field-correlation/latency-breach.spec.ts}   & \texttt{breach emits event without drop} \\
+AC-10 & \texttt{packages/thalamus/tests/field-correlation/leakage.spec.ts}          & \texttt{payload not in low-class sinks} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Candidate-edge lookup: pgvector similarity on aliases vs. exact-key hash index? Likely hybrid --- exact first, vector fallback.
+  \item Unmatched-events queue: Redis stream vs. a dedicated table with a TTL sweep? Leaning Redis stream with a length cap.
+  \item Per-stream priority override: can a \texttt{mission-debrief} event ever be \texttt{critical}? Current draft: priority is event-level, stream is metadata.
+  \item Back-pressure policy when bus rate exceeds worker capacity: shed \texttt{background} first, then \texttt{routine}; never \texttt{critical}.
+  \item Classification policy for the unmatched-events queue: per-stream partition keys; test under I-6.
+\end{itemize}
+
+\end{document}

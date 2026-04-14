@@ -1,0 +1,160 @@
+% SPEC-TH-002 — Cortex Registry
+
+\input{../preamble.tex}
+
+\specID{SPEC-TH-002}
+\specTitle{Cortex Registry --- declarative cortex capabilities and selection}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+The registry is the single source of truth for which cortices exist in the running Thalamus instance and what each one can do. Cortices are declared as Markdown files with a YAML frontmatter header (capabilities, data-access helper reference, parameter schema) and a body (the domain prompt used at execution time). At startup the registry discovers these files; at plan time it exposes compact headers to the planner; at execution time it returns the full skill body to the cortex executor (SPEC-TH-003). This separation keeps the planning prompt small and makes adding a cortex a pure additive operation.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Discover all cortex skill files from a configured directory at startup, with no hard-coded import list.
+  \item Parse each file into a typed header (name, description, data-helper name, parameter schema) and a body (domain prompt).
+  \item Offer two lookup shapes: compact headers for the planner, full skill for the executor.
+  \item Reject malformed files without crashing the process, and log enough context for an operator to fix them.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+The registry does not execute cortices, does not evaluate headers against the user query, and does not rank or score cortices. Selection logic lives in the planner. Hot reload of skill files and dynamic registration at runtime are out of scope for v1 --- discovery happens once per process.
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+Every entry exposed by the registry has a non-empty \texttt{name} and \texttt{description}. Files missing either are skipped with a warning; they never appear in \texttt{getHeaders} or \texttt{get}.
+\end{invariant}
+
+\begin{invariant}
+\texttt{names()}, \texttt{getHeaders()}, and the keys of \texttt{get(name)} lookups are mutually consistent: for every \texttt{n} in \texttt{names()}, \texttt{get(n)} returns a defined skill whose \texttt{header.name === n}.
+\end{invariant}
+
+\begin{invariant}
+The planner payload (\texttt{getHeadersForPlanner}) contains only header fields, never the full body. A body must never leak into planner input.
+\end{invariant}
+
+\section{Interface}
+
+\begin{lstlisting}[language=TypeScript]
+export interface CortexSkillHeader {
+  name: string;
+  description: string;
+  sqlHelper: string;            // name of the data-access helper
+  params: Record<string, string>;
+}
+
+export interface CortexSkill {
+  header: CortexSkillHeader;
+  body: string;                 // domain prompt, fed to the LLM at execute time
+  filePath: string;
+}
+
+export class CortexRegistry {
+  constructor(skillsDir?: string);
+  discover(): void;                             // one-shot, at startup
+  getHeaders(): CortexSkillHeader[];
+  getHeadersForPlanner(): string;               // compact string
+  get(name: string): CortexSkill | undefined;
+  has(name: string): boolean;
+  names(): string[];
+  size(): number;
+}
+\end{lstlisting}
+
+\section{Scenarios}
+
+\begin{scenario}{Nominal discovery}
+\Given a directory with three well-formed skill files \\
+\When \texttt{discover()} is called \\
+\Then \texttt{size() === 3} \\
+\And \texttt{getHeaders().length === 3} \\
+\And every header has a non-empty \texttt{name} and \texttt{description}.
+\end{scenario}
+
+\begin{scenario}{Malformed frontmatter is skipped}
+\Given a directory with two valid files and one file missing the \texttt{---} frontmatter delimiters \\
+\When \texttt{discover()} is called \\
+\Then \texttt{size() === 2} \\
+\And a warning is logged with the path of the skipped file \\
+\And the process does not throw.
+\end{scenario}
+
+\begin{scenario}{Missing required fields is skipped}
+\Given a file whose frontmatter declares \texttt{sqlHelper} but omits \texttt{description} \\
+\When \texttt{discover()} is called \\
+\Then that file is skipped and a warning is logged \\
+\And no header referring to it is returned by \texttt{getHeaders}.
+\end{scenario}
+
+\begin{scenario}{Missing directory is non-fatal}
+\Given \texttt{skillsDir} points to a non-existent path \\
+\When \texttt{discover()} is called \\
+\Then no exception is thrown \\
+\And \texttt{size() === 0} \\
+\And a warning is logged with the attempted path.
+\end{scenario}
+
+\begin{scenario}{Planner view excludes body}
+\Given a valid skill whose body contains the literal string \texttt{SECRET-BODY-TOKEN} \\
+\When \texttt{getHeadersForPlanner()} is called \\
+\Then the returned string does not contain \texttt{SECRET-BODY-TOKEN}.
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+After \texttt{discover()} over a fixture with $k$ valid files and $m$ invalid files, \texttt{size() === k} and each name in \texttt{names()} resolves via \texttt{get()} to a skill whose \texttt{header.name} matches.
+\end{ac}
+
+\begin{ac}{AC-2}
+\texttt{discover()} on a non-existent directory returns without throwing and leaves the registry empty.
+\end{ac}
+
+\begin{ac}{AC-3}
+A file whose frontmatter omits \texttt{name} or \texttt{description} is not registered; no partial entry is exposed by any public method.
+\end{ac}
+
+\begin{ac}{AC-4}
+\texttt{getHeadersForPlanner()} contains each registered name and description exactly once and does not contain any substring from any skill body.
+\end{ac}
+
+\begin{ac}{AC-5}
+The \texttt{params} map parsed from frontmatter preserves all declared keys with their string values (no type coercion, no dropped entries).
+\end{ac}
+
+\begin{ac}{AC-6}
+\texttt{has(name)} returns true if and only if \texttt{get(name)} returns a defined skill.
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1 & \texttt{packages/thalamus/tests/cortex-registry.spec.ts} & \texttt{discovers valid skills, skips invalid} \\
+AC-2 & \texttt{packages/thalamus/tests/cortex-registry.spec.ts} & \texttt{missing directory is non-fatal} \\
+AC-3 & \texttt{packages/thalamus/tests/cortex-registry.spec.ts} & \texttt{skips files missing required fields} \\
+AC-4 & \texttt{packages/thalamus/tests/cortex-registry.spec.ts} & \texttt{planner view excludes body} \\
+AC-5 & \texttt{packages/thalamus/tests/cortex-registry.spec.ts} & \texttt{params map round-trip} \\
+AC-6 & \texttt{packages/thalamus/tests/cortex-registry.spec.ts} & \texttt{has and get are consistent} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Should the \texttt{params} schema be validated against a typed grammar at discovery time, or lazily by the executor?
+  \item Do we want a debug endpoint that returns \texttt{getHeadersForPlanner()} verbatim for operators?
+  \item Should we support per-environment skill overlays (e.g. a \texttt{skills.staging/} directory layered over the base)?
+\end{itemize}
+
+\end{document}

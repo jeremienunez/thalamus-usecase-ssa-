@@ -1,0 +1,262 @@
+% SPEC-DB-002 --- Typed Repositories
+\input{../preamble.tex}
+
+\specID{SPEC-DB-002}
+\specTitle{Typed Repositories --- Drizzle-inferred contracts for data access}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+Repositories are the only code in the system allowed to issue SQL. They sit
+directly above \texttt{@interview/db-schema} and expose typed, intention-named
+functions to services. Thalamus cortices and the Sweep pipeline both consume
+these repositories; keeping them thin, typed, and query-only is what lets the
+service layer stay pure and testable.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Define the repository contract: \emph{queries only}, no business logic,
+        no cross-entity aggregation beyond SQL joins.
+  \item Parameter and return types come from Drizzle's
+        \texttt{\$inferSelect / \$inferInsert}; nothing hand-rolled.
+  \item Ban \texttt{any} and \texttt{unknown} in repository signatures. Payload
+        narrowing happens above the repo, not inside it, and not at its edge.
+  \item Make each repository method easy to mock at the service boundary.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+Repositories do not orchestrate multi-step workflows, call external services,
+emit events, implement retry policies, or enforce business rules (tier gating,
+permission checks, quota). They do not serialize to DTOs. That is the service
+layer's job --- "repo = queries, service = logic". Transaction composition
+spanning multiple repositories is owned by the service.
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+No \texttt{any}, no \texttt{unknown}, no \texttt{Record<string, unknown>} in
+repository public signatures. Parameters and return types are either Drizzle-
+inferred row types, narrow DTO-less tuples, or primitives.
+\end{invariant}
+
+\begin{invariant}
+A repository method performs at most one logical database operation: a single
+\texttt{select} (with joins allowed), a single \texttt{insert}, a single
+\texttt{update}, or a single \texttt{delete}. Composition of operations lives
+in the service.
+\end{invariant}
+
+\begin{invariant}
+Repositories take the \texttt{Database} handle (or a \texttt{tx}) by
+constructor injection. They do not import a global client. This keeps them
+trivially testable and transaction-safe.
+\end{invariant}
+
+\begin{invariant}
+JSONB columns are not narrowed inside the repository. They are returned with
+their schema-declared type; services are responsible for parsing via Zod or
+equivalent before using them as domain objects.
+\end{invariant}
+
+\section{Interface}
+
+\subsection{Construction}
+
+\begin{lstlisting}[language=TypeScript]
+import type { Database } from "@interview/db-schema";
+
+export class ResearchFindingRepo {
+  constructor(private readonly db: Database) {}
+  // ... methods below
+}
+\end{lstlisting}
+
+\subsection{Representative signatures}
+
+\begin{lstlisting}[language=TypeScript]
+import {
+  researchCycle, researchFinding, researchEdge,
+  type ResearchCycle, type NewResearchCycle,
+  type ResearchFinding, type NewResearchFinding,
+  type ResearchEdge, type NewResearchEdge,
+} from "@interview/db-schema";
+
+export class ResearchCycleRepo {
+  constructor(private readonly db: Database) {}
+
+  findById(id: bigint): Promise<ResearchCycle | null>;
+  listByStatus(status: string, limit: number): Promise<ResearchCycle[]>;
+  insert(row: NewResearchCycle): Promise<ResearchCycle>;
+  updateStatus(id: bigint, status: string): Promise<void>;
+}
+
+export class ResearchFindingRepo {
+  constructor(private readonly db: Database) {}
+
+  findByEntity(
+    entityName: string,
+    entityType: string,
+  ): Promise<ResearchFinding[]>;
+
+  findByCycle(cycleId: bigint): Promise<ResearchFinding[]>;
+  insertMany(rows: NewResearchFinding[]): Promise<void>;
+}
+
+export class ResearchEdgeRepo {
+  constructor(private readonly db: Database) {}
+
+  neighbors(
+    name: string,
+    type: string,
+  ): Promise<ResearchEdge[]>;
+
+  insert(row: NewResearchEdge): Promise<ResearchEdge>;
+}
+\end{lstlisting}
+
+\subsection{What is explicitly forbidden}
+
+\begin{lstlisting}[language=TypeScript]
+// FORBIDDEN: leaks `any`
+findSomething(input: any): Promise<any>;
+
+// FORBIDDEN: leaks `unknown` payloads at the edge
+getMeta(id: bigint): Promise<unknown>;
+
+// FORBIDDEN: business logic in the repo
+async publishArticleAndNotify(id: bigint) { /* no */ }
+
+// FORBIDDEN: JS-side aggregation when SQL can do it
+async listFindingsThenCountByType(cycleId: bigint) {
+  const rows = await this.db.select()...;
+  return rows.reduce(/* no -- push to SQL */);
+}
+\end{lstlisting}
+
+\section{Scenarios}
+
+\begin{scenario}{Service composes two repository calls in one transaction}
+\Given \texttt{ResearchCycleRepo} and \texttt{ResearchFindingRepo} \\
+\When the service wraps \texttt{updateStatus} + \texttt{insertMany} inside
+\texttt{db.transaction(async (tx) => ...)} \\
+\Then both repos accept the \texttt{tx} handle as their \texttt{Database} \\
+\And a failure in either call rolls back the whole transaction.
+\end{scenario}
+
+\begin{scenario}{Lookup uses the declared index}
+\Given \texttt{idx\_research\_finding\_entity} from SPEC-DB-001 exists \\
+\When \texttt{ResearchFindingRepo.findByEntity("X","item")} is called \\
+\Then the generated SQL filters on \texttt{(entity\_name, entity\_type)} \\
+\And \texttt{EXPLAIN} reports an index scan, not a sequential scan.
+\end{scenario}
+
+\begin{scenario}{Unknown payload stays opaque at the boundary}
+\Given \texttt{ResearchCycle.plan} is \texttt{jsonb} \\
+\When a caller reads \texttt{cycle.plan} \\
+\Then the type is the schema-declared type (not \texttt{any}) \\
+\And the service --- not the repo --- validates and narrows it before use.
+\end{scenario}
+
+\begin{scenario}{Bulk insert preserves row shape}
+\Given \(n\) \texttt{NewResearchFinding} values \\
+\When \texttt{insertMany(rows)} is called \\
+\Then a single SQL \texttt{INSERT} is issued \\
+\And TypeScript rejects any row missing a \texttt{notNull} column.
+\end{scenario}
+
+\begin{scenario}{Mocked repo in a service unit test}
+\Given a service under test whose only dependency is \texttt{ResearchFindingRepo} \\
+\When the test substitutes a hand-rolled mock conforming to the repo's public
+type \\
+\Then no database connection is required \\
+\And TypeScript enforces the mock implements every public method.
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+A lint rule (or grep-based test) finds zero \texttt{any}, \texttt{unknown}, or
+\texttt{Record<string, unknown>} in exported repository signatures under
+\texttt{packages/db-schema/src/repos/}.
+\end{ac}
+
+\begin{ac}{AC-2}
+Every repository method's parameter and return types reference
+\texttt{\$inferSelect} or \texttt{\$inferInsert} from
+\texttt{@interview/db-schema}, or primitives (\texttt{bigint},
+\texttt{string}, \texttt{number}), or arrays of those.
+\end{ac}
+
+\begin{ac}{AC-3}
+No repository method contains control flow beyond a single await of a Drizzle
+query builder expression. A static check (AST rule) enforces one logical
+operation per method.
+\end{ac}
+
+\begin{ac}{AC-4}
+Repositories accept a \texttt{Database | Transaction} handle at construction.
+A test composes two repo calls inside a transaction and asserts rollback on
+failure.
+\end{ac}
+
+\begin{ac}{AC-5}
+\texttt{ResearchFindingRepo.findByEntity} uses
+\texttt{idx\_research\_finding\_entity}; an integration test runs
+\texttt{EXPLAIN} and asserts an index scan.
+\end{ac}
+
+\begin{ac}{AC-6}
+A service unit test mocks every repo method from a single TypeScript
+interface derived from the concrete class --- and compiles.
+\end{ac}
+
+\begin{ac}{AC-7}
+Attempting to insert a row missing a \texttt{notNull} column fails at compile
+time in a fixture test.
+\end{ac}
+
+\begin{ac}{AC-8}
+No repository imports from \texttt{../services/}, \texttt{../controllers/}, or
+any module outside \texttt{@interview/db-schema}. Enforced by an import-path
+lint rule.
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file (planned) & Test name \\
+\midrule
+AC-1 & \texttt{packages/db-schema/tests/repos/no-any.spec.ts}         & \texttt{repo signatures ban any/unknown} \\
+AC-2 & \texttt{packages/db-schema/tests/repos/types.spec.ts}          & \texttt{repo signatures use inferred types} \\
+AC-3 & \texttt{packages/db-schema/tests/repos/single-op.spec.ts}      & \texttt{one logical query per method} \\
+AC-4 & \texttt{packages/db-schema/tests/repos/tx.int.spec.ts}         & \texttt{rollback across two repos} \\
+AC-5 & \texttt{packages/db-schema/tests/repos/finding-index.int.spec.ts} & \texttt{findByEntity uses entity index} \\
+AC-6 & \texttt{packages/db-schema/tests/repos/mockability.spec.ts}    & \texttt{repo is mockable from its class type} \\
+AC-7 & \texttt{packages/db-schema/tests/repos/insert-required.spec.ts}& \texttt{missing notNull column is compile error} \\
+AC-8 & \texttt{packages/db-schema/tests/repos/isolation.spec.ts}      & \texttt{repos have no upward imports} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Should repositories expose a cursor/stream API for large result sets
+        (e.g. all findings for a long-running cycle), or is pagination enough?
+  \item Do we introduce a \texttt{Repo} base class/interface for consistent
+        \texttt{tx} propagation, or keep each class free-standing?
+  \item Should JSONB columns be narrowed at the repo boundary via a branded
+        type (still no \texttt{any}), or left to the service with Zod?
+  \item How do we express "upsert" semantics without violating the
+        one-operation-per-method invariant --- dedicated method, or service
+        composition of \texttt{findById} + \texttt{insert}/\texttt{update}?
+\end{itemize}
+
+\end{document}

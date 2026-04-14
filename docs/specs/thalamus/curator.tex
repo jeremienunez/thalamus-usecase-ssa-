@@ -1,0 +1,183 @@
+\input{../preamble.tex}
+
+\specID{SPEC-TH-012}
+\specTitle{Curator --- dedup, ranking, and consolidation of swarm output}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+The Nano-Swarm (SPEC-TH-010) produces a wide, noisy set of retrieval artifacts, some duplicated,
+some off-topic, some already known to the system. Before any of these are injected into the feed or
+promoted into a persistent source list, they must be scored for \emph{relevance} (do they answer the
+research intent?) and \emph{novelty} (do they add information we do not already have?). The Curator
+is the last stage of the Explorer pipeline and turns the raw artifact stream into a typed
+consolidation decision stream.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Score each artifact on two orthogonal axes: relevance \([0,1]\) and novelty \([0,1]\).
+  \item Produce a ternary decision per artifact --- \texttt{inject}, \texttt{promote}, or \texttt{discard} --- using deterministic thresholds.
+  \item Assign every artifact a coarse category so downstream consumers can route it.
+  \item Remain operational without the underlying LLM: a heuristic fallback preserves ordering semantics when the model call fails.
+  \item Preserve input order and cardinality: exactly one \texttt{CuratedItem} out per input artifact.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+This spec does not cover: the feed-injection SQL, the source-promotion logic, cross-cycle novelty
+memory (novelty is evaluated against what the LLM or heuristic can infer from the batch), or the
+prompt wording itself (implementation detail).
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+The Curator is total: \texttt{curate(articles)} returns a list of exactly \texttt{articles.length} items, in the same order.
+\end{invariant}
+
+\begin{invariant}
+\texttt{relevanceScore} and \texttt{noveltyScore} are clamped to \([0,1]\) for every returned item,
+including for heuristic-path items.
+\end{invariant}
+
+\begin{invariant}
+The \texttt{action} field is one of exactly \{\texttt{"inject"}, \texttt{"promote"}, \texttt{"discard"}\};
+\texttt{category} is one of exactly \{\texttt{"MARKET"}, \texttt{"REVIEWS"}, \texttt{"DROPS"}, \texttt{"DISCOVERY"}\}.
+Any out-of-range value from the model is coerced to \texttt{"discard"} / \texttt{"DISCOVERY"} respectively.
+\end{invariant}
+
+\begin{invariant}
+An LLM failure on one batch does not contaminate other batches: the Curator falls back to the
+heuristic scorer for that batch only and continues.
+\end{invariant}
+
+\begin{invariant}
+Given \(relevance \ge 0.7\) and \(novelty \ge 0.5\), the heuristic path yields \texttt{action = "inject"}
+(or stronger: \texttt{"promote"} if relevance \(\ge 0.8\) and entity count \(\ge 5\)).
+\end{invariant}
+
+\section{Interface}
+The Curator consumes the artifact type produced by SPEC-TH-010 and emits a decision envelope.
+
+\begin{lstlisting}[language=TypeScript]
+export interface CuratedItem {
+  url: string;
+  title: string;
+  body: string;
+  relevanceScore: number;   // [0,1]
+  noveltyScore: number;     // [0,1]
+  action: "inject" | "promote" | "discard";
+  category: "MARKET" | "REVIEWS" | "DROPS" | "DISCOVERY";
+  reason: string;           // <= 200 chars, 1 sentence
+  entities: ExtractedEntities;
+}
+
+export class ExplorerCurator {
+  curate(articles: RetrievalArtifact[]): Promise<CuratedItem[]>;
+}
+\end{lstlisting}
+
+\section{Scenarios}
+
+\begin{scenario}{Nominal batch scoring}
+\Given 25 retrieval artifacts and a healthy LLM transport \\
+\When \texttt{curate} is invoked \\
+\Then the artifacts are split into batches of at most 10 \\
+\And each batch is scored with one LLM call \\
+\And the returned list has exactly 25 items, in the original input order \\
+\And every score is clamped to \([0,1]\)
+\end{scenario}
+
+\begin{scenario}{LLM unavailable for one batch}
+\Given three batches where the second one causes the LLM call to reject \\
+\When \texttt{curate} is invoked \\
+\Then batches 1 and 3 are scored by the LLM \\
+\And batch 2 is scored by the heuristic fallback \\
+\And the final list preserves the original input order and length
+\end{scenario}
+
+\begin{scenario}{Malformed model output}
+\Given the LLM returns JSON where \texttt{action} is \texttt{"maybe"} and \texttt{category} is \texttt{"OTHER"} \\
+\When the batch is parsed \\
+\Then those fields are coerced to \texttt{"discard"} and \texttt{"DISCOVERY"} \\
+\And the item is still returned (not dropped)
+\end{scenario}
+
+\begin{scenario}{Heuristic promotion}
+\Given an artifact with rich wine entities (\(\ge 5\)), concrete data points, and body \(\ge 1500\) chars \\
+\When the heuristic path runs on it \\
+\Then \texttt{relevanceScore} is at least 0.8 \\
+\And \texttt{action} is \texttt{"promote"}
+\end{scenario}
+
+\begin{scenario}{Empty input}
+\Given an empty artifact list \\
+\When \texttt{curate} is invoked \\
+\Then the result is \texttt{[]} \\
+\And no LLM call is made
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+For every input artifact there is exactly one output item with the same \texttt{url}, in the same position.
+\end{ac}
+
+\begin{ac}{AC-2}
+\texttt{relevanceScore} and \texttt{noveltyScore} are in \([0,1]\) for every returned item.
+\end{ac}
+
+\begin{ac}{AC-3}
+\texttt{action} and \texttt{category} always belong to their declared enumerations; unknown values from the model are coerced to \texttt{"discard"} / \texttt{"DISCOVERY"}.
+\end{ac}
+
+\begin{ac}{AC-4}
+A forced LLM failure on one batch results in that batch being heuristic-scored; the other batches are unaffected.
+\end{ac}
+
+\begin{ac}{AC-5}
+An input of size 0 returns \texttt{[]} and triggers zero LLM calls.
+\end{ac}
+
+\begin{ac}{AC-6}
+For an artifact with \(\ge 5\) entities, \(\ge 1\) data point, and body length \(\ge 1500\), the heuristic path yields \texttt{action \(\in\) \{"inject","promote"\}}.
+\end{ac}
+
+\begin{ac}{AC-7}
+\texttt{reason} is a non-empty string no longer than 200 characters for every item.
+\end{ac}
+
+\begin{ac}{AC-8}
+Batches submitted to the LLM contain at most 10 artifacts; a mock LLM transport asserts this bound.
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1 & \texttt{packages/thalamus/tests/curator.order.spec.ts} & \texttt{preserves input order and cardinality} \\
+AC-2 & \texttt{packages/thalamus/tests/curator.clamp.spec.ts} & \texttt{clamps scores to [0,1]} \\
+AC-3 & \texttt{packages/thalamus/tests/curator.enum.spec.ts} & \texttt{coerces unknown enum values} \\
+AC-4 & \texttt{packages/thalamus/tests/curator.fallback.spec.ts} & \texttt{falls back to heuristic on LLM failure} \\
+AC-5 & \texttt{packages/thalamus/tests/curator.empty.spec.ts} & \texttt{empty input returns empty output} \\
+AC-6 & \texttt{packages/thalamus/tests/curator.heuristic.spec.ts} & \texttt{promotes entity-rich artifacts} \\
+AC-7 & \texttt{packages/thalamus/tests/curator.reason.spec.ts} & \texttt{reason is always bounded} \\
+AC-8 & \texttt{packages/thalamus/tests/curator.batching.spec.ts} & \texttt{batches at most 10 artifacts per LLM call} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Should novelty be evaluated against a cross-cycle memory (e.g. prior URLs, prior entity fingerprints) rather than from the LLM alone?
+  \item Should the \texttt{category} enumeration be pluggable per-domain, or remain fixed at the Explorer level?
+  \item Should the heuristic thresholds (0.7 / 0.5 / 0.8) be configurable, or fixed as part of the contract?
+\end{itemize}
+
+\end{document}

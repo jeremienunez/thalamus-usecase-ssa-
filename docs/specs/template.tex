@@ -1,0 +1,84 @@
+% Template for a new spec. Copy this file, replace placeholders, keep the structure.
+
+\input{../preamble.tex}
+
+\specID{SPEC-XXX}
+\specTitle{Short Descriptive Title}
+\specStatus{DRAFT}      % DRAFT | REVIEW | APPROVED | IMPLEMENTED
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+Two to four lines stating the problem this spec addresses, why it exists, and where it sits in the system.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Goal 1 --- observable, testable.
+  \item Goal 2 --- observable, testable.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+Explicit exclusions. Anything a reader might reasonably expect that this spec does \emph{not} cover.
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+Properties that must always hold, independent of the scenarios below.
+\end{invariant}
+
+\section{Interface}
+Public surface of the module (types, function signatures, emitted events). Consumers depend on this; internal refactors must not break it.
+
+\begin{lstlisting}[language=TypeScript]
+// Public surface example
+export function foo(input: Input): Result<Output, FooError>;
+\end{lstlisting}
+
+\section{Scenarios}
+
+\begin{scenario}{Nominal path}
+\Given preconditions \\
+\When the action is invoked \\
+\Then the observable outcome is X \\
+\And side effects are Y
+\end{scenario}
+
+\begin{scenario}{Failure path}
+\Given ... \\
+\When ... \\
+\Then ...
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+Precise, binary-checkable statement. Mapped 1-to-1 to at least one test.
+\end{ac}
+
+\begin{ac}{AC-2}
+...
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1 & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
+AC-2 & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Any remaining ambiguity, to be resolved before \textsc{APPROVED}.
+\end{itemize}
+
+\end{document}

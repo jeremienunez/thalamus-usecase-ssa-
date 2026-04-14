@@ -1,0 +1,174 @@
+% SPEC-SW-003 — Resolution Service
+\input{../preamble.tex}
+
+\specID{SPEC-SW-003}
+\specTitle{Resolution Service --- transactional write with audit trail}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+Once a reviewer accepts a finding, the proposed change must be applied to the source of truth. This spec defines the \emph{writer}: it loads an accepted finding, validates its embedded action payload, resolves any ambiguous references (e.g. a name that matches multiple records), executes the mutations under a single transaction, records an audit row, and writes the outcome back to the pending buffer. Rejected or unaccepted findings are never written. Errors short-circuit into a visible failure state rather than a partial silent mutation.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Only operate on findings the reviewer has explicitly accepted.
+  \item Validate every action payload against a strict schema before touching the DB.
+  \item Surface ambiguity back to the reviewer (pending-selection state) instead of guessing.
+  \item Apply every accepted resolution inside a single atomic transaction.
+  \item Persist an audit row per resolution (who, what, when, rows touched, errors).
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+This service does not decide acceptance (reviewer UI does). It does not generate findings (SPEC-SW-001) nor route notifications (SPEC-SW-002). It does not roll back previously committed resolutions.
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+A resolution MUST NOT mutate the source of truth unless the finding's \texttt{accepted} flag is strictly \texttt{true}.
+\end{invariant}
+\begin{invariant}
+All mutations for a single resolution happen inside one DB transaction. On any handler error, the transaction rolls back entirely; partial writes are impossible.
+\end{invariant}
+\begin{invariant}
+Every resolution --- success, partial, or failed --- produces exactly one audit row with the outcome status, affected row count, and any error messages. The audit row is persistent (survives process restarts).
+\end{invariant}
+\begin{invariant}
+If an action references an ambiguous target (e.g. a name that resolves to $>1$ candidate), the service returns \texttt{pending\_selection} without mutating the DB, and stores the selector options back in the pending buffer.
+\end{invariant}
+
+\section{Interface}
+
+\begin{lstlisting}[language=TypeScript]
+export type ResolutionStatus =
+  | "success" | "partial" | "failed" | "pending_selection";
+
+export interface ResolutionResult {
+  status: ResolutionStatus;
+  affectedRows: number;
+  resolvedAt?: string;
+  errors?: string[];
+  pendingSelections?: PendingSelection[];
+}
+
+export class ResolutionService {
+  constructor(
+    entityRepo: EntityRepository,
+    findingRepo: FindingRepository,
+    auditSink: AuditSink,
+    db: Database,
+  );
+
+  resolve(
+    findingId: string,
+    selections?: Record<string, string | number>,
+  ): Promise<ResolutionResult>;
+}
+\end{lstlisting}
+
+\section{Scenarios}
+
+\begin{scenario}{Nominal accepted resolution}
+\Given a finding with \texttt{accepted=true} and a valid \texttt{update\_field} action \\
+\When \texttt{resolve(findingId)} is called \\
+\Then the DB transaction opens, the field is updated, the audit row is inserted, the transaction commits \\
+\And the returned \texttt{status} is \texttt{success} with \texttt{affectedRows > 0} \\
+\And the pending buffer now shows the resolution outcome.
+\end{scenario}
+
+\begin{scenario}{Reviewer rejected (or never accepted)}
+\Given a finding with \texttt{accepted=false} or \texttt{accepted=null} \\
+\When \texttt{resolve(findingId)} is called \\
+\Then no DB mutation occurs \\
+\And the returned \texttt{status} is \texttt{failed} with an explanatory error \\
+\And no audit row claims a successful resolution.
+\end{scenario}
+
+\begin{scenario}{Ambiguous reference --- first call}
+\Given an accepted finding whose action references a name that matches two records \\
+\When \texttt{resolve(findingId)} is called without \texttt{selections} \\
+\Then no DB mutation occurs \\
+\And the returned \texttt{status} is \texttt{pending\_selection} \\
+\And the pending buffer is updated with the selector options so the reviewer can pick.
+\end{scenario}
+
+\begin{scenario}{Ambiguous reference --- second call with selection}
+\Given the previous pending selection exists \\
+\When \texttt{resolve(findingId, \{key: chosenId\})} is called \\
+\Then the chosen id is used, the transaction runs, and \texttt{status} is \texttt{success}.
+\end{scenario}
+
+\begin{scenario}{Handler error rolls back}
+\Given an accepted finding with two actions where the second throws \\
+\When \texttt{resolve(findingId)} is called \\
+\Then the entire transaction rolls back \\
+\And \texttt{affectedRows = 0} \\
+\And the audit row records \texttt{failed} with the error message.
+\end{scenario}
+
+\begin{scenario}{Malformed payload}
+\Given an accepted finding whose \texttt{resolutionPayload} fails schema validation \\
+\When \texttt{resolve(findingId)} is called \\
+\Then no DB mutation occurs \\
+\And the returned \texttt{status} is \texttt{failed} with a schema error \\
+\And an audit row is still written with that failure.
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+Calling \texttt{resolve} on a finding with \texttt{accepted != true} produces \texttt{status=failed} and zero DB mutations.
+\end{ac}
+\begin{ac}{AC-2}
+A malformed or schema-invalid \texttt{resolutionPayload} produces \texttt{status=failed} with a descriptive error and no DB mutations.
+\end{ac}
+\begin{ac}{AC-3}
+All mutations for one \texttt{resolve} call execute inside a single transaction; if any handler throws, the transaction rolls back and \texttt{affectedRows=0}.
+\end{ac}
+\begin{ac}{AC-4}
+An ambiguous reference returns \texttt{status=pending\_selection}, writes selector options to the pending buffer, and performs no mutation.
+\end{ac}
+\begin{ac}{AC-5}
+When \texttt{selections} are provided and disambiguate the action, the transaction runs to completion and \texttt{status} is \texttt{success} or \texttt{partial}.
+\end{ac}
+\begin{ac}{AC-6}
+Every call to \texttt{resolve} produces exactly one audit row, regardless of outcome (success, partial, failed, pending\_selection).
+\end{ac}
+\begin{ac}{AC-7}
+The audit row contains: finding id, reviewer id, action kinds, affected row count, final status, error messages (if any), and a UTC timestamp.
+\end{ac}
+\begin{ac}{AC-8}
+Concurrent \texttt{resolve} calls on the same finding are serialized; only the first commits, the second observes the resolved state and is a no-op with \texttt{status=failed} (\emph{already resolved}).
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1 & \texttt{tests/unit/resolution.guards.spec.ts}       & \texttt{refuses unaccepted finding} \\
+AC-2 & \texttt{tests/unit/resolution.payload.spec.ts}      & \texttt{rejects malformed payload} \\
+AC-3 & \texttt{tests/integration/resolution.tx.spec.ts}    & \texttt{rolls back on handler error} \\
+AC-4 & \texttt{tests/integration/resolution.ambiguous.spec.ts} & \texttt{returns pending\_selection} \\
+AC-5 & \texttt{tests/integration/resolution.selection.spec.ts} & \texttt{commits with selection} \\
+AC-6 & \texttt{tests/integration/resolution.audit.spec.ts} & \texttt{writes one audit row per call} \\
+AC-7 & \texttt{tests/integration/resolution.audit.spec.ts} & \texttt{audit row contains full context} \\
+AC-8 & \texttt{tests/integration/resolution.concurrency.spec.ts} & \texttt{serializes concurrent resolves} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Audit sink: dedicated SQL table vs append-only log --- do we need queryable history from the reviewer UI?
+  \item Should \texttt{partial} status be allowed at all, or should any handler error force \texttt{failed} + full rollback?
+  \item Do we expose an \emph{undo} operation that compensates a prior resolution, or is rollback strictly at transaction scope?
+\end{itemize}
+
+\end{document}

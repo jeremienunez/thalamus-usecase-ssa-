@@ -1,0 +1,157 @@
+% SPEC-SH-003 --- CompletenessScorer
+
+\input{../preamble.tex}
+
+\specID{SPEC-SH-003}
+\specTitle{CompletenessScorer --- adaptive weight normalization on partial records}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+Downstream consumers (matchers, validators, dashboards) score the quality of a record against a set of weighted components (fields, signals, sub-scores). In practice, some components are routinely absent --- the source system did not emit them, the ingestion pipeline dropped them, or the producer is still backfilling. A naive weighted sum \(\sum w_i \cdot v_i\) penalises partial records even when the available components are strong, and makes scores from records with different coverage non-comparable. \texttt{CompletenessScorer} is the canonical utility that performs \emph{adaptive weight normalization}: weights are redistributed across the components that are actually present, so the score stays on a stable \([0, 1]\) scale regardless of coverage.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Produce a score in \([0, 1]\) that is invariant to the \emph{presence} pattern of components, depending only on the observed values and their relative weights.
+  \item Report both the normalised score and the coverage ratio, so callers can filter low-coverage results without losing them.
+  \item Be deterministic, pure, and allocation-light: usable inside hot paths of matchers and sweep workers.
+  \item Fail loudly on malformed inputs (negative weights, non-finite values) rather than silently producing garbage.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+This spec does \emph{not} define which components are scored, their business meaning, or their default weights. Those are owned by the calling module (e.g.\ the matcher spec). This spec also does not perform imputation: missing components stay missing, they are never filled with a default value before scoring.
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+For any input where at least one component is present with a finite value \(v_i \in [0, 1]\) and a strictly positive weight \(w_i\):
+\[
+\mathrm{score} \;=\; \frac{\sum_{i \in P} w_i \cdot v_i}{\sum_{i \in P} w_i} \in [0, 1]
+\]
+where \(P\) is the set of present components. If \(P = \emptyset\), the scorer returns \texttt{null} for the score and \(0\) for coverage; it never throws for empty input.
+\end{invariant}
+
+\begin{invariant}
+Coverage is reported as \(\mathrm{coverage} = \sum_{i \in P} w_i \;/\; \sum_i w_i\), using the caller-declared full weight set as the denominator. Coverage is always in \([0, 1]\) and is independent of component values.
+\end{invariant}
+
+\section{Interface}
+
+\begin{lstlisting}[language=TypeScript]
+export interface ScorerComponent {
+  readonly key: string;
+  readonly weight: number;  // > 0
+  readonly value: number | null | undefined;  // in [0, 1] when present
+}
+
+export interface CompletenessResult {
+  readonly score: number | null;   // null iff coverage === 0
+  readonly coverage: number;       // in [0, 1]
+  readonly presentKeys: readonly string[];
+  readonly missingKeys: readonly string[];
+}
+
+export function scoreCompleteness(
+  components: readonly ScorerComponent[]
+): CompletenessResult;
+\end{lstlisting}
+
+\section{Scenarios}
+
+\begin{scenario}{Full coverage}
+\Given three components with weights \((0.5, 0.3, 0.2)\) and values \((0.8, 0.6, 1.0)\) \\
+\When \texttt{scoreCompleteness} is called \\
+\Then \texttt{score} equals \(0.5 \cdot 0.8 + 0.3 \cdot 0.6 + 0.2 \cdot 1.0 = 0.78\) \\
+\And \texttt{coverage} equals \(1.0\) \\
+\And \texttt{missingKeys} is empty.
+\end{scenario}
+
+\begin{scenario}{Partial coverage, weights redistribute}
+\Given the same weights, with values \((0.8, \texttt{null}, 1.0)\) \\
+\When \texttt{scoreCompleteness} is called \\
+\Then \texttt{score} equals \((0.5 \cdot 0.8 + 0.2 \cdot 1.0) / (0.5 + 0.2) = 0.8571\ldots\) \\
+\And \texttt{coverage} equals \(0.7\) \\
+\And \texttt{missingKeys} contains the key of the absent component.
+\end{scenario}
+
+\begin{scenario}{All components missing}
+\Given three components whose values are all \texttt{null} or \texttt{undefined} \\
+\When \texttt{scoreCompleteness} is called \\
+\Then \texttt{score} is \texttt{null} \\
+\And \texttt{coverage} is \(0\) \\
+\And no exception is thrown.
+\end{scenario}
+
+\begin{scenario}{Rejects malformed weights}
+\Given a component with weight \(-0.1\) or \texttt{NaN} \\
+\When \texttt{scoreCompleteness} is called \\
+\Then the function throws a \texttt{RangeError} referencing the offending \texttt{key}.
+\end{scenario}
+
+\begin{scenario}{Rejects out-of-range values}
+\Given a component with a present value of \(1.4\) \\
+\When \texttt{scoreCompleteness} is called \\
+\Then the function throws a \texttt{RangeError} and does not return a partial result.
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+Full-coverage inputs yield \(\mathrm{score} = \sum w_i v_i / \sum w_i\) and \(\mathrm{coverage} = 1\).
+\end{ac}
+
+\begin{ac}{AC-2}
+Partial-coverage inputs yield a score computed only over present components, with weights renormalised to their own sum.
+\end{ac}
+
+\begin{ac}{AC-3}
+Empty-coverage inputs yield \texttt{score === null} and \texttt{coverage === 0}, without throwing.
+\end{ac}
+
+\begin{ac}{AC-4}
+Any non-finite or negative weight causes a \texttt{RangeError} naming the offending component key.
+\end{ac}
+
+\begin{ac}{AC-5}
+Any present value outside \([0, 1]\) causes a \texttt{RangeError} naming the offending component key.
+\end{ac}
+
+\begin{ac}{AC-6}
+For the same input, \texttt{scoreCompleteness} returns bitwise-equal results across calls (determinism, no floating-point drift from iteration order).
+\end{ac}
+
+\begin{ac}{AC-7}
+\texttt{presentKeys} and \texttt{missingKeys} partition the input keys exactly (no duplicates, no omissions).
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1 & \texttt{packages/shared/tests/completeness-scorer.spec.ts} & \texttt{full coverage matches weighted sum} \\
+AC-2 & \texttt{packages/shared/tests/completeness-scorer.spec.ts} & \texttt{partial coverage renormalises weights} \\
+AC-3 & \texttt{packages/shared/tests/completeness-scorer.spec.ts} & \texttt{empty coverage returns null score} \\
+AC-4 & \texttt{packages/shared/tests/completeness-scorer.spec.ts} & \texttt{rejects non-finite or negative weights} \\
+AC-5 & \texttt{packages/shared/tests/completeness-scorer.spec.ts} & \texttt{rejects values outside [0,1]} \\
+AC-6 & \texttt{packages/shared/tests/completeness-scorer.spec.ts} & \texttt{deterministic across repeated calls} \\
+AC-7 & \texttt{packages/shared/tests/completeness-scorer.spec.ts} & \texttt{presentKeys and missingKeys partition input} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Should \texttt{0} weights be tolerated (component declared but intentionally ignored) or rejected alongside negatives?
+  \item Should the scorer expose a variant that accepts values in \([-1, 1]\) for signed signals, or is that a separate utility?
+  \item How are duplicate keys handled --- first wins, last wins, or hard error?
+\end{itemize}
+
+\end{document}

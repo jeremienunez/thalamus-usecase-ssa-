@@ -1,0 +1,153 @@
+% SPEC-SW-002 — Finding Routing
+\input{../preamble.tex}
+
+\specID{SPEC-SW-002}
+\specTitle{Finding Routing --- dedup, rate-limit, and reviewer-UI dispatch}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+The nano-sweep producer (SPEC-SW-001) can emit hundreds of draft findings per run. Raw throughput would flood the reviewer UI and generate duplicate entries across successive runs. This spec defines the routing layer that sits between the pending buffer and the reviewer: it deduplicates overlapping findings, rate-limits notifications, decides which audience (role / tier) receives which source, and wires sweep completions into the messaging channel. It does not decide the \emph{truth} of a finding --- only who sees it and when.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Map each finding source (sweep, research cycle, cortex output) to a set of audience slugs.
+  \item Deduplicate findings whose (category, target, title) triple matches an existing pending entry within a TTL window.
+  \item Rate-limit reviewer notifications so a single sweep produces at most one digest per audience.
+  \item Dispatch a summary message to reviewers on sweep completion, idempotently.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+This spec does not generate findings (see SPEC-SW-001) nor apply resolutions (see SPEC-SW-003). It does not implement the reviewer UI itself --- only the server-side dispatch logic that feeds it.
+\end{nongoal}
+
+\section{Invariants}
+\begin{invariant}
+The routing layer is read-only with respect to source-of-truth tables. It only reads the pending buffer and writes to the messaging / inbox channel.
+\end{invariant}
+\begin{invariant}
+A single sweep completion produces at most one notification per audience slug, regardless of how many findings it contains.
+\end{invariant}
+\begin{invariant}
+Two findings with identical \texttt{(category, targetKey, normalizedTitle)} within the same TTL window MUST NOT both reach the reviewer inbox. The later one is suppressed or merged.
+\end{invariant}
+\begin{invariant}
+Administrative reviewers always receive every source via the admin dispatch path; tier maps explicitly exclude them to avoid double delivery.
+\end{invariant}
+
+\section{Interface}
+
+\begin{lstlisting}[language=TypeScript]
+export type InboxSource =
+  | "finding" | "sweep" | "research_cycle" | "consumption";
+
+// Cortex-emitted findings: map cortex id -> audience slugs
+export function getTiersForCortex(cortex: string): string[];
+
+// Non-cortex sources: map source -> audience slugs
+export function getTiersForSource(source: InboxSource): string[];
+
+// Wire sweep producer -> reviewer inbox
+export function wireSweepNotifications(
+  sweepService: NanoSweepService,
+  deps: {
+    findAdminIds: () => Promise<string[]>;
+    messagingService: Pick<MessagingService, "send">;
+  },
+): void;
+\end{lstlisting}
+
+\section{Scenarios}
+
+\begin{scenario}{Sweep completion notifies admins}
+\Given \texttt{wireSweepNotifications} has been called once at startup \\
+\When a sweep completes with 42 suggestions stored \\
+\Then exactly one inbox message is sent \\
+\And its recipients are the full admin id list \\
+\And its body reports group count, suggestion count, cost and duration.
+\end{scenario}
+
+\begin{scenario}{No admins configured}
+\Given \texttt{findAdminIds()} resolves to an empty array \\
+\When a sweep completes \\
+\Then no inbox message is sent \\
+\And the sweep run still succeeds and returns its \texttt{SweepResult}.
+\end{scenario}
+
+\begin{scenario}{Deduplication within TTL}
+\Given finding $F$ with key $(cat, target, title)$ already sits in the pending buffer, unreviewed \\
+\When a new run emits $F'$ with the same key within the TTL window \\
+\Then $F'$ is suppressed (or merged into $F$ with incremented count) \\
+\And the reviewer still sees a single row for that key.
+\end{scenario}
+
+\begin{scenario}{Rate-limit per audience}
+\Given two sweep completions fire within the rate-limit window \\
+\When both would target the same audience \\
+\Then only the first dispatches a notification \\
+\And the second is dropped or collapsed into the first digest.
+\end{scenario}
+
+\begin{scenario}{Tier-specific cortex finding}
+\Given a cortex whose tier map lists \texttt{["tier-b"]} \\
+\When a finding from that cortex enters the router \\
+\Then tier-b reviewers receive it \\
+\And no other non-admin tier receives it \\
+\And admins still receive it via the admin dispatch path.
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+\texttt{getTiersForSource("sweep")} returns an empty array (admin-only path). The admin path is exercised separately in the wiring.
+\end{ac}
+\begin{ac}{AC-2}
+\texttt{wireSweepNotifications} registers exactly one \texttt{onComplete} handler on the sweep service.
+\end{ac}
+\begin{ac}{AC-3}
+When a sweep completes and at least one admin id exists, \texttt{messagingService.send} is called exactly once with those recipients.
+\end{ac}
+\begin{ac}{AC-4}
+When a sweep completes and admin id list is empty, \texttt{messagingService.send} is not called.
+\end{ac}
+\begin{ac}{AC-5}
+Given two findings with identical \texttt{(category, targetKey, normalizedTitle)} submitted within the dedup TTL, the pending buffer contains exactly one reviewer-visible entry for that key.
+\end{ac}
+\begin{ac}{AC-6}
+Given two sweep completions within the rate-limit window, at most one notification per audience is dispatched.
+\end{ac}
+\begin{ac}{AC-7}
+For any cortex not present in the tier map, \texttt{getTiersForCortex} returns an empty array (fail-closed).
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1 & \texttt{tests/unit/finding-routing.sources.spec.ts} & \texttt{sweep source maps to admin-only} \\
+AC-2 & \texttt{tests/unit/finding-routing.wiring.spec.ts}  & \texttt{registers one completion handler} \\
+AC-3 & \texttt{tests/integration/finding-routing.notify.spec.ts} & \texttt{dispatches once to all admins} \\
+AC-4 & \texttt{tests/unit/finding-routing.wiring.spec.ts}  & \texttt{skips send when no admins} \\
+AC-5 & \texttt{tests/integration/finding-routing.dedup.spec.ts}  & \texttt{dedups identical finding keys} \\
+AC-6 & \texttt{tests/integration/finding-routing.ratelimit.spec.ts} & \texttt{limits digests per window} \\
+AC-7 & \texttt{tests/unit/finding-routing.cortex.spec.ts}  & \texttt{unknown cortex fails closed} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Dedup key: exact-match only, or include a lightweight similarity threshold on title?
+  \item Rate-limit window duration --- per-run, per-hour, per-day?
+  \item Should merged duplicates carry a visible \emph{seen N times} counter in the reviewer row?
+\end{itemize}
+
+\end{document}

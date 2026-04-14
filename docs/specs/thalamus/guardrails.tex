@@ -1,0 +1,260 @@
+% SPEC-TH-020 --- Guardrails: cost caps, depth limits, hallucination checks.
+% Generic spec for the Thalamus cortex orchestrator's safety envelope.
+
+\input{../preamble.tex}
+
+\specID{SPEC-TH-020}
+\specTitle{Guardrails --- Cost Caps, Depth Limits, Hallucination Checks}
+\specStatus{DRAFT}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+The Thalamus orchestrator drives recursive LLM-backed cortices that query internal data, external sources and other cortices. Without a hard safety envelope, such loops can burn unbounded tokens, recurse without progress, or surface fabricated claims.
+
+This spec defines \textbf{Guardrails}: the non-bypassable control layer that bounds every cortex invocation and every research chain. Enforcement lives in the orchestrator, not in the cortex prompts --- prompts can drift, code cannot. This is a sovereignty-critical surface: it is where operators retain control of cost, depth, and factuality against non-deterministic LLM behaviour.
+
+Guardrails sit between the cortex executor (\texttt{packages/thalamus/src/cortices/executor.ts}) and the cortex LLM transport. All cost, depth and validation decisions pass through it; none of them are delegated to the model.
+
+\section{Goals}
+\begin{itemize}[leftmargin=1.2em]
+  \item Enforce a per-cortex \textbf{token and monetary budget} at call time, independent of what the cortex prompt asks for.
+  \item Enforce a \textbf{depth limit} on any recursive or chained invocation, measured in iterations and in cumulative cost.
+  \item Detect \textbf{hallucinations} via structured-output validation, schema conformance and source-citation requirements; reject or quarantine findings that fail.
+  \item On breach, always surface a \textbf{partial result with an explicit breach marker}; never silently truncate.
+  \item Emit \textbf{observability signals} (metrics, structured logs) on every breach and every quarantine, so operators can audit non-deterministic behaviour post-hoc.
+\end{itemize}
+
+\section{Non-Goals}
+\begin{nongoal}
+This spec does not define:
+\begin{itemize}[leftmargin=1.2em]
+  \item The content of cortex prompts (see SPEC-TH-011, cortex skills).
+  \item Prompt-injection sanitation of inbound data payloads (see SPEC-TH-021, input sanitiser). Guardrails here govern \emph{orchestrator behaviour}, not \emph{payload cleanup}.
+  \item Rate limiting at the HTTP edge (see SPEC-API-030).
+  \item Long-term cost accounting across tenants (see SPEC-BILL-010).
+  \item Model selection, fallback strategy, or retry policy at the transport layer (see SPEC-TH-014).
+\end{itemize}
+\end{nongoal}
+
+\section{Invariants}
+
+\begin{invariant}
+\textbf{INV-1 --- Budget is non-bypassable.} Every cortex invocation is wrapped by \texttt{withGuardrails(budget, fn)}. It is impossible for a cortex to reach the LLM transport without a resolved, typed \texttt{Budget} object. Calling the transport directly is a lint-enforced violation.
+\end{invariant}
+
+\begin{invariant}
+\textbf{INV-2 --- Budget is monotonic.} Cumulative token and monetary cost on a chain only ever increase; there is no reset, discount or retroactive rebate across iterations of the same research chain. Reported cost $\geq$ actual cost for any prefix of the chain.
+\end{invariant}
+
+\begin{invariant}
+\textbf{INV-3 --- Depth is bounded by construction.} A research chain terminates in at most \texttt{maxIterationsPerChain} cycles, regardless of the novelty signal, LLM confidence, or cortex opinion. The orchestrator decrements the remaining-depth counter before dispatching each iteration; depth 0 short-circuits to a partial result.
+\end{invariant}
+
+\begin{invariant}
+\textbf{INV-4 --- Breach is observable.} On every breach (budget, depth, validation), the result carries a \texttt{breach} field enumerating the triggered guard(s), the measured value and the threshold. A silent success path on breach is a defect.
+\end{invariant}
+
+\begin{invariant}
+\textbf{INV-5 --- Unverifiable findings do not reach consumers.} A finding without a valid schema shape, or without at least one non-empty \texttt{evidence[]} citation pointing to an allow-listed source, is quarantined with \texttt{findingType = rejected\_unsourced} and never emitted to downstream stores.
+\end{invariant}
+
+\section{Interface}
+
+The orchestrator exposes a single entry point that all cortex calls must flow through. The contract is total: every outcome maps to a typed result, including breaches.
+
+\begin{lstlisting}[language=TypeScript]
+// Budget resolved per complexity tier (simple | moderate | deep)
+export interface Budget {
+  maxIterations: number;   // hard cap on chain depth
+  maxCost: number;         // monetary cap per chain, USD
+  maxTokens: number;       // aggregate prompt+completion tokens
+  maxWallClockMs: number;  // chain timeout
+  confidenceTarget: number;
+  coverageTarget: number;
+}
+
+export type BreachKind =
+  | "budget_cost"
+  | "budget_tokens"
+  | "depth_iterations"
+  | "wall_clock"
+  | "schema_invalid"
+  | "unsourced_finding"
+  | "source_not_allowlisted";
+
+export interface Breach {
+  kind: BreachKind;
+  measured: number | string;
+  threshold: number | string;
+  iteration: number;
+  cortex: string;
+}
+
+export interface GuardedOutput<T> {
+  result: T;                 // partial if breach.length > 0
+  partial: boolean;
+  breaches: Breach[];
+  usage: { tokens: number; costUsd: number; iterations: number; };
+}
+
+export function withGuardrails<T>(
+  budget: Budget,
+  ctx: ChainContext,
+  fn: (remaining: Budget) => Promise<T>,
+): Promise<GuardedOutput<T>>;
+
+export function validateFinding(
+  raw: unknown,
+  allowlist: SourceAllowlist,
+): Finding | RejectedFinding;
+\end{lstlisting}
+
+Emitted metrics (Prometheus-compatible):
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{thalamus\_guardrail\_breach\_total\{kind,cortex\}} --- counter
+  \item \texttt{thalamus\_chain\_cost\_usd\{cortex,tier\}} --- histogram
+  \item \texttt{thalamus\_chain\_iterations\{cortex,tier\}} --- histogram
+  \item \texttt{thalamus\_finding\_rejected\_total\{reason,cortex\}} --- counter
+\end{itemize}
+
+\section{Scenarios}
+
+\begin{scenario}{S-1 --- Nominal within budget}
+\Given a chain with \texttt{budget = simple} (\$0.03, 2 iter) \\
+\When iteration~1 costs \$0.008, produces 3 valid findings, and the novelty signal says stop \\
+\Then the chain exits normally with \texttt{partial=false}, \texttt{breaches=[]}, and \texttt{usage.costUsd=0.008}.
+\end{scenario}
+
+\begin{scenario}{S-2 --- Monetary cap exceeded mid-chain}
+\Given \texttt{budget.maxCost = 0.06} (moderate tier) \\
+\And iterations 1--3 accumulated \$0.055 \\
+\When iteration~4 is about to dispatch and the transport's pre-flight cost estimate is \$0.012 \\
+\Then the orchestrator refuses to dispatch iteration~4, returns \texttt{GuardedOutput} with \texttt{partial=true}, \texttt{breaches=[\{kind:"budget\_cost", measured:0.055, threshold:0.06\}]}, and includes all findings accumulated through iteration~3. \\
+\And metric \texttt{thalamus\_guardrail\_breach\_total\{kind="budget\_cost"\}} is incremented once.
+\end{scenario}
+
+\begin{scenario}{S-3 --- Token cap exceeded during iteration}
+\Given a running iteration with \texttt{maxTokens=60\,000} remaining \\
+\When the streaming LLM response crosses 60\,000 cumulative tokens mid-stream \\
+\Then the transport stream is cancelled at the next token boundary \\
+\And a partial finding set is parsed from the already-received prefix; any incomplete JSON object is dropped (not reconstructed) \\
+\And the result carries \texttt{breaches=[\{kind:"budget\_tokens",\dots\}]}.
+\end{scenario}
+
+\begin{scenario}{S-4 --- Depth limit reached}
+\Given \texttt{maxIterationsPerChain=8} and the chain at iteration~8 with an active novelty signal \\
+\When the strategist cortex requests a 9th iteration \\
+\Then the request is denied regardless of remaining cost budget \\
+\And the output is marked \texttt{partial=true} with \texttt{kind:"depth\_iterations"}.
+\end{scenario}
+
+\begin{scenario}{S-5 --- Hallucination: finding without evidence}
+\Given a cortex returns a finding with \texttt{evidence=[]} \\
+\When \texttt{validateFinding} runs \\
+\Then the finding is rejected, replaced by a \texttt{RejectedFinding} stub carrying \texttt{reason="unsourced"} \\
+\And it is \emph{not} persisted to the knowledge graph \\
+\And metric \texttt{thalamus\_finding\_rejected\_total\{reason="unsourced"\}} is incremented.
+\end{scenario}
+
+\begin{scenario}{S-6 --- Hallucination: non-allowlisted source}
+\Given a finding cites a URL whose host is not in the per-cortex source allowlist \\
+\When validation runs \\
+\Then the finding is rejected with \texttt{reason="source\_not\_allowlisted"} and the offending URL is logged at \texttt{warn}. \\
+\And the remainder of the finding set for that iteration is kept.
+\end{scenario}
+
+\begin{scenario}{S-7 --- Schema-invalid structured output}
+\Given the LLM returns JSON that fails the cortex output Zod schema (missing \texttt{confidence} field) \\
+\When the validator runs after one retry with schema-repair prompt \\
+\Then on second failure, the iteration returns zero findings with \texttt{breaches=[\{kind:"schema\_invalid"\}]} \\
+\And cost of the failed iteration is still charged to the chain budget (INV-2).
+\end{scenario}
+
+\begin{scenario}{S-8 --- Wall-clock timeout on a long iteration}
+\Given a chain-level \texttt{maxWallClockMs=300\,000} \\
+\When the current iteration's transport call exceeds 90\,000\,ms (\texttt{cortex.timeoutMs}) or the aggregate exceeds 300\,000\,ms \\
+\Then the in-flight call is aborted via \texttt{AbortSignal}; partial findings from prior iterations are returned with \texttt{kind:"wall\_clock"}.
+\end{scenario}
+
+\begin{scenario}{S-9 --- Consecutive zero-finding iterations}
+\Given \texttt{consecutiveZeroStop=2} \\
+\When iteration~$n$ and iteration~$n{+}1$ both produce zero valid findings after validation \\
+\Then the chain terminates with \texttt{partial=false} (not a breach --- a normal stop condition) \\
+\And a structured log entry tags the stop reason as \texttt{"diminishing\_returns"}. This is \emph{not} a breach.
+\end{scenario}
+
+\section{Acceptance Criteria}
+
+\begin{ac}{AC-1}
+Given a chain where cumulative cost crosses \texttt{budget.maxCost} after iteration~$k$, the orchestrator MUST NOT dispatch iteration~$k{+}1$. The returned \texttt{GuardedOutput.partial} MUST be \texttt{true} and \texttt{breaches} MUST contain exactly one entry with \texttt{kind="budget\_cost"}.
+\end{ac}
+
+\begin{ac}{AC-2}
+Given a chain at iteration equal to \texttt{budget.maxIterations}, any further dispatch MUST be refused with a \texttt{depth\_iterations} breach. This holds even if remaining cost budget is non-zero.
+\end{ac}
+
+\begin{ac}{AC-3}
+Given a finding with \texttt{evidence.length === 0}, \texttt{validateFinding} MUST return a \texttt{RejectedFinding} and the finding MUST NOT appear in the persisted knowledge graph.
+\end{ac}
+
+\begin{ac}{AC-4}
+Given a finding whose \texttt{evidence[i].url} host is not in the cortex's source allowlist, \texttt{validateFinding} MUST return a \texttt{RejectedFinding} with \texttt{reason="source\_not\_allowlisted"}.
+\end{ac}
+
+\begin{ac}{AC-5}
+Given an LLM response that fails schema validation twice in a row for the same iteration, that iteration MUST yield zero findings and MUST still increment \texttt{usage.costUsd} with the attempted cost (monotonicity, INV-2).
+\end{ac}
+
+\begin{ac}{AC-6}
+On every breach, exactly one increment of \texttt{thalamus\_guardrail\_breach\_total} with the matching \texttt{kind} and \texttt{cortex} labels MUST be observed. No breach MUST be silent; a unit test asserting breach-without-metric MUST fail the build.
+\end{ac}
+
+\begin{ac}{AC-7}
+\texttt{GuardedOutput} MUST always be returned, even on breach. The orchestrator MUST NOT \texttt{throw} out of \texttt{withGuardrails} for any of the defined \texttt{BreachKind}s; thrown exceptions are reserved for infrastructure errors (DB unreachable, transport crash).
+\end{ac}
+
+\begin{ac}{AC-8}
+Given a wall-clock overrun, the in-flight transport call MUST receive an \texttt{AbortSignal.abort()} within 500\,ms of the deadline, verified by an integration test that measures dispatch-to-abort latency.
+\end{ac}
+
+\begin{ac}{AC-9}
+Partial results returned on breach MUST be structurally identical (same TypeScript type, same JSON shape) to successful results; consumers MUST be able to rely on \texttt{result} being safe to read regardless of \texttt{partial}'s value.
+\end{ac}
+
+\begin{ac}{AC-10}
+The per-tier \texttt{Budget} (\texttt{simple}, \texttt{moderate}, \texttt{deep}) MUST be the \emph{only} source of numeric caps at runtime. No literal cost, iteration or token number MUST appear inside cortex prompts or cortex skill code --- enforced by a repository-level grep test.
+\end{ac}
+
+\section{Traceability}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+AC & Test file & Test name \\
+\midrule
+AC-1  & \texttt{packages/thalamus/test/guardrails.cost.spec.ts}      & \texttt{aborts chain on cost cap} \\
+AC-2  & \texttt{packages/thalamus/test/guardrails.depth.spec.ts}     & \texttt{refuses dispatch at max depth} \\
+AC-3  & \texttt{packages/thalamus/test/guardrails.validate.spec.ts}  & \texttt{rejects unsourced finding} \\
+AC-4  & \texttt{packages/thalamus/test/guardrails.validate.spec.ts}  & \texttt{rejects non-allowlisted source} \\
+AC-5  & \texttt{packages/thalamus/test/guardrails.validate.spec.ts}  & \texttt{charges cost on schema-invalid} \\
+AC-6  & \texttt{packages/thalamus/test/guardrails.metrics.spec.ts}   & \texttt{emits one breach metric per breach} \\
+AC-7  & \texttt{packages/thalamus/test/guardrails.contract.spec.ts}  & \texttt{never throws on defined breach kinds} \\
+AC-8  & \texttt{packages/thalamus/test/guardrails.timeout.spec.ts}   & \texttt{aborts in-flight call within 500ms} \\
+AC-9  & \texttt{packages/thalamus/test/guardrails.contract.spec.ts}  & \texttt{partial result has same shape} \\
+AC-10 & \texttt{packages/thalamus/test/guardrails.nomagic.spec.ts}   & \texttt{no literal caps outside config} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open Questions}
+\begin{itemize}[leftmargin=1.2em]
+  \item Should the cost cap be checked \emph{before} dispatch using a pre-flight token estimate, or only \emph{after} dispatch on reported usage? Current decision: pre-flight estimate + post-flight reconciliation. Needs validation against transport accuracy.
+  \item Per-tenant vs.\ per-chain monetary caps: in scope for SPEC-BILL-010, out of scope here --- but the interface must not preclude tenant-level wrapping.
+  \item Allowlist governance: who owns the per-cortex source allowlist? Proposed: declared in the cortex skill header, reviewed at skill-registration time. To be confirmed.
+\end{itemize}
+
+\end{document}
