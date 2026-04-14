@@ -1,8 +1,11 @@
+export type WhySourceClass = "field" | "osint" | "sim" | "derived";
+
 export interface WhyNode {
   id: string;
   label: string;
   kind: "finding" | "edge" | "source_item";
   sha256?: string;
+  sourceClass?: WhySourceClass;
   children: WhyNode[];
 }
 
@@ -15,9 +18,15 @@ export interface ProvenanceRepo {
       fromKind: string;
       label: string;
       sha256?: string;
+      sourceClass?: WhySourceClass;
     }>
   >;
-  sourceItem(id: string): Promise<{ id: string; label: string; sha256?: string } | null>;
+  sourceItem(id: string): Promise<{
+    id: string;
+    label: string;
+    sha256?: string;
+    sourceClass?: WhySourceClass;
+  } | null>;
 }
 
 export async function buildWhyTree(
@@ -34,6 +43,7 @@ export async function buildWhyTree(
       label: e.label,
       kind: "edge",
       sha256: e.sha256,
+      ...(e.sourceClass && { sourceClass: e.sourceClass }),
       children: [],
     };
     if (e.fromKind === "source_item") {
@@ -44,10 +54,20 @@ export async function buildWhyTree(
           label: s.label,
           kind: "source_item",
           sha256: s.sha256,
+          ...(s.sourceClass && { sourceClass: s.sourceClass }),
           children: [],
         });
     }
     children.push(child);
   }
+  // Sort children at each level by source_class priority: FIELD > OSINT > SIM > derived.
+  const priority = (sc?: WhySourceClass): number =>
+    sc === "field" ? 0 : sc === "osint" ? 1 : sc === "sim" ? 2 : 3;
+  const sortRec = (arr: WhyNode[]): WhyNode[] => {
+    arr.forEach((n) => sortRec(n.children));
+    arr.sort((a, b) => priority(a.sourceClass) - priority(b.sourceClass));
+    return arr;
+  };
+  sortRec(children);
   return { id: f.id, label: f.label, kind: "finding", children };
 }
