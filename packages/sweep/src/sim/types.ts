@@ -91,7 +91,16 @@ export interface AgentContext {
    * the infer_telemetry action. Absent for UC1 / UC3 operator-behaviour swarms.
    */
   telemetryTarget: TelemetryTarget | null;
+  /**
+   * Populated on Pc-estimator fish (sim_swarm.kind === "uc_pc_estimator").
+   * Carries the conjunction event + both satellites + the per-fish perturbation
+   * (hard-body radius × covariance scale) that disambiguates each sample.
+   * Absent for telemetry / UC1 / UC3 swarms.
+   */
+  pcEstimatorTarget: PcEstimatorTarget | null;
 }
+
+export type PcEstimatorTarget = import("./load-pc-target").PcEstimatorTarget;
 
 /** Satellite + bus-datasheet prior, injected as a dedicated prompt block. */
 export interface TelemetryTarget {

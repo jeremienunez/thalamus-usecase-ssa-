@@ -41,8 +41,45 @@ export function renderTurnPrompt(ctx: AgentContext): string {
     ...(ctx.telemetryTarget
       ? ["## Telemetry inference target", renderTelemetryTarget(ctx.telemetryTarget), ""]
       : []),
+    ...(ctx.pcEstimatorTarget
+      ? [renderPcEstimatorTarget(ctx.pcEstimatorTarget), ""]
+      : []),
     "## Task",
     "Decide what you do this turn. Respond with a single JSON object matching the schema in your instructions. No prose before or after.",
+  ].join("\n");
+}
+
+function renderPcEstimatorTarget(t: import("./types").PcEstimatorTarget): string {
+  const fmt = (v: number | null | undefined, digits = 3): string =>
+    v == null || Number.isNaN(v) ? "—" : Number(v).toFixed(digits);
+  const fmtSci = (v: number | null | undefined): string =>
+    v == null || Number.isNaN(v) ? "—" : Number(v).toExponential(3);
+  const tca = t.tca ? new Date(t.tca).toISOString() : "—";
+  const hbr =
+    t.assumptions?.hardBodyRadiusMeters != null
+      ? `${t.assumptions.hardBodyRadiusMeters} m`
+      : t.hardBodyRadiusMeters != null
+      ? `${t.hardBodyRadiusMeters} m (catalog)`
+      : "—";
+  const scale = t.assumptions?.covarianceScale ?? "—";
+  const primaryBus = t.primary.bus ?? "—";
+  const secondaryBus = t.secondary.bus ?? "—";
+  const primaryNorad = t.primary.noradId != null ? String(t.primary.noradId) : "—";
+  const secondaryNorad = t.secondary.noradId != null ? String(t.secondary.noradId) : "—";
+  return [
+    "## Pc estimation target",
+    `- Conjunction ID: ${t.conjunctionId}`,
+    `- TCA: ${tca}`,
+    `- Miss distance: ${fmt(t.missDistanceKm)} km`,
+    `- Relative velocity: ${fmt(t.relativeVelocityKmps)} km/s`,
+    `- Algorithmic Pc (current): ${fmtSci(t.currentPc)}`,
+    `- Primary:   ${t.primary.name} (NORAD ${primaryNorad}) · bus ${primaryBus}`,
+    `- Secondary: ${t.secondary.name} (NORAD ${secondaryNorad}) · bus ${secondaryBus}`,
+    `- Covariance (combined σ): ${fmt(t.combinedSigmaKm)} km`,
+    "",
+    "### Your perturbation",
+    `- Hard-body radius: ${hbr}`,
+    `- Covariance scale: ${scale}`,
   ].join("\n");
 }
 

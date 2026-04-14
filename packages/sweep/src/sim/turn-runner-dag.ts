@@ -29,16 +29,20 @@ import { turnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
 import { renderTurnPrompt } from "./prompt";
 import { loadTelemetryTarget } from "./load-telemetry-target";
+import { loadPcTarget } from "./load-pc-target";
 
 const logger = createLogger("sim-dag");
 
 const DEFAULT_CORTEX_NAME = "sim_operator_agent";
 const TELEMETRY_CORTEX_NAME = "telemetry_inference_agent";
+const PC_ESTIMATOR_CORTEX_NAME = "pc_estimator_agent";
 const MAX_JSON_RETRIES = 2;
 
 /** Pick the cortex skill for this turn based on the agent context. */
 function pickCortexName(ctx: AgentContext): string {
-  return ctx.telemetryTarget ? TELEMETRY_CORTEX_NAME : DEFAULT_CORTEX_NAME;
+  if (ctx.pcEstimatorTarget) return PC_ESTIMATOR_CORTEX_NAME;
+  if (ctx.telemetryTarget) return TELEMETRY_CORTEX_NAME;
+  return DEFAULT_CORTEX_NAME;
 }
 
 export interface DagRunnerDeps {
@@ -326,10 +330,10 @@ export class DagTurnRunner {
     ]);
 
     const godEvents = await this.loadGodEvents(args.simRunId, args.turnIndex);
-    const telemetryTarget = await loadTelemetryTarget(
-      this.deps.db,
-      args.simRunId,
-    );
+    const [telemetryTarget, pcEstimatorTarget] = await Promise.all([
+      loadTelemetryTarget(this.deps.db, args.simRunId),
+      loadPcTarget(this.deps.db, args.simRunId),
+    ]);
 
     return {
       simRunId: args.simRunId,
@@ -353,6 +357,7 @@ export class DagTurnRunner {
       godEvents,
       fleetSnapshot: args.fleetSnapshot,
       telemetryTarget,
+      pcEstimatorTarget,
     };
   }
 
