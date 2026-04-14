@@ -1,3 +1,7 @@
+// Container
+export { buildThalamusContainer } from "./config/container";
+export type { ThalamusContainer, BuildThalamusOpts } from "./config/container";
+
 // Services
 export { ThalamusService } from "./services/thalamus.service";
 export { ThalamusPlanner } from "./services/thalamus-planner.service";
