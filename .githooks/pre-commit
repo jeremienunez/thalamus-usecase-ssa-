@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Pre-commit hook — blocks commits that break spec contracts.
+#
+# Gates (fail-fast, ordered by speed):
+#   1. No .env* files in the staged set (safety net beyond .gitignore)
+#   2. pnpm typecheck          — all packages compile
+#   3. pnpm spec:check         — every AC in APPROVED/IMPLEMENTED specs has a traced test
+#   4. pnpm test               — the traced tests (and all others) pass
+#
+# DRAFT / REVIEW specs are ignored — work-in-progress doesn't block commits.
+# Bypass only with explicit --no-verify AND a written reason. Don't make a habit of it.
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+fail() { printf "${RED}✗ pre-commit: %s${NC}\n" "$1" >&2; exit 1; }
+ok()   { printf "${GREEN}✓ %s${NC}\n" "$1"; }
+step() { printf "${YELLOW}▸ %s${NC}\n" "$1"; }
+
+# ── 1. safety: no env files committed ───────────────────────────────────────
+step "checking no .env files in staged diff"
+STAGED_ENV=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^\.env($|\.)' | grep -v '^\.env\.example$' || true)
+if [ -n "$STAGED_ENV" ]; then
+  fail "refusing to commit env files:\n$STAGED_ENV\n  → add them to .gitignore and \`git rm --cached <file>\`"
+fi
+ok "no env files staged"
+
+# ── 2. typecheck ────────────────────────────────────────────────────────────
+step "pnpm typecheck"
+pnpm -s typecheck || fail "typecheck failed — fix types before committing"
+ok "typecheck passed"
+
+# ── 3. spec traceability ────────────────────────────────────────────────────
+step "pnpm spec:check (AC ↔ test traceability)"
+pnpm -s spec:check || fail "spec-check failed — every AC in APPROVED/IMPLEMENTED specs must have a passing test"
+ok "spec-check passed"
+
+# ── 4. tests ────────────────────────────────────────────────────────────────
+step "pnpm test"
+pnpm -s test || fail "tests failed — the spec's 'attendu réel' is not met"
+ok "tests passed"
+
+printf "${GREEN}✓ pre-commit: all gates green${NC}\n"
