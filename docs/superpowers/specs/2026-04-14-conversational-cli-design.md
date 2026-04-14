@@ -171,6 +171,15 @@ No SQL schema changes — `sim_agent_memory` already carries the right columns. 
   session 8f3a · tokens 12.4k/400k · cost $0.083 · last: query (2.4s)
   ```
 - **Cost dial**: session total = Σ cycle costs (thalamus + sweep + cli cortices); per-turn delta shown as `+ $0.014`.
+- **Satellite loader** — an ASCII pet that animates while long ops run (`runCycle`, `startTelemetrySwarm`, swarm aggregation). Default sprite is a small satellite orbiting a dot; additional sprites picked per action (dish scanning for `/query`, antenna blinking for `/telemetry`, radar sweep for `/graph`). ~10 fps via an Ink `useInterval`, cleaned up on step completion. The sprite also carries the current cortex name as a subtitle so the reviewer sees _what_ the system is doing, not just _that_ it's busy.
+  ```
+       .·°·.
+      ·     ·
+     ·   ●   ·     ← running: conjunction-analysis  ($0.012 so far)
+      · ─┼─ ·
+       ·─┴─·
+  ```
+  Sprite frames live in `packages/cli/src/components/SatelliteLoader/frames.ts`. New sprites are pure strings — zero runtime cost to add (e.g. a "pokemon-caught" celebratory frame on `/accept`).
 
 ## 9. Testing
 
