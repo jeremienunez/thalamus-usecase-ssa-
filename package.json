@@ -5,6 +5,7 @@
   "description": "Standalone extraction of Thalamus (multi-cortex research agent) and Sweep (nano swarm DB audit) for technical interview",
   "scripts": {
     "typecheck": "pnpm -r typecheck",
+    "ssa": "pnpm --filter @interview/cli start",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
@@ -17,6 +18,7 @@
   "devDependencies": {
     "@types/node": "^20.19.39",
     "@vitest/coverage-v8": "^1.6.1",
+    "dependency-cruiser": "^17.3.10",
     "ioredis-mock": "^8.13.1",
     "pg-mem": "^3.0.14",
     "tsx": "^4.21.0",
