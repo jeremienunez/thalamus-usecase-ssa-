@@ -40,6 +40,7 @@ Interview-readiness checklist for Thalamus + Sweep — **target interview: CortA
 Every spec has a Traceability table; tests must land at those paths and the `describe` block must carry the AC id. Below is the consolidated list per package.
 
 ### `@interview/shared`
+
 - [ ] `tests/try-async.spec.ts` — SPEC-SH-001 (AC-1..n)
 - [ ] `tests/app-error.spec.ts` — SPEC-SH-002
 - [ ] `tests/completeness-scorer.spec.ts` — SPEC-SH-003
@@ -47,10 +48,12 @@ Every spec has a Traceability table; tests must land at those paths and the `des
 - [ ] `tests/logger.spec.ts` + `tests/metrics.spec.ts` — SPEC-SH-005
 
 ### `@interview/db-schema`
+
 - [ ] `tests/schema-contract.spec.ts` — SPEC-DB-001
 - [ ] `tests/typed-repos.spec.ts` — SPEC-DB-002
 
 ### `@interview/thalamus`
+
 - [ ] `tests/orchestrator.spec.ts` — SPEC-TH-001
 - [ ] `tests/cortex-registry.spec.ts` — SPEC-TH-002
 - [ ] `tests/cortex-pattern.spec.ts` — SPEC-TH-003
@@ -64,6 +67,7 @@ Every spec has a Traceability table; tests must land at those paths and the `des
 - [ ] `tests/field-correlation.spec.ts` — SPEC-TH-041 (p99 SLO, `LatencyBreach`, no drop)
 
 ### `@interview/sweep`
+
 - [ ] `tests/unit/nano-sweep.{batching,parser,callbacks,cost,cap}.spec.ts` + `tests/integration/nano-sweep.readonly.spec.ts` — SPEC-SW-001
 - [ ] `tests/finding-routing.spec.ts` — SPEC-SW-002
 - [ ] `tests/resolution.spec.ts` — SPEC-SW-003
@@ -105,28 +109,33 @@ The repo was pivoted from its original commercial domain to SSA (collision avoid
 Targeted coverage, not exhaustive — tests picked to demonstrate design intent to a reviewer.
 
 ### shared
+
 - [ ] `tryAsync` tuple semantics (success / caught / rethrow)
 - [ ] `AppError` hierarchy + structured-cause serialization
 - [ ] Domain normalizers — edge cases that break naive string matching
 - [ ] `completeness-scorer` adaptive weight normalization when fields are missing
 
 ### db-schema
+
 - [ ] Typed query helpers against a fresh pg instance (smoke)
 - [ ] Schema migration round-trip
 
 ### thalamus
+
 - [ ] `orchestrator.executor` dispatches to the right cortex by query shape
 - [ ] `nano-swarm` parallelism + curator dedup (mock `nano-caller`)
 - [ ] `guardrails` enforces depth and cost caps, surfaces partial results on breach
 - [ ] One end-to-end cortex path: query → plan → explore → entity write (LLM mocked)
 
 ### sweep
+
 - [ ] `nano-sweep.service` emits findings shape expected by `finding-routing`
 - [ ] `resolution.service` applies an accepted suggestion in a transaction, writes audit row
 - [ ] Feedback loop: reject → next-run prompt includes the rejection signal
 - [ ] Rate-limit + dedupe in the chat repository
 
 ### e2e
+
 - [ ] Thalamus: one end-to-end query routed through executor, LLM mocked, graph write verified
 - [ ] Sweep: trigger → finding → reviewer accept → DB write + audit row (all in-memory/redis-mock)
 
@@ -144,11 +153,13 @@ Targeted coverage, not exhaustive — tests picked to demonstrate design intent 
 ## Interview prep — CortAIx / Thales
 
 ### Narrative (Olivier)
+
 - [ ] Write first-person pitch (5–7 min): problem → system shape → why cortex pattern → why nano swarm → guardrails → transposition to threat intel → tradeoffs
 - [ ] Open with the honest framing: "built on a commercial domain, pattern is domain-agnostic, here's the mapping"
 - [ ] Close with "what I'd change to ship this at Thales" (sovereign models on classified cortices, STIX/TAXII source fetchers, CERT-FR/ANSSI feeds)
 
 ### Code walkthrough
+
 - [ ] One file per package picked and rehearsed:
   - [ ] `thalamus/src/orchestrators/executor.ts` — orchestration + guardrails
   - [ ] `sweep/src/services/nano-sweep.service.ts` — swarm + finding routing
@@ -157,6 +168,7 @@ Targeted coverage, not exhaustive — tests picked to demonstrate design intent 
 - [ ] Diagram ready for each (whiteboard-able)
 
 ### Anticipated questions — have answers ready
+
 - [ ] **Sovereignty**: how would you deploy this on classified data? (sovereign models per cortex, air-gapped source fetchers, on-prem pgvector)
 - [ ] **Cost control**: how do you cap runaway agents? (budget per cortex, depth cap, partial-result surfacing on breach)
 - [ ] **Hallucination on IOCs**: hallucinated IOC = security incident. How do you prevent it? (structured-only outputs via Zod, source-reliability scoring, reviewer gate on Sweep before DB write)
@@ -203,6 +215,7 @@ Primary build pitched as **Space Situational Awareness** (orbital collision avoi
 - [ ] Land the punch: "**same code, new domain**. That's the Factory promise — ship the platform once, plug a domain per BL."
 
 ### Architecture additions to prototype (post-interview, if they bite)
+
 - [ ] `thalamus/src/cortices/{catalog,observations,conjunction-analysis,correlation,maneuver-planning}/` — SSA cortex stubs with skill `.md` prompts
 - [ ] `thalamus/src/cortices/sources/osint/` — `TLEFetcher`, `AmateurObsFetcher`, `SpacePressFetcher`
 - [ ] `thalamus/src/cortices/sources/field/` — generic `ClassifiedRadarFetcher`, `OperatorTelemetryFetcher` (stubbed, mockable)
@@ -212,12 +225,14 @@ Primary build pitched as **Space Situational Awareness** (orbital collision avoi
 - [ ] One end-to-end demo script: synthetic TLE + synthetic radar track → conjunction detected → operator accept in Playwright → `Maneuver` row + audit
 
 ### The 4 Olivier axes to hit explicitly
+
 - [ ] **Souveraineté** — multi-provider, per-step model selection, nothing tied to a vendor
 - [ ] **Contrôle** — bounded agents, guardrails in code not in prompts, cost/depth caps, rogue-agent story as contrast
 - [ ] **Human-in-the-loop** — Sweep never writes blind, every mutation audited and reversible
 - [ ] **Testabilité** — 5-layer arch, typed repos, vitest workspace with unit/integration/e2e ready to show
 
 ### Live-demo readiness
+
 - [ ] `pnpm -r typecheck` green
 - [ ] `pnpm test` green
 - [ ] Repo browsable with clickable file links in README
@@ -231,6 +246,7 @@ Plan: [tasks/sweep-sim-plan.md](tasks/sweep-sim-plan.md) — 9 phases, ~6h total
 **Core idea:** many cheap small-model "fish" cover the possibility space. A swarm of K fish, each perturbed (god-event, persona, constraints), produces an outcome distribution. Single runs = size-1 swarm. Nano model per fish, ~$0.01/fish.
 
 Use cases:
+
 - **UC1 swarm** — operator behaviour under perturbation; 50 fish, DAG driver, coverage over operator decisions
 - **UC3 swarm** — conjunction negotiation; 30 fish, Sequential driver, modal resolution → `sweep_suggestion` with distribution metadata
 
@@ -245,3 +261,103 @@ Use cases:
 - [ ] Phase 8 — Unit + integration tests (quorum fail-soft, determinism, cross-fish isolation) + final anti-pattern sweep
 
 Exit criteria: `make swarm-uc3` < 180s fixtures-mode (30 fish), `make swarm-uc1` < 300s (50 fish), deterministic aggregator output, one suggestion per swarm max, thalamus→sweep import direction preserved.
+
+## Next up — conversational CLI + fish quick wins
+
+Interactive CLI that captures logs, accepts queries, and delivers briefings
+readable by a non-technical reviewer. Each fish quick-win reuses the SPEC-SW-006
+sim-swarm infrastructure (already shipped) so impact >> effort.
+
+### Priority 1 — CLI foundation (DONE 2026-04-14)
+
+Shipped as `@interview/cli` via 22-task TDD plan (see
+[docs/superpowers/plans/2026-04-14-conversational-cli.md](docs/superpowers/plans/2026-04-14-conversational-cli.md)).
+46 specs green.
+
+- [x] `pnpm run ssa` entrypoint — two-lane router (slash grammar +
+      `interpreter` cortex emitting Zod `RouterPlan`)
+- [x] Commands: `query`, `telemetry`, `logs`, `graph`, `accept`, `explain`
+- [x] Source-class color bar + confidence sparkline, cost dial, rolling ETA
+- [x] Animated emoji logs (6 fps) + ASCII satellite loader with p50/p95 ETA
+- [x] 6 renderers (briefing, telemetry, logTail, graphTree, whyTree, clarify)
+- [x] Memory buffer + palace (`sim_agent_memory` HNSW, 200k token threshold)
+- [x] `analyst_briefing` + `interpreter` cortex skills
+- [x] E2E happy-path test
+
+Deferred (non-blocking for the demo):
+
+- [ ] `buildRealAdapters` in `cli/src/boot.ts` — wire thalamus/telemetry/
+      graph/resolution/why to real services (needs shared DB+Redis+LLM
+      bootstrap). CLI boots in stub mode; `logs` is real.
+- [ ] `analyst_briefing` end-to-end in `runCycle` output (skill exists)
+- [ ] Aggregator / swarm-service / promote `stepLog` emission
+
+### Priority 2 — Fish quick-wins (ranked by pitch value)
+
+Each reuses `startInvestigationSwarm(query, targetEntity, K)` — generalised
+from `startTelemetrySwarm`.
+
+- [ ] **Conjunction Pc probabilistic estimator (~45 min)** — take a
+      `conjunction_event`, K fish estimate Pc with perturbed assumptions
+      (hard-body radius 5 / 10 / 20 m, covariance tight / loose). Aggregator
+      → median + sigma + dissent clusters. Fixes the "all Pc = 1e-2
+      algorithmic default" gap flagged by the earlier demo cycle.
+- [ ] **Maneuver cost estimator (~60 min)** — K fish propose burns (dV,
+      timing, post-maneuver re-screen). Aggregator finds the Pareto front
+      over cost x residual-risk. Reviewer accepts the Pareto-efficient pick
+      → `sweep_suggestion` with `kind: "maneuver"` payload.
+- [ ] **Why? button (~30 min)** — on any finding, traces provenance via
+      `research_edge` back to the source_item + skill sha256. ASCII tree
+      render in the CLI. Instant explainability for a non-tech reviewer.
+- [ ] **Anomaly triage (~60 min)** — suspect low-confidence finding → K fish
+      each propose 3-5 explanation hypotheses (pipeline bug / real event /
+      sensor error / data gap). Aggregator clusters hypotheses, reviewer
+      picks. Demonstrates "system knows when it doesn't know".
+- [ ] **Operator posture inference (~45 min)** — K fish impersonate
+      doctrines (commercial / institutional / military-like), vote on the
+      operator's actual posture based on fleet mass / regime / cadence.
+      Fills an `operator.posture` field never publicly disclosed.
+- [ ] **"Dig into" follow-up (~30 min)** — in the CLI, follow-up query
+      relaunches a micro-swarm scoped to the previous finding's entity +
+      accumulated context. Conversational drilldown.
+- [ ] **Debris decay forecaster (~75 min)** — requires debris ingestion
+      first (see P4). K fish estimate remaining orbital lifetime per
+      catalogued debris using live NOAA F10.7 + altitude. Top-20 "likely
+      decay next 30d" as findings.
+- [ ] **What-if scenario (~90 min)** — "what if operator X launches 100
+      sats in SSO next month?" → K fish simulate impact on conjunction
+      rate, congestion, operator reactions. Aggregator = distribution of
+      plausibility outcomes.
+
+### Priority 3 — Grafana / Prometheus (~1h)
+
+- [ ] HTTP `/metrics` endpoint on port 8080 serving `registry.metrics()`
+      (prom-client text format)
+- [ ] Instrumentation at 5 points: `thalamus_cycles_total{status}`,
+      `thalamus_cortex_duration_seconds{cortex}` (histogram),
+      `thalamus_cycle_cost_usd` (counter),
+      `sweep_fish_duration_seconds{kind}` (histogram),
+      `sweep_suggestions_emitted_total{source_class,severity}` (counter)
+- [ ] `docker-compose.yml` — add prometheus (scrape `:8080/metrics`) +
+      grafana (port 3000, provision `dashboard.json` at boot)
+- [ ] `infra/grafana/dashboards/ssa.json` — 8 panels: cycle rate,
+      findings/cycle, cost/cycle, cortex p50/p99, swarm quorum, conjunction
+      rate by regime, fish dispersion, source_class distribution
+
+### Priority 4 — Debris ingestion (~45 min)
+
+Probability of collision sat x debris >> sat x sat in LEO. GCAT catalogues
+~60k objects; we currently seed 1500 active payloads only.
+
+- [ ] Extend `satellite` table OR add `space_object` table — field
+      `object_class enum('payload','rocket_stage','debris','unknown')`
+- [ ] `seed/debris.ts` — filter GCAT `Type ∈ {R, D, ?}` where `DDate IS NULL`
+      (not decayed), upsert with same regime classification
+- [ ] Extend `conjunctions-cli.ts` to screen `payload x any` pairs (not just
+      payload x payload). Expect ~20x more conjunction candidates in LEO.
+
+### Bottom line — interview pitch combo (~2h15)
+
+CLI + interpreter cortex (P1) + **Pc estimator + maneuver Pareto + Why button**
+(first three P2) = decision-support under uncertainty with auditable
+provenance, live. Matches the README pitch. Everything else is polish.

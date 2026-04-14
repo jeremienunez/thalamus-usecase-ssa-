@@ -4,6 +4,69 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Conversational CLI (`@interview/cli`) — 2026-04-14
+
+Interactive Ink-based REPL (`pnpm run ssa`) for the SSA console: two-lane
+router (slash grammar + interpreter cortex), animated emoji lifecycle
+logs, ASCII satellite loader with rolling p50/p95 ETA, pretext-flavored
+editorial rendering.
+
+Shared:
+
+- `packages/shared/src/observability/steps.ts` — `StepName` union of 19
+  lifecycle steps + `STEP_REGISTRY` (frames + terminal + error emoji per
+  step). Discriminated union on `StepEntry` enforces instantaneous vs
+  animated at compile time.
+- `packages/shared/src/observability/step-logger.ts` — `stepLog(logger,
+step, phase, extra?)` emits structured `StepEvent` to pino. Unknown
+  steps fall back to `❔` with a dev-mode warning.
+
+Thalamus & sweep retrofit:
+
+- `thalamus.service.ts`, `thalamus-planner.service.ts`,
+  `thalamus-executor.service.ts`, `thalamus-reflexion.service.ts`,
+  `cortex-llm.ts` emit `stepLog` at `cycle`, `planner`, `cortex`,
+  `nano.call`, `reflexion` lifecycle boundaries (start/done/error).
+- `telemetry-swarm.service.ts`, `turn-runner-dag.ts`,
+  `turn-runner-sequential.ts` emit `swarm`, `fish.turn`,
+  `fish.memory.write`.
+
+Package `@interview/cli`:
+
+- Router: slash-grammar parser (`parser.ts`) + Zod `RouterPlanSchema`
+  (7 discriminants incl. `clarify`) + `interpreter` cortex skill +
+  `dispatch` loop mapping steps to adapters.
+- Adapters: `thalamus`, `telemetry`, `logs` (pino ring buffer),
+  `graph` (BFS over research_edge), `resolution`, `why` (provenance
+  tree) — all thin wrappers.
+- Memory: `ConversationBuffer` (token-counted ring) + `MemoryPalace`
+  (sim_agent_memory HNSW) with 200k token threshold.
+- Utilities: `CostMeter` (per-turn + session), `EtaStore` (rolling
+  p50/p95 persisted to `~/.cache/ssa-cli/eta.json`), source-class
+  colors (`FIELD` green / `OSINT` yellow / `SIM` gray), sparkline bar.
+- Ink components: `Prompt`, `StatusFooter`, `ScrollView`,
+  `AnimatedEmoji` (6 fps frame cycler with terminal freeze on
+  done/error), `SatelliteLoader` (ASCII sprite + subtitle + ETA band
+  green/yellow/red).
+- Renderers: `briefing`, `telemetry`, `logTail`, `graphTree`,
+  `whyTree`, `clarify`.
+- Cortex skills: `interpreter.md` (router) + `analyst-briefing.md`
+  (briefing).
+- Boot: `boot.ts` + `index.ts` — stubbed adapters in the default path,
+  injectable via `BootDeps` for tests. `LogsAdapter` is wired end-to-end
+  via pino ring buffer.
+- Tests: 46 specs — schema (5), parser (10), interpreter (3), memory
+  (7), cost/eta (4), adapters (8), dispatch (2), components (5),
+  briefing renderer (1), e2e REPL (1).
+
+Known gaps (deferred):
+
+- `buildRealAdapters` in `boot.ts` still throws for
+  thalamus/telemetry/graph/resolution/why — real infra wiring (DB +
+  Redis + LLM transport) pending.
+- Aggregator / swarm-service / promote `stepLog` emission deferred
+  (Task 3 scoped to 4 files).
+
 ### sim-fish telemetry inference pipeline — 2026-04-14
 
 End-to-end multi-agent inference of operator-private 14D telemetry scalars,

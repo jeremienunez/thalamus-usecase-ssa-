@@ -199,11 +199,47 @@ Each uses the same `docs/specs/` contracts. Each is a schema + skill-pack swap. 
 
 ## Running locally
 
-````bash
+```bash
 pnpm install
 pnpm -r typecheck   # all packages
 pnpm test           # vitest workspace (unit / integration / e2e)
-```# Thalamus & Sweep — Agentic Systems Portfolio
+pnpm run ssa        # conversational CLI (Ink REPL — see §SSA console below)
+```
+
+## SSA console — `pnpm run ssa`
+
+Interactive terminal REPL (`@interview/cli`) with two-lane routing: explicit
+slash commands bypass the LLM (`parseExplicitCommand`), free-text goes
+through the `interpreter` cortex which emits a Zod-validated
+`RouterPlan { steps[1..8], confidence }`. Ambiguous input triggers a
+`clarify` step instead of guessing.
+
+Commands:
+
+- `/query <text>` — run a Thalamus cycle, render briefing
+- `/telemetry <satId>` — spawn telemetry swarm, render 14-scalar distribution
+- `/logs [level=info] [service=*]` — tail in-process pino ring buffer
+- `/graph <entity>` — BFS neighbourhood in `research_edge`
+- `/accept <suggestionId>` — resolve a sweep suggestion (audited)
+- `/explain <findingId>` — ASCII provenance tree (finding → edges →
+  source_item + skill sha256)
+
+Rendering:
+
+- Editorial tight layout (pretext-flavored quote bubbles, confidence
+  sparklines, source-class colors: FIELD=green, OSINT=yellow, SIM=gray).
+- Animated emoji lifecycle logs at 6 fps (frames for in-progress, terminal
+  emoji freeze on done/error).
+- ASCII satellite loader with rolling p50/p95 ETA per `{kind, subject}`,
+  persisted to `~/.cache/ssa-cli/eta.json`.
+- Persistent status footer: `session · tokens k/400k · cost $X · last: …`.
+
+Current boot is stub mode (`buildRealAdapters` throws for thalamus /
+telemetry / graph / resolution / why — real infra wiring pending). The
+`logs` adapter is real (pino ring buffer). Injectable adapters via
+`BootDeps` power the e2e test.
+
+# Thalamus & Sweep — Agentic Systems Portfolio
 
 > **Two production agentic backends. One shared typed foundation.**
 > Thalamus creates knowledge. Sweep maintains it. Together they close the loop.
@@ -215,17 +251,17 @@ pnpm test           # vitest workspace (unit / integration / e2e)
 <!-- Context-engineering block: explicit vocabulary for both human readers and LLM consumers. -->
 <!-- Every term below is used consistently throughout the document. -->
 
-| Term | Definition |
-|---|---|
-| **Cortex** | A domain-specialized execution unit. Owns its tools, skill prompts, SQL helpers, and cost budget. Isolated blast radius. |
-| **Skill** | A markdown prompt file, versioned with the code. The "binary" the cortex runs. |
-| **Nano worker** | A cheap, fast model instance (e.g. `gpt-5.4-nano`) doing bounded retrieval or classification in a swarm. |
-| **Curator** | A stronger model that deduplicates, ranks, and synthesizes nano worker outputs. |
-| **Finding** | A structured observation (inconsistency, threat, conjunction) surfaced by the swarm, pending human review. |
-| **Resolution** | A transactional DB write triggered by an accepted finding. Always audited, always reversible. |
-| **HITL** | Human-in-the-loop. The reviewer is a first-class system component, not an exception path. |
-| **Dual-stream** | OSINT (low-confidence, high-volume) fused with Field (high-confidence, restricted). Confidence is never self-promoted. |
-| **Source fetcher** | A typed adapter behind the `SourceFetcher` interface. One per external system. Swappable, mockable. |
+| Term               | Definition                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| **Cortex**         | A domain-specialized execution unit. Owns its tools, skill prompts, SQL helpers, and cost budget. Isolated blast radius. |
+| **Skill**          | A markdown prompt file, versioned with the code. The "binary" the cortex runs.                                           |
+| **Nano worker**    | A cheap, fast model instance (e.g. `gpt-5.4-nano`) doing bounded retrieval or classification in a swarm.                 |
+| **Curator**        | A stronger model that deduplicates, ranks, and synthesizes nano worker outputs.                                          |
+| **Finding**        | A structured observation (inconsistency, threat, conjunction) surfaced by the swarm, pending human review.               |
+| **Resolution**     | A transactional DB write triggered by an accepted finding. Always audited, always reversible.                            |
+| **HITL**           | Human-in-the-loop. The reviewer is a first-class system component, not an exception path.                                |
+| **Dual-stream**    | OSINT (low-confidence, high-volume) fused with Field (high-confidence, restricted). Confidence is never self-promoted.   |
+| **Source fetcher** | A typed adapter behind the `SourceFetcher` interface. One per external system. Swappable, mockable.                      |
 
 ---
 
@@ -287,7 +323,7 @@ flowchart TB
     style FOUNDATION fill:#0d1117,stroke:#30363d,color:#e6edf3
     style THALAMUS fill:#161b22,stroke:#4cc9f0,color:#e6edf3
     style SWEEP fill:#161b22,stroke:#f72585,color:#e6edf3
-````
+```
 
 ---
 
