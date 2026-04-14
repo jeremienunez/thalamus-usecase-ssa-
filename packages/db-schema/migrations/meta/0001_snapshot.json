@@ -1,0 +1,1804 @@
+{
+  "id": "996be6da-a436-4022-85ca-9da823f88488",
+  "prevId": "57974d0d-103a-4988-9e88-936ee4d8bb8e",
+  "version": "6",
+  "dialect": "postgresql",
+  "tables": {
+    "public.research_cycle": {
+      "name": "research_cycle",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trigger_type": {
+          "name": "trigger_type",
+          "type": "cycle_trigger",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trigger_source": {
+          "name": "trigger_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dag_plan": {
+          "name": "dag_plan",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cortices_used": {
+          "name": "cortices_used",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "cycle_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "findings_count": {
+          "name": "findings_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "total_cost": {
+          "name": "total_cost",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_research_cycle_started": {
+          "name": "idx_research_cycle_started",
+          "columns": [
+            "started_at"
+          ],
+          "isUnique": false
+        },
+        "idx_research_cycle_status": {
+          "name": "idx_research_cycle_status",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.research_edge": {
+      "name": "research_edge",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "finding_id": {
+          "name": "finding_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "entity_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "relation": {
+          "name": "relation",
+          "type": "relation",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weight": {
+          "name": "weight",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "context": {
+          "name": "context",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_research_edge_finding": {
+          "name": "idx_research_edge_finding",
+          "columns": [
+            "finding_id"
+          ],
+          "isUnique": false
+        },
+        "idx_research_edge_entity": {
+          "name": "idx_research_edge_entity",
+          "columns": [
+            "entity_type",
+            "entity_id"
+          ],
+          "isUnique": false
+        },
+        "idx_research_edge_relation": {
+          "name": "idx_research_edge_relation",
+          "columns": [
+            "relation"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "research_edge_finding_id_research_finding_id_fk": {
+          "name": "research_edge_finding_id_research_finding_id_fk",
+          "tableFrom": "research_edge",
+          "tableTo": "research_finding",
+          "columnsFrom": [
+            "finding_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.research_finding": {
+      "name": "research_finding",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "research_cycle_id": {
+          "name": "research_cycle_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cortex": {
+          "name": "cortex",
+          "type": "cortex",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finding_type": {
+          "name": "finding_type",
+          "type": "finding_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "finding_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "urgency": {
+          "name": "urgency",
+          "type": "urgency",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "reasoning": {
+          "name": "reasoning",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "impact_score": {
+          "name": "impact_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bus_context": {
+          "name": "bus_context",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reflexion_notes": {
+          "name": "reflexion_notes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "iteration": {
+          "name": "iteration",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "dedup_hash": {
+          "name": "dedup_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "embedding": {
+          "name": "embedding",
+          "type": "vector(1024)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_research_finding_cycle": {
+          "name": "idx_research_finding_cycle",
+          "columns": [
+            "research_cycle_id"
+          ],
+          "isUnique": false
+        },
+        "idx_research_finding_status_created": {
+          "name": "idx_research_finding_status_created",
+          "columns": [
+            "status",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_research_finding_cortex_type": {
+          "name": "idx_research_finding_cortex_type",
+          "columns": [
+            "cortex",
+            "finding_type"
+          ],
+          "isUnique": false
+        },
+        "uniq_research_finding_dedup": {
+          "name": "uniq_research_finding_dedup",
+          "columns": [
+            "dedup_hash"
+          ],
+          "isUnique": true
+        },
+        "idx_research_finding_expires": {
+          "name": "idx_research_finding_expires",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "research_finding_research_cycle_id_research_cycle_id_fk": {
+          "name": "research_finding_research_cycle_id_research_cycle_id_fk",
+          "tableFrom": "research_finding",
+          "tableTo": "research_cycle",
+          "columnsFrom": [
+            "research_cycle_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.operator": {
+      "name": "operator",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ground_station": {
+          "name": "ground_station",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.operator_country": {
+      "name": "operator_country",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orbit_regime_id": {
+          "name": "orbit_regime_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "doctrine": {
+          "name": "doctrine",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bounds": {
+          "name": "bounds",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "centroid": {
+          "name": "centroid",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "geometry": {
+          "name": "geometry",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "operator_country_orbit_regime_id_orbit_regime_id_fk": {
+          "name": "operator_country_orbit_regime_id_orbit_regime_id_fk",
+          "tableFrom": "operator_country",
+          "tableTo": "orbit_regime",
+          "columnsFrom": [
+            "orbit_regime_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.orbit_regime": {
+      "name": "orbit_regime",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "altitude_band": {
+          "name": "altitude_band",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.payload": {
+      "name": "payload",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "technical_profile": {
+          "name": "technical_profile",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_url": {
+          "name": "photo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.platform_class": {
+      "name": "platform_class",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.satellite": {
+      "name": "satellite",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "launch_year": {
+          "name": "launch_year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operator_country_id": {
+          "name": "operator_country_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "platform_class_id": {
+          "name": "platform_class_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operator_id": {
+          "name": "operator_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "satellite_bus_id": {
+          "name": "satellite_bus_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mass_kg": {
+          "name": "mass_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_experimental": {
+          "name": "is_experimental",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rating": {
+          "name": "rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_url": {
+          "name": "photo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "temperature": {
+          "name": "temperature",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lifetime": {
+          "name": "lifetime",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power": {
+          "name": "power",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "variant": {
+          "name": "variant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_resilient": {
+          "name": "is_resilient",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "classification_tier": {
+          "name": "classification_tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "k_multiplier": {
+          "name": "k_multiplier",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "descriptions": {
+          "name": "descriptions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "g_short_description": {
+          "name": "g_short_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "g_description": {
+          "name": "g_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "g_operator_description": {
+          "name": "g_operator_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "g_operator_country_description": {
+          "name": "g_operator_country_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "g_orbit_regime_description": {
+          "name": "g_orbit_regime_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "g_launch_year_description": {
+          "name": "g_launch_year_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "profile_metadata": {
+          "name": "profile_metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power_draw": {
+          "name": "power_draw",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "thermal_margin": {
+          "name": "thermal_margin",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pointing_accuracy": {
+          "name": "pointing_accuracy",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attitude_rate": {
+          "name": "attitude_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "link_budget": {
+          "name": "link_budget",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data_rate": {
+          "name": "data_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload_duty": {
+          "name": "payload_duty",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eclipse_ratio": {
+          "name": "eclipse_ratio",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "solar_array_health": {
+          "name": "solar_array_health",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "battery_depth_of_discharge": {
+          "name": "battery_depth_of_discharge",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "propellant_remaining": {
+          "name": "propellant_remaining",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "radiation_dose": {
+          "name": "radiation_dose",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "debris_proximity": {
+          "name": "debris_proximity",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mission_age": {
+          "name": "mission_age",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telemetry_summary": {
+          "name": "telemetry_summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "satellite_operator_country_id_operator_country_id_fk": {
+          "name": "satellite_operator_country_id_operator_country_id_fk",
+          "tableFrom": "satellite",
+          "tableTo": "operator_country",
+          "columnsFrom": [
+            "operator_country_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "satellite_platform_class_id_platform_class_id_fk": {
+          "name": "satellite_platform_class_id_platform_class_id_fk",
+          "tableFrom": "satellite",
+          "tableTo": "platform_class",
+          "columnsFrom": [
+            "platform_class_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "satellite_operator_id_operator_id_fk": {
+          "name": "satellite_operator_id_operator_id_fk",
+          "tableFrom": "satellite",
+          "tableTo": "operator",
+          "columnsFrom": [
+            "operator_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "satellite_satellite_bus_id_satellite_bus_id_fk": {
+          "name": "satellite_satellite_bus_id_satellite_bus_id_fk",
+          "tableFrom": "satellite",
+          "tableTo": "satellite_bus",
+          "columnsFrom": [
+            "satellite_bus_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.satellite_bus": {
+      "name": "satellite_bus",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform_class": {
+          "name": "platform_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generation": {
+          "name": "generation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payloads": {
+          "name": "payloads",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telemetry_summary": {
+          "name": "telemetry_summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power_draw": {
+          "name": "power_draw",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "thermal_margin": {
+          "name": "thermal_margin",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pointing_accuracy": {
+          "name": "pointing_accuracy",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attitude_rate": {
+          "name": "attitude_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "link_budget": {
+          "name": "link_budget",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data_rate": {
+          "name": "data_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload_duty": {
+          "name": "payload_duty",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eclipse_ratio": {
+          "name": "eclipse_ratio",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "solar_array_health": {
+          "name": "solar_array_health",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "battery_depth_of_discharge": {
+          "name": "battery_depth_of_discharge",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "propellant_remaining": {
+          "name": "propellant_remaining",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "radiation_dose": {
+          "name": "radiation_dose",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "debris_proximity": {
+          "name": "debris_proximity",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mission_age": {
+          "name": "mission_age",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.satellite_payload": {
+      "name": "satellite_payload",
+      "schema": "",
+      "columns": {
+        "satellite_id": {
+          "name": "satellite_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload_id": {
+          "name": "payload_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mass_kg": {
+          "name": "mass_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power_w": {
+          "name": "power_w",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "satellite_payload_satellite_id_satellite_id_fk": {
+          "name": "satellite_payload_satellite_id_satellite_id_fk",
+          "tableFrom": "satellite_payload",
+          "tableTo": "satellite",
+          "columnsFrom": [
+            "satellite_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "satellite_payload_payload_id_payload_id_fk": {
+          "name": "satellite_payload_payload_id_payload_id_fk",
+          "tableFrom": "satellite_payload",
+          "tableTo": "payload",
+          "columnsFrom": [
+            "payload_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.launch": {
+      "name": "launch",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vehicle": {
+          "name": "vehicle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.sweep_audit": {
+      "name": "sweep_audit",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "suggestion_id": {
+          "name": "suggestion_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operator_country_id": {
+          "name": "operator_country_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operator_country_name": {
+          "name": "operator_country_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "sweep_category",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "severity": {
+          "name": "severity",
+          "type": "sweep_severity",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suggested_action": {
+          "name": "suggested_action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "affected_satellites": {
+          "name": "affected_satellites",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "web_evidence": {
+          "name": "web_evidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "accepted": {
+          "name": "accepted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewer_note": {
+          "name": "reviewer_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution_status": {
+          "name": "resolution_status",
+          "type": "sweep_resolution_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution_payload": {
+          "name": "resolution_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution_errors": {
+          "name": "resolution_errors",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_sweep_audit_category": {
+          "name": "idx_sweep_audit_category",
+          "columns": [
+            "category"
+          ],
+          "isUnique": false
+        },
+        "idx_sweep_audit_severity": {
+          "name": "idx_sweep_audit_severity",
+          "columns": [
+            "severity",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_sweep_audit_reviewed": {
+          "name": "idx_sweep_audit_reviewed",
+          "columns": [
+            "reviewed_at"
+          ],
+          "isUnique": false
+        },
+        "idx_sweep_audit_suggestion": {
+          "name": "idx_sweep_audit_suggestion",
+          "columns": [
+            "suggestion_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "sweep_audit_operator_country_id_operator_country_id_fk": {
+          "name": "sweep_audit_operator_country_id_operator_country_id_fk",
+          "tableFrom": "sweep_audit",
+          "tableTo": "operator_country",
+          "columnsFrom": [
+            "operator_country_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.article": {
+      "name": "article",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "author_id": {
+          "name": "author_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "article_author_id_user_id_fk": {
+          "name": "article_author_id_user_id_fk",
+          "tableFrom": "article",
+          "tableTo": "user",
+          "columnsFrom": [
+            "author_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "article_slug_unique": {
+          "name": "article_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      }
+    },
+    "public.user": {
+      "name": "user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'user'"
+        },
+        "tier": {
+          "name": "tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'free'"
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_email_unique": {
+          "name": "user_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      }
+    },
+    "public.exploration_log": {
+      "name": "exploration_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "query": {
+          "name": "query",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "query_type": {
+          "name": "query_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "signal_source": {
+          "name": "signal_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "urls_crawled": {
+          "name": "urls_crawled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "items_injected": {
+          "name": "items_injected",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "items_promoted": {
+          "name": "items_promoted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "quality_score": {
+          "name": "quality_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exploration_meta": {
+          "name": "exploration_meta",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_exploration_created": {
+          "name": "idx_exploration_created",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_exploration_quality": {
+          "name": "idx_exploration_quality",
+          "columns": [
+            "quality_score"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.source": {
+      "name": "source",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "source_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "last_fetched_at": {
+          "name": "last_fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_source_kind_last_fetched": {
+          "name": "idx_source_kind_last_fetched",
+          "columns": [
+            "kind",
+            "last_fetched_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "source_slug_unique": {
+          "name": "source_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      }
+    },
+    "public.source_item": {
+      "name": "source_item",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "abstract": {
+          "name": "abstract",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "authors": {
+          "name": "authors",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "score": {
+          "name": "score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raw_metadata": {
+          "name": "raw_metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uniq_source_item_external": {
+          "name": "uniq_source_item_external",
+          "columns": [
+            "source_id",
+            "external_id"
+          ],
+          "isUnique": true
+        },
+        "idx_source_item_source_published": {
+          "name": "idx_source_item_source_published",
+          "columns": [
+            "source_id",
+            "published_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "source_item_source_id_source_id_fk": {
+          "name": "source_item_source_id_source_id_fk",
+          "tableFrom": "source_item",
+          "tableTo": "source",
+          "columnsFrom": [
+            "source_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

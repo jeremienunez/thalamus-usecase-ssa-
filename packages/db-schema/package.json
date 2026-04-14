@@ -1,0 +1,32 @@
+{
+  "name": "@interview/db-schema",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "drizzle-kit": "drizzle-kit",
+    "generate": "drizzle-kit generate",
+    "push": "drizzle-kit push",
+    "studio": "drizzle-kit studio",
+    "seed": "tsx src/seed/index.ts",
+    "enrich": "tsx src/seed/enrich.ts",
+    "conjunctions": "tsx src/seed/conjunctions-cli.ts",
+    "enrich-gcat": "tsx src/seed/enrich-gcat.ts",
+    "baselines": "tsx src/seed/baselines.ts"
+  },
+  "dependencies": {
+    "@interview/shared": "workspace:*",
+    "drizzle-orm": "^0.30.0",
+    "pg": "^8.11.0",
+    "satellite.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14",
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.21.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.4.0"
+  }
+}

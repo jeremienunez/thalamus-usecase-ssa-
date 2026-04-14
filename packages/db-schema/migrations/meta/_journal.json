@@ -1,0 +1,41 @@
+{
+  "version": "6",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1776115691951,
+      "tag": "0000_flawless_dorian_gray",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776118111291,
+      "tag": "0001_whole_liz_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1776181720393,
+      "tag": "0002_jittery_timeslip",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1776183275576,
+      "tag": "0003_magical_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1776185720478,
+      "tag": "0004_icy_deadpool",
+      "breakpoints": true
+    }
+  ]
+}
