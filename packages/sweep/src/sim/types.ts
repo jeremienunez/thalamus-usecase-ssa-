@@ -85,6 +85,33 @@ export interface AgentContext {
     detail?: string;
   }>;
   fleetSnapshot: FleetSnapshot | null;
+  /**
+   * Populated on telemetry-inference fish (sim_swarm.kind === "uc_telemetry_inference").
+   * Carries the target satellite + flattened bus datasheet prior that grounds
+   * the infer_telemetry action. Absent for UC1 / UC3 operator-behaviour swarms.
+   */
+  telemetryTarget: TelemetryTarget | null;
+}
+
+/** Satellite + bus-datasheet prior, injected as a dedicated prompt block. */
+export interface TelemetryTarget {
+  satelliteId: number;
+  satelliteName: string;
+  noradId: number | null;
+  regime: string | null;
+  launchYear: number | null;
+  busArchetype: string | null;
+  /**
+   * Flattened prior: `{ [scalarKey]: { typical, min, max, unit } }`.
+   * Null when no datasheet matched the bus name — the fish must say so
+   * rather than invent values.
+   */
+  busDatasheetPrior: Record<
+    string,
+    { typical: number; min: number; max: number; unit: string }
+  > | null;
+  /** Citation URLs for the bus datasheet (reviewer audit). */
+  sources: string[];
 }
 
 /** Compact fleet summary passed into each turn prompt. Cached per fish. */

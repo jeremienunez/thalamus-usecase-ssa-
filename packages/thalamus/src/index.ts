@@ -8,6 +8,25 @@ export { ResearchGraphService } from "./services/research-graph.service";
 export { CortexExecutor } from "./cortices/executor";
 export { CortexRegistry } from "./cortices/registry";
 export * from "./cortices/types";
+export { ConfidenceService, InvalidPromotion } from "./cortices/confidence";
+export type {
+  SourceClass,
+  EdgeConfidence,
+  EdgeProvenanceEvent,
+  PromoteEdgeInput,
+  DemoteEdgeInput,
+  QueryFilter,
+} from "./cortices/confidence";
+export { FieldCorrelator, LATENCY_BUDGET_MS } from "./cortices/field-correlation";
+export type {
+  Priority,
+  FieldEvent,
+  CorrelationResult,
+  LatencyBreach,
+  MetricsSink,
+  FieldCorrelatorOptions,
+  CandidateLookup,
+} from "./cortices/field-correlation";
 
 // Explorer
 export { ExplorerOrchestrator } from "./explorer/orchestrator";

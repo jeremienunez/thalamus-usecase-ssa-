@@ -38,9 +38,58 @@ export function renderTurnPrompt(ctx: AgentContext): string {
     "## God-view injections active this turn",
     renderGodEvents(ctx),
     "",
+    ...(ctx.telemetryTarget
+      ? ["## Telemetry inference target", renderTelemetryTarget(ctx.telemetryTarget), ""]
+      : []),
     "## Task",
     "Decide what you do this turn. Respond with a single JSON object matching the schema in your instructions. No prose before or after.",
   ].join("\n");
+}
+
+function renderTelemetryTarget(t: import("./types").TelemetryTarget): string {
+  const header = [
+    `- satelliteId: ${t.satelliteId}`,
+    `- name: ${t.satelliteName}`,
+    t.noradId != null ? `- noradId: ${t.noradId}` : null,
+    t.regime ? `- regime: ${t.regime}` : null,
+    t.launchYear != null ? `- launchYear: ${t.launchYear}` : null,
+    t.busArchetype ? `- bus: ${t.busArchetype}` : "- bus: (unknown — no datasheet prior available)",
+  ].filter((l): l is string => l !== null);
+
+  if (!t.busDatasheetPrior || Object.keys(t.busDatasheetPrior).length === 0) {
+    header.push(
+      "",
+      "### Bus datasheet prior",
+      "(no public datasheet matched — infer conservatively from regime + operator norms, and set self-reported confidence ≤ 0.25)",
+    );
+    return header.join("\n");
+  }
+
+  const rows = Object.entries(t.busDatasheetPrior)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, r]) => {
+      const band =
+        r.min === r.max
+          ? `${r.typical} ${r.unit}`
+          : `[${r.min}, ${r.typical}, ${r.max}] ${r.unit}`;
+      return `| ${key} | ${band} |`;
+    });
+
+  header.push(
+    "",
+    "### Bus datasheet prior",
+    "Values you infer MUST lie within the range below (±10% tolerance).",
+    "",
+    "| scalar | [min, typical, max] unit |",
+    "|---|---|",
+    ...rows,
+  );
+
+  if (t.sources.length > 0) {
+    header.push("", `Sources: ${t.sources.join(", ")}`);
+  }
+
+  return header.join("\n");
 }
 
 function renderFleetSnapshot(ctx: AgentContext): string {

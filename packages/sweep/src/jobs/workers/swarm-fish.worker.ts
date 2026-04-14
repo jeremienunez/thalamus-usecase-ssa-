@@ -83,6 +83,13 @@ export function createSwarmFishWorker(
           } else if (run.kind === "uc1_operator_behavior") {
             await deps.dagRunner.runTurn({ simRunId, turnIndex });
             // DAG driver does not self-terminate early; fish runs to maxTurns.
+          } else if (run.kind === "uc_telemetry_inference") {
+            // Single-agent single-turn swarm: the fish emits one
+            // infer_telemetry action and is done. Use the DAG runner (it's
+            // the same per-agent parallel-turn path with 1 agent) and mark
+            // terminal immediately so we skip the remaining maxTurns loop.
+            await deps.dagRunner.runTurn({ simRunId, turnIndex });
+            terminal = true;
           } else {
             throw new Error(`unknown sim_run.kind: ${String(run.kind)}`);
           }

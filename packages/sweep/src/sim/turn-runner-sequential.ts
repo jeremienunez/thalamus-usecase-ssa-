@@ -18,10 +18,16 @@ import { turnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
 import { renderTurnPrompt } from "./prompt";
 import { isTerminal } from "./promote";
+import { loadTelemetryTarget } from "./load-telemetry-target";
 
 const logger = createLogger("sim-sequential");
 
-const CORTEX_NAME = "sim_operator_agent";
+const DEFAULT_CORTEX_NAME = "sim_operator_agent";
+const TELEMETRY_CORTEX_NAME = "telemetry_inference_agent";
+
+function pickCortexName(ctx: AgentContext): string {
+  return ctx.telemetryTarget ? TELEMETRY_CORTEX_NAME : DEFAULT_CORTEX_NAME;
+}
 const MAX_JSON_RETRIES = 2;
 
 export interface SequentialRunnerDeps {
@@ -155,10 +161,11 @@ export class SequentialTurnRunner {
 
   private async callAgent(ctx: AgentContext): Promise<TurnResponse> {
     const userPrompt = renderTurnPrompt(ctx);
-    const skill = this.deps.cortexRegistry.get(CORTEX_NAME);
+    const cortexName = pickCortexName(ctx);
+    const skill = this.deps.cortexRegistry.get(cortexName);
     if (!skill) {
       throw new Error(
-        `Cortex skill '${CORTEX_NAME}' not found in registry. Did you discover() skills at boot?`,
+        `Cortex skill '${cortexName}' not found in registry. Did you discover() skills at boot?`,
       );
     }
     const instructions = skill.body;
@@ -198,7 +205,7 @@ export class SequentialTurnRunner {
       }
     }
     throw new Error(
-      `sim_operator_agent response invalid after ${MAX_JSON_RETRIES + 1} attempts: ${lastError?.message}`,
+      `${pickCortexName(ctx)} response invalid after ${MAX_JSON_RETRIES + 1} attempts: ${lastError?.message}`,
     );
   }
 
@@ -228,6 +235,10 @@ export class SequentialTurnRunner {
     ]);
 
     const godEvents = await this.loadGodEvents(args.simRunId, args.turnIndex);
+    const telemetryTarget = await loadTelemetryTarget(
+      this.deps.db,
+      args.simRunId,
+    );
 
     return {
       simRunId: args.simRunId,
@@ -250,6 +261,7 @@ export class SequentialTurnRunner {
       })),
       godEvents,
       fleetSnapshot: args.fleetSnapshot,
+      telemetryTarget,
     };
   }
 

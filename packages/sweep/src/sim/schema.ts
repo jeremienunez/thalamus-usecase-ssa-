@@ -7,6 +7,20 @@
  */
 
 import { z } from "zod";
+import { TELEMETRY_SCALAR_KEYS } from "@interview/db-schema";
+
+/** Per-scalar inference shape produced by the telemetry_inference_agent. */
+const scalarValueSchema = z.object({
+  value: z.number().finite(),
+  unit: z.string().min(1).max(16),
+});
+
+/** Record<TelemetryScalarKey, {value, unit}> — required keys match TELEMETRY_SCALAR_KEYS. */
+const telemetryScalarsSchema = z.object(
+  Object.fromEntries(
+    TELEMETRY_SCALAR_KEYS.map((k) => [k, scalarValueSchema]),
+  ) as Record<(typeof TELEMETRY_SCALAR_KEYS)[number], typeof scalarValueSchema>,
+);
 
 export const turnActionSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -41,6 +55,13 @@ export const turnActionSchema = z.discriminatedUnion("kind", [
     reason: z.string().min(1),
   }),
   z.object({ kind: z.literal("hold"), reason: z.string().min(1) }),
+  z.object({
+    kind: z.literal("infer_telemetry"),
+    satelliteId: z.number().int().positive(),
+    scalars: telemetryScalarsSchema,
+    confidence: z.number().min(0).max(1),
+    reason: z.string().min(1),
+  }),
 ]);
 
 export const turnResponseSchema = z.object({
@@ -98,9 +119,22 @@ export const swarmConfigSchema = z.object({
   llmMode: z.enum(["cloud", "fixtures", "record"]),
   quorumPct: z.number().min(0).max(1).default(0.8),
   perFishTimeoutMs: z.number().int().positive().default(60_000),
-  fishConcurrency: z.number().int().min(1).max(16).default(8),
+  fishConcurrency: z.number().int().min(1).max(50).default(8),
   nanoModel: z.string().default("gpt-5.4-nano"),
   seed: z.number().int().default(42),
+});
+
+export const busDatasheetPriorSchema = z.object({
+  busArchetype: z.string(),
+  scalars: z.record(
+    z.string(),
+    z.object({
+      typical: z.number(),
+      min: z.number(),
+      max: z.number(),
+      unit: z.string(),
+    }),
+  ),
 });
 
 export const seedRefsSchema = z.object({
@@ -108,10 +142,16 @@ export const seedRefsSchema = z.object({
   conjunctionFindingId: z.number().int().positive().optional(),
   horizonDays: z.number().int().positive().default(5),
   turnsPerDay: z.number().int().positive().default(1),
+  telemetryTargetSatelliteId: z.number().int().positive().optional(),
+  busDatasheetPrior: busDatasheetPriorSchema.optional(),
 });
 
 export const launchSwarmSchema = z.object({
-  kind: z.enum(["uc1_operator_behavior", "uc3_conjunction"]),
+  kind: z.enum([
+    "uc1_operator_behavior",
+    "uc3_conjunction",
+    "uc_telemetry_inference",
+  ]),
   title: z.string().min(1),
   baseSeed: seedRefsSchema,
   perturbations: z.array(perturbationSchema).min(1),

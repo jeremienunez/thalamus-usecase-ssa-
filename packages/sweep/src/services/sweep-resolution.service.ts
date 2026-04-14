@@ -33,7 +33,24 @@ import {
 
 const logger = createLogger("sweep-resolution");
 
+/**
+ * Hook fired after a sim-swarm-sourced update_field is successfully applied.
+ * Wired in the DI container to bump the scalar's source_class via
+ * ConfidenceService (SIM_UNCORROBORATED → OSINT_CORROBORATED per SPEC-TH-040).
+ * Optional: when absent, the UPDATE still applies; confidence tracking is skipped.
+ */
+export type OnSimUpdateAccepted = (event: {
+  satelliteId: bigint;
+  field: string;
+  value: number;
+  swarmId: number | null;
+  priorSourceClass: string;
+  nextSourceClass: string;
+}) => Promise<void>;
+
 export class SweepResolutionService {
+  private onSimUpdateAccepted: OnSimUpdateAccepted | null = null;
+
   constructor(
     private satelliteRepo: SatelliteRepository,
     private sweepRepo: SweepRepository,
@@ -43,6 +60,10 @@ export class SweepResolutionService {
 
   setGraphService(gs: ResearchGraphService): void {
     this.graphService = gs;
+  }
+
+  setOnSimUpdateAccepted(cb: OnSimUpdateAccepted): void {
+    this.onSimUpdateAccepted = cb;
   }
 
   /**
@@ -297,18 +318,66 @@ export class SweepResolutionService {
       );
     }
 
-    // Direct value fields (mass_kg, launch_year)
+    // Direct value fields. Extended from {mass_kg, launch_year} to also cover
+    // the 8 telemetry scalars inferable by sim-swarm (SPEC-SW-006 telemetry
+    // inference). Each snake_case DB column maps to its Drizzle camelCase key.
     const fieldMap: Record<string, string> = {
       mass_kg: "massKg",
       launch_year: "launchYear",
+      // Telemetry scalars (sim-swarm inference accept path).
+      power_draw: "powerDraw",
+      thermal_margin: "thermalMargin",
+      pointing_accuracy: "pointingAccuracy",
+      attitude_rate: "attitudeRate",
+      link_budget: "linkBudget",
+      data_rate: "dataRate",
+      payload_duty: "payloadDuty",
+      eclipse_ratio: "eclipseRatio",
     };
     const drizzleField = fieldMap[field] ?? field;
-    return this.updateSatellitesScalar(
+    const result = await this.updateSatellitesScalar(
       operatorCountryId,
       action.satelliteIds,
       drizzleField,
       Number(value),
     );
+
+    // Sim-provenance post-hook: when the accepted suggestion carries a
+    // sim_swarm provenance tag, fire the onSimUpdateAccepted callback so the
+    // container can bump the scalar's source_class (SIM_UNCORROBORATED →
+    // OSINT_CORROBORATED) via ConfidenceService. The resolution returns
+    // regardless — confidence promotion failures do not fail the UPDATE.
+    const provenance = (action as { provenance?: { source?: string; swarmId?: number; sourceClass?: string } })
+      .provenance;
+    if (
+      result.affected > 0 &&
+      provenance?.source === "sim_swarm_telemetry" &&
+      this.onSimUpdateAccepted
+    ) {
+      const targetSatelliteIds = await this.resolveSatelliteIds(
+        action.satelliteIds,
+        operatorCountryId,
+      );
+      for (const satId of targetSatelliteIds) {
+        try {
+          await this.onSimUpdateAccepted({
+            satelliteId: satId,
+            field,
+            value: Number(value),
+            swarmId: provenance.swarmId ?? null,
+            priorSourceClass: provenance.sourceClass ?? "SIM_UNCORROBORATED",
+            nextSourceClass: "OSINT_CORROBORATED",
+          });
+        } catch (err) {
+          logger.warn(
+            { err, satelliteId: String(satId), field },
+            "onSimUpdateAccepted callback failed; UPDATE still stands",
+          );
+        }
+      }
+    }
+
+    return result;
   }
 
   private async handleLinkPayload(

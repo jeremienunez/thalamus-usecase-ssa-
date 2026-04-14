@@ -84,6 +84,18 @@ export class SwarmService {
     if (kind === "uc1_operator_behavior" && (baseSeed.operatorIds?.length ?? 0) < 1) {
       throw new Error("UC1 swarm requires at least 1 operatorId in baseSeed");
     }
+    if (kind === "uc_telemetry_inference") {
+      if ((baseSeed.operatorIds?.length ?? 0) !== 1) {
+        throw new Error(
+          "UC_TELEMETRY swarm requires exactly 1 operatorId in baseSeed (the target satellite's operator)",
+        );
+      }
+      if (baseSeed.telemetryTargetSatelliteId == null) {
+        throw new Error(
+          "UC_TELEMETRY swarm requires baseSeed.telemetryTargetSatelliteId",
+        );
+      }
+    }
 
     // 1. Insert sim_swarm row.
     const swarmConfig: SwarmConfig = {

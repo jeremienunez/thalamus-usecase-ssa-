@@ -28,11 +28,18 @@ import type { AgentContext, FleetSnapshot, TurnResponse } from "./types";
 import { turnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
 import { renderTurnPrompt } from "./prompt";
+import { loadTelemetryTarget } from "./load-telemetry-target";
 
 const logger = createLogger("sim-dag");
 
-const CORTEX_NAME = "sim_operator_agent";
+const DEFAULT_CORTEX_NAME = "sim_operator_agent";
+const TELEMETRY_CORTEX_NAME = "telemetry_inference_agent";
 const MAX_JSON_RETRIES = 2;
+
+/** Pick the cortex skill for this turn based on the agent context. */
+function pickCortexName(ctx: AgentContext): string {
+  return ctx.telemetryTarget ? TELEMETRY_CORTEX_NAME : DEFAULT_CORTEX_NAME;
+}
 
 export interface DagRunnerDeps {
   db: Database;
@@ -216,10 +223,11 @@ export class DagTurnRunner {
 
   private async callAgent(ctx: AgentContext): Promise<TurnResponse> {
     const userPrompt = renderTurnPrompt(ctx);
-    const skill = this.deps.cortexRegistry.get(CORTEX_NAME);
+    const cortexName = pickCortexName(ctx);
+    const skill = this.deps.cortexRegistry.get(cortexName);
     if (!skill) {
       throw new Error(
-        `Cortex skill '${CORTEX_NAME}' not found in registry. Did you discover() skills at boot?`,
+        `Cortex skill '${cortexName}' not found in registry. Did you discover() skills at boot?`,
       );
     }
     const instructions = skill.body;
@@ -258,7 +266,7 @@ export class DagTurnRunner {
       }
     }
     throw new Error(
-      `sim_operator_agent response invalid after ${MAX_JSON_RETRIES + 1} attempts: ${lastError?.message}`,
+      `${pickCortexName(ctx)} response invalid after ${MAX_JSON_RETRIES + 1} attempts: ${lastError?.message}`,
     );
   }
 
@@ -289,6 +297,10 @@ export class DagTurnRunner {
     ]);
 
     const godEvents = await this.loadGodEvents(args.simRunId, args.turnIndex);
+    const telemetryTarget = await loadTelemetryTarget(
+      this.deps.db,
+      args.simRunId,
+    );
 
     return {
       simRunId: args.simRunId,
@@ -311,6 +323,7 @@ export class DagTurnRunner {
       })),
       godEvents,
       fleetSnapshot: args.fleetSnapshot,
+      telemetryTarget,
     };
   }
 

@@ -1,6 +1,7 @@
 // Services
 export { NanoSweepService } from "./services/nano-sweep.service";
 export { SweepResolutionService } from "./services/sweep-resolution.service";
+export type { OnSimUpdateAccepted } from "./services/sweep-resolution.service";
 export { SatelliteSweepChatService } from "./services/satellite-sweep-chat.service";
 export { MessagingService } from "./services/messaging.service";
 export {
@@ -72,8 +73,22 @@ export {
   isTerminal,
   loadSimTurn,
   emitSuggestionFromModal,
+  emitTelemetrySuggestions,
 } from "./sim/promote";
-export type { EmitSuggestionDeps } from "./sim/promote";
+export type { EmitSuggestionDeps, EmitTelemetrySuggestionsDeps } from "./sim/promote";
+export { TelemetryAggregatorService } from "./sim/aggregator-telemetry";
+export type {
+  TelemetryAggregate,
+  TelemetryAggregatorDeps,
+  TelemetryScalarStats,
+} from "./sim/aggregator-telemetry";
+export { startTelemetrySwarm } from "./sim/telemetry-swarm.service";
+export type { TelemetrySwarmOpts } from "./sim/telemetry-swarm.service";
+export {
+  lookupBusPrior,
+  lookupBusEntry,
+  listBusNames,
+} from "./sim/bus-datasheets";
 export { SequentialTurnRunner } from "./sim/turn-runner-sequential";
 export type {
   SequentialRunnerDeps,

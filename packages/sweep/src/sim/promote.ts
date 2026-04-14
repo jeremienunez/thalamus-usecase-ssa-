@@ -377,3 +377,216 @@ async function safeEmbed(
     return null;
   }
 }
+
+// -----------------------------------------------------------------------
+// Telemetry swarm → N sweep_suggestions (one per scalar)
+// -----------------------------------------------------------------------
+
+import type { TelemetryAggregate } from "./aggregator-telemetry";
+import type { TelemetryScalarKey } from "@interview/db-schema";
+import { TELEMETRY_SCALAR_COLUMN } from "@interview/db-schema";
+
+export interface EmitTelemetrySuggestionsDeps {
+  db: Database;
+  sweepRepo: SweepRepository;
+}
+
+/**
+ * Convert a per-scalar TelemetryAggregate into N sweep_suggestions —
+ * one per scalar where a consensus exists. Each suggestion carries:
+ *   - resolutionPayload: { kind: "update_field", field: <snake_case>, value: median }
+ *   - simDistribution: full per-scalar stats (median, σ, min, max, n, values, unit)
+ *   - source_class tag (in webEvidence for visibility; promotion happens on accept)
+ *
+ * Only scalars where the target column is currently NULL on the satellite
+ * are emitted; non-NULL columns are skipped (we don't overwrite real data).
+ *
+ * Returns the suggestion ids created.
+ */
+export async function emitTelemetrySuggestions(
+  deps: EmitTelemetrySuggestionsDeps,
+  aggregate: TelemetryAggregate,
+): Promise<string[]> {
+  if (!aggregate.quorumMet) {
+    logger.info(
+      { swarmId: aggregate.swarmId, satelliteId: aggregate.satelliteId },
+      "telemetry emit skipped — quorum not met",
+    );
+    return [];
+  }
+
+  // Resolve satellite + operator context once.
+  const satRows = await deps.db.execute(sql`
+    SELECT s.id::text AS sat_id,
+           s.name     AS sat_name,
+           op.name    AS operator_name,
+           oc.id::text AS country_id,
+           oc.name    AS country_name
+    FROM satellite s
+    LEFT JOIN operator op         ON op.id = s.operator_id
+    LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
+    WHERE s.id = ${BigInt(aggregate.satelliteId)}
+    LIMIT 1
+  `);
+  const sat = satRows.rows[0] as
+    | {
+        sat_id: string;
+        sat_name: string;
+        operator_name: string | null;
+        country_id: string | null;
+        country_name: string | null;
+      }
+    | undefined;
+  if (!sat) {
+    logger.warn(
+      { satelliteId: aggregate.satelliteId },
+      "telemetry emit: satellite not found",
+    );
+    return [];
+  }
+
+  // Which scalars are currently NULL? We only emit for those.
+  const nullColumns = await findNullTelemetryColumns(deps.db, aggregate.satelliteId);
+
+  const suggestionIds: string[] = [];
+  for (const key of Object.keys(aggregate.scalars) as TelemetryScalarKey[]) {
+    const stats = aggregate.scalars[key];
+    if (!stats) continue;
+    const column = TELEMETRY_SCALAR_COLUMN[key];
+    if (!nullColumns.has(column)) {
+      logger.debug(
+        { satelliteId: aggregate.satelliteId, column },
+        "skipping scalar — target column already populated",
+      );
+      continue;
+    }
+
+    const { severity, sourceClass } = scoreScalar(stats, aggregate.simConfidence);
+
+    const simDistribution = JSON.stringify({
+      swarmId: aggregate.swarmId,
+      satelliteId: aggregate.satelliteId,
+      scalar: key,
+      column,
+      stats: {
+        median: round(stats.median, 6),
+        mean: round(stats.mean, 6),
+        sigma: round(stats.sigma, 6),
+        min: round(stats.min, 6),
+        max: round(stats.max, 6),
+        n: stats.n,
+        unit: stats.unit,
+        avgFishConfidence: round(stats.avgFishConfidence, 4),
+        values: stats.values.map((v) => round(v, 6)),
+      },
+      simConfidence: round(aggregate.simConfidence, 4),
+      sourceClass,
+    });
+
+    const resolutionPayload = JSON.stringify({
+      kind: "update_field",
+      satelliteIds: [aggregate.satelliteId],
+      field: column,
+      value: round(stats.median, 6),
+      provenance: {
+        source: "sim_swarm_telemetry",
+        swarmId: aggregate.swarmId,
+        sourceClass,
+      },
+    });
+
+    const title = `Infer ${key} for ${sat.sat_name} ≈ ${round(stats.median, 3)} ${stats.unit}`;
+    const description = [
+      `Multi-agent inference from bus datasheet prior + persona perturbations across ${stats.n} fish.`,
+      ``,
+      `Median: ${round(stats.median, 3)} ${stats.unit} (σ ${round(stats.sigma, 3)}, min ${round(stats.min, 3)}, max ${round(stats.max, 3)}).`,
+      `Self-reported fish confidence: ${round(stats.avgFishConfidence, 2)}. Swarm confidence (SIM band): ${round(aggregate.simConfidence, 2)}.`,
+      ``,
+      `Source class: ${sourceClass}. This is an INFERENCE, not a measurement.`,
+      `Accept → UPDATE satellite SET ${column} = ${round(stats.median, 6)} + promote to OSINT_CORROBORATED.`,
+      `Reject → feedback logged, next swarm adjusts prior.`,
+    ].join("\n");
+
+    const id = await deps.sweepRepo.insertOne({
+      operatorCountryId: sat.country_id !== null ? BigInt(sat.country_id) : null,
+      operatorCountryName: sat.country_name ?? "(no country)",
+      category: "enrichment",
+      severity,
+      title,
+      description,
+      affectedSatellites: 1,
+      suggestedAction: `UPDATE satellite.${column} = ${round(stats.median, 6)} ${stats.unit}`,
+      webEvidence: null,
+      resolutionPayload,
+      simSwarmId: String(aggregate.swarmId),
+      simDistribution,
+    });
+    suggestionIds.push(id);
+
+    logger.info(
+      {
+        swarmId: aggregate.swarmId,
+        satelliteId: aggregate.satelliteId,
+        scalar: key,
+        column,
+        median: stats.median,
+        sigma: stats.sigma,
+        n: stats.n,
+        simConfidence: aggregate.simConfidence,
+        suggestionId: id,
+      },
+      "telemetry scalar suggestion emitted",
+    );
+  }
+
+  return suggestionIds;
+}
+
+async function findNullTelemetryColumns(
+  db: Database,
+  satelliteId: number,
+): Promise<Set<string>> {
+  const cols = Object.values(TELEMETRY_SCALAR_COLUMN);
+  const selects = cols.map((c) => `"${c}" IS NULL AS "${c}"`).join(", ");
+  const res = await db.execute(
+    sql.raw(`SELECT ${selects} FROM satellite WHERE id = ${BigInt(satelliteId).toString()}::bigint LIMIT 1`),
+  );
+  const row = res.rows[0] as Record<string, boolean | null> | undefined;
+  if (!row) return new Set();
+  const out = new Set<string>();
+  for (const c of cols) {
+    if (row[c] === true) out.add(c);
+  }
+  return out;
+}
+
+/**
+ * Severity + source_class from consensus strength. All telemetry inferences
+ * start in the SIM_UNCORROBORATED band — promotion to OSINT_CORROBORATED
+ * happens on reviewer accept via ConfidenceService.
+ */
+function scoreScalar(
+  stats: { median: number; sigma: number; n: number },
+  simConfidence: number,
+): { severity: "critical" | "warning" | "info"; sourceClass: "SIM_UNCORROBORATED" } {
+  const cv =
+    Math.abs(stats.median) > 1e-9 ? stats.sigma / Math.abs(stats.median) : 1;
+  // A reviewer should be pulled toward two patterns:
+  //   1. Tight consensus (low cv) with reasonable sample + swarm confidence →
+  //      a clean accept candidate.
+  //   2. High dispersion (high cv) → fish dissent, worth investigating why.
+  // Everything in between is background info.
+  // We never emit "critical" for pure inference — critical is reserved for
+  // field-corroborated alerts per SPEC-TH-040 I-4 (band cap SIM ≤ 0.35).
+  let severity: "critical" | "warning" | "info" = "info";
+  const enoughSamples = stats.n >= 5;
+  const tightConsensus = cv < 0.20 && simConfidence >= 0.20 && enoughSamples;
+  const highDispersion = cv >= 0.50 && enoughSamples;
+  if (tightConsensus || highDispersion) severity = "warning";
+  return { severity, sourceClass: "SIM_UNCORROBORATED" };
+}
+
+function round(n: number, digits: number): number {
+  const k = Math.pow(10, digits);
+  return Math.round(n * k) / k;
+}
