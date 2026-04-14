@@ -1,0 +1,5 @@
+{
+  "text": "{\n  \"action\": { \"kind\": \"maneuver\", \"satelliteId\": 1, \"deltaVmps\": 3.5, \"reason\": \"Fixture fallback: unilateral maneuver to preserve fleet availability and close the negotiation; satelliteId is a sentinel replaced by the swarm aggregator when a real target exists.\" },\n  \"rationale\": \"Fixture fallback response. Executing a maneuver closes UC3 with a concrete resolution so the swarm aggregator has a promotable modal outcome to surface.\",\n  \"observableSummary\": \"Commits to a unilateral maneuver on satellite 1 (3.5 m/s).\"\n}\n",
+  "model": "gpt-5.4-nano",
+  "recordedAt": "2026-04-14T00:00:00.000Z"
+}
