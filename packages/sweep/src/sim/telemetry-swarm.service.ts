@@ -13,7 +13,7 @@
 
 import { sql } from "drizzle-orm";
 import type { Database, SeedRefs, PerturbationSpec, SwarmConfig } from "@interview/db-schema";
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import type { SwarmService, LaunchSwarmResult } from "./swarm.service";
 import { lookupBusPrior } from "./bus-datasheets";
 
@@ -80,6 +80,13 @@ export async function startTelemetrySwarm(
 ): Promise<LaunchSwarmResult> {
   const fishCount = opts.fishCount ?? DEFAULT_FISH_COUNT;
 
+  stepLog(logger, "swarm", "start", {
+    kind: "uc_telemetry_inference",
+    satelliteId: opts.satelliteId,
+    fishCount,
+  });
+
+  try {
   const target = await loadTargetContext(deps.db, opts.satelliteId);
   if (!target) {
     throw new Error(
@@ -141,5 +148,19 @@ export async function startTelemetrySwarm(
     "telemetry swarm launched",
   );
 
+  stepLog(logger, "swarm", "done", {
+    swarmId: result.swarmId,
+    satelliteId: opts.satelliteId,
+    fishCount: result.fishCount,
+    busMatched: priorLookup.found,
+  });
+
   return result;
+  } catch (err) {
+    stepLog(logger, "swarm", "error", {
+      satelliteId: opts.satelliteId,
+      err: (err as Error)?.message,
+    });
+    throw err;
+  }
 }

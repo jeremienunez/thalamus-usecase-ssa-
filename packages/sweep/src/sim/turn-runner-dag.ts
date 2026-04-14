@@ -23,7 +23,7 @@ import type { Database, NewSimTurn, TurnAction } from "@interview/db-schema";
 import { simAgent, simRun, simTurn } from "@interview/db-schema";
 import type { CortexRegistry } from "@interview/thalamus";
 import { callNanoWithMode, extractJsonObject } from "@interview/thalamus";
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import type { AgentContext, FleetSnapshot, TurnResponse } from "./types";
 import { turnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
@@ -78,6 +78,12 @@ export class DagTurnRunner {
    * decides whether to retry the whole turn.
    */
   async runTurn(opts: DagRunTurnOpts): Promise<DagRunTurnResult> {
+    stepLog(logger, "fish.turn", "start", {
+      simRunId: opts.simRunId,
+      turn: opts.turnIndex,
+      driver: "dag",
+    });
+    try {
     const agents = await this.loadAgents(opts.simRunId);
     if (agents.length === 0) {
       throw new Error(`No agents for sim_run ${opts.simRunId}`);
@@ -182,6 +188,11 @@ export class DagTurnRunner {
         }
       }
       await this.deps.memory.writeMany(memoryRows);
+      stepLog(logger, "fish.memory.write", "done", {
+        simRunId: opts.simRunId,
+        turn: opts.turnIndex,
+        rows: memoryRows.length,
+      });
 
       return simTurnIdByAgent;
     });
@@ -208,12 +219,30 @@ export class DagTurnRunner {
       "DAG turn complete",
     );
 
+    stepLog(logger, "fish.turn", "done", {
+      simRunId: opts.simRunId,
+      turn: opts.turnIndex,
+      driver: "dag",
+      agentCount: agents.length,
+      successCount: successes.length,
+      failureCount: failures.length,
+    });
+
     return {
       simRunId: opts.simRunId,
       turnIndex: opts.turnIndex,
       agentResults,
       failedAgents: failures.map((f) => f.agent.id),
     };
+    } catch (err) {
+      stepLog(logger, "fish.turn", "error", {
+        simRunId: opts.simRunId,
+        turn: opts.turnIndex,
+        driver: "dag",
+        err: (err as Error)?.message,
+      });
+      throw err;
+    }
   }
 
   // -------------------------------------------------------------------

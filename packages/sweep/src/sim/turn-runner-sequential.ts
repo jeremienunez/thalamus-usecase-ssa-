@@ -12,7 +12,7 @@ import type { Database, NewSimTurn, TurnAction } from "@interview/db-schema";
 import { simAgent, simRun, simTurn } from "@interview/db-schema";
 import type { CortexRegistry } from "@interview/thalamus";
 import { callNanoWithMode, extractJsonObject } from "@interview/thalamus";
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import type { AgentContext, FleetSnapshot, TurnResponse } from "./types";
 import { turnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
@@ -62,6 +62,12 @@ export class SequentialTurnRunner {
    * update sim_run.status if terminal.
    */
   async runTurn(opts: RunTurnOpts): Promise<RunTurnResult> {
+    stepLog(logger, "fish.turn", "start", {
+      simRunId: opts.simRunId,
+      turn: opts.turnIndex,
+      driver: "sequential",
+    });
+    try {
     const { db } = this.deps;
 
     const agents = await this.loadAgents(opts.simRunId);
@@ -119,6 +125,11 @@ export class SequentialTurnRunner {
             content: response.observableSummary,
           })),
       ]);
+      stepLog(logger, "fish.memory.write", "done", {
+        simRunId: opts.simRunId,
+        turn: opts.turnIndex,
+        agentId: speaker.id,
+      });
 
       if (terminal) {
         await tx
@@ -146,6 +157,15 @@ export class SequentialTurnRunner {
       "sequential turn complete",
     );
 
+    stepLog(logger, "fish.turn", "done", {
+      simRunId: opts.simRunId,
+      turn: opts.turnIndex,
+      driver: "sequential",
+      agentId: speaker.id,
+      actionKind: response.action.kind,
+      terminal,
+    });
+
     return {
       simTurnId: result.simTurnId,
       agentId: speaker.id,
@@ -153,6 +173,15 @@ export class SequentialTurnRunner {
       terminal,
       promotedFindingId,
     };
+    } catch (err) {
+      stepLog(logger, "fish.turn", "error", {
+        simRunId: opts.simRunId,
+        turn: opts.turnIndex,
+        driver: "sequential",
+        err: (err as Error)?.message,
+      });
+      throw err;
+    }
   }
 
   // -------------------------------------------------------------------
