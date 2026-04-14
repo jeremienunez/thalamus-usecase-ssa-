@@ -10,7 +10,7 @@ import {
   createLlmTransport,
   LlmChatTransport,
 } from "../transports/llm-chat";
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import type { CortexFinding } from "../cortices/types";
 
 const logger = createLogger("thalamus-reflexion");
@@ -46,8 +46,21 @@ export class ThalamusReflexion {
       maxIterations?: number;
     },
   ): Promise<ReflexionResult> {
+    stepLog(logger, "reflexion", "start", {
+      iteration,
+      raw: rawFindings.length,
+      kept: keptFindings.length,
+    });
+    const reflexionStartedAt = Date.now();
+
     // Only truly empty rounds (cortices returned nothing at all) short-circuit.
     if (rawFindings.length === 0) {
+      stepLog(logger, "reflexion", "done", {
+        iteration,
+        replan: false,
+        reason: "empty-round",
+        durationMs: Date.now() - reflexionStartedAt,
+      });
       return {
         replan: false,
         notes: "No findings produced — nothing to evaluate",
@@ -124,12 +137,26 @@ Respond with ONLY JSON: { "replan": bool, "notes": "...", "gaps": ["..."], "over
         "Reflexion evaluation complete",
       );
 
+      stepLog(logger, "reflexion", "done", {
+        iteration,
+        replan: result.replan,
+        confidence: result.overallConfidence,
+        gaps: result.gaps?.length ?? 0,
+        lowConfidenceRound,
+        durationMs: Date.now() - reflexionStartedAt,
+      });
+
       return result;
     } catch (err) {
       logger.error(
         { err, iteration },
         "Reflexion LLM failed, approving findings",
       );
+      stepLog(logger, "reflexion", "error", {
+        iteration,
+        err: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - reflexionStartedAt,
+      });
       return {
         replan: false,
         notes: "Reflexion failed — approving findings as-is",

@@ -8,7 +8,7 @@
  * - User: LLM-planned DAGs, optional reflexion, full cycle
  */
 
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import {
   THALAMUS_CONFIG,
   ITERATION_BUDGETS,
@@ -68,6 +68,12 @@ export class ThalamusService {
    * Returns the cycle record with findings count.
    */
   async runCycle(input: RunCycleInput): Promise<ResearchCycle> {
+    const cycleStartedAt = Date.now();
+    stepLog(logger, "cycle", "start", {
+      query: input.query,
+      trigger: input.triggerType,
+      daemonJob: input.daemonJob,
+    });
     // 1. Get DAG plan
     let plan: DAGPlan;
     if (input.dag) {
@@ -363,6 +369,14 @@ export class ThalamusService {
         "Research cycle completed",
       );
 
+      stepLog(logger, "cycle", "done", {
+        cycleId: cycle.id.toString(),
+        durationMs: Date.now() - cycleStartedAt,
+        costUsd: totalCost,
+        findings: storedCount,
+        iterations: iteration,
+      });
+
       // Refresh cycle with updated counts
       return (await this.cycleRepo.findById(cycle.id))!;
     } catch (err) {
@@ -370,6 +384,11 @@ export class ThalamusService {
         error: err instanceof Error ? err.message : String(err),
       });
       logger.error({ cycleId: cycle.id, err }, "Research cycle failed");
+      stepLog(logger, "cycle", "error", {
+        cycleId: cycle.id.toString(),
+        durationMs: Date.now() - cycleStartedAt,
+        err: err instanceof Error ? err.message : String(err),
+      });
       throw err;
     }
   }

@@ -10,7 +10,7 @@
  */
 
 import { createLlmTransport } from "../transports/llm-chat";
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJsonObject } from "../utils/llm-json-parser";
 import type { CortexFinding } from "./types";
 
@@ -88,6 +88,12 @@ Each finding needs:
 If data comes from web search, use entityId:0 and describe the entity in evidence.source.
 Keep it SHORT. Max ${input.maxFindings ?? 3} findings.`;
 
+  stepLog(logger, "nano.call", "start", {
+    cortex: input.cortexName,
+    promptChars: input.systemPrompt.length + userPrompt.length,
+    webSearch: !!input.enableWebSearch,
+  });
+
   try {
     const response = await transport.call(userPrompt);
 
@@ -122,6 +128,14 @@ Keep it SHORT. Max ${input.maxFindings ?? 3} findings.`;
       "Cortex LLM analysis complete",
     );
 
+    stepLog(logger, "nano.call", "done", {
+      cortex: input.cortexName,
+      provider: response.provider,
+      findings: findings.length,
+      tokensEstimate,
+      durationMs: duration,
+    });
+
     return {
       findings,
       model: `${response.provider}`,
@@ -132,6 +146,11 @@ Keep it SHORT. Max ${input.maxFindings ?? 3} findings.`;
       { cortex: input.cortexName, err },
       "Cortex LLM analysis failed",
     );
+    stepLog(logger, "nano.call", "error", {
+      cortex: input.cortexName,
+      durationMs: Date.now() - start,
+      err: err instanceof Error ? err.message : String(err),
+    });
     return { findings: [], model: "none", tokensEstimate: 0 };
   }
 }

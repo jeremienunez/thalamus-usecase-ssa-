@@ -10,7 +10,7 @@
 
 import { z } from "zod";
 import { createLlmTransport } from "../transports/llm-chat";
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJson } from "../utils/llm-json-parser";
 import type { CortexRegistry } from "../cortices/registry";
 
@@ -179,6 +179,8 @@ export class ThalamusPlanner {
    * Reads skill headers, calls LLM to produce optimal DAG.
    */
   async plan(query: string): Promise<DAGPlan> {
+    stepLog(logger, "planner", "start", { query });
+    const plannerStartedAt = Date.now();
     const headers = this.registry.getHeadersForPlanner();
     const cortexNames = this.registry.names();
 
@@ -214,7 +216,15 @@ Respond with ONLY a JSON object: { "intent": "...", "complexity": "simple|modera
 
       if (plan.nodes.length === 0) {
         logger.warn({ query }, "Planner produced empty DAG, using fallback");
-        return this.fallbackPlan(query);
+        const fallback = this.fallbackPlan(query);
+        stepLog(logger, "planner", "done", {
+          intent: fallback.intent,
+          cortices: fallback.nodes.map((n) => n.cortex),
+          complexity: fallback.complexity,
+          fallback: true,
+          durationMs: Date.now() - plannerStartedAt,
+        });
+        return fallback;
       }
 
       logger.info(
@@ -224,9 +234,20 @@ Respond with ONLY a JSON object: { "intent": "...", "complexity": "simple|modera
         },
         "DAG plan generated",
       );
+      stepLog(logger, "planner", "done", {
+        intent: plan.intent,
+        cortices: plan.nodes.map((n) => n.cortex),
+        complexity: plan.complexity,
+        durationMs: Date.now() - plannerStartedAt,
+      });
       return plan;
     } catch (err) {
       logger.error({ query, err }, "Planner LLM failed, using fallback");
+      stepLog(logger, "planner", "error", {
+        query,
+        err: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - plannerStartedAt,
+      });
       return this.fallbackPlan(query);
     }
   }

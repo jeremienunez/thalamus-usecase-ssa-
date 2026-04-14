@@ -5,7 +5,7 @@
  * Dependent cortices chain sequentially, receiving upstream findings as context.
  */
 
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import type { CortexExecutor } from "../cortices/executor";
 import type { CortexOutput, CortexInput } from "../cortices/types";
 import type { DAGPlan, DAGNode } from "./thalamus-planner.service";
@@ -130,20 +130,44 @@ export class ThalamusDAGExecutor {
 
     // Execute with timeout (per-cortex override for heavy cortices)
     const timeout = CORTEX_TIMEOUT_OVERRIDES[node.cortex] ?? CORTEX_TIMEOUT_MS;
-    const result = await Promise.race([
-      this.cortexExecutor.execute(node.cortex, input),
-      new Promise<CortexOutput>((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new Error(`Cortex ${node.cortex} timed out after ${timeout}ms`),
-            ),
-          timeout,
+    const cortexStartedAt = Date.now();
+    stepLog(logger, "cortex", "start", {
+      cortex: node.cortex,
+      cycleId: cycleId.toString(),
+      dependsOn: node.dependsOn,
+    });
+    try {
+      const result = await Promise.race([
+        this.cortexExecutor.execute(node.cortex, input),
+        new Promise<CortexOutput>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(`Cortex ${node.cortex} timed out after ${timeout}ms`),
+              ),
+            timeout,
+          ),
         ),
-      ),
-    ]);
+      ]);
 
-    return result;
+      stepLog(logger, "cortex", "done", {
+        cortex: node.cortex,
+        cycleId: cycleId.toString(),
+        findings: result.findings.length,
+        durationMs: Date.now() - cortexStartedAt,
+        tokensUsed: result.metadata.tokensUsed,
+      });
+
+      return result;
+    } catch (err) {
+      stepLog(logger, "cortex", "error", {
+        cortex: node.cortex,
+        cycleId: cycleId.toString(),
+        durationMs: Date.now() - cortexStartedAt,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
   /**
