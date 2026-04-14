@@ -1,0 +1,664 @@
+{
+  "$comment": "Bus-class priors for the 8 sim-fish-inferable telemetry scalars (SPEC-SW-006 infer_telemetry turn action). Every entry is sourced from public operator / manufacturer datasheets or peer-reviewed papers. Fields absent from the datasheet stay null — we do NOT synthesize operator-internal numbers. Ranges are [min, typical, max] where available; single values mean the datasheet quotes one number. Units are explicit. See `sources[]` per bus for citations.",
+
+  "$schemaVersion": 1,
+
+  "$fields": {
+    "powerDraw": {
+      "unit": "W",
+      "interpretation": "Average bus + payload draw at end-of-life equinox, continuous."
+    },
+    "thermalMargin": {
+      "unit": "C",
+      "interpretation": "Operating temperature margin above minimum design — delta between coldest-case payload temperature and its survival minimum."
+    },
+    "pointingAccuracy": {
+      "unit": "deg",
+      "interpretation": "3-sigma pointing knowledge on payload boresight. Lower is better."
+    },
+    "attitudeRate": {
+      "unit": "deg/s",
+      "interpretation": "Max commanded slew rate the bus ADCS can sustain without saturation."
+    },
+    "linkBudget": {
+      "unit": "dBW",
+      "interpretation": "Downlink EIRP, typical beam. Comms-class only."
+    },
+    "dataRate": {
+      "unit": "Mbps",
+      "interpretation": "Aggregate user-data throughput per bus, EOL."
+    },
+    "payloadDuty": {
+      "unit": "fraction",
+      "interpretation": "Typical in-view duty cycle, orbit-averaged. Comms ≈ 1.0, EO ≈ 0.2-0.4, SIGINT depends on geometry."
+    },
+    "eclipseRatio": {
+      "unit": "fraction",
+      "interpretation": "Fraction of orbit in Earth shadow. Pure orbital geometry — NOT from datasheet, derived at sim-fish time from SGP4 + sun position."
+    }
+  },
+
+  "buses": [
+    {
+      "name": "SSL-1300",
+      "aliases": ["LS-1300", "FS-1300", "Lanteris 1300", "SSL 1300"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "min": 5000, "typical": 12000, "max": 18000 },
+        "payloadDuty": { "typical": 1.0 },
+        "linkBudget": null,
+        "dataRate": null
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.4, "note": "Industry-typical for GEO comms bus with body-mounted radiators." },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.5, "note": "3-axis stabilised with star trackers; 0.05° is Maxar / Loral-family norm." },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "min": 5500, "max": 6700 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/SSL_1300",
+        "https://space.skyrocket.de/doc_sat/ssloral-1300.htm",
+        "https://www.maxar.com/maxar-space-systems/products/maxar-1300-series"
+      ]
+    },
+
+    {
+      "name": "BSS-702HP",
+      "aliases": ["Boeing 702HP", "HS-702", "BSS-702"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "min": 3000, "typical": 12000, "max": 18000 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 8, "confidence": 0.4 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.5 },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "transponders": { "max": 100 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Boeing_702",
+        "https://space.skyrocket.de/doc_sat/hs-702.htm"
+      ]
+    },
+
+    {
+      "name": "Eurostar 3000",
+      "aliases": ["Eurostar E3000", "E3000", "Airbus Eurostar 3000"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "min": 9000, "typical": 13000, "max": 16000 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.4 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.5 },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "min": 4500, "max": 6400 },
+        "battery": "lithium-ion",
+        "solarArrayM2": { "min": 35, "max": 45 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Eurostar_E3000",
+        "https://www.airbus.com/space/telecommunications-satellites/eurostar-series.html"
+      ]
+    },
+
+    {
+      "name": "A2100",
+      "aliases": ["A2100A", "A2100AX", "A2100AXS", "A2100M", "LM2100"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "min": 1000, "typical": 8000, "max": 20000 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.4 },
+        "pointingAccuracy": { "typical": 0.04, "confidence": 0.5, "note": "Lockheed ADCS heritage quotes ±0.04° class." },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "typical": 2300 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Lockheed_Martin_A2100",
+        "https://www.lockheedmartin.com/content/dam/lockheed-martin/space/documents/satellite/LM2100-Insert.pdf",
+        "https://space.skyrocket.de/doc_sat/lockheed_a2100.htm"
+      ]
+    },
+
+    {
+      "name": "Starlink v1.5",
+      "aliases": ["Starlink-v1.5", "Starlink v1"],
+      "platformClass": "communications",
+      "regime": "leo",
+      "published": {
+        "powerDraw": { "typical": 2000 },
+        "dataRate": { "typical": 20000 },
+        "payloadDuty": { "typical": 0.8 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 5, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 0.1, "confidence": 0.3, "note": "Phased-array beamforming; mechanical pointing is loose, electronic beam steering is sub-beam." },
+        "attitudeRate": { "typical": 1.0, "confidence": 0.3, "note": "LEO comms sat, high-agility for phased array slew." }
+      },
+      "context": {
+        "designLifeYears": 5,
+        "launchMassKg": { "typical": 306 },
+        "note": "FCC filings + SpaceX public statements. v1.0=260 kg, v1.5=306 kg, v2-Mini=800 kg, v2=1250 kg."
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Starlink",
+        "https://fcc.gov/ecfs/document/10517124420596/1"
+      ]
+    },
+
+    {
+      "name": "Starlink v2-Mini",
+      "aliases": ["Starlink v2 Mini", "Starlink-v2-Mini"],
+      "platformClass": "communications",
+      "regime": "leo",
+      "published": {
+        "powerDraw": { "typical": 4000 },
+        "dataRate": { "typical": 80000 },
+        "payloadDuty": { "typical": 0.85 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 5, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 0.1, "confidence": 0.3 },
+        "attitudeRate": { "typical": 1.0, "confidence": 0.3 }
+      },
+      "context": {
+        "designLifeYears": 5,
+        "launchMassKg": { "typical": 800 }
+      },
+      "sources": ["https://en.wikipedia.org/wiki/Starlink"]
+    },
+
+    {
+      "name": "Iridium NEXT",
+      "aliases": ["Iridium-NEXT"],
+      "platformClass": "communications",
+      "regime": "leo",
+      "published": {
+        "powerDraw": { "typical": 2200 },
+        "payloadDuty": { "typical": 0.9 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 8, "confidence": 0.4 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.5 },
+        "attitudeRate": { "typical": 0.5, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "typical": 860 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Iridium_NEXT",
+        "https://space.skyrocket.de/doc_sat/iridium-next.htm"
+      ]
+    },
+
+    {
+      "name": "GPS III",
+      "aliases": ["GPS-III", "GPS Block III"],
+      "platformClass": "navigation",
+      "regime": "meo",
+      "published": {
+        "powerDraw": { "min": 4500, "typical": 5500, "max": 6000 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.5 },
+        "pointingAccuracy": { "typical": 0.03, "confidence": 0.6, "note": "Navigation-grade, Earth-pointing ±0.03° is program requirement (Lockheed specs)." },
+        "attitudeRate": { "typical": 0.1, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "typical": 3880 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/GPS_Block_III",
+        "https://www.lockheedmartin.com/en-us/products/gps.html"
+      ]
+    },
+
+    {
+      "name": "GPS IIF",
+      "aliases": ["GPS-IIF", "GPS Block IIF"],
+      "platformClass": "navigation",
+      "regime": "meo",
+      "published": {
+        "powerDraw": { "typical": 2450 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.5 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.5 },
+        "attitudeRate": { "typical": 0.1, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 12,
+        "launchMassKg": { "typical": 1630 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/GPS_Block_IIF",
+        "https://space.skyrocket.de/doc_sat/gps-iif.htm"
+      ]
+    },
+
+    {
+      "name": "GalileoSat",
+      "aliases": ["Galileo FOC", "Galileo IOV", "Galileo"],
+      "platformClass": "navigation",
+      "regime": "meo",
+      "published": {
+        "powerDraw": { "typical": 1900 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.5 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.5 },
+        "attitudeRate": { "typical": 0.1, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 12,
+        "launchMassKg": { "typical": 714 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Galileo_(satellite_navigation)",
+        "https://space.skyrocket.de/doc_sat/galileo-foc.htm"
+      ]
+    },
+
+    {
+      "name": "Uragan",
+      "aliases": ["GLONASS-M", "Uragan-M", "GLONASS-K", "Uragan-K"],
+      "platformClass": "navigation",
+      "regime": "meo",
+      "published": {
+        "powerDraw": { "typical": 1250 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.5 },
+        "pointingAccuracy": { "typical": 0.1, "confidence": 0.4 },
+        "attitudeRate": { "typical": 0.1, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 7,
+        "launchMassKg": { "typical": 1415 },
+        "note": "GLONASS-M is the workhorse; GLONASS-K is the newer variant with 10-year design life."
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/GLONASS",
+        "https://space.skyrocket.de/doc_sat/uragan-m.htm"
+      ]
+    },
+
+    {
+      "name": "GOES-R",
+      "aliases": ["GOES-R series", "GOES-16", "GOES-17", "GOES-18"],
+      "platformClass": "earth_observation",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "typical": 4000 },
+        "payloadDuty": { "typical": 1.0 },
+        "dataRate": { "typical": 75 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 8, "confidence": 0.5 },
+        "pointingAccuracy": { "typical": 0.01, "confidence": 0.6, "note": "GOES-R INR spec: image navigation 28 μrad (≈0.0016°)." },
+        "attitudeRate": { "typical": 0.5, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "typical": 5192 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/GOES-R",
+        "https://www.goes-r.gov/spacesegment/ABI.html"
+      ]
+    },
+
+    {
+      "name": "Sentinel-1",
+      "aliases": ["Sentinel 1A", "Sentinel 1B", "Sentinel-1A", "Sentinel-1B"],
+      "platformClass": "earth_observation",
+      "regime": "sso",
+      "published": {
+        "powerDraw": { "typical": 4800 },
+        "payloadDuty": { "typical": 0.25, "note": "SAR: duty cycle limited by power budget." },
+        "dataRate": { "typical": 520 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.5 },
+        "pointingAccuracy": { "typical": 0.01, "confidence": 0.6 },
+        "attitudeRate": { "typical": 1.0, "confidence": 0.5 }
+      },
+      "context": {
+        "designLifeYears": 7,
+        "launchMassKg": { "typical": 2300 },
+        "note": "C-band SAR, 1A/1B pair from 2014/2016."
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Sentinel-1",
+        "https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-1"
+      ]
+    },
+
+    {
+      "name": "Sentinel-2",
+      "aliases": ["Sentinel 2A", "Sentinel 2B", "Sentinel-2A", "Sentinel-2B"],
+      "platformClass": "earth_observation",
+      "regime": "sso",
+      "published": {
+        "powerDraw": { "typical": 1700 },
+        "payloadDuty": { "typical": 0.3 },
+        "dataRate": { "typical": 450 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.5 },
+        "pointingAccuracy": { "typical": 0.01, "confidence": 0.6 },
+        "attitudeRate": { "typical": 1.0, "confidence": 0.5 }
+      },
+      "context": {
+        "designLifeYears": 7,
+        "launchMassKg": { "typical": 1140 },
+        "note": "13-band multispectral imager, 10m/20m/60m GSD."
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Sentinel-2",
+        "https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-2"
+      ]
+    },
+
+    {
+      "name": "Prisma",
+      "aliases": ["PRISMA-L", "Prima"],
+      "platformClass": "earth_observation",
+      "regime": "sso",
+      "published": {
+        "powerDraw": { "typical": 900 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 8, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 0.02, "confidence": 0.4 },
+        "attitudeRate": { "typical": 0.5, "confidence": 0.3 }
+      },
+      "context": {
+        "designLifeYears": 5,
+        "launchMassKg": { "typical": 830 },
+        "note": "Italian ASI hyperspectral. Prima is the OHB-Italia bus derived from Prisma heritage."
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/PRISMA_(Italian_satellite)",
+        "https://space.skyrocket.de/doc_sat/prisma.htm"
+      ]
+    },
+
+    {
+      "name": "Cubesat 1U",
+      "aliases": ["Cubesat 1U", "1U CubeSat"],
+      "platformClass": "science",
+      "regime": "leo",
+      "published": {
+        "powerDraw": { "typical": 2 },
+        "payloadDuty": { "typical": 0.1, "note": "Power-starved; 10% duty typical." }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 5, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 2.0, "confidence": 0.3, "note": "Magnetorquer-only class; higher-end 1Us with reaction wheels approach 0.5°." },
+        "attitudeRate": { "typical": 1.0, "confidence": 0.3 }
+      },
+      "context": {
+        "designLifeYears": 2,
+        "launchMassKg": { "max": 1.33 },
+        "note": "CubeSat Design Spec (CDS) Rev 14. 1U = 10×10×10 cm."
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/CubeSat",
+        "https://www.cubesat.org/cds"
+      ]
+    },
+
+    {
+      "name": "Cubesat 3U",
+      "aliases": ["Cubesat 3U", "3U CubeSat"],
+      "platformClass": "science",
+      "regime": "leo",
+      "published": {
+        "powerDraw": { "typical": 8 },
+        "payloadDuty": { "typical": 0.15 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 5, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 0.5, "confidence": 0.3 },
+        "attitudeRate": { "typical": 1.0, "confidence": 0.3 }
+      },
+      "context": {
+        "designLifeYears": 3,
+        "launchMassKg": { "max": 4.0 },
+        "note": "CDS 3U = 10×10×30 cm. Planet Dove / Spire Lemur class."
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/CubeSat",
+        "https://www.cubesat.org/cds"
+      ]
+    },
+
+    {
+      "name": "HS-601",
+      "aliases": ["HS-601HP", "HS 601", "BSS-601"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "min": 4000, "typical": 6000, "max": 8000 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.4 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.4 },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "min": 3000, "max": 4000 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/HS-601",
+        "https://space.skyrocket.de/doc_sat/hs-601.htm"
+      ]
+    },
+
+    {
+      "name": "DFH-3",
+      "aliases": ["DFH-3B", "Dong Fang Hong 3"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "typical": 2200 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 8, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 0.1, "confidence": 0.3 },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.3 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "typical": 2320 }
+      },
+      "sources": ["https://space.skyrocket.de/doc_sat/dfh-3.htm"]
+    },
+
+    {
+      "name": "DFH-4",
+      "aliases": ["Dong Fang Hong 4"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "min": 10000, "typical": 12000, "max": 15000 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.3 },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.3 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "min": 5000, "max": 5300 }
+      },
+      "sources": ["https://space.skyrocket.de/doc_sat/dfh-4.htm"]
+    },
+
+    {
+      "name": "Strela-3",
+      "aliases": ["Strela-3M"],
+      "platformClass": "communications",
+      "regime": "leo",
+      "published": {
+        "powerDraw": { "typical": 280 },
+        "payloadDuty": { "typical": 0.5 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 5, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 1.0, "confidence": 0.2, "note": "Russian military store-and-forward, tight specs not public." },
+        "attitudeRate": { "typical": 0.5, "confidence": 0.2 }
+      },
+      "context": {
+        "designLifeYears": 5,
+        "launchMassKg": { "typical": 225 }
+      },
+      "sources": ["https://space.skyrocket.de/doc_sat/strela-3.htm"]
+    },
+
+    {
+      "name": "Milstar",
+      "aliases": ["DSCS III"],
+      "platformClass": "military",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "typical": 8000 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.3, "note": "Hardened mil-spec, specifics classified." },
+        "pointingAccuracy": { "typical": 0.03, "confidence": 0.4 },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.3 }
+      },
+      "context": {
+        "designLifeYears": 10,
+        "launchMassKg": { "typical": 4500 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Milstar",
+        "https://space.skyrocket.de/doc_sat/milstar.htm"
+      ]
+    },
+
+    {
+      "name": "TDRS",
+      "aliases": ["TDRSS"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "typical": 3200 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.4 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.4 },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "typical": 3180 }
+      },
+      "sources": ["https://en.wikipedia.org/wiki/Tracking_and_Data_Relay_Satellite"]
+    },
+
+    {
+      "name": "Spacebus 4000",
+      "aliases": ["Spacebus 4000B2", "Spacebus 4000B3", "Spacebus 4000C3"],
+      "platformClass": "communications",
+      "regime": "geo",
+      "published": {
+        "powerDraw": { "min": 6000, "typical": 10000, "max": 15800 },
+        "payloadDuty": { "typical": 1.0 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 10, "confidence": 0.4 },
+        "pointingAccuracy": { "typical": 0.05, "confidence": 0.4 },
+        "attitudeRate": { "typical": 0.2, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 15,
+        "launchMassKg": { "min": 3900, "max": 6100 }
+      },
+      "sources": [
+        "https://en.wikipedia.org/wiki/Spacebus",
+        "https://space.skyrocket.de/doc_sat/spacebus-4000.htm"
+      ]
+    },
+
+    {
+      "name": "SSTL-100",
+      "aliases": ["SSTL 100", "SSTL-150"],
+      "platformClass": "earth_observation",
+      "regime": "sso",
+      "published": {
+        "powerDraw": { "typical": 120 },
+        "payloadDuty": { "typical": 0.2 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 5, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 0.1, "confidence": 0.4 },
+        "attitudeRate": { "typical": 1.0, "confidence": 0.4 }
+      },
+      "context": {
+        "designLifeYears": 7,
+        "launchMassKg": { "typical": 100 },
+        "note": "SSTL workhorse for constellations (DMC, NigeriaSat, etc.). SSTL-150 scales to 150 kg."
+      },
+      "sources": ["https://space.skyrocket.de/doc_sat/sstl-100.htm"]
+    },
+
+    {
+      "name": "Microstar",
+      "aliases": ["Orbcomm Microstar"],
+      "platformClass": "communications",
+      "regime": "leo",
+      "published": {
+        "powerDraw": { "typical": 120 },
+        "payloadDuty": { "typical": 0.3 }
+      },
+      "inferred": {
+        "thermalMargin": { "typical": 5, "confidence": 0.3 },
+        "pointingAccuracy": { "typical": 1.0, "confidence": 0.3 },
+        "attitudeRate": { "typical": 0.5, "confidence": 0.3 }
+      },
+      "context": {
+        "designLifeYears": 4,
+        "launchMassKg": { "typical": 42 },
+        "note": "Orbcomm first-generation, 1995-launched."
+      },
+      "sources": ["https://space.skyrocket.de/doc_sat/orbcomm.htm"]
+    }
+  ]
+}
