@@ -1,0 +1,190 @@
+/**
+ * Thalamus DAG Executor — Runs cortex DAG with parallel + sequential execution
+ *
+ * Independent cortices (empty dependsOn) run in parallel via Promise.all.
+ * Dependent cortices chain sequentially, receiving upstream findings as context.
+ */
+
+import { createLogger } from "@interview/shared/observability";
+import type { CortexExecutor } from "../cortices/executor";
+import type { CortexOutput, CortexInput } from "../cortices/types";
+import type { DAGPlan, DAGNode } from "./thalamus-planner.service";
+
+const logger = createLogger("thalamus-executor");
+
+const CORTEX_TIMEOUT_MS = 90_000;
+
+// Cortices with web enrichment + LLM synthesis need more time
+const CORTEX_TIMEOUT_OVERRIDES: Record<string, number> = {
+  payload_profiler: 180_000, // 3 min — crawls SpaceTrack + ESA DISCOS + synthesis
+};
+
+export interface DAGExecutionResult {
+  outputs: Map<string, CortexOutput>;
+  totalDuration: number;
+}
+
+export class ThalamusDAGExecutor {
+  constructor(private cortexExecutor: CortexExecutor) {}
+
+  /**
+   * Execute a DAG plan. Groups nodes by dependency level,
+   * runs each level in parallel, chains results forward.
+   */
+  async execute(
+    plan: DAGPlan,
+    cycleId: bigint,
+    lang?: "fr" | "en",
+    mode?: "investment" | "audit",
+  ): Promise<DAGExecutionResult> {
+    const start = Date.now();
+    const outputs = new Map<string, CortexOutput>();
+    const levels = this.topologicalLevels(plan.nodes);
+
+    logger.info(
+      {
+        intent: plan.intent,
+        levels: levels.length,
+        totalNodes: plan.nodes.length,
+      },
+      "DAG execution started",
+    );
+
+    for (let i = 0; i < levels.length; i++) {
+      const level = levels[i];
+      logger.info(
+        { level: i, cortices: level.map((n) => n.cortex) },
+        "Executing DAG level",
+      );
+
+      // Run all nodes in this level in parallel
+      const results = await Promise.allSettled(
+        level.map((node) =>
+          this.executeNode(node, cycleId, plan.intent, outputs, lang, mode),
+        ),
+      );
+
+      // Collect results
+      for (let j = 0; j < level.length; j++) {
+        const result = results[j];
+        const node = level[j];
+        if (result.status === "fulfilled") {
+          outputs.set(node.cortex, result.value);
+        } else {
+          logger.error(
+            { cortex: node.cortex, error: result.reason },
+            "Cortex execution failed",
+          );
+          outputs.set(node.cortex, {
+            findings: [],
+            metadata: { tokensUsed: 0, duration: 0, model: "error" },
+          });
+        }
+      }
+    }
+
+    const totalDuration = Date.now() - start;
+    const totalFindings = [...outputs.values()].reduce(
+      (sum, o) => sum + o.findings.length,
+      0,
+    );
+
+    logger.info(
+      { totalDuration, totalFindings, cortices: [...outputs.keys()] },
+      "DAG execution complete",
+    );
+
+    return { outputs, totalDuration };
+  }
+
+  /**
+   * Execute a single DAG node with timeout and upstream context.
+   */
+  private async executeNode(
+    node: DAGNode,
+    cycleId: bigint,
+    query: string,
+    upstreamOutputs: Map<string, CortexOutput>,
+    lang?: "fr" | "en",
+    mode?: "investment" | "audit",
+  ): Promise<CortexOutput> {
+    // Build context from upstream dependencies
+    const previousFindings = node.dependsOn.flatMap((dep) => {
+      const upstream = upstreamOutputs.get(dep);
+      if (!upstream) return [];
+      return upstream.findings.map((f) => ({
+        title: f.title,
+        summary: f.summary,
+        confidence: f.confidence,
+      }));
+    });
+
+    const input: CortexInput = {
+      query,
+      params: node.params,
+      cycleId,
+      lang,
+      mode,
+      context: previousFindings.length > 0 ? { previousFindings } : undefined,
+    };
+
+    // Execute with timeout (per-cortex override for heavy cortices)
+    const timeout = CORTEX_TIMEOUT_OVERRIDES[node.cortex] ?? CORTEX_TIMEOUT_MS;
+    const result = await Promise.race([
+      this.cortexExecutor.execute(node.cortex, input),
+      new Promise<CortexOutput>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(`Cortex ${node.cortex} timed out after ${timeout}ms`),
+            ),
+          timeout,
+        ),
+      ),
+    ]);
+
+    return result;
+  }
+
+  /**
+   * Topological sort into parallel execution levels.
+   * Level 0: nodes with no dependencies (run first, in parallel)
+   * Level 1: nodes depending only on level 0 (run after level 0)
+   * etc.
+   */
+  private topologicalLevels(nodes: DAGNode[]): DAGNode[][] {
+    const levels: DAGNode[][] = [];
+    const placed = new Set<string>();
+    const remaining = [...nodes];
+
+    while (remaining.length > 0) {
+      const level: DAGNode[] = [];
+
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        const node = remaining[i];
+        const depsResolved = node.dependsOn.every((dep) => placed.has(dep));
+        if (depsResolved) {
+          level.push(node);
+          remaining.splice(i, 1);
+        }
+      }
+
+      if (level.length === 0) {
+        // Circular dependency or unresolvable — dump remaining as last level
+        logger.warn(
+          { remaining: remaining.map((n) => n.cortex) },
+          "Unresolvable DAG dependencies, forcing execution",
+        );
+        levels.push(remaining);
+        break;
+      }
+
+      for (const node of level) {
+        placed.add(node.cortex);
+      }
+      levels.push(level);
+    }
+
+    return levels;
+  }
+}

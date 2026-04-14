@@ -1,0 +1,5105 @@
+{
+  "region": "Bordeaux",
+  "count": 43,
+  "appellations": [
+    {
+      "id": 383,
+      "name": "Barsac",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 25,
+        "par_couleur": { "rose": null, "blanc": 25, "rouge": null },
+        "butoir_hl_ha": 28,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 15,
+        "par_couleur": { "rose": null, "blanc": 15, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": 6,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": false,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 5.95,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 17.08,
+          "depth_cm": "0-30",
+          "sand_pct": 55.43,
+          "silt_pct": 27.47,
+          "soil_type": "Sandy Loam",
+          "cec_cmol_kg": 18.95,
+          "nitrogen_g_kg": 31.82,
+          "bulk_density_g_cm3": 1.39,
+          "organic_carbon_g_kg": 29.15,
+          "water_available_pct": 30.03,
+          "coarse_fragments_pct": 9.7,
+          "water_wilting_point_pct": 12.85,
+          "water_field_capacity_pct": 34.17,
+          "water_holding_capacity_pct": 17.18
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.53,
+            "humidity_avg": 78.21,
+            "precip_total": 773.8000000000001,
+            "temp_max_avg": 42.98,
+            "temp_min_avg": -11.24,
+            "wind_speed_avg": 0.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3394, "winkler": 1664, "cool_night": 4.33 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 63,
+          "min_m": 26,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 36,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 175
+    },
+    {
+      "id": 216,
+      "name": "Blaye",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "carmenère N", "max_pct": 10 },
+            { "nom": "cot N (malbec)", "max_pct": null },
+            { "nom": "petit verdot N", "max_pct": null }
+          ]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 48,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 48 },
+        "butoir_hl_ha": 60,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 12,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 12 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 172,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 29,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 123
+    },
+    {
+      "id": 6,
+      "name": "Bordeaux",
+      "parentName": null,
+      "encepagement": {
+        "rose": {
+          "principaux": [
+            { "nom": "Merlot N", "source": "knowledge" },
+            { "nom": "Cabernet-sauvignon N", "source": "knowledge" },
+            { "nom": "Cabernet franc N", "source": "knowledge" }
+          ],
+          "accessoires": []
+        },
+        "blanc": {
+          "principaux": [
+            { "nom": "Sauvignon B", "source": "knowledge" },
+            { "nom": "Sémillon B", "source": "knowledge" },
+            { "nom": "Muscadelle B", "source": "knowledge" }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            { "nom": "Merlot N", "source": "knowledge" },
+            { "nom": "Cabernet-sauvignon N", "source": "knowledge" },
+            { "nom": "Cabernet franc N", "source": "knowledge" }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 172,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 29,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 4548
+    },
+    {
+      "id": 1794,
+      "name": "Bordeaux clairet",
+      "parentName": "Bordeaux",
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "colombard B", "max_pct": null },
+            { "nom": "merlot blanc B", "max_pct": null },
+            { "nom": "ugni blanc B", "max_pct": null }
+          ]
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 172,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 29,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 327
+    },
+    {
+      "id": 1877,
+      "name": "Bordeaux Haut-Benauge",
+      "parentName": "Bordeaux",
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "colombard B", "max_pct": null },
+            { "nom": "merlot blanc B", "max_pct": null },
+            { "nom": "ugni blanc B", "max_pct": null }
+          ]
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 172,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 29,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 367
+    },
+    {
+      "id": 387,
+      "name": "Cadillac",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 37,
+        "par_couleur": { "rose": null, "blanc": 37, "rouge": null },
+        "butoir_hl_ha": 40,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 15,
+        "par_couleur": { "rose": null, "blanc": 15, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.78,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 34.03,
+          "depth_cm": "0-30",
+          "sand_pct": 34.3,
+          "silt_pct": 31.68,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 25.65,
+          "nitrogen_g_kg": 28.98,
+          "bulk_density_g_cm3": 1.44,
+          "organic_carbon_g_kg": 32.35,
+          "water_available_pct": 28.52,
+          "coarse_fragments_pct": 10.77,
+          "water_wilting_point_pct": 16.1,
+          "water_field_capacity_pct": 32.35,
+          "water_holding_capacity_pct": 12.42
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.53,
+            "humidity_avg": 78.21,
+            "precip_total": 773.8000000000001,
+            "temp_max_avg": 42.98,
+            "temp_min_avg": -11.24,
+            "wind_speed_avg": 0.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3394, "winkler": 1664, "cool_night": 4.33 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 102,
+          "min_m": 7,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 55,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 184
+    },
+    {
+      "id": 1927,
+      "name": "Cadillac Côtes de Bordeaux",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 37,
+        "par_couleur": { "rose": null, "blanc": 37, "rouge": null },
+        "butoir_hl_ha": 40,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 15,
+        "par_couleur": { "rose": null, "blanc": 15, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 102,
+          "min_m": 7,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 55,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 691
+    },
+    {
+      "id": 20,
+      "name": "Canon-Fronsac",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "carmenère N", "max_pct": 10 },
+            { "nom": "cot N (ou malbec)", "max_pct": null },
+            { "nom": "petit verdot N", "max_pct": 10 }
+          ]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 53,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": 65,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": 13.5,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": 8,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 54,
+          "min_m": 5,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 27,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 454
+    },
+    {
+      "id": 119,
+      "name": "Castillon Côtes de Bordeaux",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "auxerrois B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas rose Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "gewurztraminer Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat ottonel B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "riesling B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sylvaner B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "pinot noir N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": null,
+      "tav": null,
+      "vinification": null,
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 172,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 29,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 1116
+    },
+    {
+      "id": 309,
+      "name": "Cérons",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 40,
+        "par_couleur": { "rose": null, "blanc": 40, "rouge": null },
+        "butoir_hl_ha": 44,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 14.5,
+        "par_couleur": { "rose": null, "blanc": 14.5, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 62,
+          "min_m": 6,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 32,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 68
+    },
+    {
+      "id": 256,
+      "name": "Côtes de Bergerac",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "ugni blanc B", "max_pct": 25 },
+            { "nom": "chenin B", "max_pct": null },
+            { "nom": "ondenc B", "max_pct": null }
+          ]
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": 55, "rouge": 50 },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": 14.5,
+        "min_pct": 11.5,
+        "par_couleur": { "rose": null, "blanc": 11.5, "rouge": 11.5 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.4,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.68,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 32.35,
+          "depth_cm": "0-30",
+          "sand_pct": 21.58,
+          "silt_pct": 46.12,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 19.53,
+          "nitrogen_g_kg": 27.07,
+          "bulk_density_g_cm3": 1.4,
+          "organic_carbon_g_kg": 35.2,
+          "water_available_pct": 26.02,
+          "coarse_fragments_pct": 13.38,
+          "water_wilting_point_pct": 19.65,
+          "water_field_capacity_pct": 36.7,
+          "water_holding_capacity_pct": 6.37
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 12.7,
+            "humidity_avg": 77.39,
+            "precip_total": 719.05,
+            "temp_max_avg": 41.72,
+            "temp_min_avg": -12.61,
+            "wind_speed_avg": 2.47
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3149, "winkler": 1572, "cool_night": 2.47 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 153,
+          "min_m": 13,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 64,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 34
+    },
+    {
+      "id": 162,
+      "name": "Côtes de Blaye",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "colombard B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "ugni blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "muscadelle B", "max_pct": null },
+            { "nom": "sauvignon B", "max_pct": null },
+            { "nom": "sauvignon gris G", "max_pct": null },
+            { "nom": "sémillon B", "max_pct": null }
+          ]
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 60,
+        "par_couleur": { "rose": null, "blanc": 60, "rouge": null },
+        "butoir_hl_ha": 72,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": 13,
+        "min_pct": 10,
+        "par_couleur": { "rose": null, "blanc": 10, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 172,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 29,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 3
+    },
+    {
+      "id": 23,
+      "name": "Côtes de Bordeaux",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            { "nom": "Merlot N", "source": "knowledge" },
+            { "nom": "Cabernet-sauvignon N", "source": "knowledge" },
+            { "nom": "Cabernet franc N", "source": "knowledge" }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 106,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 40,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 695
+    },
+    {
+      "id": 1888,
+      "name": "Côtes de Bordeaux-Saint-Macaire",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "Sémillon B",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "Sauvignon B",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "Muscadelle B",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 112,
+          "min_m": 15,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 61,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 132
+    },
+    {
+      "id": 286,
+      "name": "Côtes de Bourg",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "auxerrois B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas rose Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "gewurztraminer Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat ottonel B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "riesling B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sylvaner B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "pinot noir N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": null,
+      "tav": null,
+      "vinification": null,
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 172,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 29,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 1564
+    },
+    {
+      "id": 208,
+      "name": "Entre-deux-Mers",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "colombard B", "max_pct": null },
+            { "nom": "ugni blanc B", "max_pct": null },
+            { "nom": "mauzac B", "max_pct": 10 },
+            { "nom": "merlot blanc B", "max_pct": 30 }
+          ]
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "carmenère N", "max_pct": null }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.48,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 23.55,
+          "depth_cm": "0-30",
+          "sand_pct": 37.28,
+          "silt_pct": 39.17,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.48,
+          "nitrogen_g_kg": 35.68,
+          "bulk_density_g_cm3": 1.4,
+          "organic_carbon_g_kg": 23.73,
+          "water_available_pct": 30.05,
+          "coarse_fragments_pct": 9.45,
+          "water_wilting_point_pct": 15.08,
+          "water_field_capacity_pct": 35.65,
+          "water_holding_capacity_pct": 14.97
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3216, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 88,
+          "min_m": 5,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 39,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 718
+    },
+    {
+      "id": 420,
+      "name": "Entre-deux-Mers Haut-Benauge",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "colombard B", "max_pct": null },
+            { "nom": "ugni blanc B", "max_pct": null },
+            { "nom": "mauzac B", "max_pct": 10 },
+            { "nom": "merlot blanc B", "max_pct": 30 }
+          ]
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "carmenère N", "max_pct": null }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 88,
+          "min_m": 5,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 39,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 70
+    },
+    {
+      "id": 285,
+      "name": "Francs Côtes de Bordeaux",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "auxerrois B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas rose Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "gewurztraminer Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat ottonel B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "riesling B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sylvaner B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "pinot noir N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": null,
+      "tav": null,
+      "vinification": null,
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 172,
+          "min_m": 0,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 29,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 324
+    },
+    {
+      "id": 48,
+      "name": "Fronsac",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "auxerrois B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas rose Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "gewurztraminer Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat ottonel B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "riesling B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sylvaner B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "pinot noir N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": null,
+      "tav": null,
+      "vinification": null,
+      "terroir": {
+        "soil": {
+          "ph": 6,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 28.3,
+          "depth_cm": "0-30",
+          "sand_pct": 42,
+          "silt_pct": 29.68,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 25.83,
+          "nitrogen_g_kg": 38.65,
+          "bulk_density_g_cm3": 1.37,
+          "organic_carbon_g_kg": 37.53,
+          "water_available_pct": 29.87,
+          "coarse_fragments_pct": 9.4,
+          "water_wilting_point_pct": 14.43,
+          "water_field_capacity_pct": 32.35,
+          "water_holding_capacity_pct": 15.43
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 51,
+          "min_m": 3,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 28,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 875
+    },
+    {
+      "id": 54,
+      "name": "Graves",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "auxerrois B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas rose Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "gewurztraminer Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat ottonel B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "riesling B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sylvaner B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "pinot noir N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": null,
+      "tav": null,
+      "vinification": null,
+      "terroir": {
+        "soil": {
+          "ph": 6.57,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 20.22,
+          "depth_cm": "0-30",
+          "sand_pct": 50.8,
+          "silt_pct": 29,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 19.87,
+          "nitrogen_g_kg": 21.78,
+          "bulk_density_g_cm3": 1.43,
+          "organic_carbon_g_kg": 20.77,
+          "water_available_pct": 30.78,
+          "coarse_fragments_pct": 11.32,
+          "water_wilting_point_pct": 13.65,
+          "water_field_capacity_pct": 33.98,
+          "water_holding_capacity_pct": 17.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.53,
+            "humidity_avg": 78.21,
+            "precip_total": 773.8000000000001,
+            "temp_max_avg": 42.98,
+            "temp_min_avg": -11.24,
+            "wind_speed_avg": 0.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3394, "winkler": 1664, "cool_night": 4.33 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 91,
+          "min_m": 6,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 56,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 2028
+    },
+    {
+      "id": 182,
+      "name": "Graves de Vayres",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": 65
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": 65
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": 65
+            },
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": 65
+            }
+          ],
+          "accessoires": [{ "nom": "merlot blanc B", "max_pct": 30 }]
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 10.5 },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.98,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 33.43,
+          "depth_cm": "0-30",
+          "sand_pct": 27.97,
+          "silt_pct": 38.58,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 28.35,
+          "nitrogen_g_kg": 29.02,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 30.7,
+          "water_available_pct": 28.73,
+          "coarse_fragments_pct": 10.97,
+          "water_wilting_point_pct": 17.8,
+          "water_field_capacity_pct": 34.68,
+          "water_holding_capacity_pct": 10.93
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 37,
+          "min_m": 3,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 7,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 365
+    },
+    {
+      "id": 1900,
+      "name": "Graves supérieures",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "auxerrois B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas rose Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "gewurztraminer Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat ottonel B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "riesling B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sylvaner B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "pinot noir N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": null,
+      "tav": null,
+      "vinification": null,
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 91,
+          "min_m": 6,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 56,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 294
+    },
+    {
+      "id": 5,
+      "name": "Lalande-de-Pomerol",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "auxerrois B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas rose Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "gewurztraminer Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat ottonel B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "riesling B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sylvaner B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "pinot noir N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": null,
+      "tav": null,
+      "vinification": null,
+      "terroir": {
+        "soil": {
+          "ph": 6.7,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 21.12,
+          "depth_cm": "0-30",
+          "sand_pct": 48.15,
+          "silt_pct": 30.75,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.07,
+          "nitrogen_g_kg": 21.82,
+          "bulk_density_g_cm3": 1.45,
+          "organic_carbon_g_kg": 21.43,
+          "water_available_pct": 29.7,
+          "coarse_fragments_pct": 9.53,
+          "water_wilting_point_pct": 14.52,
+          "water_field_capacity_pct": 32,
+          "water_holding_capacity_pct": 15.18
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3217, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 59,
+          "min_m": 5,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 37,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 1139
+    },
+    {
+      "id": 428,
+      "name": "Loupiac",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "Sémillon",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "Sauvignon",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "Muscadelle",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": 21,
+        "min_pct": 12,
+        "par_couleur": { "rose": null, "blanc": 21, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 5.78,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 20.97,
+          "depth_cm": "0-30",
+          "sand_pct": 51.63,
+          "silt_pct": 27.4,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 21.3,
+          "nitrogen_g_kg": 31.43,
+          "bulk_density_g_cm3": 1.37,
+          "organic_carbon_g_kg": 36.6,
+          "water_available_pct": 29.13,
+          "coarse_fragments_pct": 10.42,
+          "water_wilting_point_pct": 14.02,
+          "water_field_capacity_pct": 34.15,
+          "water_holding_capacity_pct": 15.12
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.53,
+            "humidity_avg": 78.21,
+            "precip_total": 773.8000000000001,
+            "temp_max_avg": 42.98,
+            "temp_min_avg": -11.24,
+            "wind_speed_avg": 0.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3394, "winkler": 1664, "cool_night": 4.33 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 34,
+          "min_m": 4,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 23,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 187
+    },
+    {
+      "id": 158,
+      "name": "Lussac Saint-Emilion",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "carmenère N", "max_pct": 10 },
+            { "nom": "petit verdot N", "max_pct": 10 }
+          ]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 53,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": 65,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.58,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 25.47,
+          "depth_cm": "0-30",
+          "sand_pct": 37.02,
+          "silt_pct": 37.52,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 22.25,
+          "nitrogen_g_kg": 27.93,
+          "bulk_density_g_cm3": 1.41,
+          "organic_carbon_g_kg": 29.17,
+          "water_available_pct": 28.42,
+          "coarse_fragments_pct": 10.62,
+          "water_wilting_point_pct": 14.78,
+          "water_field_capacity_pct": 32.67,
+          "water_holding_capacity_pct": 13.63
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3217, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 50,
+          "min_m": 4,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 22,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 647
+    },
+    {
+      "id": 28,
+      "name": "Margaux",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "castets N", "max_pct": 10 }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 57,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 57 },
+        "butoir_hl_ha": 63,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": 13.5,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.55,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 17.88,
+          "depth_cm": "0-30",
+          "sand_pct": 58.35,
+          "silt_pct": 23.82,
+          "soil_type": "Sandy Loam",
+          "cec_cmol_kg": 24.62,
+          "nitrogen_g_kg": 27.57,
+          "bulk_density_g_cm3": 1.41,
+          "organic_carbon_g_kg": 26.35,
+          "water_available_pct": 30.5,
+          "coarse_fragments_pct": 9.33,
+          "water_wilting_point_pct": 13.75,
+          "water_field_capacity_pct": 33.17,
+          "water_holding_capacity_pct": 16.75
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 41,
+          "min_m": 4,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 13,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 1795
+    },
+    {
+      "id": 108,
+      "name": "Montagne-Saint-Emilion",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "carmenère N", "max_pct": 10 },
+            { "nom": "petit verdot N", "max_pct": 10 }
+          ]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 53,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": 65,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.4,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 29.98,
+          "depth_cm": "0-30",
+          "sand_pct": 33.37,
+          "silt_pct": 36.6,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 26.65,
+          "nitrogen_g_kg": 34.78,
+          "bulk_density_g_cm3": 1.36,
+          "organic_carbon_g_kg": 33.82,
+          "water_available_pct": 29.72,
+          "coarse_fragments_pct": 9.4,
+          "water_wilting_point_pct": 15.18,
+          "water_field_capacity_pct": 32.35,
+          "water_holding_capacity_pct": 14.53
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3217, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 36,
+          "min_m": 5,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 26,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 997
+    },
+    {
+      "id": 283,
+      "name": "Moulis",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [
+            { "nom": "arinarnoa N", "max_pct": 5 },
+            { "nom": "castets N", "max_pct": 5 },
+            { "nom": "marselan N", "max_pct": 5 },
+            { "nom": "touriga nacional N", "max_pct": 5 }
+          ]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": null
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 31,
+          "min_m": 19,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 27,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 524
+    },
+    {
+      "id": 35,
+      "name": "Pauillac",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 57,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 57 },
+        "butoir_hl_ha": 63,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": 13.5,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": "mixte",
+        "malo_interdite": false,
+        "elevage_min_mois": 6,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.03,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 23.85,
+          "depth_cm": "0-30",
+          "sand_pct": 47.32,
+          "silt_pct": 28.85,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 23.22,
+          "nitrogen_g_kg": 36.17,
+          "bulk_density_g_cm3": 1.35,
+          "organic_carbon_g_kg": 32.77,
+          "water_available_pct": 28.83,
+          "coarse_fragments_pct": 13.3,
+          "water_wilting_point_pct": 15.82,
+          "water_field_capacity_pct": 32.67,
+          "water_holding_capacity_pct": 13.02
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.11,
+            "humidity_avg": 79.67,
+            "precip_total": 744.6,
+            "temp_max_avg": 41.31,
+            "temp_min_avg": -10.59,
+            "wind_speed_avg": 2.79
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3111, "winkler": 1557, "cool_night": 3.67 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 32,
+          "min_m": 6,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 24,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 1538
+    },
+    {
+      "id": 235,
+      "name": "Pécharmant",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": 65,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": 65,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (malbec)",
+              "source": "pdf",
+              "max_pct": 65,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": 65,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 50,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 50 },
+        "butoir_hl_ha": 54,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": 13.5,
+        "min_pct": 11.5,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11.5 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": 8,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.68,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 32.35,
+          "depth_cm": "0-30",
+          "sand_pct": 21.58,
+          "silt_pct": 46.12,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 19.53,
+          "nitrogen_g_kg": 27.07,
+          "bulk_density_g_cm3": 1.4,
+          "organic_carbon_g_kg": 35.2,
+          "water_available_pct": 26.02,
+          "coarse_fragments_pct": 13.38,
+          "water_wilting_point_pct": 19.65,
+          "water_field_capacity_pct": 36.7,
+          "water_holding_capacity_pct": 6.37
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 12.7,
+            "humidity_avg": 77.39,
+            "precip_total": 719.05,
+            "temp_max_avg": 41.72,
+            "temp_min_avg": -12.61,
+            "wind_speed_avg": 2.47
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3149, "winkler": 1572, "cool_night": 2.47 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Basse colline (100-250m)",
+          "max_m": 136,
+          "min_m": 47,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 105,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 41
+    },
+    {
+      "id": 10,
+      "name": "Pessac-Léognan",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 54,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": 60,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": "mixte",
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 61,
+          "min_m": 20,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 47,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 2165
+    },
+    {
+      "id": 27,
+      "name": "Pomerol",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (malbec/pressac)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 49,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 49 },
+        "butoir_hl_ha": 60,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": 13.5,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.68,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.2,
+          "depth_cm": "0-30",
+          "sand_pct": 39.88,
+          "silt_pct": 33.93,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 21.65,
+          "nitrogen_g_kg": 24.33,
+          "bulk_density_g_cm3": 1.44,
+          "organic_carbon_g_kg": 23.82,
+          "water_available_pct": 29.25,
+          "coarse_fragments_pct": 9.78,
+          "water_wilting_point_pct": 13.75,
+          "water_field_capacity_pct": 32.28,
+          "water_holding_capacity_pct": 15.5
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3217, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 78,
+          "min_m": 4,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 39,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 2328
+    },
+    {
+      "id": 85,
+      "name": "Puisseguin Saint-Emilion",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "auxerrois B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "chasselas rose Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "gewurztraminer Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat à petits grains Rs",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscat ottonel B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot blanc B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "pinot gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "riesling B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sylvaner B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "pinot noir N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": null,
+      "tav": null,
+      "vinification": null,
+      "terroir": {
+        "soil": {
+          "ph": 6.28,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 21.98,
+          "depth_cm": "0-30",
+          "sand_pct": 44.55,
+          "silt_pct": 33.5,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 21.7,
+          "nitrogen_g_kg": 25.37,
+          "bulk_density_g_cm3": 1.41,
+          "organic_carbon_g_kg": 26.53,
+          "water_available_pct": 30.12,
+          "coarse_fragments_pct": 8.97,
+          "water_wilting_point_pct": 13.88,
+          "water_field_capacity_pct": 33.2,
+          "water_holding_capacity_pct": 16.23
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3217, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 75,
+          "min_m": 17,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 42,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 457
+    },
+    {
+      "id": 462,
+      "name": "Sainte-Croix-du-Mont",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "Sémillon",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "Sauvignon",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "Muscadelle",
+              "source": "knowledge",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": null,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": null },
+        "butoir_hl_ha": null,
+        "base_hl_ha_source": null
+      },
+      "tav": {
+        "max_pct": 21,
+        "min_pct": 12,
+        "par_couleur": { "rose": null, "blanc": 12, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.55,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 20.72,
+          "depth_cm": "0-30",
+          "sand_pct": 52,
+          "silt_pct": 27.32,
+          "soil_type": "Sandy Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 23.25,
+          "bulk_density_g_cm3": 1.41,
+          "organic_carbon_g_kg": 29.83,
+          "water_available_pct": 30.55,
+          "coarse_fragments_pct": 9.27,
+          "water_wilting_point_pct": 13.6,
+          "water_field_capacity_pct": 33.77,
+          "water_holding_capacity_pct": 16.95
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.53,
+            "humidity_avg": 78.21,
+            "precip_total": 773.8000000000001,
+            "temp_max_avg": 42.98,
+            "temp_min_avg": -11.24,
+            "wind_speed_avg": 0.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3394, "winkler": 1664, "cool_night": 4.33 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 33,
+          "min_m": 13,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 23,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 194
+    },
+    {
+      "id": 21,
+      "name": "Saint-Emilion",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "petit verdot N", "max_pct": 10 }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 53,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": 65,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.78,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 34,
+          "depth_cm": "0-30",
+          "sand_pct": 27.5,
+          "silt_pct": 38.5,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 26.08,
+          "nitrogen_g_kg": 32.15,
+          "bulk_density_g_cm3": 1.41,
+          "organic_carbon_g_kg": 29.27,
+          "water_available_pct": 28.43,
+          "coarse_fragments_pct": 9.13,
+          "water_wilting_point_pct": 16.97,
+          "water_field_capacity_pct": 32.57,
+          "water_holding_capacity_pct": 11.47
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3216, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 34,
+          "min_m": 1,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 17,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 688
+    },
+    {
+      "id": 1986,
+      "name": "Saint-Emilion 1er grand cru classé A",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "petit verdot N", "max_pct": 10 }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 53,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": 65,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": { "soil": null, "climate": null, "altitude": null },
+      "wineCount": 122
+    },
+    {
+      "id": 1987,
+      "name": "Saint-Emilion 1er grand cru classé B",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "petit verdot N", "max_pct": 10 }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 53,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": 65,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": { "soil": null, "climate": null, "altitude": null },
+      "wineCount": 292
+    },
+    {
+      "id": 77,
+      "name": "Saint-Emilion grand cru",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "petit verdot N", "max_pct": 10 }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 46,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 46 },
+        "butoir_hl_ha": 55,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11.5,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11.5 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.78,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 34,
+          "depth_cm": "0-30",
+          "sand_pct": 27.5,
+          "silt_pct": 38.5,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 26.08,
+          "nitrogen_g_kg": 32.15,
+          "bulk_density_g_cm3": 1.41,
+          "organic_carbon_g_kg": 29.27,
+          "water_available_pct": 28.43,
+          "coarse_fragments_pct": 9.13,
+          "water_wilting_point_pct": 16.97,
+          "water_field_capacity_pct": 32.57,
+          "water_holding_capacity_pct": 11.47
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3216, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 34,
+          "min_m": 1,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 17,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 3248
+    },
+    {
+      "id": 1988,
+      "name": "Saint-Emilion grand cru classé",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "petit verdot N", "max_pct": 10 }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 53,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": 65,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": { "soil": null, "climate": null, "altitude": null },
+      "wineCount": 1646
+    },
+    {
+      "id": 15,
+      "name": "Saint-Estèphe",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 57,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 57 },
+        "butoir_hl_ha": 63,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": 13.5,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": "mixte",
+        "malo_interdite": false,
+        "elevage_min_mois": 6,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.83,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 26.5,
+          "depth_cm": "0-30",
+          "sand_pct": 44.12,
+          "silt_pct": 29.37,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 20.93,
+          "nitrogen_g_kg": 24.85,
+          "bulk_density_g_cm3": 1.42,
+          "organic_carbon_g_kg": 28.4,
+          "water_available_pct": 28.47,
+          "coarse_fragments_pct": 11.87,
+          "water_wilting_point_pct": 15.33,
+          "water_field_capacity_pct": 33.85,
+          "water_holding_capacity_pct": 13.13
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 33,
+          "min_m": 2,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 15,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 1199
+    },
+    {
+      "id": 459,
+      "name": "Saint-Georges-Saint-Emilion",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": [{ "nom": "petit verdot N", "max_pct": 10 }]
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 53,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 53 },
+        "butoir_hl_ha": 65,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": false,
+        "elevage_min_mois": null,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 7.02,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 33.45,
+          "depth_cm": "0-30",
+          "sand_pct": 27.8,
+          "silt_pct": 38.77,
+          "soil_type": "Clay Loam",
+          "cec_cmol_kg": 28.23,
+          "nitrogen_g_kg": 25.92,
+          "bulk_density_g_cm3": 1.43,
+          "organic_carbon_g_kg": 26.63,
+          "water_available_pct": 29.47,
+          "coarse_fragments_pct": 10.05,
+          "water_wilting_point_pct": 16.48,
+          "water_field_capacity_pct": 32.58,
+          "water_holding_capacity_pct": 12.98
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.08,
+            "humidity_avg": 78.79,
+            "precip_total": 759.2,
+            "temp_max_avg": 42.29,
+            "temp_min_avg": -11.58,
+            "wind_speed_avg": 2.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3217, "winkler": 1630, "cool_night": 2.89 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 16,
+          "min_m": 2,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 9,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 155
+    },
+    {
+      "id": 14,
+      "name": "Saint-Julien",
+      "parentName": null,
+      "encepagement": {
+        "blanc": { "principaux": [], "accessoires": [] },
+        "rouge": {
+          "principaux": [
+            {
+              "nom": "cabernet franc N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cabernet-sauvignon N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "carmenère N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "cot N (ou malbec)",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "merlot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "petit verdot N",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 57,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 57 },
+        "butoir_hl_ha": 63,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": 13.5,
+        "min_pct": 11,
+        "par_couleur": { "rose": null, "blanc": null, "rouge": 11 },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": "mixte",
+        "malo_interdite": false,
+        "elevage_min_mois": 6,
+        "malo_obligatoire": true,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": 0.3,
+        "maceration_carbonique": null,
+        "malo_obligatoire_source": "pdf"
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.78,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 21.88,
+          "depth_cm": "0-30",
+          "sand_pct": 54.52,
+          "silt_pct": 23.6,
+          "soil_type": "Sandy Loam",
+          "cec_cmol_kg": 24.72,
+          "nitrogen_g_kg": 28.57,
+          "bulk_density_g_cm3": 1.39,
+          "organic_carbon_g_kg": 33.17,
+          "water_available_pct": 27.85,
+          "coarse_fragments_pct": 13.45,
+          "water_wilting_point_pct": 15.98,
+          "water_field_capacity_pct": 33.92,
+          "water_holding_capacity_pct": 11.87
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.43,
+            "humidity_avg": 78.36,
+            "precip_total": 748.2499999999999,
+            "temp_max_avg": 41.94,
+            "temp_min_avg": -10.55,
+            "wind_speed_avg": 1.84
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3206, "winkler": 1638, "cool_night": 4.68 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 33,
+          "min_m": 15,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 28,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 969
+    },
+    {
+      "id": 36,
+      "name": "Sauternes",
+      "parentName": null,
+      "encepagement": {
+        "blanc": {
+          "principaux": [
+            {
+              "nom": "sémillon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "sauvignon gris G",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            },
+            {
+              "nom": "muscadelle B",
+              "source": "pdf",
+              "max_pct": null,
+              "min_pct": null
+            }
+          ],
+          "accessoires": []
+        },
+        "rouge": { "principaux": [], "accessoires": [] }
+      },
+      "rendement": {
+        "vci_hl_ha": null,
+        "base_hl_ha": 25,
+        "par_couleur": { "rose": null, "blanc": 25, "rouge": null },
+        "butoir_hl_ha": 28,
+        "base_hl_ha_source": "pdf"
+      },
+      "tav": {
+        "max_pct": null,
+        "min_pct": 15,
+        "par_couleur": { "rose": null, "blanc": 15, "rouge": null },
+        "min_pct_source": "pdf"
+      },
+      "vinification": {
+        "sur_lies": null,
+        "batonnage": null,
+        "elevage_type": null,
+        "malo_interdite": null,
+        "elevage_min_mois": null,
+        "malo_obligatoire": null,
+        "elevage_fut_neuf_pct": null,
+        "acide_malique_max_g_l": null,
+        "maceration_carbonique": false,
+        "malo_obligatoire_source": null
+      },
+      "terroir": {
+        "soil": {
+          "ph": 6.2,
+          "source": "SoilGrids 2.0 (ISRIC)",
+          "clay_pct": 20.78,
+          "depth_cm": "0-30",
+          "sand_pct": 50.05,
+          "silt_pct": 29.17,
+          "soil_type": "Loam",
+          "cec_cmol_kg": 19.3,
+          "nitrogen_g_kg": 26.63,
+          "bulk_density_g_cm3": 1.41,
+          "organic_carbon_g_kg": 24.68,
+          "water_available_pct": 29.18,
+          "coarse_fragments_pct": 9.62,
+          "water_wilting_point_pct": 12.42,
+          "water_field_capacity_pct": 34.35,
+          "water_holding_capacity_pct": 16.77
+        },
+        "climate": {
+          "annual": {
+            "temp_avg": 13.53,
+            "humidity_avg": 78.21,
+            "precip_total": 773.8000000000001,
+            "temp_max_avg": 42.98,
+            "temp_min_avg": -11.24,
+            "wind_speed_avg": 0.41
+          },
+          "period": "1981-2024",
+          "source": "NASA POWER",
+          "indices": { "huglin": 3394, "winkler": 1664, "cool_night": 4.33 },
+          "classification": {
+            "huglin_zone": "Très chaud (>2700)",
+            "winkler_zone": "III (tempéré-chaud)",
+            "cool_night_zone": "Nuits fraîches (<12°C)"
+          }
+        },
+        "altitude": {
+          "zone": "Plaine (<100m)",
+          "max_m": 85,
+          "min_m": 19,
+          "method": "3x3 grid sampling",
+          "source": "SRTM 30m (Open-Topo-Data)",
+          "median_m": 35,
+          "points_sampled": 9
+        }
+      },
+      "wineCount": 1361
+    }
+  ]
+}
