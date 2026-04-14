@@ -181,6 +181,80 @@ No SQL schema changes — `sim_agent_memory` already carries the right columns. 
   ```
   Sprite frames live in `packages/cli/src/components/SatelliteLoader/frames.ts`. New sprites are pure strings — zero runtime cost to add (e.g. a "pokemon-caught" celebratory frame on `/accept`).
 
+## 8bis. Emoji-tagged lifecycle logs
+
+Thalamus and sweep emit pino events at every step. The `/logs` tail renderer
+becomes readable at a glance when each event carries an **animated** emoji
+prefix — the bullet cycles through a small frame set while the step is in
+progress, and freezes on a terminal emoji once the step completes.
+
+**Two states per step:**
+
+- `inProgress` — renders a frame cycle at ~6 fps (cadence shared with the
+  satellite loader). The cycle is a list of related emoji, not a spinner.
+- `done` / `error` — renders a single terminal emoji, stable.
+
+The emoji frames are a structured field on the log event
+(`{ step, phase: "start"|"done"|"error", frames?: string[], terminal?: string, msg, ... }`)
+— not a string hack. Existing pino consumers ignore the animation fields
+and see the `terminal` emoji or the first `frames[0]`. The CLI renderer
+owns the animation loop.
+
+**Thalamus (per cycle):**
+
+| Step             | Animated frames (in-progress) | Terminal (done) | Terminal (error) |
+| ---------------- | ----------------------------- | --------------- | ---------------- |
+| cycle            | 🧠 💭 🧠 💫                   | 🏁              | 💥               |
+| planner          | 🗺️ 🧭 🗺️ 📐                   | 📍              | ⚠️               |
+| cortex           | 🧩 ⚙️ 🧩 🔩                   | ✅              | ❌               |
+| nano.call        | 💭 💬 💭 🗯️                   | ✨              | 💔               |
+| fetch.osint      | 🛰️ 📶 🛰️ 🌐                   | 📥              | 🕳️               |
+| fetch.field      | 📡 ⚡ 📡 🔭                   | 📥              | 🕳️               |
+| curator.dedup    | 🧹 🧽 🧹 ✂️                   | 🧴              | ⚠️               |
+| kg.write         | 📝 ✍️ 📝 🖋️                   | 📚              | ❌               |
+| guardrail.breach | —                             | 🚧              | —                |
+| reflexion        | 🔁 🌀 🔁 ♻️                   | 🪞              | ⚠️               |
+
+**Sweep fish (per turn):**
+
+| Step              | Animated frames (in-progress) | Terminal (done) | Terminal (error) |
+| ----------------- | ----------------------------- | --------------- | ---------------- |
+| swarm             | 🐟 🐠 🐡 🦈                   | 🏆              | 🚨               |
+| fish.spawn        | 🐠 🫧 🐠 💦                   | 🐟              | —                |
+| fish.perturb      | 🎲 🌪️ 🎲 ⚡                   | 🎯              | —                |
+| fish.turn         | 💧 🌊 💧 🫧                   | 🎣              | 💔               |
+| fish.memory.read  | 🧠 🔍 🧠 📖                   | 📚              | —                |
+| fish.memory.write | 🫧 💾 🫧 📥                   | 💽              | —                |
+| aggregator        | 🕸️ 🧬 🕸️ 🔬                   | 🎯              | ⚠️               |
+| suggestion.emit   | —                             | 💡              | —                |
+| swarm.fail-soft   | —                             | 🚨              | —                |
+
+Guidelines for frame sets:
+
+- 3–5 frames per animated step, looped. Theme them so the sequence reads
+  like the action (water ripples for fish, gears for cortex, radio waves
+  for field).
+- Terminal emoji is visually distinct from any frame in the loop — the
+  reader's eye catches the state change.
+- Instantaneous steps (e.g. `guardrail.breach`, `suggestion.emit`,
+  `swarm.fail-soft`) have no animation — just the terminal.
+
+**Implementation:**
+
+- Shared helper `packages/shared/src/observability/step-logger.ts` exporting
+  `stepLog(logger, step, extra?)`. Looks the emoji up in a frozen map keyed by
+  `step`; unknown steps log with a `❔` and a dev-mode warning.
+- Thalamus and sweep services replace their existing ad-hoc `logger.info("...")`
+  at lifecycle boundaries with `stepLog(logger, "cortex.start", { cortex })`.
+- CLI `logTail.tsx` groups consecutive events by `cycleId` / `swarmId`,
+  renders them as an indented timeline with the emoji as the bullet.
+- The emoji map is the single source of truth — updating it updates CLI
+  rendering and any future Grafana/Prometheus label automatically.
+
+Unit tests in `packages/shared/tests/step-logger.spec.ts` assert the map
+is exhaustive (every `Step` union member has an emoji) and that unknown
+steps fall back to `❔`.
+
 ## 9. Testing
 
 Per-AC tests in `packages/cli/tests/`:
