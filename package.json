@@ -1,0 +1,30 @@
+{
+  "name": "interview-thalamus-sweep",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Standalone extraction of Thalamus (multi-cortex research agent) and Sweep (nano swarm DB audit) for technical interview",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "vitest run --project e2e",
+    "test:watch": "vitest",
+    "spec:check": "tsx scripts/spec-check.ts",
+    "hooks:install": "git config core.hooksPath .githooks && echo '  ✓ git hooks installed (.githooks/)'",
+    "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || echo '  (skipped hooks install — not a git repo yet)'"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "@vitest/coverage-v8": "^1.6.1",
+    "ioredis-mock": "^8.13.1",
+    "pg-mem": "^3.0.14",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.1"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

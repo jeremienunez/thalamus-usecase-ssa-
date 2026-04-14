@@ -1,0 +1,50 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+.vitest-cache/
+*.lcov
+
+# LaTeX build artifacts (keep .tex sources, ignore compiled)
+docs/specs/**/*.aux
+docs/specs/**/*.log
+docs/specs/**/*.out
+docs/specs/**/*.toc
+docs/specs/**/*.fls
+docs/specs/**/*.fdb_latexmk
+docs/specs/**/*.synctex.gz
+docs/specs/**/*.pdf
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local demo state
+fixtures/recorded/
+data/seeds/local/
+
+# Frontend WIP — not ready for the portfolio tree yet
+apps/
+design-system/

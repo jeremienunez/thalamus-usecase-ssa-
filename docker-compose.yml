@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: thalamus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: thalamus
+      POSTGRES_PASSWORD: thalamus
+      POSTGRES_DB: thalamus
+    ports:
+      # Host 5433 → container 5432. Avoids conflict with a local postgres on 5432.
+      - "5433:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thalamus -d thalamus"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: thalamus-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    ports:
+      # Host 6380 → container 6379. Avoids conflict with a local redis on 6379.
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pg-data:
+  redis-data:

@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": false,
+    "sourceMap": false,
+    "noUncheckedIndexedAccess": false,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@interview/shared": ["./packages/shared/src/index.ts"],
+      "@interview/shared/*": ["./packages/shared/src/*"],
+      "@interview/db-schema": ["./packages/db-schema/src/index.ts"],
+      "@interview/db-schema/*": ["./packages/db-schema/src/*"],
+      "@interview/thalamus": ["./packages/thalamus/src/index.ts"],
+      "@interview/thalamus/*": ["./packages/thalamus/src/*"],
+      "@interview/sweep": ["./packages/sweep/src/index.ts"],
+      "@interview/sweep/*": ["./packages/sweep/src/*"]
+    }
+  }
+}
