@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { Box } from "ink";
+import { Box, Text } from "ink";
 import { randomUUID } from "node:crypto";
 import { Prompt } from "./components/Prompt";
 import { StatusFooter } from "./components/StatusFooter";
@@ -11,6 +11,12 @@ import { parseExplicitCommand } from "./router/parser";
 import { dispatch, type DispatchResult, type Adapters } from "./router/dispatch";
 import type { RouterPlan } from "./router/schema";
 import type { Estimate } from "./util/etaStore";
+import { BriefingRenderer } from "./renderers/briefing";
+import { TelemetryRenderer } from "./renderers/telemetry";
+import { LogTailRenderer } from "./renderers/logTail";
+import { GraphTreeRenderer } from "./renderers/graphTree";
+import { WhyTreeRenderer } from "./renderers/whyTree";
+import { ClarifyRenderer } from "./renderers/clarify";
 
 export interface AppProps {
   adapters: Adapters;
@@ -24,9 +30,7 @@ export function App(p: AppProps): React.JSX.Element {
   const [buffer] = useState(() => new ConversationBuffer({ maxTokens: 200_000 }));
   const [cost] = useState(() => new CostMeter());
   const [busy, setBusy] = useState<null | { kind: string; subject: string; start: number }>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [results, setResults] = useState<DispatchResult[]>([]);
-  void results;
   const [lastAction, setLastAction] = useState<{ name: string; ms: number } | undefined>();
 
   const onSubmit = useCallback(async (input: string) => {
@@ -57,8 +61,37 @@ export function App(p: AppProps): React.JSX.Element {
   return (
     <Box flexDirection="column">
       <ScrollView>
-        {/* Renderers wired in Task 18; placeholder passes results count */}
-        <Box />
+        {results.map((r, i) => {
+          switch (r.kind) {
+            case "briefing":
+              return (
+                <BriefingRenderer key={i}
+                  executiveSummary={`Research cycle produced ${r.findings.length} finding(s). Cost $${r.costUsd.toFixed(3)}.`}
+                  findings={r.findings as never}
+                  recommendedActions={[]}
+                  followUpPrompts={[]}
+                />
+              );
+            case "telemetry":
+              return <TelemetryRenderer key={i} satId={r.satId} distribution={r.distribution} />;
+            case "logs":
+              return <LogTailRenderer key={i} events={r.events as never} />;
+            case "graph":
+              return <GraphTreeRenderer key={i} tree={r.tree} />;
+            case "resolution":
+              return (
+                <Box key={i} marginY={1}>
+                  <Text color={r.ok ? "green" : "red"}>
+                    {r.ok ? "✓" : "✗"} accepted {r.suggestionId}
+                  </Text>
+                </Box>
+              );
+            case "why":
+              return <WhyTreeRenderer key={i} tree={r.tree} />;
+            case "clarify":
+              return <ClarifyRenderer key={i} question={r.question} options={r.options} />;
+          }
+        })}
       </ScrollView>
       {busy && (
         <SatelliteLoader
