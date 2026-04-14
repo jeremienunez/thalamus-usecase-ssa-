@@ -1,2 +1,6 @@
 #!/usr/bin/env node
-console.log("@interview/cli boot placeholder — Ink app wired in later tasks");
+import { main } from "./boot";
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
