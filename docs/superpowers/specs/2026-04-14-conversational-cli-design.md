@@ -172,6 +172,7 @@ No SQL schema changes — `sim_agent_memory` already carries the right columns. 
   ```
 - **Cost dial**: session total = Σ cycle costs (thalamus + sweep + cli cortices); per-turn delta shown as `+ $0.014`.
 - **Satellite loader** — an ASCII pet that animates while long ops run (`runCycle`, `startTelemetrySwarm`, swarm aggregation). Default sprite is a small satellite orbiting a dot; additional sprites picked per action (dish scanning for `/query`, antenna blinking for `/telemetry`, radar sweep for `/graph`). ~10 fps via an Ink `useInterval`, cleaned up on step completion. The sprite also carries the current cortex name as a subtitle so the reviewer sees _what_ the system is doing, not just _that_ it's busy.
+
   ```
        .·°·.
       ·     ·
@@ -179,7 +180,30 @@ No SQL schema changes — `sim_agent_memory` already carries the right columns. 
       · ─┼─ ·
        ·─┴─·
   ```
+
   Sprite frames live in `packages/cli/src/components/SatelliteLoader/frames.ts`. New sprites are pure strings — zero runtime cost to add (e.g. a "pokemon-caught" celebratory frame on `/accept`).
+
+- **Approximate ETA** — the loader subtitle also carries a live time-to-finish estimate, updated every tick. Source of truth: a small rolling-window store `util/etaStore.ts` keyed by `{ kind, subject }` (e.g. `cortex:conjunction-analysis`, `swarm:telemetry-inference`, `swarm:pc-estimator`) with p50 and p95 durations from the last N=20 completed runs, persisted to `~/.cache/ssa-cli/eta.json` so estimates survive restarts.
+
+  Rendering rule:
+  - `elapsed < p50` → `~ Xs remaining` where `X = p50 - elapsed` (green)
+  - `p50 ≤ elapsed < p95` → `~ Ys remaining, slower than usual` (yellow)
+  - `elapsed ≥ p95` → `running long — p95 was Zs` (red, no countdown)
+  - First run for a given `{ kind, subject }` with no history → `~ estimating…` (gray)
+
+  Display inside the loader block, below the cortex name:
+
+  ```
+       .·°·.
+      ·     ·
+     ·   ●   ·     running: conjunction-analysis
+      · ─┼─ ·       ~ 3s remaining  ·  $0.012 so far
+       ·─┴─·
+  ```
+
+  The ETA store is updated by a tiny hook at the log pipeline: every `cortex.done` / `swarm.done` event carries `durationMs`; the renderer appends it to the rolling window. No additional instrumentation — reuses the emoji-tagged lifecycle events from §8bis.
+
+  **Non-goal:** ETA precision. This is a reassurance cue, not an SLA — we show it to keep the reviewer's eye engaged during 10–15 s waits.
 
 ## 8bis. Emoji-tagged lifecycle logs
 
