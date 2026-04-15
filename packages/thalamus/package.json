@@ -6,7 +6,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "demo-cycle": "node --env-file=../../.env --import tsx src/demo/cycle.ts"
+    "demo-cycle": "node --env-file=../../.env --import tsx src/demo/cycle.ts",
+    "ssa": "node --env-file=../../.env --import tsx src/demo/ssa-repl.ts"
   },
   "dependencies": {
     "@interview/shared": "workspace:*",

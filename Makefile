@@ -73,6 +73,10 @@ demo: up migrate seed ## Full bring-up: infra → migrations → seeds → stop-
 thalamus-cycle: ## Run one research cycle end-to-end (SSA catalog query)
 	pnpm --filter @interview/thalamus demo-cycle
 
+.PHONY: ssa
+ssa: ## Interactive SSA REPL (query → briefing loop)
+	pnpm --filter @interview/thalamus ssa
+
 .PHONY: sweep-run
 sweep-run: ## Run one sweep audit pass against the seeded catalog
 	pnpm --filter @interview/sweep demo-run
