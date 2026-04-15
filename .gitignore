@@ -46,5 +46,4 @@ fixtures/recorded/
 data/seeds/local/
 
 # Frontend WIP — not ready for the portfolio tree yet
-apps/
 design-system/

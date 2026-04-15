@@ -1,0 +1,76 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+
+  ::selection {
+    background-color: #22d3ee33;
+    color: #e6edf3;
+  }
+
+  *:focus-visible {
+    outline: 1px solid #22d3ee;
+    outline-offset: 2px;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #2d3748;
+    border-radius: 0;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #3a4656;
+  }
+}
+
+@layer components {
+  .label {
+    @apply text-label uppercase tracking-widest text-muted font-medium;
+  }
+  .mono {
+    @apply font-mono text-numeric;
+  }
+  .hairline {
+    @apply border-hairline;
+  }
+  .panel {
+    @apply bg-panel border-hairline;
+  }
+  .elevated {
+    @apply bg-elevated border-hairline;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
