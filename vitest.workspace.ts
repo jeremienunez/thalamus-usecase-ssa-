@@ -18,10 +18,7 @@ const aliases = {
     __dirname,
     "packages/shared/src/utils/index.ts",
   ),
-  "@interview/shared/types": resolve(
-    __dirname,
-    "packages/shared/src/types",
-  ),
+  "@interview/shared/types": resolve(__dirname, "packages/shared/src/types"),
   "@interview/shared/schemas": resolve(
     __dirname,
     "packages/shared/src/schemas",
@@ -36,14 +33,8 @@ const aliases = {
     __dirname,
     "packages/thalamus/src/services/research-graph.service.ts",
   ),
-  "@interview/db-schema": resolve(
-    __dirname,
-    "packages/db-schema/src/index.ts",
-  ),
-  "@interview/thalamus": resolve(
-    __dirname,
-    "packages/thalamus/src/index.ts",
-  ),
+  "@interview/db-schema": resolve(__dirname, "packages/db-schema/src/index.ts"),
+  "@interview/thalamus": resolve(__dirname, "packages/thalamus/src/index.ts"),
   "@interview/sweep": resolve(__dirname, "packages/sweep/src/index.ts"),
 };
 
@@ -60,10 +51,7 @@ export default defineWorkspace([
       ...base,
       name: "unit",
       include: ["packages/*/tests/**/*.spec.ts"],
-      exclude: [
-        "packages/*/tests/integration/**",
-        "packages/*/tests/e2e/**",
-      ],
+      exclude: ["packages/*/tests/integration/**", "packages/*/tests/e2e/**"],
     },
   },
   {
@@ -71,7 +59,10 @@ export default defineWorkspace([
     test: {
       ...base,
       name: "integration",
-      include: ["packages/*/tests/integration/**/*.spec.ts"],
+      include: [
+        "packages/*/tests/integration/**/*.spec.ts",
+        "apps/*/tests/**/*.spec.ts",
+      ],
       testTimeout: 15000,
     },
   },
