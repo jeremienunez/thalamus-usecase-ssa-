@@ -28,6 +28,7 @@ import type { Database } from "@interview/db-schema";
 import { ResearchCycleTrigger } from "@interview/shared/enum";
 import IORedis from "ioredis";
 import { buildThalamusContainer } from "../config/container";
+import { createLlmTransportWithMode } from "../transports/factory";
 import {
   loadCycleFindings,
   loadRecentFindings,
@@ -115,13 +116,17 @@ async function main(): Promise<void> {
   printHelp();
   rl.prompt();
 
-  rl.on("line", async (rawLine) => {
+  let queue: Promise<void> = Promise.resolve();
+  rl.on("line", (rawLine) => {
+    queue = queue.then(() => handleLine(rawLine));
+  });
+
+  async function handleLine(rawLine: string): Promise<void> {
     const line = rawLine.trim();
     if (!line) {
-      rl.prompt();
+      if (!shuttingDown) rl.prompt();
       return;
     }
-
     try {
       const [cmd, ...rest] = line.split(/\s+/);
       const arg = rest.join(" ");
@@ -144,6 +149,8 @@ async function main(): Promise<void> {
         await handleWhy(arg, { db });
       } else if (cmd === "stats") {
         printStats(state);
+      } else if (cmd === "chat" || cmd === "ask") {
+        await handleChat(arg || line, { state });
       } else {
         // Anything else = free-form query.
         await handleQuery(line, { c, db, state });
@@ -156,7 +163,7 @@ async function main(): Promise<void> {
         rl.prompt();
       }
     }
-  });
+  }
 
   rl.on("close", shutdown);
 
@@ -185,6 +192,7 @@ ${COLOR.bold}Commands${COLOR.reset}
   ${COLOR.cyan}graph <entity>${COLOR.reset}        show research_edge neighbourhood of an entity
   ${COLOR.cyan}findings [limit]${COLOR.reset}      list last N findings across cycles
   ${COLOR.cyan}why <findingId>${COLOR.reset}       trace provenance of a finding
+  ${COLOR.cyan}chat <text>${COLOR.reset}           direct conversation with the SSA assistant (no cycle)
   ${COLOR.cyan}stats${COLOR.reset}                 session totals (cycles, cost, swarms)
   ${COLOR.cyan}help${COLOR.reset}                  this list
   ${COLOR.cyan}quit${COLOR.reset}                  goodbye
@@ -246,7 +254,8 @@ async function handleQuery(
   }));
 
   if (findings.length === 0) {
-    console.log(`${COLOR.yellow}[cycle] no findings produced — re-run with a narrower query${COLOR.reset}`);
+    console.log(`${COLOR.grey}[cycle] no findings — falling back to direct chat${COLOR.reset}`);
+    await handleChat(query, { state: deps.state });
     return;
   }
 
@@ -261,6 +270,28 @@ async function handleQuery(
   console.log(briefing);
 }
 
+
+const CHAT_SYSTEM_PROMPT = `You are the SSA mission-operator assistant inside the Thalamus + Sweep REPL.
+You talk to a non-technical reviewer. Keep answers under 120 words, in the reviewer's language.
+You CAN explain: catalog contents, conjunction concepts, sim-fish swarms, confidence bands (FIELD/OSINT/SIM), findings, what each REPL command does (query, telemetry, graph, findings, why, accept, stats).
+You CANNOT run actions yourself — if the user wants data, suggest the exact REPL command that would fetch it.
+Never invent satellite numbers or Pc values. If the user asks for a specific datum, direct them to \`query\`, \`telemetry\`, or \`findings\`.`;
+
+async function handleChat(
+  query: string,
+  deps: { state: SessionState },
+): Promise<void> {
+  const t0 = Date.now();
+  const transport = createLlmTransportWithMode(CHAT_SYSTEM_PROMPT);
+  const response = await transport.call(query);
+  const elapsedMs = Date.now() - t0;
+  banner("CHAT", "magenta");
+  console.log(response.content || `${COLOR.grey}(empty response)${COLOR.reset}`);
+  console.log(
+    `${COLOR.grey}provider=${response.provider} elapsed=${(elapsedMs / 1000).toFixed(1)}s${COLOR.reset}`,
+  );
+  void deps;
+}
 
 async function handleTelemetry(
   arg: string,
