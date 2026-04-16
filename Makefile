@@ -61,7 +61,13 @@ studio: ## Open Drizzle Studio (web UI on :4983)
 
 .PHONY: seed
 seed: ## Seed reference tables + ~500 satellites from CelesTrak TLE
-	pnpm --filter @interview/db-schema seed
+	@bash -c '. ./scripts/ui.sh; \
+	  section "Seeding catalog"; \
+	  step "pnpm --filter @interview/db-schema seed"; \
+	  pnpm --filter @interview/db-schema seed; \
+	  sats=$$(docker exec thalamus-postgres psql -U thalamus -d thalamus -tAc "select count(*) from satellites" 2>/dev/null || echo "?"); \
+	  regimes=$$(docker exec thalamus-postgres psql -U thalamus -d thalamus -tAc "select count(distinct regime_id) from satellites where regime_id is not null" 2>/dev/null || echo "?"); \
+	  ok "$$sats satellites, $$regimes regimes in catalog"'
 
 ##@ Demo
 # ── Demo ─────────────────────────────────────────────────────────────────────
