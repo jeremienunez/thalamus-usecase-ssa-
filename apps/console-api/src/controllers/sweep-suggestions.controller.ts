@@ -1,7 +1,13 @@
 // apps/console-api/src/controllers/sweep-suggestions.controller.ts
 import type { FastifyRequest } from "fastify";
+import type { SweepSuggestionsService } from "../services/sweep-suggestions.service";
 import { asyncHandler } from "../utils/async-handler";
 
+/**
+ * Structural deps for sweep-suggestions controllers. Kept here so the
+ * container can compose it from `@interview/sweep` at boot, and so the
+ * service file imports its shape back from this module.
+ */
 export interface SweepDeps {
   sweepRepo: {
     list(opts: { reviewed: boolean; limit: number }): Promise<{
@@ -25,28 +31,13 @@ export interface SweepDeps {
   resolutionService: { resolve(id: string): Promise<unknown> };
 }
 
-export function sweepSuggestionsListController(deps: SweepDeps) {
-  return asyncHandler(async () => {
-    const res = await deps.sweepRepo.list({ reviewed: false, limit: 100 });
-    const items = res.rows.map((r) => ({
-      id: r.id,
-      title: r.title,
-      description: r.description,
-      suggestedAction: r.suggestedAction,
-      category: r.category,
-      severity: r.severity,
-      operatorCountryName: r.operatorCountryName,
-      affectedSatellites: r.affectedSatellites,
-      createdAt: r.createdAt,
-      accepted: r.accepted,
-      resolutionStatus: r.resolutionStatus,
-      hasPayload: Boolean(r.resolutionPayload),
-    }));
-    return { items, total: items.length };
-  });
+export function sweepSuggestionsListController(
+  service: SweepSuggestionsService,
+) {
+  return asyncHandler(() => service.list());
 }
 
-export function sweepReviewController(deps: SweepDeps) {
+export function sweepReviewController(service: SweepSuggestionsService) {
   return asyncHandler<
     FastifyRequest<{
       Params: { id: string };
@@ -55,12 +46,9 @@ export function sweepReviewController(deps: SweepDeps) {
   >(async (req, reply) => {
     const { id } = req.params;
     const { accept, reason } = req.body ?? { accept: false };
-    const ok = await deps.sweepRepo.review(id, accept, reason);
-    if (!ok) return reply.code(404).send({ error: "not found" });
-    if (accept) {
-      const resolution = await deps.resolutionService.resolve(id);
-      return { ok: true, reviewed: true, resolution };
-    }
-    return { ok: true, reviewed: true, resolution: null };
+    const result = await service.review(id, accept, reason);
+    if (result.ok === false)
+      return reply.code(404).send({ error: "not found" });
+    return result;
   });
 }
