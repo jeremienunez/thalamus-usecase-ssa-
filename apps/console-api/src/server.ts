@@ -10,11 +10,13 @@ import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { buildContainer } from "./container";
 import { registerAllRoutes } from "./routes";
+import type { HealthSnapshot } from "./infra/health-snapshot";
 
 export type AppHandle = {
   app: FastifyInstance;
   close: () => Promise<void>;
   info: { databaseUrl: string; redisUrl: string; cortices: number };
+  snapshot: HealthSnapshot;
 };
 
 export type ServerHandle = AppHandle & { port: number };
@@ -93,10 +95,15 @@ async function animateSatellite(): Promise<void> {
   process.stdout.write(stars.join("\n") + "\n");
 }
 
-function printBanner(port: number, info: { databaseUrl: string; redisUrl: string; cortices: number }): void {
+function printBanner(
+  port: number,
+  info: { databaseUrl: string; redisUrl: string; cortices: number },
+  snapshot: HealthSnapshot,
+): void {
   const mode = isProd ? "production" : "development";
   const c = C.cyan, g = C.green, gr = C.gray, b = C.bold, r = C.reset;
   const base = `http://localhost:${port}`;
+  const dot = (ok: boolean) => `${ok ? g : C.red}●${r}`;
   const header = [
     ``,
     `  ${b}${c}console-api${r} ${gr}·${r} ${g}ready${r} ${gr}on${r} ${b}${base}${r}`,
@@ -105,7 +112,14 @@ function printBanner(port: number, info: { databaseUrl: string; redisUrl: string
     `  ${gr}mode${r}      ${mode}`,
     `  ${gr}postgres${r}  ${info.databaseUrl}`,
     `  ${gr}redis${r}     ${info.redisUrl}`,
-    `  ${gr}cortices${r}  ${info.cortices}`,
+  ];
+  const pad = (s: string | number | null, n: number) => String(s ?? "—").padEnd(n);
+  const system = [
+    `  ${b}System${r}`,
+    `    ${dot(snapshot.postgres.ok)} postgres    ${pad(snapshot.postgres.pgvector ? `pgvector ${snapshot.postgres.pgvector}` : "pgvector —", 24)}`,
+    `    ${dot(snapshot.redis.ok)} redis       ${pad(snapshot.redis.ok ? "ready" : "unreachable", 24)}`,
+    `    ${dot(true)} cortices    ${pad(snapshot.cortices, 24)} ${gr}loaded${r}`,
+    `    ${dot(snapshot.postgres.ok)} catalog     ${pad(snapshot.catalog.satellites, 6)} sats   ${pad(snapshot.catalog.regimes, 6)} regimes`,
   ];
   const hints = [
     `  ${b}Try this:${r}`,
@@ -117,7 +131,10 @@ function printBanner(port: number, info: { databaseUrl: string; redisUrl: string
     `  ${gr}›${r} ${c}curl -X POST${r} ${base}/api/repl/turn ${gr}-d '{"query":"LEO traffic"}'${r}`,
   ];
   process.stdout.write(
-    header.join("\n") + "\n\n" + cfg.join("\n") + "\n\n" + hints.join("\n") + "\n\n",
+    header.join("\n") + "\n\n" +
+    cfg.join("\n") + "\n\n" +
+    system.join("\n") + "\n\n" +
+    hints.join("\n") + "\n\n",
   );
 }
 
@@ -161,11 +178,12 @@ export async function createApp(): Promise<AppHandle> {
     done();
   });
 
-  const container = buildContainer(app.log);
+  const container = await buildContainer(app.log);
   registerAllRoutes(app, container.services);
   return {
     app,
     info: container.info,
+    snapshot: container.snapshot,
     close: async () => {
       await app.close();
       await container.close();
@@ -180,14 +198,14 @@ export async function startServer(
     throw new Error(`startServer: invalid port ${port}`);
   }
   await animateSatellite();
-  const { app, close, info } = await createApp();
+  const { app, close, info, snapshot } = await createApp();
   const address = await app.listen({ port, host: "0.0.0.0" });
   const boundPort = (() => {
     const m = address.match(/:(\d+)$/);
     return m ? Number(m[1]) : port;
   })();
-  printBanner(boundPort, info);
-  return { app, port: boundPort, close, info };
+  printBanner(boundPort, info, snapshot);
+  return { app, port: boundPort, close, info, snapshot };
 }
 
 async function main(): Promise<void> {
