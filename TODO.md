@@ -32,7 +32,7 @@ Interview-readiness checklist for Thalamus + Sweep — **target interview: CortA
 ### Spec work remaining
 
 - [ ] Move specs from `DRAFT` → `REVIEW` → `APPROVED` status as contracts are validated
-- [ ] `scripts/spec-check.ts` — CI gate: walk test files, extract `@spec` tags, assert each AC has a matching test and vice versa
+- [x] `scripts/spec-check.ts` — spec gate: walks every `.tex`, parses `\specStatus` + `\begin{ac}` + Traceability table, enforces every AC on an APPROVED/IMPLEMENTED spec has an existing test file + test name. Currently no-ops (all 24 specs DRAFT) — activates as specs graduate.
 - [ ] Add `spec-build` CI job — run `make all` in `docs/specs/`, publish PDFs as artifacts
 
 ## Tests tracing to Acceptance Criteria
@@ -77,18 +77,30 @@ Every spec has a Traceability table; tests must land at those paths and the `des
 
 ## Pre-commit + CI (spec-oriented)
 
-- [ ] `husky` + `lint-staged` pre-commit: typecheck, lint, format, unit tests on staged files
+- [x] **Native `.githooks/pre-commit`** (no husky dep): blocks `.env*` staged → `pnpm typecheck` → `pnpm spec:check` → `pnpm test`. Installed via `pnpm hooks:install` (sets `core.hooksPath`).
 - [ ] CI pipeline: `pnpm -r typecheck` → `pnpm -r lint` → `pnpm -r test --coverage` → `make -C docs/specs all` → `tsx scripts/spec-check.ts`
 - [ ] 100% coverage gate on `shared` (pure functions, no excuse); pyramidal target 70% unit / 25% integration / 5% e2e on thalamus + sweep
 - [ ] Coverage artifacts published per PR
 
 ## Build cleanup (in progress)
 
-- [ ] Add `packages/sweep/package.json` and `packages/sweep/tsconfig.json` (currently missing)
+- [x] Add `packages/sweep/package.json` and `packages/sweep/tsconfig.json`
 - [ ] Remove unused `csv-reader.ts` / `pdf-table-reader.ts` from `shared` (missing `csv-parse` / `pdf-parse` deps, not used by thalamus or sweep)
-- [ ] `pnpm -r typecheck` passes cleanly across all four packages
+- [x] `pnpm -r typecheck` passes cleanly across all 7 workspace projects (shared, db-schema, thalamus, sweep, cli, console, console-api)
 - [ ] `pnpm -r build` passes (if/when build scripts are added)
-- [ ] Drizzle `using`/`op` index error in schema (bump drizzle-orm or drop the GIN index)
+- [x] Drizzle `using`/`op` index error resolved via raw SQL migration (`0001_hnsw_index.sql`, `0002_embedding_2048.sql`) — HNSW + halfvec(2048) index applied out-of-band since drizzle-kit 0.21 cannot emit `USING hnsw` natively
+
+## console-api 5-layer refactor — done 2026-04-16
+
+- [x] Decompose `apps/console-api/src/server.ts` from 2001 to 61 lines — layered into `routes/` → `controllers/` → `services/` → `repositories/` → `types/` + `utils/` + `prompts/`.
+- [x] Hoist shared DTO helpers to [packages/shared/src/ssa/](packages/shared/src/ssa/) — SatelliteView / FindingView / KgView alongside the existing ConjunctionView. `deriveAction(pc)` added next to `deriveCovarianceQuality(sigmaKm)`.
+- [x] Tighten repository id signatures to `bigint` (was `string` + internal `BigInt()` throw); enable PK index via `::bigint[]` cast in edge lookup.
+- [x] `StatsService.snapshot` parallelises 3 count queries (was sequential).
+- [x] Composition root in [apps/console-api/src/container.ts](apps/console-api/src/container.ts) (134 lines) — wires 9 repos + 13 services + thalamus/sweep containers; exposes `AppServices` to `registerAllRoutes`.
+- [x] vitest workspace picks up `packages/*/src/**/*.test.ts` — unmasks 20 co-located shared DTO tests.
+- [x] All 4 integration specs (conjunctions / enrichment-findings / knn-propagation / sweep-mission) green throughout. Final: 385 passed / 23 todo.
+- [ ] Follow-ups from code review: add unit tests for the 5 view services (list/findById/updateDecision sentinel branches), redact error messages from `asyncHandler` before sending to client in prod, tighten `satellitesController` to validate `regime` via `RegimeSchema.safeParse`, reshape `ConjunctionViewService.list(minPc)` to options-object for symmetry with other services, split `findingDecisionController`'s `"invalid"` sentinel into `"invalid-id"` vs `"invalid-decision"` for field-specific UI errors.
+- [ ] Follow-up from code review: `MissionService` start/stop race preserved from server.ts — add generation counter to prevent concurrent ticks from two rapid start/stop cycles.
 
 ## Domain pivot to SSA (Space Situational Awareness) — done 2026-04-13
 
@@ -300,8 +312,10 @@ from `startTelemetrySwarm`.
 - [ ] **Conjunction Pc probabilistic estimator (~45 min)** — take a
       `conjunction_event`, K fish estimate Pc with perturbed assumptions
       (hard-body radius 5 / 10 / 20 m, covariance tight / loose). Aggregator
-      → median + sigma + dissent clusters. Fixes the "all Pc = 1e-2
-      algorithmic default" gap flagged by the earlier demo cycle.
+      → median + sigma + dissent clusters. Deterministic Pc baseline already
+      shipped (Foster-1992 1D gaussian on regime-conditioned σ — see
+      2026-04-16 CHANGELOG entry); this task adds the fish-swarm dissent
+      layer on top of it.
 - [ ] **Maneuver cost estimator (~60 min)** — K fish propose burns (dV,
       timing, post-maneuver re-screen). Aggregator finds the Pareto front
       over cost x residual-risk. Reviewer accepts the Pareto-efficient pick
@@ -449,7 +463,7 @@ trace, and reason on factual fills.
 ### KNN propagation — zero-LLM enrichment (done)
 
 - [x] `POST /api/sweep/mission/knn-propagate {field, k, minSim, limit,
-  dryRun}` — for each payload missing a field, finds K nearest embedded
+dryRun}` — for each payload missing a field, finds K nearest embedded
       neighbours with field set, propagates consensus value.
 - [x] Consensus rule: numeric = all within ±10 % of median; text = mode
       covers ≥ ⅔ of neighbours. Nearest-neighbour `cos_sim ≥ minSim`.
