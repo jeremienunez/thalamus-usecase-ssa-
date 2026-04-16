@@ -4,7 +4,10 @@ import { dirname, resolve } from "node:path";
 import { RouterPlanSchema, type RouterPlan } from "./schema";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SKILL_PATH = resolve(__dirname, "../../../thalamus/src/cortices/skills/interpreter.md");
+const SKILL_PATH = resolve(
+  __dirname,
+  "../../../../apps/console-api/src/agent/ssa/skills/interpreter.md",
+);
 
 export interface NanoCaller {
   call: (args: { system: string; user: string; temperature: number; responseFormat: "json" })

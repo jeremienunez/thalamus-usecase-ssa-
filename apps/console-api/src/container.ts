@@ -8,6 +8,8 @@
  * `registerAllRoutes`. The corresponding `close()` tears the whole stack
  * down — used by tests so the vitest process can exit cleanly.
  */
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import Redis from "ioredis";
@@ -15,6 +17,11 @@ import * as schema from "@interview/db-schema";
 import type { FastifyBaseLogger } from "fastify";
 import { buildThalamusContainer } from "@interview/thalamus";
 import { buildSweepContainer } from "@interview/sweep";
+
+const SSA_SKILLS_DIR = resolve(
+  fileURLToPath(new URL(".", import.meta.url)),
+  "./agent/ssa/skills",
+);
 
 import { SatelliteRepository } from "./repositories/satellite.repository";
 import { ConjunctionRepository } from "./repositories/conjunction.repository";
@@ -62,7 +69,7 @@ export async function buildContainer(logger: FastifyBaseLogger): Promise<{
   >;
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
 
-  const thalamus = buildThalamusContainer({ db });
+  const thalamus = buildThalamusContainer({ db, skillsDir: SSA_SKILLS_DIR });
   const sweep = buildSweepContainer({ db, redis });
 
   // repos

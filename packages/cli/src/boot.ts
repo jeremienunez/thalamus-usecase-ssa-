@@ -1,7 +1,8 @@
 import React from "react";
 import { render } from "ink";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import pino from "pino";
 import { Pool } from "pg";
 import IORedis from "ioredis";
@@ -81,7 +82,13 @@ export async function main(
     const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6380";
     ownedPool = new Pool({ connectionString: databaseUrl });
     ownedRedis = new IORedis(redisUrl, { maxRetriesPerRequest: null });
-    const registry = new CortexRegistry();
+    // SSA cortex skill pack lives in console-api. Until the CLI moves under
+    // apps/ssa-cli, walk up to the shared path.
+    const skillsDir = resolve(
+      fileURLToPath(new URL(".", import.meta.url)),
+      "../../../apps/console-api/src/agent/ssa/skills",
+    );
+    const registry = new CortexRegistry(skillsDir);
     registry.discover();
     wiring = { pool: ownedPool, redis: ownedRedis, registry };
   }
@@ -147,7 +154,13 @@ export async function buildRealAdapters(
   const db: Database = drizzle(ctx.pool);
 
   // Thalamus DI — full container against the live DB.
-  const thalamusC = buildThalamusContainer({ db });
+  // SSA cortex skill pack lives in console-api (shared with CLI until we
+  // move packages/cli under apps/ssa-cli).
+  const skillsDir = resolve(
+    fileURLToPath(new URL(".", import.meta.url)),
+    "../../../apps/console-api/src/agent/ssa/skills",
+  );
+  const thalamusC = buildThalamusContainer({ db, skillsDir });
 
   // Sweep DI — for resolution + telemetry-swarm launch.
   const llmMode =

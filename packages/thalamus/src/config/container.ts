@@ -29,8 +29,8 @@ export interface ThalamusContainer {
 
 export interface BuildThalamusOpts {
   db: Database;
-  /** Optional override for skills directory (defaults to packaged cortices/skills) */
-  skillsDir?: string;
+  /** Required: path to the caller's cortex-skill directory (domain pack). */
+  skillsDir: string;
   /** Optional Voyage API key override */
   voyageApiKey?: string;
 }
