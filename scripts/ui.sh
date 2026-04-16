@@ -52,7 +52,7 @@ spinner_until() {
   start=$(date +%s)
   # Hide cursor on TTY to avoid blinking artifacts.
   [[ -t 1 ]] && printf '\e[?25l'
-  while ! "$predicate" 2>/dev/null; do
+  while ! eval "$predicate" >/dev/null 2>&1; do
     elapsed=$(( $(date +%s) - start ))
     if (( elapsed >= timeout )); then
       [[ -t 1 ]] && printf '\r\e[2K\e[?25h'

@@ -11,11 +11,11 @@ SHELL := /usr/bin/env bash
 
 .PHONY: up
 up: ## Start Postgres (pgvector) + Redis in background, wait until healthy
-	docker compose up -d
-	@echo "⏳ waiting for services to be healthy..."
-	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' thalamus-postgres 2>/dev/null)" = "healthy" ]; do sleep 1; done
-	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' thalamus-redis    2>/dev/null)" = "healthy" ]; do sleep 1; done
-	@echo "✓ postgres + redis healthy"
+	@bash -c '. ./scripts/ui.sh; \
+	  section "Infra"; \
+	  docker compose up -d >/dev/null 2>&1 || true; \
+	  spinner_until "docker inspect -f {{.State.Health.Status}} thalamus-postgres 2>/dev/null | grep -q healthy" "postgres (pgvector)" 60; \
+	  spinner_until "docker inspect -f {{.State.Health.Status}} thalamus-redis    2>/dev/null | grep -q healthy" "redis" 60'
 
 .PHONY: down
 down: ## Stop services (keeps volumes)
