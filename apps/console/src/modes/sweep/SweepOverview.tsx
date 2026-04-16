@@ -13,7 +13,7 @@ export function SweepOverview({ onSelect }: { onSelect: (id: string) => void }) 
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      <div className="label mb-3">RECENT FINDINGS · {data.total} total</div>
+      <div className="label mb-3">RECENT FINDINGS · {data.count} total</div>
       <div className="border border-hairline bg-panel">
         <div className="grid grid-cols-[90px_120px_1fr_80px_140px] border-b border-hairline bg-panel px-3 py-2">
           <span className="label">ID</span>

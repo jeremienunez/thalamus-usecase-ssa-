@@ -16,7 +16,8 @@
     "drizzle-orm": "^0.30.0",
     "fastify": "^5.1.0",
     "ioredis": "^5.3.0",
-    "pg": "^8.11.0"
+    "pg": "^8.11.0",
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",

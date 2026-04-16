@@ -17,7 +17,7 @@ export interface LlmChatConfig {
 
 export interface LlmResponse {
   content: string;
-  provider: "kimi" | "openai" | "none";
+  provider: "local" | "kimi" | "openai" | "none";
 }
 
 /** Generic LLM transport — `call(userPrompt) → LlmResponse`. */

@@ -13,6 +13,8 @@ import {
   enrichmentConfig,
   enrichmentFallbackConfig,
   isKimiEnabled,
+  isLocalLlmEnabled,
+  localLlmConfig,
 } from "../config/enrichment";
 import type { z } from "zod";
 import type { LlmChatConfig, LlmResponse, LlmTransport } from "./types";
@@ -42,6 +44,22 @@ export class LlmChatTransport {
    * Call LLM with Kimi K2 primary -> OpenAI fallback -> none
    */
   async call(userPrompt: string): Promise<LlmResponse> {
+    if (isLocalLlmEnabled()) {
+      try {
+        const content = await retry(() => this.callLocal(userPrompt), {
+          maxAttempts: this.maxRetries,
+          delayMs: 500,
+          backoff: "exponential",
+        });
+        return { content, provider: "local" };
+      } catch (error) {
+        logger.warn(
+          { error: (error as Error).message },
+          "Local LLM call failed — falling through to remote providers",
+        );
+      }
+    }
+
     const kimiOpen =
       LlmChatTransport.kimiConsecutiveFailures <
       LlmChatTransport.CIRCUIT_BREAKER_THRESHOLD;
@@ -102,6 +120,36 @@ export class LlmChatTransport {
   // ==========================================================================
   // Private: HTTP Calls
   // ==========================================================================
+
+  private async callLocal(userPrompt: string): Promise<string> {
+    const url = localLlmConfig.url.endsWith("/v1/chat/completions")
+      ? localLlmConfig.url
+      : `${localLlmConfig.url.replace(/\/$/, "")}/v1/chat/completions`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: localLlmConfig.model,
+        messages: [
+          { role: "system", content: this.config.systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: localLlmConfig.maxTokens,
+        temperature: localLlmConfig.temperature,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Local LLM error ${response.status}: ${body}`);
+    }
+
+    const data = (await response.json()) as {
+      choices: Array<{ message: { content: string | null } }>;
+    };
+    return data.choices[0]?.message?.content ?? "";
+  }
 
   private async callKimi(userPrompt: string): Promise<string> {
     // Global rate limiter — wait if we're calling too fast

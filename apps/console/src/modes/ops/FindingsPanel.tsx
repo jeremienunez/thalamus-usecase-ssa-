@@ -52,7 +52,7 @@ export function FindingsPanel({
         <span className="h-1.5 w-1.5 bg-cyan" />
         <div className="label text-[10px]">{headerLabel}</div>
         <span className="ml-auto mono text-[10px] text-dim">
-          {isLoading ? "…" : `${items.length}${satKey ? "" : ` / ${data?.total ?? 0}`}`}
+          {isLoading ? "…" : `${items.length}${satKey ? "" : ` / ${data?.count ?? 0}`}`}
         </span>
       </div>
       <div className="max-h-[44vh] overflow-y-auto">

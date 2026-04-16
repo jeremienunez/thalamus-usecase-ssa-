@@ -5,7 +5,7 @@
  * `CONSOLE_API_URL` so every spec's `fetch(${BASE}/...)` hits a live instance.
  * No external `pnpm dev` required.
  */
-import { startServer } from "../src/server";
+import { startServer } from "../../src/server";
 
 let handle: Awaited<ReturnType<typeof startServer>> | undefined;
 

@@ -50,7 +50,7 @@ export default defineWorkspace([
     test: {
       ...base,
       name: "unit",
-      include: ["packages/*/tests/**/*.spec.ts"],
+      include: ["packages/*/tests/**/*.spec.ts", "packages/*/src/**/*.test.ts"],
       exclude: ["packages/*/tests/integration/**", "packages/*/tests/e2e/**"],
     },
   },

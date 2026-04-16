@@ -23,8 +23,12 @@ export default defineConfig({
     globals: true,
     environment: "node",
     alias: aliases,
-    include: ["tests/**/*.spec.ts"],
-    globalSetup: ["./tests/setup.ts"],
+    include: [
+      "tests/unit/**/*.test.ts",
+      "tests/integration/**/*.spec.ts",
+      "tests/e2e/**/*.spec.ts",
+    ],
+    globalSetup: ["./tests/e2e/setup.ts"],
     testTimeout: 30000,
     // Must run in a single fork so `CONSOLE_API_URL` set by globalSetup reaches
     // every spec, and so the seeded Redis state isn't raced by parallel tests.

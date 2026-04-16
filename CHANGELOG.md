@@ -4,6 +4,194 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### console-api test pyramid + polish fixes — 2026-04-16
+
+**Test reorganization.** All console-api tests moved into a single pyramidal
+structure under [apps/console-api/tests/](apps/console-api/tests/):
+
+```
+tests/
+  unit/                  # 50+ tests — pure functions, no I/O
+    utils/               # 4 test files (async-handler, fabrication, field-constraints, sql-field)
+    transformers/        # 5 test files (the row→DTO layer)
+    services/            # 2 test files (satellite-view, conjunction-view)
+  integration/           # real DB, below HTTP
+    repositories/        # satellite.repository.spec.ts (live Postgres)
+  e2e/                   # full HTTP via startServer(0)
+    setup.ts             # vitest globalSetup, boots Fastify
+    conjunctions.spec.ts, enrichment-findings.spec.ts,
+    knn-propagation.spec.ts, sweep-mission.spec.ts
+  README.md              # documents the pyramid
+```
+
+Naming convention enforced: `.test.ts` = unit (fast, parallel-safe),
+`.spec.ts` = integration + e2e (requires infra).
+[apps/console-api/vitest.config.ts](apps/console-api/vitest.config.ts) updated
+to match.
+
+**Polish fixes** (code-review follow-ups):
+
+- `entityRef` de-duplicated between `kg-view.transformer` and
+  `finding-view.transformer` — single source of truth in kg-view.
+- `asyncHandler` now redacts internal 500 errors in production
+  (`NODE_ENV=production` + no explicit `statusCode` → `{ error: "internal error" }`;
+  real message still goes to `req.log.error`). Explicit HTTP errors
+  (with `.statusCode`) pass through untouched.
+- `satellitesController` validates `regime` via `RegimeSchema.safeParse` —
+  bad regime values fall through to `undefined` instead of silently matching
+  nothing.
+- `ConjunctionViewService.list(minPc)` → `list({ minPc })` — symmetry with
+  `SatelliteViewService.list(opts)` and `FindingViewService.list(filters)`.
+- `FindingViewService` sentinel `"invalid"` split into `"invalid-id"` vs
+  `"invalid-decision"` — controller now returns distinct error messages
+  (matches original server.ts behaviour, better for UI field-level errors).
+
+### console-api transformers layer — 2026-04-16
+
+Follow-up to the 5-layer refactor: extracted all row→DTO mapping functions
+from inside services into a dedicated `apps/console-api/src/transformers/`
+directory.
+
+Before: transformers were inline in services (`toView` / `toEdge` / `toListView`
+/ `toDetailView` / `entityRef`) — coupled to orchestration, hard to test in
+isolation. `mapFindingStatus` / `toDbStatus` / `parseFindingId` were
+misclassified as "utils".
+
+After: 5 transformer modules, each a collection of pure functions:
+
+- [transformers/satellite-view.transformer.ts](apps/console-api/src/transformers/satellite-view.transformer.ts)
+- [transformers/conjunction-view.transformer.ts](apps/console-api/src/transformers/conjunction-view.transformer.ts)
+- [transformers/kg-view.transformer.ts](apps/console-api/src/transformers/kg-view.transformer.ts) (`toRegimeNode`, `toOperatorNode`, `toSatelliteNode`, `toFindingNode`, `toKgEdge`, `entityRef`)
+- [transformers/finding-view.transformer.ts](apps/console-api/src/transformers/finding-view.transformer.ts) (`toFindingListView`, `toFindingDetailView`, `entityRef`)
+- [transformers/finding-status.transformer.ts](apps/console-api/src/transformers/finding-status.transformer.ts) (`mapFindingStatus`, `toDbStatus`, `parseFindingId` — **moved** from `utils/`)
+
+Impact:
+
+- Services shrank **301 → 125 lines (−58%)** — satellite-view 58→19, conjunction-view 49→15, kg-view 68→29, finding-view 126→62, stats unchanged.
+- **51 new unit tests** added (9 satellite + 14 conjunction + 12 kg + 16 finding-view). Pure-function tests, no mocks.
+- **Byte-level equivalence** confirmed between extracted transformers and the inline versions they replaced — zero behaviour drift, 4 integration specs still green.
+- Full suite: 465 passed / 23 todo (up from 414 / 23).
+
+### console-api 5-layer architecture refactor — 2026-04-16
+
+Decomposed the monolithic `apps/console-api/src/server.ts` (2001 lines) into a
+layered Fastify backend:
+
+```
+src/
+  server.ts          # boot only — 61 lines (was 2001)
+  container.ts       # DI composition root — 134 lines
+  routes/            # 12 route registrars + index barrel (registerAllRoutes)
+  controllers/       # 13 controllers — thin req/reply adapters, asyncHandler-wrapped
+  services/          # 13 services — business logic, orchestration, state
+  repositories/      # 9 repositories — raw SQL, bigint-typed ids
+  types/             # 5 server-only types (mission, autonomy, cycle, reflexion, knn)
+  prompts/           # 3 LLM prompts (mission-research, repl-chat, autonomy-queries)
+  utils/             # 7 server-only helpers (async-handler, regime, classification,
+                     #   finding-status, fabrication-detector, field-constraints, sql-field)
+```
+
+Shared DTOs hoisted to [packages/shared/src/ssa/](packages/shared/src/ssa/):
+
+- `satellite-view.ts` — `SatelliteView` + `normaliseRegime` / `regimeFromMeanMotion`
+  / `smaFromMeanMotion` / `classificationTier` (moved from console-api).
+- `finding-view.ts` — `FindingView` + `FindingStatus`.
+- `kg-view.ts` — `KgNode`, `KgEdge`, `KgEntityClass`.
+- `conjunction-view.ts` — added `deriveAction(pc)` next to existing
+  `deriveCovarianceQuality(sigmaKm)`. Unit tests land next to the types.
+
+Rule applied end-to-end: anything that does not share semantics with the
+console frontend stays server-local in `apps/console-api/src/utils/`;
+anything consumed by both frontend and backend lives in
+`packages/shared/src/ssa/`.
+
+Behaviour preserved except for three intentional improvements:
+
+- `SatelliteRepository.findPayloadNamesByIds` / `updateField` /
+  `knnNeighboursForField` tightened from `string`-valued ids to `bigint[]`,
+  eliminating a latent `SyntaxError` on malformed input.
+- `ResearchEdgeRepository.findByFindingIds` tightened from `string[]` to
+  `bigint[]` with `::bigint[]` cast, enabling PK index usage.
+- `StatsService.snapshot` now runs its 3 count queries in `Promise.all`
+  parallelism (was sequential in the inline server.ts).
+
+Workspace test discipline — [vitest.workspace.ts](vitest.workspace.ts): the
+`unit` project now picks up `packages/*/src/**/*.test.ts` (co-located tests),
+not just `packages/*/tests/**/*.spec.ts`. This surfaced 20 previously-dead
+shared DTO tests.
+
+Workflow — subagent-driven-development with two-stage review (spec + code
+quality) per task. 6 feature branches merged back into a single refactor
+branch:
+
+- `api-reads` — health + satellites + conjunctions + kg + findings + stats.
+- `api-enrichment-infra` — enrichment-cycle + sweep-audit repos +
+  enrichment-finding + nano-research services.
+- `api-mission-orchestration` — mission + knn-propagation + reflexion
+  (service + controller + routes for each; reflexion repo).
+- `api-ops-orchestration` — cycle-runner + autonomy + repl-chat
+  (service + controller + routes for each).
+
+All 4 integration specs green throughout (conjunctions, enrichment-findings,
+knn-propagation, sweep-mission). Full repo suite: 385 passed / 23 todo.
+
+### Per-event conjunction cortex + Foster Pc covariance columns — 2026-04-16
+
+Closes the gap between the SGP4 propagator (which produced min-range + TCA) and
+the cortex output (which was emitting data-quality meta-findings instead of
+concrete per-event screens). After this change, `conjunction_analysis` emits
+one finding per NORAD pair with miss distance, TCA, and calibrated Pc in the
+title — the intended contract of the cortex.
+
+Schema — [packages/db-schema/src/schema/conjunction.ts](packages/db-schema/src/schema/conjunction.ts):
+
+- `primary_sigma_km`, `secondary_sigma_km`, `combined_sigma_km` (real) — 1σ
+  position uncertainty at TCA for each object and the RSS combination.
+- `hard_body_radius_m` (real, default 20) — sum of spherical hardbodies
+  (≈ 10 m per object).
+- `pc_method` (text) — methodology marker, currently `"foster-gaussian-1d"`.
+- Columns added NULLable so existing events survive; re-seed overwrites.
+
+Propagator — [packages/db-schema/src/seed/conjunctions.ts](packages/db-schema/src/seed/conjunctions.ts):
+
+- `sigmaKmFor(regime, ageAtEpochDays, propagationDays)` — regime-conditioned
+  baseline + growth rate. LEO/SSO 0.5 km + 0.15 km/day, MEO 1.0 + 0.05, GTO
+  2.0 + 0.1, HEO 2.5 + 0.1, GEO 4.0 + 0.02. Plausible for OSINT-derived TLEs.
+- **Foster-1992 1D Gaussian Pc** over the miss-distance distribution:
+  `Pc ≈ (HBR² / 2σc²) · exp(−d² / 2σc²)` where `σc = √(σp² + σs²)`.
+  Clamped to [1e-12, 0.5]. Replaces the previous flat `exp(-minRange/10)`
+  heuristic that clipped everything to 1e-2.
+- Result: Pc distribution spans 9 orders of magnitude (1e-4 → <1e-12). Top
+  event CHUANGXIN 1-02 × 1-03 @ 2.27 km σ=1.93 km → Pc = 2.7e-5 (HIGH).
+
+Helper — [packages/thalamus/src/cortices/queries/conjunction.ts](packages/thalamus/src/cortices/queries/conjunction.ts):
+
+- `ConjunctionScreenRow` extended with `primarySigmaKm`, `secondarySigmaKm`,
+  `combinedSigmaKm`, `hardBodyRadiusM`, `pcMethod`. Cortex receives the full
+  covariance context, not just Pc.
+
+Prompt tuning — strict per-event contract:
+
+- [skills/conjunction-analysis.md](packages/thalamus/src/cortices/skills/conjunction-analysis.md)
+  rewritten. Hard rules: **one finding per DATA row**, never invent NORAD IDs,
+  never emit data-quality meta-findings when events are present (that's the
+  `data_auditor` cortex's job). Title format mandatory:
+  `"NORAD 28252 × 38332 — 2.1 km miss, 2026-04-17T14:12Z, Pc=1.8e-04"`.
+- Severity ladder — `findingType`: `alert` (Pc≥1e-4) / `forecast` (1e-6…1e-4)
+  / `insight`. `urgency`: critical (≥1e-3) / high (≥1e-4) / medium (≥1e-6) /
+  low. `confidence = 0.75` default (OSINT-only), lifts to `0.9` with field
+  corroboration per the `dual-stream-confidence` spec.
+- Pc interpretation table embedded in the skill: ≥1e-3 → wake ops,
+  1e-4…1e-3 → NASA threshold, 1e-6…1e-4 → watch, <1e-6 → archive.
+- [skills/traffic-spotter.md](packages/thalamus/src/cortices/skills/traffic-spotter.md)
+  rewritten to one-finding-per-regime (density rows) + one-per-news-item.
+  Bans generic "we have RSS data" meta.
+
+Verified end-to-end: re-run of `THALAMUS_MODE=record make thalamus-cycle`
+produces 57 findings / 30 persisted / 75 edges (vs 13 / 5 / 25 before
+tuning), with per-event NORAD titles and operator names surfaced on the
+top-5 Pc sample.
+
 ### Orbit trails + conjunction markers on the OPS globe — 2026-04-16
 
 Ships the "satellite positions" view that matches real SSA console aesthetics:
