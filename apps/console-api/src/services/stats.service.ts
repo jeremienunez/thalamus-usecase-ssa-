@@ -1,4 +1,4 @@
-import { mapFindingStatus } from "../utils/finding-status";
+import { mapFindingStatus } from "../transformers/finding-status.transformer";
 import type { StatsRepository } from "../repositories/stats.repository";
 
 export type StatsView = {
