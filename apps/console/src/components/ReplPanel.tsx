@@ -11,6 +11,7 @@ import { clsx } from "clsx";
 import { CheckCircle2, ChevronDown, X, Terminal } from "lucide-react";
 import {
   postTurn,
+  isSlashCommand,
   type DispatchResult,
   type BriefingFinding,
   type TelemetryEntry,
@@ -19,15 +20,38 @@ import {
   type WhyNode,
   type TurnResponse,
 } from "../lib/repl";
+import { postChatStream } from "../lib/repl-stream";
 import { AnimatedStepBadge } from "./AnimatedStepBadge";
+import { CycleLoader, type CycleStep } from "./CycleLoader";
+import type { ReplStreamEvent } from "@interview/shared";
 
 // ---------- Context ----------
+export type TurnPhase =
+  | "classifying"
+  | "chatting"
+  | "cycle-running"
+  | "done"
+  | "error";
+
+type FindingData = Extract<ReplStreamEvent, { event: "finding" }>["data"];
+
 export type Turn = {
   id: string;
   input: string;
-  pending: boolean;
+  phase: TurnPhase;
+  startedAt: number;
+  // slash-command path
   response?: TurnResponse;
   error?: string;
+  // chat/streaming path
+  cycleId?: string;
+  currentStep?: CycleStep;
+  steps: CycleStep[];
+  findings: FindingData[];
+  chatText: string;
+  summaryText: string;
+  provider?: string;
+  tookMs?: number;
 };
 
 type ReplCtx = {
@@ -56,16 +80,103 @@ export function ReplProvider({ children }: { children: ReactNode }) {
     const trimmed = input.trim();
     if (!trimmed) return;
     const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setTurns((t) => [...t, { id, input: trimmed, pending: true }]);
+    const startedAt = Date.now();
+    const base: Turn = {
+      id,
+      input: trimmed,
+      phase: "classifying",
+      startedAt,
+      steps: [],
+      findings: [],
+      chatText: "",
+      summaryText: "",
+    };
+    setTurns((t) => [...t, base]);
     setOpen(true);
     setBusy(true);
-    postTurn(trimmed, sessionIdRef.current)
-      .then((response) => {
-        setTurns((t) => t.map((x) => (x.id === id ? { ...x, pending: false, response } : x)));
-      })
+
+    const patch = (fn: (t: Turn) => Turn): void => {
+      setTurns((ts) => ts.map((x) => (x.id === id ? fn(x) : x)));
+    };
+
+    if (isSlashCommand(trimmed)) {
+      postTurn(trimmed, sessionIdRef.current)
+        .then((response) => {
+          patch((t) => ({
+            ...t,
+            phase: "done",
+            response,
+            tookMs: response.tookMs,
+          }));
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          patch((t) => ({ ...t, phase: "error", error: msg }));
+        })
+        .finally(() => setBusy(false));
+      return;
+    }
+
+    postChatStream(trimmed, (evt) => {
+      switch (evt.event) {
+        case "classified":
+          patch((t) => ({
+            ...t,
+            phase: evt.data.action === "chat" ? "chatting" : "cycle-running",
+          }));
+          break;
+        case "cycle.start":
+          patch((t) => ({ ...t, cycleId: evt.data.cycleId }));
+          break;
+        case "step": {
+          const cs: CycleStep = {
+            name: evt.data.step,
+            phase: evt.data.phase,
+            terminal: evt.data.terminal,
+            elapsedMs: evt.data.elapsedMs,
+          };
+          patch((t) => {
+            // "start" marks a new in-flight step; "done"/"error" pushes into trail.
+            if (cs.phase === "start") return { ...t, currentStep: cs };
+            const cleared =
+              t.currentStep?.name === cs.name ? undefined : t.currentStep;
+            return { ...t, currentStep: cleared, steps: [...t.steps, cs] };
+          });
+          break;
+        }
+        case "finding":
+          patch((t) => ({ ...t, findings: [...t.findings, evt.data] }));
+          break;
+        case "chat.complete":
+          patch((t) => ({
+            ...t,
+            chatText: evt.data.text,
+            provider: evt.data.provider,
+          }));
+          break;
+        case "summary.complete":
+          patch((t) => ({
+            ...t,
+            summaryText: evt.data.text,
+            provider: evt.data.provider,
+          }));
+          break;
+        case "done":
+          patch((t) => ({
+            ...t,
+            phase: "done",
+            provider: evt.data.provider,
+            tookMs: evt.data.tookMs,
+          }));
+          break;
+        case "error":
+          patch((t) => ({ ...t, phase: "error", error: evt.data.message }));
+          break;
+      }
+    })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
-        setTurns((t) => t.map((x) => (x.id === id ? { ...x, pending: false, error: msg } : x)));
+        patch((t) => ({ ...t, phase: "error", error: msg }));
       })
       .finally(() => setBusy(false));
   }, []);
@@ -158,19 +269,47 @@ export function ReplPanel() {
 }
 
 // ---------- Turn view ----------
-function TurnView({ turn, onFollowUp }: { turn: Turn; onFollowUp: (input: string) => void }) {
+function TurnView({
+  turn,
+  onFollowUp,
+}: {
+  turn: Turn;
+  onFollowUp: (input: string) => void;
+}) {
+  const elapsed = Date.now() - turn.startedAt;
   return (
     <div className="mb-3 border-l border-hairline pl-3">
       <div className="mono mb-1 text-caption text-cyan">
         &gt; <span className="text-primary">{turn.input}</span>
       </div>
-      {turn.pending && (
+
+      {turn.phase === "classifying" && (
         <div className="mono text-caption text-muted">
-          <AnimatedStepBadge step="planner" phase="progress" /> planning...
+          <AnimatedStepBadge step="planner" phase="progress" /> classifying…
         </div>
       )}
-      {turn.error && <div className="mono text-caption text-hot">error: {turn.error}</div>}
-      {turn.response && (
+
+      {turn.phase === "chatting" && (
+        <div className="mono text-caption text-muted">
+          <AnimatedStepBadge step="nano.call" phase="progress" /> chat…
+        </div>
+      )}
+
+      {turn.phase === "cycle-running" && (
+        <CycleLoader
+          cycleId={turn.cycleId ?? "…"}
+          current={turn.currentStep}
+          trail={turn.steps}
+          elapsedMs={elapsed}
+        />
+      )}
+
+      {turn.phase === "error" && (
+        <div className="mono text-caption text-hot">error: {turn.error}</div>
+      )}
+
+      {/* slash-command response (done) */}
+      {turn.phase === "done" && turn.response && (
         <div className="flex flex-col gap-2">
           {turn.response.results.map((r, i) => (
             <ResultView key={i} result={r} onFollowUp={onFollowUp} />
@@ -178,6 +317,54 @@ function TurnView({ turn, onFollowUp }: { turn: Turn; onFollowUp: (input: string
           <div className="mono text-caption text-dim">
             cost=${turn.response.costUsd.toFixed(4)} · {turn.response.tookMs}ms
           </div>
+        </div>
+      )}
+
+      {/* streamed response (done) */}
+      {turn.phase === "done" && !turn.response && (
+        <div className="flex flex-col gap-2">
+          {turn.chatText && (
+            <div className="border-l-2 border-cyan pl-3">
+              <div className="whitespace-pre-wrap text-body text-primary">
+                {turn.chatText}
+              </div>
+              <div className="mt-1 mono text-caption text-dim">
+                assistant · {turn.provider}
+              </div>
+            </div>
+          )}
+          {turn.findings.length > 0 && (
+            <div className="flex flex-col gap-1 border border-hairline bg-elevated p-2">
+              <div className="mono text-caption text-muted">
+                findings · {turn.findings.length}
+              </div>
+              {turn.findings.map((f) => (
+                <div
+                  key={f.id}
+                  className="mono flex items-center gap-2 text-caption"
+                >
+                  <span className="text-primary">{f.id}</span>
+                  <span className="text-muted">{f.title}</span>
+                  {f.cortex && (
+                    <span className="text-dim">[{f.cortex}]</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {turn.summaryText && (
+            <div className="border-l-2 border-cold pl-3">
+              <div className="whitespace-pre-wrap text-body text-primary">
+                {turn.summaryText}
+              </div>
+            </div>
+          )}
+          {turn.tookMs != null && (
+            <div className="mono text-caption text-dim">
+              {turn.provider ? `${turn.provider} · ` : ""}
+              {turn.tookMs}ms
+            </div>
+          )}
         </div>
       )}
     </div>
