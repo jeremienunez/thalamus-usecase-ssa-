@@ -8,12 +8,6 @@ export { ThalamusPlanner } from "./services/thalamus-planner.service";
 export { ThalamusDAGExecutor } from "./services/thalamus-executor.service";
 export { ResearchGraphService } from "./services/research-graph.service";
 
-// Cortex queries (public for CLI / downstream wiring)
-export { queryConjunctionCandidatesKnn } from "./cortices/queries/conjunction-candidates";
-export type {
-  ConjunctionCandidateKnn,
-  ConjunctionCandidatesKnnOpts,
-} from "./cortices/queries/conjunction-candidates";
 
 // Cortices
 export { CortexExecutor } from "./cortices/executor";

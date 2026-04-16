@@ -1,12 +1,18 @@
-import type {
-  AdvisoryRow,
-  RssTrendRow,
-  ManeuverPlanRow,
-  ObservationIngestRow,
-  CorrelationMergeRow,
-  OrbitalPrimerRow,
-  SourceRepository,
-} from "../repositories/source.repository";
+import type { SourceRepository } from "../repositories/source.repository";
+import {
+  toAdvisoryView,
+  toRssView,
+  toManeuverView,
+  toObservationView,
+  toCorrelationView,
+  toOrbitalPrimerView,
+  type AdvisoryView,
+  type RssView,
+  type ManeuverView,
+  type ObservationView,
+  type CorrelationView,
+  type OrbitalPrimerView,
+} from "../transformers/source-data.transformer";
 
 export class SourceDataService {
   constructor(private readonly repo: SourceRepository) {}
@@ -16,8 +22,9 @@ export class SourceDataService {
     operatorId?: string;
     category?: string;
     limit?: number;
-  }): Promise<{ items: AdvisoryRow[]; count: number }> {
-    const items = await this.repo.listAdvisoryFeed(opts);
+  }): Promise<{ items: AdvisoryView[]; count: number }> {
+    const rows = await this.repo.listAdvisoryFeed(opts);
+    const items = rows.map(toAdvisoryView);
     return { items, count: items.length };
   }
 
@@ -25,8 +32,9 @@ export class SourceDataService {
     category?: string;
     days?: number;
     limit?: number;
-  }): Promise<{ items: RssTrendRow[]; count: number }> {
-    const items = await this.repo.listRssItems(opts);
+  }): Promise<{ items: RssView[]; count: number }> {
+    const rows = await this.repo.listRssItems(opts);
+    const items = rows.map(toRssView);
     return { items, count: items.length };
   }
 
@@ -34,8 +42,9 @@ export class SourceDataService {
     conjunctionEventId?: string;
     maxDeltaVmps?: number;
     limit?: number;
-  }): Promise<{ items: ManeuverPlanRow[]; count: number }> {
-    const items = await this.repo.listManeuverPlanSources(opts);
+  }): Promise<{ items: ManeuverView[]; count: number }> {
+    const rows = await this.repo.listManeuverPlanSources(opts);
+    const items = rows.map(toManeuverView);
     return { items, count: items.length };
   }
 
@@ -43,16 +52,18 @@ export class SourceDataService {
     stationId?: string;
     windowMinutes?: number;
     limit?: number;
-  }): Promise<{ items: ObservationIngestRow[]; count: number }> {
-    const items = await this.repo.listObservationSources(opts);
+  }): Promise<{ items: ObservationView[]; count: number }> {
+    const rows = await this.repo.listObservationSources(opts);
+    const items = rows.map(toObservationView);
     return { items, count: items.length };
   }
 
   async listCorrelationSources(opts: {
     conjunctionEventId?: string;
     limit?: number;
-  }): Promise<{ items: CorrelationMergeRow[]; count: number }> {
-    const items = await this.repo.listCorrelationSources(opts);
+  }): Promise<{ items: CorrelationView[]; count: number }> {
+    const rows = await this.repo.listCorrelationSources(opts);
+    const items = rows.map(toCorrelationView);
     return { items, count: items.length };
   }
 
@@ -60,8 +71,9 @@ export class SourceDataService {
     topic?: string;
     stakeholderLevel?: string;
     limit?: number;
-  }): Promise<{ items: OrbitalPrimerRow[]; count: number }> {
-    const items = await this.repo.listOrbitalPrimerSources(opts);
+  }): Promise<{ items: OrbitalPrimerView[]; count: number }> {
+    const rows = await this.repo.listOrbitalPrimerSources(opts);
+    const items = rows.map(toOrbitalPrimerView);
     return { items, count: items.length };
   }
 }

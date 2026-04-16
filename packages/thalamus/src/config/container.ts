@@ -8,7 +8,8 @@
 import type { Database } from "@interview/db-schema";
 import { CortexRegistry } from "../cortices/registry";
 import { CortexExecutor } from "../cortices/executor";
-import type { CortexDataProvider } from "../cortices/types";
+import type { CortexDataProvider, DomainConfig } from "../cortices/types";
+import { noopDomainConfig } from "../cortices/types";
 import { ResearchGraphService } from "../services/research-graph.service";
 import { ThalamusService } from "../services/thalamus.service";
 import { ResearchCycleRepository } from "../repositories/research-cycle.repository";
@@ -34,6 +35,12 @@ export interface BuildThalamusOpts {
   skillsDir: string;
   /** Required: app-provided data provider map (sqlHelper name → fetcher fn). */
   dataProvider: CortexDataProvider;
+  /**
+   * Domain vocabulary + cortex classifications + pre-built DAGs.
+   * Optional — defaults to `noopDomainConfig` for agents that route via HTTP
+   * and don't run cycles in-process (e.g. CLI).
+   */
+  domainConfig?: DomainConfig;
   /** Optional Voyage API key override */
   voyageApiKey?: string;
 }
@@ -52,7 +59,11 @@ export function buildThalamusContainer(
   const registry = new CortexRegistry(opts.skillsDir);
   registry.discover();
 
-  const executor = new CortexExecutor(registry, opts.dataProvider);
+  const executor = new CortexExecutor(
+    registry,
+    opts.dataProvider,
+    opts.domainConfig ?? noopDomainConfig,
+  );
 
   const graphService = new ResearchGraphService(
     findingRepo,

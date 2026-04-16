@@ -3,3 +3,8 @@ export * from "./satellite-view.transformer";
 export * from "./conjunction-view.transformer";
 export * from "./kg-view.transformer";
 export * from "./finding-view.transformer";
+export * from "./source-data.transformer";
+export * from "./satellite-audit.transformer";
+export * from "./satellite-enrichment.transformer";
+export * from "./fleet-analysis.transformer";
+export * from "./traffic-forecast.transformer";

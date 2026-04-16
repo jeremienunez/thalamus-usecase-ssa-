@@ -24,6 +24,24 @@ import {
   sanitizeDataPayload,
 } from "../src/cortices/guardrails";
 
+// Test fixture: minimal SSA-flavoured keyword set. In production the app
+// (apps/console-api/src/agent/ssa/vocabulary.ts) provides the real 80-token
+// set. The kernel function is vocabulary-agnostic — we just need enough
+// coverage to exercise the saturation / off-topic paths.
+const TEST_KEYWORDS = new Set([
+  "satellite",
+  "starlink",
+  "conjunction",
+  "leo",
+  "nasa",
+  "tracking",
+  "apogee",
+  "inclination",
+  "sgp4",
+  "orbital",
+  "orbit",
+]);
+
 describe("SPEC-TH-020 Layer 1 — sanitizeText strips prompt injections", () => {
   it("removes direct instruction override", () => {
     const { clean, injections } = sanitizeText(
@@ -89,12 +107,16 @@ describe("SPEC-TH-020 Layer 1 — sanitizeText strips prompt injections", () => 
 
 describe("SPEC-TH-020 Layer 2 — domainRelevance gate", () => {
   it("returns 0 for off-topic text", () => {
-    expect(domainRelevance("Latest fashion trends in Paris", "runway shows"))
+    expect(domainRelevance("Latest fashion trends in Paris", "runway shows", TEST_KEYWORDS))
       .toBe(0);
   });
 
   it("returns a positive score on a single SSA keyword", () => {
-    const score = domainRelevance("Satellite launched", "commercial mission");
+    const score = domainRelevance(
+      "Satellite launched",
+      "commercial mission",
+      TEST_KEYWORDS,
+    );
     expect(score).toBeGreaterThan(0);
     expect(score).toBeLessThanOrEqual(1);
   });
@@ -103,6 +125,7 @@ describe("SPEC-TH-020 Layer 2 — domainRelevance gate", () => {
     const score = domainRelevance(
       "Starlink satellite conjunction in LEO",
       "NASA tracking, apogee 550km, inclination 53 deg",
+      TEST_KEYWORDS,
     );
     expect(score).toBe(1);
   });
@@ -113,7 +136,7 @@ describe("SPEC-TH-020 Layer 2 — domainRelevance gate", () => {
       ["satellite satellite satellite", "orbit orbit orbit"],
       ["!!!@@@###", "??? :::"],
     ] as const) {
-      const s = domainRelevance(title, summary);
+      const s = domainRelevance(title, summary, TEST_KEYWORDS);
       expect(s).toBeGreaterThanOrEqual(0);
       expect(s).toBeLessThanOrEqual(1);
     }
@@ -168,6 +191,7 @@ describe("SPEC-TH-020 Layer 3 — sanitizeDataPayload", () => {
     ];
     const { sanitized, stats } = sanitizeDataPayload(items, {
       requireDomainRelevance: true,
+      keywords: TEST_KEYWORDS,
     });
     expect(stats.filtered).toBe(1);
     const parsed = JSON.parse(sanitized);

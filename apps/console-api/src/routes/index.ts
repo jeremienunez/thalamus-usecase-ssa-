@@ -17,6 +17,7 @@ import type { SourceDataService } from "../services/source-data.service";
 import type { SatelliteAuditService } from "../services/satellite-audit.service";
 import type { SatelliteEnrichmentService } from "../services/satellite-enrichment.service";
 import type { OrbitalAnalysisService } from "../services/orbital-analysis.service";
+import type { OpacityService } from "../services/opacity.service";
 
 import { registerHealthRoutes } from "./health.routes";
 import { registerSatelliteRoutes } from "./satellites.routes";
@@ -34,6 +35,7 @@ import { registerSourceRoutes } from "./sources.routes";
 import { registerSatelliteAuditRoutes } from "./satellite-audit.routes";
 import { registerSatelliteEnrichmentRoutes } from "./satellite-enrichment.routes";
 import { registerOrbitalRoutes } from "./orbital.routes";
+import { registerOpacityRoutes } from "./opacity.routes";
 
 export type { SweepDeps } from "../controllers/sweep-suggestions.controller";
 
@@ -55,6 +57,7 @@ export type AppServices = {
   satelliteAudit: SatelliteAuditService;
   satelliteEnrichment: SatelliteEnrichmentService;
   orbitalAnalysis: OrbitalAnalysisService;
+  opacity: OpacityService;
 };
 
 export function registerAllRoutes(
@@ -77,4 +80,5 @@ export function registerAllRoutes(
   registerSatelliteAuditRoutes(app, s.satelliteAudit);
   registerSatelliteEnrichmentRoutes(app, s.satelliteEnrichment);
   registerOrbitalRoutes(app, s.orbitalAnalysis);
+  registerOpacityRoutes(app, s.opacity);
 }

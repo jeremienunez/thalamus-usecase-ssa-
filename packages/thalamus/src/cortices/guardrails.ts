@@ -73,109 +73,24 @@ export function sanitizeText(text: string): {
 }
 
 // ============================================================================
-// Layer 2: SSA Domain Content Filter
+// Layer 2: Domain Content Filter — keywords injected by the app
 // ============================================================================
 
-const SSA_KEYWORDS = new Set([
-  // Core objects.
-  "satellite",
-  "satellites",
-  "spacecraft",
-  "payload",
-  "bus",
-  "debris",
-  "object",
-  "rocket",
-  "stage",
-  "upper-stage",
-  "constellation",
-  "fleet",
-  "rideshare",
-  // Orbits & elements.
-  "orbit",
-  "orbital",
-  "leo",
-  "meo",
-  "geo",
-  "gto",
-  "heo",
-  "sso",
-  "lunar",
-  "cislunar",
-  "apogee",
-  "perigee",
-  "inclination",
-  "raan",
-  "eccentricity",
-  "epoch",
-  "tle",
-  "omm",
-  "ephemeris",
-  "ephemerides",
-  "propagation",
-  "sgp4",
-  // Operations & events.
-  "conjunction",
-  "collision",
-  "maneuver",
-  "manoeuvre",
-  "burn",
-  "delta-v",
-  "deltav",
-  "station-keeping",
-  "deorbit",
-  "reentry",
-  "fragmentation",
-  "breakup",
-  "kessler",
-  "close-approach",
-  // Sensing & provenance.
-  "radar",
-  "optical",
-  "tracking",
-  "observation",
-  "celestrak",
-  "space-track",
-  "spacetrack",
-  "noaa",
-  "esa",
-  "nasa",
-  "cneos",
-  "operator",
-  "launch",
-  "mission",
-  "telemetry",
-  "advisory",
-  "warning",
-  "catalog",
-  "cosmos",
-  "norad",
-  // Adjacent context.
-  "earth-observation",
-  "remote-sensing",
-  "comms",
-  "communications",
-  "sigint",
-  "gnss",
-  "gps",
-  "galileo",
-  "glonass",
-  "beidou",
-  "starlink",
-  "oneweb",
-  "kuiper",
-  "iridium",
-]);
-
 /**
- * Check if text is SSA-relevant. Returns relevance score (0-1).
- * Used to filter off-topic content from RSS / web fetchers before LLM analysis.
+ * Scores how relevant a piece of text is to the caller's domain, by counting
+ * matches against the domain's keyword vocabulary. Kernel-agnostic: the
+ * keyword set is provided by the caller (app layer owns vocabulary).
+ * 3+ matches = fully relevant (score 1.0).
  */
-export function domainRelevance(title: string, summary?: string): number {
-  const text = `${title} ${summary || ""}`.toLowerCase();
+export function domainRelevance(
+  title: string,
+  summary: string,
+  keywords: Set<string>,
+): number {
+  const text = `${title} ${summary}`.toLowerCase();
   const words = text.split(/\W+/);
-  const matches = words.filter((w) => SSA_KEYWORDS.has(w)).length;
-  return Math.min(1, matches / 3); // 3+ SSA keywords = fully relevant
+  const matches = words.filter((w) => keywords.has(w)).length;
+  return Math.min(1, matches / 3);
 }
 
 // ============================================================================
@@ -187,11 +102,16 @@ const MAX_PAYLOAD_LENGTH = 15000;
 
 /**
  * Sanitize an array of data items before sending to LLM.
- * Strips injections, filters off-topic items, truncates.
+ * Strips injections, filters off-topic items, truncates. Callers pass
+ * domain `keywords` when `requireDomainRelevance` is set.
  */
 export function sanitizeDataPayload(
   items: Array<Record<string, unknown>>,
-  opts?: { maxItems?: number; requireDomainRelevance?: boolean },
+  opts?: {
+    maxItems?: number;
+    requireDomainRelevance?: boolean;
+    keywords?: Set<string>;
+  },
 ): {
   sanitized: string;
   stats: { total: number; filtered: number; injections: number };
@@ -215,11 +135,11 @@ export function sanitizeDataPayload(
       }
     }
 
-    // SSA relevance filter (for RSS / web items).
-    if (opts?.requireDomainRelevance) {
+    // Domain relevance filter — keywords provided by the caller.
+    if (opts?.requireDomainRelevance && opts.keywords) {
       const title = String(cleanItem.title ?? cleanItem.name ?? "");
       const summary = String(cleanItem.summary ?? "");
-      if (domainRelevance(title, summary) < 0.3) {
+      if (domainRelevance(title, summary, opts.keywords) < 0.3) {
         filtered++;
         continue;
       }

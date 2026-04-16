@@ -2,11 +2,11 @@
  * OpacityScout — pure scorer tests.
  *
  * Verifies the signal-weight table the skill markdown contracts with.
- * Keep in sync with packages/thalamus/src/cortices/skills/opacity-scout.md.
+ * Keep in sync with apps/console-api/src/agent/ssa/skills/opacity-scout.md.
  */
 
 import { describe, it, expect } from "vitest";
-import { computeOpacityScore } from "../src/cortices/queries/opacity-scout";
+import { computeOpacityScore } from "../../../../src/agent/ssa/opacity-score";
 
 const ZERO = {
   payloadUndisclosed: false,

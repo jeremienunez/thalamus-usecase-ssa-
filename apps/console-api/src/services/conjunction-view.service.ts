@@ -14,4 +14,12 @@ export class ConjunctionViewService {
     const items = rows.map(toConjunctionView);
     return { items, count: items.length };
   }
+
+  async screen(opts: Parameters<ConjunctionRepository["screenConjunctions"]>[0]) {
+    return this.repo.screenConjunctions(opts);
+  }
+
+  async knnCandidates(opts: Parameters<ConjunctionRepository["findKnnCandidates"]>[0]) {
+    return this.repo.findKnnCandidates(opts);
+  }
 }

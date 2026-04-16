@@ -11,3 +11,4 @@ export * from "./repl.schema";
 export * from "./sources.schema";
 export * from "./orbital.schema";
 export * from "./satellite-audit.schema";
+export * from "./opacity.schema";

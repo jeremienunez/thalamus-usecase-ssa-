@@ -57,6 +57,10 @@ import { TrafficForecastRepository } from "./repositories/traffic-forecast.repos
 import { SatelliteAuditService } from "./services/satellite-audit.service";
 import { SatelliteEnrichmentService } from "./services/satellite-enrichment.service";
 import { OrbitalAnalysisService } from "./services/orbital-analysis.service";
+import { OpacityService } from "./services/opacity.service";
+
+import { buildCortexDataProvider } from "./agent/ssa/cortex-data-provider";
+import { buildSsaDomainConfig } from "./agent/ssa/domain-config";
 
 import type { AppServices } from "./routes";
 import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
@@ -78,17 +82,6 @@ export async function buildContainer(logger: FastifyBaseLogger): Promise<{
   >;
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
 
-  // Data provider: maps skill frontmatter sqlHelper names → repo method calls.
-  // TODO: wire each entry to the corresponding repo method once services are built.
-  const dataProvider: Record<string, (params: Record<string, unknown>) => Promise<unknown[]>> = {};
-
-  const thalamus = buildThalamusContainer({
-    db,
-    skillsDir: SSA_SKILLS_DIR,
-    dataProvider,
-  });
-  const sweep = buildSweepContainer({ db, redis });
-
   // repos
   const satelliteRepo = new SatelliteRepository(db);
   const conjunctionRepo = new ConjunctionRepository(db);
@@ -104,6 +97,37 @@ export async function buildContainer(logger: FastifyBaseLogger): Promise<{
   const satelliteEnrichmentRepo = new SatelliteEnrichmentRepository(db);
   const fleetAnalysisRepo = new FleetAnalysisRepository(db);
   const trafficForecastRepo = new TrafficForecastRepository(db);
+
+  // Cortex-facing data services (same contract as the HTTP routes).
+  const sourceDataService = new SourceDataService(sourceRepo);
+  const satelliteAuditService = new SatelliteAuditService(satelliteAuditRepo);
+  const satelliteEnrichmentService = new SatelliteEnrichmentService(
+    satelliteRepo,
+    satelliteEnrichmentRepo,
+  );
+  const orbitalAnalysisService = new OrbitalAnalysisService(
+    fleetAnalysisRepo,
+    trafficForecastRepo,
+  );
+  const opacityService = new OpacityService(reflexionRepo);
+  const conjunctionViewService = new ConjunctionViewService(conjunctionRepo);
+
+  const dataProvider = buildCortexDataProvider({
+    sourceData: sourceDataService,
+    satelliteAudit: satelliteAuditService,
+    satelliteEnrichment: satelliteEnrichmentService,
+    orbitalAnalysis: orbitalAnalysisService,
+    opacity: opacityService,
+    conjunctionView: conjunctionViewService,
+  });
+
+  const thalamus = buildThalamusContainer({
+    db,
+    skillsDir: SSA_SKILLS_DIR,
+    dataProvider,
+    domainConfig: buildSsaDomainConfig(),
+  });
+  const sweep = buildSweepContainer({ db, redis });
 
   // services
   const enrichmentFinding = new EnrichmentFindingService(
@@ -127,7 +151,7 @@ export async function buildContainer(logger: FastifyBaseLogger): Promise<{
 
   const services: AppServices = {
     satelliteView: new SatelliteViewService(satelliteRepo),
-    conjunctionView: new ConjunctionViewService(conjunctionRepo),
+    conjunctionView: conjunctionViewService,
     kgView: new KgViewService(kgRepo),
     findingView: new FindingViewService(findingRepo, edgeRepo),
     stats: new StatsService(statsRepo),
@@ -151,16 +175,11 @@ export async function buildContainer(logger: FastifyBaseLogger): Promise<{
       sweepRepo: sweep.sweepRepo,
       resolutionService: sweep.resolutionService,
     }),
-    sourceData: new SourceDataService(sourceRepo),
-    satelliteAudit: new SatelliteAuditService(satelliteAuditRepo),
-    satelliteEnrichment: new SatelliteEnrichmentService(
-      satelliteRepo,
-      satelliteEnrichmentRepo,
-    ),
-    orbitalAnalysis: new OrbitalAnalysisService(
-      fleetAnalysisRepo,
-      trafficForecastRepo,
-    ),
+    sourceData: sourceDataService,
+    satelliteAudit: satelliteAuditService,
+    satelliteEnrichment: satelliteEnrichmentService,
+    orbitalAnalysis: orbitalAnalysisService,
+    opacity: opacityService,
   };
 
   const snapshot = await snapshotHealth(db, redis, thalamus.registry.size());

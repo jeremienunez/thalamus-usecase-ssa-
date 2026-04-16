@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import type { ConjunctionViewService } from "../services/conjunction-view.service";
-import { conjunctionsController } from "../controllers/conjunctions.controller";
+import {
+  conjunctionsController,
+  screenController,
+  knnCandidatesController,
+} from "../controllers/conjunctions.controller";
 
 export function registerConjunctionRoutes(
   app: FastifyInstance,
@@ -10,4 +14,6 @@ export function registerConjunctionRoutes(
     "/api/conjunctions",
     conjunctionsController(service),
   );
+  app.get("/api/conjunctions/screen", screenController(service));
+  app.get("/api/conjunctions/knn-candidates", knnCandidatesController(service));
 }

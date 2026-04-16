@@ -16,9 +16,9 @@ import type {
   CortexOutput,
   CortexFinding,
   CortexDataProvider,
+  DomainConfig,
 } from "./types";
 import { analyzeCortexData } from "./cortex-llm";
-import { createLlmTransport } from "../transports/llm-chat";
 import { createLlmTransportWithMode } from "../transports/factory";
 import { sanitizeDataPayload, sanitizeText } from "./guardrails";
 import { fetchSourcesForCortex } from "./sources";
@@ -35,33 +35,14 @@ const logger = createLogger("cortex-executor");
 // Data provider map is injected by the app composition root.
 // No SQL_HELPER_MAP, no import from "./queries", no Database import.
 
-/**
- * Cortex names that require a userId in params (fleet-scoped work).
- * Matches the SSA cortex vocabulary.
- */
-const USER_SCOPED_CORTICES = new Set<string>([
-  ResearchCortex.FleetAnalyst,
-  ResearchCortex.AdvisoryRadar,
-]);
-
-/**
- * Cortex names that benefit from (or require) external web enrichment on top
- * of the local SQL payload.
- */
-const WEB_ENRICHED_CORTICES = new Set<string>([
-  ResearchCortex.LaunchScout,
-  ResearchCortex.DebrisForecaster,
-  ResearchCortex.RegimeProfiler,
-  ResearchCortex.AdvisoryRadar,
-  ResearchCortex.ApogeeTracker,
-  ResearchCortex.PayloadProfiler,
-  ResearchCortex.BriefingProducer,
-]);
+// Cortex classifications (userScoped / webEnriched) come from DomainConfig.
+// Web-search prompt templates come from DomainConfig.
 
 export class CortexExecutor {
   constructor(
     private registry: CortexRegistry,
     private dataProvider: CortexDataProvider,
+    private domainConfig: DomainConfig,
   ) {}
 
   /**
@@ -137,7 +118,7 @@ export class CortexExecutor {
     }
 
     // User-scoped cortices require userId.
-    if (USER_SCOPED_CORTICES.has(cortexName)) {
+    if (this.domainConfig.userScopedCortices.has(cortexName)) {
       const userId = input.params.userId;
       if (!userId) {
         logger.warn(
@@ -182,7 +163,10 @@ export class CortexExecutor {
 
     // 2. Enrich with web for cortices that benefit, or when SQL is empty.
     let webData: unknown[] = [];
-    if (WEB_ENRICHED_CORTICES.has(cortexName) || sqlData.length === 0) {
+    if (
+      this.domainConfig.webEnrichedCortices.has(cortexName) ||
+      sqlData.length === 0
+    ) {
       logger.info(
         { cortex: cortexName, sqlRows: sqlData.length },
         sqlData.length === 0
@@ -202,14 +186,18 @@ export class CortexExecutor {
 
     // 3. Map-Reduce: SQL did the math, now pre-summarize for LLM narration.
     //    Send aggregated insights, not raw rows — fewer tokens, faster, cheaper.
-    const data = preSummarize(rawData as Record<string, unknown>[], cortexName);
+    //    Domain provides the strategy (per-cortex grouping rules).
+    const data = this.domainConfig.preSummarize(
+      rawData as Record<string, unknown>[],
+      cortexName,
+    );
 
     // 4. Sanitize — strip prompt injections, filter off-topic content.
     const { sanitized: dataPayload, stats } = sanitizeDataPayload(data, {
       maxItems: 30,
       requireDomainRelevance:
-        cortexName === ResearchCortex.AdvisoryRadar ||
-        cortexName === ResearchCortex.DebrisForecaster,
+        this.domainConfig.relevanceFilteredCortices.has(cortexName),
+      keywords: this.domainConfig.keywords,
     });
 
     if (stats.injections > 0) {
@@ -241,7 +229,7 @@ export class CortexExecutor {
       systemPrompt: skill.body,
       dataPayload: dataPayload + contextBlock,
       maxFindings: 5,
-      enableWebSearch: WEB_ENRICHED_CORTICES.has(cortexName),
+      enableWebSearch: this.domainConfig.webEnrichedCortices.has(cortexName),
       lang: input.lang,
       mode: input.mode,
     });
@@ -347,44 +335,11 @@ export class CortexExecutor {
       const openaiKey = process.env.OPENAI_API_KEY;
       if (!openaiKey) return [];
 
-      // Cortex-specific search prompts for targeted results.
-      const CORTEX_SEARCH_PROMPTS: Record<
-        string,
-        (q: string) => { searchQuery: string; instruction: string }
-      > = {
-        [ResearchCortex.PayloadProfiler]: (q) => ({
-          searchQuery: `payload instrument spectrometer radar bus ${q}`.slice(
-            0,
-            200,
-          ),
-          instruction: `Search for technical data about the payload / instrument referenced in: ${q}. Look for manufacturer specs, instrument class (radar, EO, comms, SIGINT), mission heritage and bus integration. Cite sources.`,
-        }),
-        [ResearchCortex.RegimeProfiler]: (q) => ({
-          searchQuery: `orbit regime altitude inclination LEO MEO GEO ${q}`.slice(
-            0,
-            200,
-          ),
-          instruction: `Search for orbit-regime context relevant to: ${q}. Focus on altitude bands, inclination, station-keeping duty cycle, congestion and debris profile. Cite sources.`,
-        }),
-        [ResearchCortex.LaunchScout]: (q) => ({
-          searchQuery: `launch manifest rideshare fairing slot pricing ${q}`.slice(
-            0,
-            200,
-          ),
-          instruction: `Search for upcoming launches, manifests, rideshare availability and slot economics relevant to: ${q}. Include LSP, vehicle, trajectory, and price per kg where available.`,
-        }),
-      };
-
-      const cortexPrompt = CORTEX_SEARCH_PROMPTS[cortexName];
-      const { searchQuery, instruction } = cortexPrompt
-        ? cortexPrompt(query)
-        : {
-            searchQuery: `space situational awareness ${cortexName.replace(/_/g, " ")} ${query}`.slice(
-              0,
-              200,
-            ),
-            instruction: `Search for authoritative SSA / space-traffic data relevant to: ${cortexName.replace(/_/g, " ")} ${query}. Prioritise CelesTrak, Space-Track, ESA, NASA CNEOS, operator advisories and peer-reviewed sources. Return key facts, numbers, epochs and provenance.`,
-          };
+      // Web-search prompt templates come from DomainConfig (app-owned).
+      const { searchQuery, instruction } = this.domainConfig.webSearchPrompt(
+        query,
+        cortexName,
+      );
 
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
@@ -439,146 +394,7 @@ export class CortexExecutor {
   }
 }
 
-// ============================================================================
-// Pre-Summarize: SQL did the math, LLM narrates the verdict (Karpathy pattern)
-// ============================================================================
-
-/**
- * Transform raw SQL rows into pre-computed insights.
- * Instead of sending 200 rows to the LLM, send aggregate stats and a handful
- * of exemplars. The LLM's job becomes: write the finding, not do the analysis.
- */
-export function preSummarize(
-  rows: Record<string, unknown>[],
-  cortexName: string,
-): Record<string, unknown>[] {
-  if (rows.length === 0) return [];
-
-  // Apogee Tracker: group by mission-health signal.
-  if (cortexName === ResearchCortex.ApogeeTracker) {
-    const signals = new Map<string, Record<string, unknown>[]>();
-
-    for (const row of rows) {
-      const phase = String(row.currentPhase ?? "unknown");
-      const yearsToEol = Number(row.yearsToEol) || 0;
-
-      let signal = "HOLD";
-      if (phase === "nominal" && yearsToEol > 5) signal = "HEALTHY";
-      else if (phase === "nominal" && yearsToEol > 0 && yearsToEol <= 2)
-        signal = "PLAN_REPLACEMENT";
-      else if (phase === "extended") signal = "RETIRE_OR_DEORBIT";
-      else if (phase === "degraded") signal = "URGENT_REPLACE";
-
-      if (!signals.has(signal)) signals.set(signal, []);
-      signals.get(signal)!.push(row);
-    }
-
-    const insights: Record<string, unknown>[] = [];
-    for (const [signal, satellites] of signals) {
-      if (signal === "HOLD" || signal === "HEALTHY") continue;
-      insights.push({
-        type: "mission_health_signal",
-        signal,
-        count: satellites.length,
-        topSatellites: satellites.slice(0, 3).map((s) => ({
-          name: String(s.name).slice(0, 60),
-          operator: s.operatorName,
-          orbitRegime: s.orbitRegimeName,
-          currentPhase: s.currentPhase,
-          yearsToEol: s.yearsToEol,
-          id: s.id,
-        })),
-      });
-    }
-
-    return insights;
-  }
-
-  // Fleet Analyst: already pre-aggregated by SQL, pass through.
-  if (cortexName === ResearchCortex.FleetAnalyst) {
-    return rows;
-  }
-
-  // Advisory Radar: already aggregated in SQL, pass through.
-  if (cortexName === ResearchCortex.AdvisoryRadar) {
-    return rows;
-  }
-
-  // Classification Auditor: group by severity.
-  if (cortexName === ResearchCortex.ClassificationAuditor) {
-    const bySeverity = new Map<string, Record<string, unknown>[]>();
-    for (const row of rows) {
-      const sev = String(row.severity ?? "medium");
-      if (!bySeverity.has(sev)) bySeverity.set(sev, []);
-      bySeverity.get(sev)!.push(row);
-    }
-    const insights: Record<string, unknown>[] = [];
-    for (const [severity, items] of bySeverity) {
-      const totalAffected = items.reduce(
-        (s, i) => s + (Number(i.count) || 0),
-        0,
-      );
-      insights.push({
-        type: "audit_group",
-        severity,
-        issueTypes: items.length,
-        totalAffectedEntities: totalAffected,
-        items: items.slice(0, 5),
-      });
-    }
-    return insights;
-  }
-
-  // Payload Profiler: group heterogeneous data by category.
-  if (cortexName === ResearchCortex.PayloadProfiler) {
-    const byType = new Map<string, Record<string, unknown>[]>();
-    for (const row of rows) {
-      const type = String(row.type ?? "unknown");
-      if (!byType.has(type)) byType.set(type, []);
-      byType.get(type)!.push(row);
-    }
-
-    const insights: Record<string, unknown>[] = [];
-
-    const identity = byType.get("identity")?.[0];
-    if (identity) insights.push(identity);
-
-    const satelliteDist = byType.get("satellite_distribution") ?? [];
-    if (satelliteDist.length > 0) {
-      insights.push({
-        type: "satellite_distribution_summary",
-        operatorCount: satelliteDist.length,
-        distribution: satelliteDist.slice(0, 10),
-      });
-    }
-
-    const payloadMatches = byType.get("payload_mission") ?? [];
-    if (payloadMatches.length > 0) {
-      insights.push({
-        type: "mission_summary",
-        matchCount: payloadMatches.length,
-        matches: payloadMatches.slice(0, 10),
-      });
-    }
-
-    const batchTargets = byType.get("batch_target") ?? [];
-    if (batchTargets.length > 0) insights.push(...batchTargets);
-
-    const findings = byType.get("prior_finding") ?? [];
-    if (findings.length > 0) {
-      insights.push({
-        type: "prior_findings_summary",
-        count: findings.length,
-        findings: findings.slice(0, 5),
-      });
-    }
-
-    return insights;
-  }
-
-  // Default: take top 10 rows as-is.
-  return rows.slice(0, 10);
-}
+// preSummarize moved to the domain pack — injected via DomainConfig.preSummarize.
 
 // ============================================================================
 // Helpers

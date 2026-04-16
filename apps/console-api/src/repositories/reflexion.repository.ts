@@ -289,19 +289,6 @@ export class ReflexionRepository {
  *   0.20 has amateur observations
  *   0.20 catalog dropout present
  *   0.10 multiple distinct amateur sources agree (corroboration bonus)
- */ // ← absorbed from cortices/queries/opacity-scout.ts
-export function computeOpacityScore(signals: {
-  payloadUndisclosed: boolean;
-  operatorSensitive: boolean;
-  amateurObservationsCount: number;
-  catalogDropoutCount: number;
-  distinctAmateurSources: number;
-}): number {
-  let score = 0;
-  if (signals.payloadUndisclosed) score += 0.25;
-  if (signals.operatorSensitive) score += 0.25;
-  if (signals.amateurObservationsCount > 0) score += 0.2;
-  if (signals.catalogDropoutCount > 0) score += 0.2;
-  if (signals.distinctAmateurSources >= 2) score += 0.1;
-  return Math.min(1, Math.max(0, score));
-}
+ */
+export { computeOpacityScore } from "../agent/ssa/opacity-score";
+export type { OpacitySignals } from "../agent/ssa/opacity-score";

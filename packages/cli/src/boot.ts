@@ -20,7 +20,6 @@ import {
   CortexRegistry,
   buildThalamusContainer,
   callNanoWithMode,
-  queryConjunctionCandidatesKnn,
 } from "@interview/thalamus";
 import { buildSweepContainer, startTelemetrySwarm } from "@interview/sweep";
 import {
@@ -154,14 +153,17 @@ export async function buildRealAdapters(
   const db: Database = drizzle(ctx.pool);
 
   // Thalamus DI — full container against the live DB.
-  // SSA cortex skill pack lives in console-api (shared with CLI until we
-  // move packages/cli under apps/ssa-cli).
+  // CLI doesn't run cycles in-process (it routes via console-api HTTP),
+  // so domainConfig defaults to noopDomainConfig inside the kernel.
   const skillsDir = resolve(
     fileURLToPath(new URL(".", import.meta.url)),
     "../../../apps/console-api/src/agent/ssa/skills",
   );
-  // Data provider: empty until CLI wires repo-backed implementations.
-  const thalamusC = buildThalamusContainer({ db, skillsDir, dataProvider: {} });
+  const thalamusC = buildThalamusContainer({
+    db,
+    skillsDir,
+    dataProvider: {},
+  });
 
   // Sweep DI — for resolution + telemetry-swarm launch.
   const llmMode =
@@ -322,18 +324,21 @@ export async function buildRealAdapters(
     },
 
     // --- 8. candidates.propose — KNN conjunction candidate proposer ----
-    // Runs the Voyage halfvec HNSW against the catalog with altitude-overlap
-    // filtering. Pre-narrow-phase: never computes Pc, only proposes.
+    // Routed through the console-api 5-layer (GET /api/conjunctions/knn-candidates).
+    // The CLI is an agent — it consumes the same HTTP route as the frontend.
     candidates: {
       propose: async ({ targetNoradId, objectClass, limit }) => {
-        return queryConjunctionCandidatesKnn(db, {
-          targetNoradId,
-          knnK: 300,
-          limit: limit ?? 25,
-          marginKm: 20,
-          objectClass: objectClass ?? null,
-          excludeSameFamily: true,
-        });
+        const base = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
+        const url = new URL(`${base}/api/conjunctions/knn-candidates`);
+        url.searchParams.set("targetNoradId", String(targetNoradId));
+        url.searchParams.set("knnK", "300");
+        url.searchParams.set("limit", String(limit ?? 25));
+        url.searchParams.set("marginKm", "20");
+        url.searchParams.set("excludeSameFamily", "true");
+        if (objectClass) url.searchParams.set("objectClass", objectClass);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`knn-candidates ${res.status}`);
+        return (await res.json()) as Array<Record<string, unknown>>;
       },
     },
   };
