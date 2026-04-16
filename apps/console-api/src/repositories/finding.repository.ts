@@ -71,6 +71,89 @@ export class FindingRepository {
     return updated.rows.length > 0;
   }
 
+  // ── Cortex-consumed reads (absorbed from cortices/queries/repl-inspection) ──
+
+  async listByCycle(
+    cycleId: bigint,
+    limit = 50,
+  ): Promise<
+    Array<{
+      id: string;
+      title: string | null;
+      summary: string | null;
+      cortex: string | null;
+      urgency: string | null;
+      confidence: number | null;
+    }>
+  > {
+    const rows = await this.db.execute(sql`
+      SELECT id::text, title, summary, cortex::text AS cortex,
+             urgency::text AS urgency, confidence::real AS confidence
+      FROM research_finding
+      WHERE research_cycle_id = ${cycleId}
+      ORDER BY impact_score DESC NULLS LAST, confidence DESC NULLS LAST
+      LIMIT ${limit}
+    `);
+    return rows.rows as Array<{
+      id: string;
+      title: string | null;
+      summary: string | null;
+      cortex: string | null;
+      urgency: string | null;
+      confidence: number | null;
+    }>;
+  }
+
+  async listRecent(limit = 20): Promise<
+    Array<{
+      id: string;
+      cortex: string;
+      urgency: string | null;
+      confidence: number;
+      title: string;
+    }>
+  > {
+    const rows = await this.db.execute(sql`
+      SELECT id::text, cortex::text AS cortex, urgency::text AS urgency,
+             confidence::real AS confidence, title
+      FROM research_finding
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `);
+    return rows.rows as Array<{
+      id: string;
+      cortex: string;
+      urgency: string | null;
+      confidence: number;
+      title: string;
+    }>;
+  }
+
+  async findDetailById(id: bigint): Promise<{
+    id: string;
+    title: string;
+    cortex: string;
+    urgency: string | null;
+    confidence: number;
+    evidence: unknown;
+    summary: string;
+  } | null> {
+    const rows = await this.db.execute(sql`
+      SELECT id::text, title, cortex::text AS cortex, urgency::text AS urgency,
+             confidence::real AS confidence, evidence, summary
+      FROM research_finding WHERE id = ${id}
+    `);
+    return (rows.rows[0] as {
+      id: string;
+      title: string;
+      cortex: string;
+      urgency: string | null;
+      confidence: number;
+      evidence: unknown;
+      summary: string;
+    }) ?? null;
+  }
+
   async insert(input: FindingInsertInput): Promise<bigint> {
     const created = await this.db.execute<{ id: string }>(sql`
       INSERT INTO research_finding
