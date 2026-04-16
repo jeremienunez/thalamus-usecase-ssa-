@@ -48,6 +48,15 @@ import { AutonomyService } from "./services/autonomy.service";
 import { ReplChatService } from "./services/repl-chat.service";
 import { ReplTurnService } from "./services/repl-turn.service";
 import { SweepSuggestionsService } from "./services/sweep-suggestions.service";
+import { SourceRepository } from "./repositories/source.repository";
+import { SourceDataService } from "./services/source-data.service";
+import { SatelliteAuditRepository } from "./repositories/satellite-audit.repository";
+import { SatelliteEnrichmentRepository } from "./repositories/satellite-enrichment.repository";
+import { FleetAnalysisRepository } from "./repositories/fleet-analysis.repository";
+import { TrafficForecastRepository } from "./repositories/traffic-forecast.repository";
+import { SatelliteAuditService } from "./services/satellite-audit.service";
+import { SatelliteEnrichmentService } from "./services/satellite-enrichment.service";
+import { OrbitalAnalysisService } from "./services/orbital-analysis.service";
 
 import type { AppServices } from "./routes";
 import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
@@ -90,6 +99,11 @@ export async function buildContainer(logger: FastifyBaseLogger): Promise<{
   const auditRepo = new SweepAuditRepository(db);
   const reflexionRepo = new ReflexionRepository(db);
   const statsRepo = new StatsRepository(db);
+  const sourceRepo = new SourceRepository(db);
+  const satelliteAuditRepo = new SatelliteAuditRepository(db);
+  const satelliteEnrichmentRepo = new SatelliteEnrichmentRepository(db);
+  const fleetAnalysisRepo = new FleetAnalysisRepository(db);
+  const trafficForecastRepo = new TrafficForecastRepository(db);
 
   // services
   const enrichmentFinding = new EnrichmentFindingService(
@@ -137,6 +151,16 @@ export async function buildContainer(logger: FastifyBaseLogger): Promise<{
       sweepRepo: sweep.sweepRepo,
       resolutionService: sweep.resolutionService,
     }),
+    sourceData: new SourceDataService(sourceRepo),
+    satelliteAudit: new SatelliteAuditService(satelliteAuditRepo),
+    satelliteEnrichment: new SatelliteEnrichmentService(
+      satelliteRepo,
+      satelliteEnrichmentRepo,
+    ),
+    orbitalAnalysis: new OrbitalAnalysisService(
+      fleetAnalysisRepo,
+      trafficForecastRepo,
+    ),
   };
 
   const snapshot = await snapshotHealth(db, redis, thalamus.registry.size());
