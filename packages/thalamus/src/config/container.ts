@@ -8,6 +8,7 @@
 import type { Database } from "@interview/db-schema";
 import { CortexRegistry } from "../cortices/registry";
 import { CortexExecutor } from "../cortices/executor";
+import type { CortexDataProvider } from "../cortices/types";
 import { ResearchGraphService } from "../services/research-graph.service";
 import { ThalamusService } from "../services/thalamus.service";
 import { ResearchCycleRepository } from "../repositories/research-cycle.repository";
@@ -31,6 +32,8 @@ export interface BuildThalamusOpts {
   db: Database;
   /** Required: path to the caller's cortex-skill directory (domain pack). */
   skillsDir: string;
+  /** Required: app-provided data provider map (sqlHelper name → fetcher fn). */
+  dataProvider: CortexDataProvider;
   /** Optional Voyage API key override */
   voyageApiKey?: string;
 }
@@ -49,7 +52,7 @@ export function buildThalamusContainer(
   const registry = new CortexRegistry(opts.skillsDir);
   registry.discover();
 
-  const executor = new CortexExecutor(registry, db);
+  const executor = new CortexExecutor(registry, opts.dataProvider);
 
   const graphService = new ResearchGraphService(
     findingRepo,

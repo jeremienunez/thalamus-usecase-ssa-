@@ -10,13 +10,16 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import type { Database } from "@interview/db-schema";
 import type { CortexRegistry, CortexSkill } from "./registry";
-import type { CortexInput, CortexOutput, CortexFinding } from "./types";
+import type {
+  CortexInput,
+  CortexOutput,
+  CortexFinding,
+  CortexDataProvider,
+} from "./types";
 import { analyzeCortexData } from "./cortex-llm";
 import { createLlmTransport } from "../transports/llm-chat";
 import { createLlmTransportWithMode } from "../transports/factory";
-import * as sqlHelpers from "./queries";
 import { sanitizeDataPayload, sanitizeText } from "./guardrails";
 import { fetchSourcesForCortex } from "./sources";
 import {
@@ -29,25 +32,8 @@ import {
 
 const logger = createLogger("cortex-executor");
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SqlHelperFn = (db: Database, ...args: any[]) => Promise<unknown[]>;
-
-/**
- * Map of sqlHelper names (referenced in skill frontmatter) -> functions from
- * sql-helpers.ts. Names follow the SSA vocabulary (satellite / payload /
- * orbit regime / conjunction / maneuver).
- *
- * We cast through `unknown` because helpers may return rows OR a single
- * shaped object. The executor treats results as an array of unknowns.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const helpers = sqlHelpers as unknown as Record<string, any>;
-
-const SQL_HELPER_MAP: Record<string, SqlHelperFn> = Object.fromEntries(
-  Object.entries(helpers)
-    .filter(([, v]) => typeof v === "function")
-    .map(([k, v]) => [k, v as SqlHelperFn]),
-);
+// Data provider map is injected by the app composition root.
+// No SQL_HELPER_MAP, no import from "./queries", no Database import.
 
 /**
  * Cortex names that require a userId in params (fleet-scoped work).
@@ -75,7 +61,7 @@ const WEB_ENRICHED_CORTICES = new Set<string>([
 export class CortexExecutor {
   constructor(
     private registry: CortexRegistry,
-    private db: Database,
+    private dataProvider: CortexDataProvider,
   ) {}
 
   /**
@@ -316,61 +302,33 @@ export class CortexExecutor {
     params: Record<string, unknown>,
   ): Promise<unknown[]> {
     const helperName = skill.header.sqlHelper;
-    const helperFn = SQL_HELPER_MAP[helperName];
+    const helperFn = this.dataProvider[helperName];
 
     if (!helperFn) {
-      // No SQL helper — cortex uses only LLM (e.g., trend cortices with RSS).
+      // No data provider mapped — cortex uses only LLM (e.g., strategy cortices).
       logger.debug(
         { cortex: skill.header.name, sqlHelper: helperName },
-        "No SQL helper mapped, cortex will use raw params as data",
+        "No data provider mapped, cortex will use raw params as data",
       );
       return [];
     }
 
     try {
-      // Drop orbitRegime if not in the known set — lets the helper scan all
-      // regimes rather than returning nothing for a typo.
-      const KNOWN_ORBIT_REGIMES = new Set([
-        "LEO",
-        "MEO",
-        "GEO",
-        "HEO",
-        "SSO",
-        "GTO",
-        "Lunar",
-        "Cislunar",
-        "Heliocentric",
-      ]);
-      const cleanParams = { ...params };
-      if (
-        cleanParams.orbitRegime &&
-        !KNOWN_ORBIT_REGIMES.has(cleanParams.orbitRegime as string)
-      ) {
-        logger.debug(
-          {
-            cortex: skill.header.name,
-            invalidOrbitRegime: cleanParams.orbitRegime,
-          },
-          "Removing invalid orbitRegime param — will scan all regimes",
-        );
-        delete cleanParams.orbitRegime;
-      }
-
       logger.debug(
         {
           cortex: skill.header.name,
           sqlHelper: helperName,
-          params: cleanParams,
+          params,
         },
-        "Running SQL helper",
+        "Calling data provider",
       );
-      const result = await helperFn(this.db, cleanParams);
+      const result = await helperFn(params);
       if (Array.isArray(result)) return result;
       return result == null ? [] : [result as unknown];
     } catch (err) {
       logger.error(
         { cortex: skill.header.name, sqlHelper: helperName, err },
-        "SQL helper execution failed",
+        "Data provider call failed",
       );
       return [];
     }

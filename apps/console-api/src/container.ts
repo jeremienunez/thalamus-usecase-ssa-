@@ -69,7 +69,15 @@ export async function buildContainer(logger: FastifyBaseLogger): Promise<{
   >;
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
 
-  const thalamus = buildThalamusContainer({ db, skillsDir: SSA_SKILLS_DIR });
+  // Data provider: maps skill frontmatter sqlHelper names → repo method calls.
+  // TODO: wire each entry to the corresponding repo method once services are built.
+  const dataProvider: Record<string, (params: Record<string, unknown>) => Promise<unknown[]>> = {};
+
+  const thalamus = buildThalamusContainer({
+    db,
+    skillsDir: SSA_SKILLS_DIR,
+    dataProvider,
+  });
   const sweep = buildSweepContainer({ db, redis });
 
   // repos

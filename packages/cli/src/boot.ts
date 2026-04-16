@@ -160,7 +160,8 @@ export async function buildRealAdapters(
     fileURLToPath(new URL(".", import.meta.url)),
     "../../../apps/console-api/src/agent/ssa/skills",
   );
-  const thalamusC = buildThalamusContainer({ db, skillsDir });
+  // Data provider: empty until CLI wires repo-backed implementations.
+  const thalamusC = buildThalamusContainer({ db, skillsDir, dataProvider: {} });
 
   // Sweep DI — for resolution + telemetry-swarm launch.
   const llmMode =
