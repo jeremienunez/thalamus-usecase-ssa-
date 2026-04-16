@@ -6,7 +6,7 @@ export function conjunctionsController(service: ConjunctionViewService) {
   return asyncHandler<FastifyRequest<{ Querystring: { minPc?: string } }>>(
     async (req) => {
       const minPc = Number(req.query.minPc ?? 0);
-      return service.list(minPc);
+      return service.list({ minPc });
     },
   );
 }
