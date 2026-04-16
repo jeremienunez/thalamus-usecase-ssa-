@@ -39,6 +39,20 @@ out="$(warn 'slow response' 2>&1)";   assert_contains "$out" '⚠' 'warn uses wa
 out="$(fail 'redis down' 2>&1)";      assert_contains "$out" '✗' 'fail uses cross glyph'
 out="$(step 'seeding' 2>&1)";         assert_contains "$out" '›' 'step uses chevron glyph'
 
+# --- spinner_until ---
+# Predicate that succeeds on the 2nd invocation (via counter file).
+counter_file="$(mktemp)"
+echo 0 > "$counter_file"
+pred() {
+  local n; n=$(<"$counter_file")
+  echo $((n + 1)) > "$counter_file"
+  [[ $n -ge 1 ]]
+}
+out="$(spinner_until pred 'postgres' 5 2>&1)"
+rm -f "$counter_file"
+assert_contains "$out" 'postgres'       'spinner_until labels its task'
+assert_contains "$out" '✓'              'spinner_until finalizes with ok'
+
 echo
 echo "  ${pass_count} passed, ${fail_count} failed"
 [[ "$fail_count" -eq 0 ]]

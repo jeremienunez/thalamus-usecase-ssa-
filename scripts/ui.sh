@@ -39,3 +39,31 @@ step() { printf '  %s›%s %s\n' "$C_GRAY"   "$C_RESET" "$*"; }
 ok()   { printf '  %s✓%s %s\n' "$C_GREEN"  "$C_RESET" "$*"; }
 warn() { printf '  %s⚠%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 fail() { printf '  %s✗%s %s\n' "$C_RED"    "$C_RESET" "$*"; }
+
+# ── spinner_until <predicate> <label> [timeout-sec] ───────────────────────
+# Runs <predicate> (command or shell function) repeatedly. While it returns
+# non-zero, redraws a spinner glyph next to <label>. When it returns zero,
+# replaces the spinner with ok <label>. Returns 1 on timeout (default 60s)
+# and prints warn <label> (timeout).
+spinner_until() {
+  local predicate="$1" label="$2" timeout="${3:-60}"
+  local frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0 start elapsed
+  start=$(date +%s)
+  # Hide cursor on TTY to avoid blinking artifacts.
+  [[ -t 1 ]] && printf '\e[?25l'
+  while ! "$predicate" 2>/dev/null; do
+    elapsed=$(( $(date +%s) - start ))
+    if (( elapsed >= timeout )); then
+      [[ -t 1 ]] && printf '\r\e[2K\e[?25h'
+      warn "$label (timeout after ${timeout}s)"
+      return 1
+    fi
+    local glyph="${frames:i:1}"
+    printf '\r  %s%s%s %s' "$C_CYAN" "$glyph" "$C_RESET" "$label"
+    i=$(( (i + 1) % ${#frames} ))
+    sleep 0.1
+  done
+  [[ -t 1 ]] && printf '\r\e[2K\e[?25h'
+  ok "$label"
+}
