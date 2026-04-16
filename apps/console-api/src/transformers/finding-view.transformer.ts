@@ -4,12 +4,7 @@ import type {
   FindingDetailRow,
 } from "../repositories/finding.repository";
 import { mapFindingStatus } from "./finding-status.transformer";
-
-export function entityRef(type: string, id: string): string {
-  if (type === "satellite") return `sat:${id}`;
-  if (type === "operator") return `op:${id}`;
-  return `${type}:${id}`;
-}
+import { entityRef } from "./kg-view.transformer";
 
 export function toFindingListView(f: FindingRow): FindingView {
   return {

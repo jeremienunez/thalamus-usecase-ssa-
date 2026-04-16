@@ -6,9 +6,9 @@ export type Handler<Req extends FastifyRequest = FastifyRequest> = (
 ) => Promise<unknown>;
 
 /**
- * Wraps a controller fn so any thrown error is returned as {error} JSON at
- * status 500 (or the error's own `.statusCode` if set), without propagating
- * into Fastify's default HTML error path.
+ * Wraps a controller so any thrown error becomes `{error}` JSON at status 500
+ * (or the error's `.statusCode` if set). In production, internal 500s are
+ * redacted to "internal error" — real message always reaches `req.log.error`.
  */
 export function asyncHandler<Req extends FastifyRequest = FastifyRequest>(
   fn: Handler<Req>,
@@ -18,13 +18,18 @@ export function asyncHandler<Req extends FastifyRequest = FastifyRequest>(
       const result = await fn(req as Req, reply);
       if (!reply.sent) return result;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const code =
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      const explicitCode =
         typeof (err as { statusCode?: number })?.statusCode === "number"
           ? (err as { statusCode: number }).statusCode
-          : 500;
-      req.log.error({ err: msg, url: req.url }, "controller error");
-      return reply.code(code).send({ error: msg });
+          : undefined;
+      const code = explicitCode ?? 500;
+      req.log.error({ err: rawMsg, url: req.url }, "controller error");
+      const clientMsg =
+        process.env.NODE_ENV === "production" && explicitCode === undefined
+          ? "internal error"
+          : rawMsg;
+      return reply.code(code).send({ error: clientMsg });
     }
   }) as RouteHandler;
 }
