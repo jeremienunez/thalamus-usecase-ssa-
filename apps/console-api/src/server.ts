@@ -8,6 +8,8 @@
 import "./init"; // MUST be first — bumps process.setMaxListeners before imports register handlers
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { buildContainer } from "./container";
 import { registerAllRoutes } from "./routes";
 import type { HealthSnapshot } from "./infra/health-snapshot";
@@ -48,51 +50,29 @@ function durationColor(ms: number): string {
   return C.gray;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function animateSatellite(): Promise<void> {
-  if (!process.stdout.isTTY) return;
-  const y = C.yellow, c = C.cyan, g = C.green, gr = C.gray, r = C.reset;
-  const frames: string[][] = [
-    [
-      `  ${y}┌──┐${r}  ${c}╔═══╗${r}  ${y}┌──┐${r}`,
-      `  ${y}│${gr}░░${y}│${r}${gr}··${c}╣ ${gr}·${c} ╠${r}${gr}··${y}│${gr}░░${y}│${r}`,
-      `  ${y}└──┘${r}  ${c}╚═╤═╝${r}  ${y}└──┘${r}`,
-    ],
-    [
-      `  ${y}┌──┐${r}  ${c}╔═══╗${r}  ${y}┌──┐${r}`,
-      `  ${y}│${gr}▒▒${y}│${r}${gr}══${c}╣ ${gr}◦${c} ╠${r}${gr}══${y}│${gr}▒▒${y}│${r}`,
-      `  ${y}└──┘${r}  ${c}╚═╤═╝${r}  ${y}└──┘${r}`,
-    ],
-    [
-      `  ${y}┌──┐${r}  ${c}╔═══╗${r}  ${y}┌──┐${r}`,
-      `  ${y}│▓▓│${c}══╣ ${g}◉${c} ╠══${y}│▓▓│${r}`,
-      `  ${y}└──┘${r}  ${c}╚═╤═╝${r}  ${y}└──┘${r}`,
-    ],
-  ];
-  process.stdout.write("\n");
-  for (let i = 0; i < frames.length; i++) {
-    if (i > 0) process.stdout.write("\x1b[3A\r");
-    process.stdout.write(frames[i].join("\n") + "\n");
-    await sleep(160);
-  }
-  // twinkle pass
-  const stars = [
-    `        ${gr}·${r} ${gr}·${r}   ${gr}·${r}`,
-    `       ${gr}·  ${r}${c}∴${r}${gr}   ·${r}`,
-  ];
-  const starsOff = [
-    `        ${gr} ${r} ${gr}·${r}   ${gr} ${r}`,
-    `       ${gr}·  ${r}${gr}·${r}${gr}   ·${r}`,
-  ];
-  for (let k = 0; k < 3; k++) {
-    process.stdout.write((k % 2 === 0 ? stars : starsOff).join("\n") + "\n");
-    await sleep(120);
-    process.stdout.write("\x1b[2A\r");
-  }
-  process.stdout.write(stars.join("\n") + "\n");
+/**
+ * Print the shared satellite ASCII logo read from scripts/ui/satellite.txt.
+ * Same glyph source as the bash `satellite_logo` helper used by the Makefile,
+ * so changing the file updates both surfaces. Colors applied per-token to
+ * match the bash rendering: yellow panels, cyan bus + antenna, green eye.
+ */
+function printSatelliteLogo(): void {
+  const y = C.yellow, c = C.cyan, g = C.green, r = C.reset;
+  const path = fileURLToPath(new URL("../../../scripts/ui/satellite.txt", import.meta.url));
+  const raw = readFileSync(path, "utf8").replace(/\n$/, "");
+  const colored = raw
+    .replace(/◉/g, `${g}◉${c}`)
+    .replace(/┌──┐/g, `${y}┌──┐${r}`)
+    .replace(/└──┘/g, `${y}└──┘${r}`)
+    .replace(/│▓▓│/g, `${y}│▓▓│${r}`)
+    .replace(/╔═══╗/g, `${c}╔═══╗${r}`)
+    .replace(/╚═╤═╝/g, `${c}╚═╤═╝${r}`)
+    .replace(/╣/g, `${c}╣`)
+    .replace(/╠/g, `╠${r}`)
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+  process.stdout.write("\n" + colored + "\n");
 }
 
 function printBanner(
@@ -197,7 +177,7 @@ export async function startServer(
   if (!Number.isFinite(port) || port < 0) {
     throw new Error(`startServer: invalid port ${port}`);
   }
-  await animateSatellite();
+  printSatelliteLogo();
   const { app, close, info, snapshot } = await createApp();
   const address = await app.listen({ port, host: "0.0.0.0" });
   const boundPort = (() => {

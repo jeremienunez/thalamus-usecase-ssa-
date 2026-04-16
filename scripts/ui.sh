@@ -69,13 +69,25 @@ spinner_until() {
 }
 
 # ── satellite_logo ────────────────────────────────────────────────────────
-# Prints the 3-line ASCII satellite used as the recurring logo across
-# Makefile help, console-api banner, and (stretch) the ssa REPL banner.
+# Prints the 3-line ASCII satellite logo. The raw glyph layout lives in
+# scripts/ui/satellite.txt (shared single source of truth with the
+# console-api banner) — this function reads it and applies colors:
+#   yellow for the solar panels (┌──┐, │▓▓│, └──┘)
+#   cyan for the bus and antenna (╔═══╗, ╣…╠, ╚═╤═╝)
+#   green for the body eye (◉)
 satellite_logo() {
-  printf '  %s┌──┐%s  %s╔═══╗%s  %s┌──┐%s\n' \
-    "$C_YELLOW" "$C_RESET" "$C_CYAN" "$C_RESET" "$C_YELLOW" "$C_RESET"
-  printf '  %s│▓▓│%s══%s╣ %s◉%s ╠%s══%s│▓▓│%s\n' \
-    "$C_YELLOW" "$C_RESET" "$C_CYAN" "$C_GREEN" "$C_CYAN" "$C_CYAN" "$C_YELLOW" "$C_RESET"
-  printf '  %s└──┘%s  %s╚═╤═╝%s  %s└──┘%s\n' \
-    "$C_YELLOW" "$C_RESET" "$C_CYAN" "$C_RESET" "$C_YELLOW" "$C_RESET"
+  local here file
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  file="$here/ui/satellite.txt"
+  # sed applies per-glyph colors. Order matters: color ◉ before coloring ╣/╠.
+  sed \
+    -e "s/◉/${C_GREEN}◉${C_CYAN}/g" \
+    -e "s/┌──┐/${C_YELLOW}┌──┐${C_RESET}/g" \
+    -e "s/└──┘/${C_YELLOW}└──┘${C_RESET}/g" \
+    -e "s/│▓▓│/${C_YELLOW}│▓▓│${C_RESET}/g" \
+    -e "s/╔═══╗/${C_CYAN}╔═══╗${C_RESET}/g" \
+    -e "s/╚═╤═╝/${C_CYAN}╚═╤═╝${C_RESET}/g" \
+    -e "s/╣/${C_CYAN}╣/g; s/╠/╠${C_RESET}/g" \
+    -e "s/^/  /" \
+    "$file"
 }
