@@ -39,6 +39,7 @@ import { ReflexionService } from "./services/reflexion.service";
 import { CycleRunnerService } from "./services/cycle-runner.service";
 import { AutonomyService } from "./services/autonomy.service";
 import { ReplChatService } from "./services/repl-chat.service";
+import { ReplTurnService } from "./services/repl-turn.service";
 import { SweepSuggestionsService } from "./services/sweep-suggestions.service";
 
 import type { AppServices } from "./routes";
@@ -114,6 +115,7 @@ export function buildContainer(logger: FastifyBaseLogger): {
     autonomy: autonomyService,
     cycles: cycleRunner,
     replChat,
+    replTurn: new ReplTurnService(),
     sweepSuggestions: new SweepSuggestionsService({
       sweepRepo: sweep.sweepRepo,
       resolutionService: sweep.resolutionService,
