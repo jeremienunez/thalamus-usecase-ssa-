@@ -23,7 +23,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     alias: aliases,
-    include: ["tests/**/*.spec.ts"],
+    include: ["tests/**/*.spec.ts", "src/**/*.test.ts"],
     globalSetup: ["./tests/setup.ts"],
     testTimeout: 30000,
     // Must run in a single fork so `CONSOLE_API_URL` set by globalSetup reaches
