@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { fieldSqlFor } from "./sql-field";
-import { MISSION_WRITABLE_COLUMNS } from "./field-constraints";
+import { fieldSqlFor } from "../../../src/utils/sql-field";
+import { MISSION_WRITABLE_COLUMNS } from "../../../src/utils/field-constraints";
 
 describe("fieldSqlFor", () => {
   it.each(Object.keys(MISSION_WRITABLE_COLUMNS))(

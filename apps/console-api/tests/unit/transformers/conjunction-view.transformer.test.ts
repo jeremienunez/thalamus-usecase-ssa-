@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toConjunctionView } from "./conjunction-view.transformer";
-import type { ConjunctionRow } from "../repositories/conjunction.repository";
+import { toConjunctionView } from "../../../src/transformers/conjunction-view.transformer";
+import type { ConjunctionRow } from "../../../src/repositories/conjunction.repository";
 
 function row(over: Partial<ConjunctionRow> = {}): ConjunctionRow {
   return {

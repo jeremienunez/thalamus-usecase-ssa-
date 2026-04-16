@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { ConjunctionViewService } from "./conjunction-view.service";
+import { ConjunctionViewService } from "../../../src/services/conjunction-view.service";
 import type {
   ConjunctionRepository,
   ConjunctionRow,
-} from "../repositories/conjunction.repository";
+} from "../../../src/repositories/conjunction.repository";
 
 function mockRepo(): ConjunctionRepository {
   return {

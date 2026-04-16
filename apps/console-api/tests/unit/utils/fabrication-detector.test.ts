@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectFabrication } from "./fabrication-detector";
+import { detectFabrication } from "../../../src/utils/fabrication-detector";
 
 describe("detectFabrication", () => {
   it("flags hedging tokens", () => {

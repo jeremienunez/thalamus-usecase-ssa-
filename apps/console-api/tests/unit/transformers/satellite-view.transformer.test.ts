@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toSatelliteView } from "./satellite-view.transformer";
-import type { SatelliteOrbitalRow } from "../repositories/satellite.repository";
+import { toSatelliteView } from "../../../src/transformers/satellite-view.transformer";
+import type { SatelliteOrbitalRow } from "../../../src/repositories/satellite.repository";
 
 function row(over: Partial<SatelliteOrbitalRow> = {}): SatelliteOrbitalRow {
   return {

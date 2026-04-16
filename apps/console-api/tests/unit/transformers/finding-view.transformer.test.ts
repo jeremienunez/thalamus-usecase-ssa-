@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   toFindingDetailView,
   toFindingListView,
-} from "./finding-view.transformer";
+} from "../../../src/transformers/finding-view.transformer";
 import type {
   FindingDetailRow,
   FindingRow,
-} from "../repositories/finding.repository";
+} from "../../../src/repositories/finding.repository";
 
 function listRow(over: Partial<FindingRow> = {}): FindingRow {
   return {

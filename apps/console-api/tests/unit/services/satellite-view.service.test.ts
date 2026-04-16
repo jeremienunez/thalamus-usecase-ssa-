@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { SatelliteViewService } from "./satellite-view.service";
+import { SatelliteViewService } from "../../../src/services/satellite-view.service";
 import type {
   SatelliteRepository,
   SatelliteOrbitalRow,
-} from "../repositories/satellite.repository";
+} from "../../../src/repositories/satellite.repository";
 import { smaFromMeanMotion } from "@interview/shared";
 
 function mockRepo(): SatelliteRepository {

@@ -6,7 +6,7 @@ import {
   toOperatorNode,
   toRegimeNode,
   toSatelliteNode,
-} from "./kg-view.transformer";
+} from "../../../src/transformers/kg-view.transformer";
 
 describe("toRegimeNode", () => {
   it("prefixes id with regime:, class OrbitRegime, cortex —", () => {

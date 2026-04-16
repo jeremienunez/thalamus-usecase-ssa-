@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Pool } from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@interview/db-schema";
-import { SatelliteRepository } from "./satellite.repository";
+import { SatelliteRepository } from "../../../src/repositories/satellite.repository";
 
 // NOTE: No write-path test for `updateField` — would mutate shared dev DB.
 // Add when per-test transaction rollback is available.

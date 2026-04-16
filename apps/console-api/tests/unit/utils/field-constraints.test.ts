@@ -3,7 +3,7 @@ import {
   MISSION_WRITABLE_COLUMNS,
   inRange,
   unitMismatch,
-} from "./field-constraints";
+} from "../../../src/utils/field-constraints";
 
 describe("MISSION_WRITABLE_COLUMNS", () => {
   it("contains exactly 5 writable fields", () => {

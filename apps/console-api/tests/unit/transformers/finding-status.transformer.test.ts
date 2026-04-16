@@ -3,7 +3,7 @@ import {
   mapFindingStatus,
   toDbStatus,
   parseFindingId,
-} from "./finding-status.transformer";
+} from "../../../src/transformers/finding-status.transformer";
 
 describe("mapFindingStatus", () => {
   it.each([

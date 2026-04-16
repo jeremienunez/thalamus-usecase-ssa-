@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import Fastify from "fastify";
-import { asyncHandler } from "./async-handler";
+import { asyncHandler } from "../../../src/utils/async-handler";
 
 describe("asyncHandler", () => {
   it("passes through successful result as JSON", async () => {
