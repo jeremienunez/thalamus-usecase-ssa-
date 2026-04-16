@@ -12,19 +12,33 @@ import { z } from "zod";
  * NORAD `id`) use strict enums/regexes — invalid input is a 400, never a clamp.
  */
 
+const numberLike = (value: unknown): unknown => {
+  if (value === undefined) return undefined;
+  if (typeof value === "number") return value;
+  // Accept numeric query-string inputs, but reject booleans/objects/arrays.
+  if (typeof value === "string") return Number(value);
+  return Number.NaN;
+};
+
 /** Integer clamp: reject non-finite / non-number, then clamp to [min, max]. */
 export const clampedInt = (min: number, max: number, dflt: number) =>
-  z
-    .coerce.number()
-    .int()
-    .finite()
-    .default(dflt)
-    .transform((v) => Math.max(min, Math.min(max, v)));
+  z.preprocess(
+    numberLike,
+    z
+      .number()
+      .int()
+      .finite()
+      .default(dflt)
+      .transform((v) => Math.max(min, Math.min(max, v))),
+  );
 
 /** Float clamp: reject non-finite / non-number, then clamp to [min, max]. */
 export const clampedNumber = (min: number, max: number, dflt: number) =>
-  z
-    .coerce.number()
-    .finite()
-    .default(dflt)
-    .transform((v) => Math.max(min, Math.min(max, v)));
+  z.preprocess(
+    numberLike,
+    z
+      .number()
+      .finite()
+      .default(dflt)
+      .transform((v) => Math.max(min, Math.min(max, v))),
+  );
