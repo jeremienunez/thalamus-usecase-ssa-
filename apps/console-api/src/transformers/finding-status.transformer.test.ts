@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { mapFindingStatus, toDbStatus, parseFindingId } from "./finding-status";
+import {
+  mapFindingStatus,
+  toDbStatus,
+  parseFindingId,
+} from "./finding-status.transformer";
 
 describe("mapFindingStatus", () => {
   it.each([

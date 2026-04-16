@@ -3,7 +3,7 @@ import {
   mapFindingStatus,
   parseFindingId,
   toDbStatus,
-} from "../utils/finding-status";
+} from "../transformers/finding-status.transformer";
 import {
   FindingRepository,
   type FindingRow,
