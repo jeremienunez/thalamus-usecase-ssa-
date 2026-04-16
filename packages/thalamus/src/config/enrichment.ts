@@ -26,3 +26,19 @@ export const enrichmentFallbackConfig = {
 } as const;
 
 export const isKimiEnabled = (): boolean => Boolean(enrichmentConfig.apiKey);
+
+/**
+ * Local LLM (llama.cpp / Ollama / vLLM) — OpenAI-compatible endpoint.
+ *
+ * When `LOCAL_LLM_URL` is set, the transport routes through the local server
+ * first (provider="local"), bypassing Kimi/OpenAI entirely. Used for fully
+ * offline / sovereign demos (e.g. Gemma 4 on llama.cpp Vulkan backend).
+ */
+export const localLlmConfig = {
+  url: process.env.LOCAL_LLM_URL ?? "",
+  model: process.env.LOCAL_LLM_MODEL ?? "local",
+  maxTokens: Number(process.env.LOCAL_LLM_MAX_TOKENS ?? 2048),
+  temperature: Number(process.env.LOCAL_LLM_TEMPERATURE ?? 0.3),
+} as const;
+
+export const isLocalLlmEnabled = (): boolean => Boolean(localLlmConfig.url);
