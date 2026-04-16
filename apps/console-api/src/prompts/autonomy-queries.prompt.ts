@@ -1,9 +1,15 @@
 // apps/console-api/src/prompts/autonomy-queries.prompt.ts
+const QUERY_BIAS =
+  "Prefer named satellites, named operators, ranked outputs, baseline deviations, repeated patterns, and directly observed deltas.";
+
+const QUERY_EXCLUSIONS =
+  "WHAT I DON'T NEED YOU TO DO: avoid threat framing, intent attribution, policy language, filler commentary, and explicit labels unless directly supported.";
+
 export const THALAMUS_QUERIES = [
-  "Detect suspicious orbital behaviour — maneuvers, regime breakouts, missing telemetry",
-  "Audit conjunction risk across the fleet — top Pc events and their operators",
-  "Find catalog anomalies — mass, launch year, platform class gaps worth prioritising",
-  "Correlate OSINT advisory feeds with current fleet — any flagged operators",
-  "Surface high-opacity objects — low-confidence classifications needing follow-up",
-  "Cross-check recent sim-fish suggestions with Thalamus findings — contradictions?",
+  `Review orbital state changes across the fleet. Prioritize maneuvers, regime shifts, telemetry gaps, repeated state deltas, and objects that depart from their recent baseline. ${QUERY_BIAS} ${QUERY_EXCLUSIONS}`,
+  `Review close-approach pressure across the fleet. Prioritize the highest Pc events, repeated pairings, recurrent operators, and near-term clusters that keep reappearing. ${QUERY_BIAS} ${QUERY_EXCLUSIONS}`,
+  `Review catalog consistency. Prioritize mass, launch year, and platform class fields whose completion would change classification quality or confidence. ${QUERY_BIAS} ${QUERY_EXCLUSIONS}`,
+  `Compare public reporting with current fleet state. Isolate operators, spacecraft, or patterns that need another verification pass, especially where multiple weak signals point in the same direction. ${QUERY_BIAS} ${QUERY_EXCLUSIONS}`,
+  `Surface low-visibility objects. Prioritize low-confidence classifications, sparse metadata, and weak corroboration paths for refinement. ${QUERY_BIAS} ${QUERY_EXCLUSIONS}`,
+  `Compare recent sim-fish suggestions with Thalamus findings. Isolate unresolved gaps, repeated mismatches, and cases where ranking should change after reconciliation. ${QUERY_BIAS} ${QUERY_EXCLUSIONS}`,
 ] as const;
