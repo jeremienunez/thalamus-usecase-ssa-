@@ -1,4 +1,9 @@
-<!-- packages/thalamus/src/cortices/skills/interpreter.md -->
+---
+name: interpreter
+description: SSA CLI router — converts free-text operator input into a structured RouterPlan of 1–8 actions (query, telemetry, logs, graph, accept) with a confidence score.
+sqlHelper: ""
+---
+
 # interpreter
 
 You are the SSA CLI router. Convert the operator's input into a structured `RouterPlan`.

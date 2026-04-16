@@ -77,6 +77,63 @@ thalamus-cycle: ## Run one research cycle end-to-end (SSA catalog query)
 ssa: ## Interactive SSA REPL (query → briefing loop)
 	pnpm --filter @interview/thalamus ssa
 
+# ── Local LLM (Gemma 4 via llama.cpp Vulkan) ─────────────────────────────────
+# llm-serve:       26B MoE Q3_K_M — best quality, ~16 tok/s (partial offload)
+# llm-serve-fast:  E4B Q8         — fast fallback, ~43 tok/s (full GPU)
+# ssa-local:       runs the REPL against http://127.0.0.1:8080 (provider=local)
+
+LLM_MODELS_DIR ?= /media/jerem/ubuntu/models/gguf
+LLM_TEMPLATE   := $(LLM_MODELS_DIR)/gemma-template.jinja
+LLM_HOST       := 127.0.0.1
+LLM_PORT       := 8080
+LLM_URL        := http://$(LLM_HOST):$(LLM_PORT)
+
+.PHONY: llm-serve
+llm-serve: ## Start llama-server with Gemma 4 26B MoE Q3_K_M (primary demo model)
+	@echo "▶ Gemma 4 26B MoE Q3_K_M on $(LLM_URL) (Ctrl+C to stop)"
+	llama-server -m $(LLM_MODELS_DIR)/gemma-4-26B-A4B-it-Q3_K_M.gguf \
+		--host $(LLM_HOST) --port $(LLM_PORT) \
+		-ngl 18 -c 4096 -t 4 \
+		--chat-template-file $(LLM_TEMPLATE)
+
+.PHONY: llm-serve-fast
+llm-serve-fast: ## Start llama-server with Gemma 4 E4B Q8 (fast fallback model)
+	@echo "▶ Gemma 4 E4B Q8 on $(LLM_URL) (Ctrl+C to stop)"
+	llama-server -m $(LLM_MODELS_DIR)/gemma-4-E4B-it-Q8_0.gguf \
+		--host $(LLM_HOST) --port $(LLM_PORT) \
+		-ngl 999 -c 8192 -t 4 \
+		--chat-template-file $(LLM_TEMPLATE)
+
+LLM_LOG ?= /tmp/llama-server-26b.log
+
+.PHONY: llm-up
+llm-up: ## Start llama-server in background (26B MoE, idempotent — logs to /tmp)
+	@if curl -sf $(LLM_URL)/health >/dev/null 2>&1; then \
+	  echo "✓ llama-server already running on $(LLM_URL)"; \
+	else \
+	  nohup llama-server -m $(LLM_MODELS_DIR)/gemma-4-26B-A4B-it-Q3_K_M.gguf \
+	    --host $(LLM_HOST) --port $(LLM_PORT) \
+	    -ngl 18 -c 4096 -t 4 \
+	    --chat-template-file $(LLM_TEMPLATE) \
+	    > $(LLM_LOG) 2>&1 & \
+	  echo "▶ llama-server starting (PID $$!) — tail -f $(LLM_LOG)"; \
+	fi
+
+.PHONY: llm-down
+llm-down: ## Stop background llama-server
+	@pkill -f "llama-server.*--port $(LLM_PORT)" && echo "✓ llama-server stopped" || echo "no llama-server running"
+
+.PHONY: llm-logs
+llm-logs: ## Tail llama-server logs
+	tail -f $(LLM_LOG)
+
+.PHONY: ssa-local
+ssa-local: ## Interactive SSA REPL routed to local Gemma (requires `make llm-serve` running)
+	@curl -sf $(LLM_URL)/health >/dev/null 2>&1 || \
+		(echo "✗ local LLM not responding at $(LLM_URL) — run 'make llm-serve' in another terminal"; exit 1)
+	@echo "✓ local LLM up — launching REPL with provider=local"
+	LOCAL_LLM_URL=$(LLM_URL) pnpm --filter @interview/thalamus ssa
+
 .PHONY: sweep-run
 sweep-run: ## Run one sweep audit pass against the seeded catalog
 	pnpm --filter @interview/sweep demo-run

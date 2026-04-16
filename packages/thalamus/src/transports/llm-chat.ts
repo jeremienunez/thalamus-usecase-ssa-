@@ -23,6 +23,20 @@ export type { LlmChatConfig, LlmResponse, LlmTransport };
 
 const logger = createLogger("llm-chat-transport");
 
+/**
+ * Strip reasoning/thinking-channel markers that some local chat GGUFs (e.g.
+ * unsloth Gemma 4 26B-A4B) leak into the content stream.
+ * Drops everything up to and including the final `<channel|>` closer, plus any
+ * stray marker tokens that slip through.
+ */
+function stripThinkingChannels(raw: string): string {
+  return raw
+    .replace(/<\|channel>[\s\S]*?<channel\|>/g, "")
+    .replace(/<\|?channel\|?>/g, "")
+    .replace(/<\|?thought\|?>/g, "")
+    .trim();
+}
+
 // ============================================================================
 // LlmChatTransport
 // ============================================================================
@@ -148,7 +162,8 @@ export class LlmChatTransport {
     const data = (await response.json()) as {
       choices: Array<{ message: { content: string | null } }>;
     };
-    return data.choices[0]?.message?.content ?? "";
+    const raw = data.choices[0]?.message?.content ?? "";
+    return stripThinkingChannels(raw);
   }
 
   private async callKimi(userPrompt: string): Promise<string> {
