@@ -21,7 +21,23 @@ export class FindingViewService {
     status?: string;
     cortex?: string;
   }): Promise<{ items: FindingView[]; total: number }> {
-    const rows = await this.findings.list(filters);
+    // Translate DTO status vocab ("pending"|"accepted"|"rejected"|"in-review") to
+    // DB enum ("active"|"archived"|"invalidated"). If the incoming status isn't
+    // a known DTO value, drop it (don't let arbitrary strings reach the DB enum).
+    const KNOWN_DTO_STATUSES = new Set([
+      "pending",
+      "accepted",
+      "rejected",
+      "in-review",
+    ]);
+    const dbStatus =
+      filters.status && KNOWN_DTO_STATUSES.has(filters.status)
+        ? toDbStatus(filters.status)
+        : undefined;
+    const rows = await this.findings.list({
+      status: dbStatus,
+      cortex: filters.cortex,
+    });
     const items: FindingView[] = rows.map(toFindingListView);
     if (items.length > 0) {
       const ids = items.map((i) => BigInt(i.id.slice(2)));
