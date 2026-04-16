@@ -4,6 +4,32 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### console-api transformers layer — 2026-04-16
+
+Follow-up to the 5-layer refactor: extracted all row→DTO mapping functions
+from inside services into a dedicated `apps/console-api/src/transformers/`
+directory.
+
+Before: transformers were inline in services (`toView` / `toEdge` / `toListView`
+/ `toDetailView` / `entityRef`) — coupled to orchestration, hard to test in
+isolation. `mapFindingStatus` / `toDbStatus` / `parseFindingId` were
+misclassified as "utils".
+
+After: 5 transformer modules, each a collection of pure functions:
+
+- [transformers/satellite-view.transformer.ts](apps/console-api/src/transformers/satellite-view.transformer.ts)
+- [transformers/conjunction-view.transformer.ts](apps/console-api/src/transformers/conjunction-view.transformer.ts)
+- [transformers/kg-view.transformer.ts](apps/console-api/src/transformers/kg-view.transformer.ts) (`toRegimeNode`, `toOperatorNode`, `toSatelliteNode`, `toFindingNode`, `toKgEdge`, `entityRef`)
+- [transformers/finding-view.transformer.ts](apps/console-api/src/transformers/finding-view.transformer.ts) (`toFindingListView`, `toFindingDetailView`, `entityRef`)
+- [transformers/finding-status.transformer.ts](apps/console-api/src/transformers/finding-status.transformer.ts) (`mapFindingStatus`, `toDbStatus`, `parseFindingId` — **moved** from `utils/`)
+
+Impact:
+
+- Services shrank **301 → 125 lines (−58%)** — satellite-view 58→19, conjunction-view 49→15, kg-view 68→29, finding-view 126→62, stats unchanged.
+- **51 new unit tests** added (9 satellite + 14 conjunction + 12 kg + 16 finding-view). Pure-function tests, no mocks.
+- **Byte-level equivalence** confirmed between extracted transformers and the inline versions they replaced — zero behaviour drift, 4 integration specs still green.
+- Full suite: 465 passed / 23 todo (up from 414 / 23).
+
 ### console-api 5-layer architecture refactor — 2026-04-16
 
 Decomposed the monolithic `apps/console-api/src/server.ts` (2001 lines) into a
