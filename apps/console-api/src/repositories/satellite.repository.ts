@@ -48,13 +48,13 @@ export class SatelliteRepository {
     return rows.rows;
   }
 
-  async findPayloadNamesByIds(ids: string[]): Promise<SatelliteNameRow[]> {
+  async findPayloadNamesByIds(ids: bigint[]): Promise<SatelliteNameRow[]> {
     if (ids.length === 0) return [];
     const rows = await this.db.execute<SatelliteNameRow>(sql`
       SELECT id::text, name, norad_id::text
       FROM satellite
       WHERE id = ANY(${sql`ARRAY[${sql.join(
-        ids.map((i) => sql`${BigInt(i)}`),
+        ids.map((i) => sql`${i}`),
         sql`, `,
       )}]::bigint[]`})
         AND object_class = 'payload'
@@ -64,14 +64,13 @@ export class SatelliteRepository {
 
   /** Writes a whitelisted field on a satellite row. Field must be in MISSION_WRITABLE_COLUMNS. */
   async updateField(
-    satelliteId: string,
+    satelliteId: bigint,
     field: string,
     value: string | number,
   ): Promise<void> {
     const col = fieldSqlFor(field);
-    const satBigInt = BigInt(satelliteId);
     await this.db.execute(
-      sql`UPDATE satellite SET ${col} = ${value} WHERE id = ${satBigInt}`,
+      sql`UPDATE satellite SET ${col} = ${value} WHERE id = ${satelliteId}`,
     );
   }
 
@@ -92,14 +91,13 @@ export class SatelliteRepository {
   }
 
   async knnNeighboursForField(
-    targetId: string,
+    targetId: bigint,
     field: string,
     k: number,
   ): Promise<
     Array<{ id: string; value: string | number | null; cos_distance: number }>
   > {
     const col = fieldSqlFor(field);
-    const tid = BigInt(targetId);
     const rows = await this.db.execute<{
       id: string;
       value: string | number | null;
@@ -109,8 +107,8 @@ export class SatelliteRepository {
         s.id::text AS id,
         s.${col} AS value,
         (s.embedding <=> t.embedding)::float AS cos_distance
-      FROM satellite s, (SELECT embedding FROM satellite WHERE id = ${tid}) t
-      WHERE s.id != ${tid}
+      FROM satellite s, (SELECT embedding FROM satellite WHERE id = ${targetId}) t
+      WHERE s.id != ${targetId}
         AND s.object_class = 'payload'
         AND s.${col} IS NOT NULL
         AND s.embedding IS NOT NULL

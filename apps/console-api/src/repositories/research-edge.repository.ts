@@ -30,15 +30,15 @@ export type EdgeInsertInput = {
 export class ResearchEdgeRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
-  async findByFindingIds(ids: string[]): Promise<EdgeRow[]> {
+  async findByFindingIds(ids: bigint[]): Promise<EdgeRow[]> {
     if (ids.length === 0) return [];
     const rows = await this.db.execute<EdgeRow>(sql`
       SELECT finding_id::text, entity_type, entity_id::text
       FROM research_edge
-      WHERE finding_id::text = ANY(${sql`ARRAY[${sql.join(
+      WHERE finding_id = ANY(${sql`ARRAY[${sql.join(
         ids.map((i) => sql`${i}`),
         sql`, `,
-      )}]::text[]`})
+      )}]::bigint[]`})
     `);
     return rows.rows;
   }
