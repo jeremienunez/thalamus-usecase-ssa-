@@ -67,3 +67,15 @@ spinner_until() {
   [[ -t 1 ]] && printf '\r\e[2K\e[?25h'
   ok "$label"
 }
+
+# ── satellite_logo ────────────────────────────────────────────────────────
+# Prints the 3-line ASCII satellite used as the recurring logo across
+# Makefile help, console-api banner, and (stretch) the ssa REPL banner.
+satellite_logo() {
+  printf '  %s┌──┐%s  %s╔═══╗%s  %s┌──┐%s\n' \
+    "$C_YELLOW" "$C_RESET" "$C_CYAN" "$C_RESET" "$C_YELLOW" "$C_RESET"
+  printf '  %s│▓▓│%s══%s╣ %s◉%s ╠%s══%s│▓▓│%s\n' \
+    "$C_YELLOW" "$C_RESET" "$C_CYAN" "$C_GREEN" "$C_CYAN" "$C_CYAN" "$C_YELLOW" "$C_RESET"
+  printf '  %s└──┘%s  %s╚═╤═╝%s  %s└──┘%s\n' \
+    "$C_YELLOW" "$C_RESET" "$C_CYAN" "$C_RESET" "$C_YELLOW" "$C_RESET"
+}

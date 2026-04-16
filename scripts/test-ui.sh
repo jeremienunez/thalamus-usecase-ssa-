@@ -53,6 +53,12 @@ rm -f "$counter_file"
 assert_contains "$out" 'postgres'       'spinner_until labels its task'
 assert_contains "$out" '✓'              'spinner_until finalizes with ok'
 
+# --- satellite_logo ---
+out="$(satellite_logo 2>&1)"
+assert_contains "$out" '┌──┐'  'satellite_logo draws the solar panels'
+assert_contains "$out" '◉'     'satellite_logo draws the body eye'
+assert_contains "$out" '╚═╤═╝' 'satellite_logo draws the antenna base'
+
 echo
 echo "  ${pass_count} passed, ${fail_count} failed"
 [[ "$fail_count" -eq 0 ]]
