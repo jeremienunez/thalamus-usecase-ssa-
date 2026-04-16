@@ -50,6 +50,81 @@ export const useDecision = () => {
   });
 };
 
+export const useSweepSuggestions = () =>
+  useQuery({
+    queryKey: ["sweep-suggestions"] as const,
+    queryFn: () => api.sweepSuggestions(),
+    refetchInterval: 15_000,
+  });
+
+export const useReviewSuggestion = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, accept, reason }: { id: string; accept: boolean; reason?: string }) =>
+      api.reviewSuggestion(id, accept, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sweep-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["findings"] });
+      qc.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
+};
+
+export const useMissionStatus = () =>
+  useQuery({
+    queryKey: ["sweep-mission-status"] as const,
+    queryFn: () => api.missionStatus(),
+    refetchInterval: 2500,
+  });
+
+export const useMissionStart = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.missionStart(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sweep-mission-status"] });
+      qc.invalidateQueries({ queryKey: ["sweep-suggestions"] });
+    },
+  });
+};
+
+export const useMissionStop = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.missionStop(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sweep-mission-status"] });
+    },
+  });
+};
+
+export const useAutonomyStatus = () =>
+  useQuery({
+    queryKey: ["autonomy-status"] as const,
+    queryFn: () => api.autonomyStatus(),
+    refetchInterval: 3000,
+  });
+
+export const useAutonomyStart = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (intervalSec?: number) => api.autonomyStart(intervalSec),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["autonomy-status"] });
+    },
+  });
+};
+
+export const useAutonomyStop = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.autonomyStop(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["autonomy-status"] });
+    },
+  });
+};
+
 export const useCycles = () =>
   useQuery({ queryKey: ["cycles"], queryFn: () => api.cycles() });
 

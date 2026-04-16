@@ -18,7 +18,7 @@ import { source, sourceItem, type NewSourceItem, type Source } from "../schema";
 interface SourceSeed {
   slug: string;
   name: string;
-  kind: "rss" | "arxiv" | "ntrs";
+  kind: "rss" | "arxiv" | "ntrs" | "osint";
   url: string;
   category?: string;
   metadata?: Record<string, unknown>;
@@ -100,6 +100,48 @@ export const SOURCE_SEEDS: SourceSeed[] = [
     url: "https://ntrs.nasa.gov/api/citations/search",
     category: "conjunction-assessment",
     metadata: { searchQuery: "conjunction assessment" },
+  },
+
+  // ── Amateur SSA trackers (OpacityScout ingest lane) ─────────────────────
+  {
+    slug: "sattrackcam",
+    name: "SatTrackCam Leiden (Marco Langbroek)",
+    kind: "rss",
+    url: "https://sattrackcam.blogspot.com/feeds/posts/default?alt=rss",
+    category: "amateur-osint",
+    metadata: {
+      observer: "Marco Langbroek",
+      fetcherKind: "rss",
+      targetTable: "source_item",
+    },
+  },
+  {
+    slug: "seesat-archive-current",
+    name: "SeeSat-L archive (current month)",
+    kind: "osint",
+    // Monthly-rotating archive. The fetcher resolves the current index each run.
+    url: "https://satobs.org/seesat/",
+    category: "amateur-osint",
+    metadata: {
+      observer: "SeeSat-L list (multiple)",
+      fetcherKind: "seesat",
+      targetTable: "amateur_track",
+    },
+  },
+  {
+    slug: "spacetrack-satcat-diff",
+    name: "Space-Track SATCAT diff",
+    kind: "osint",
+    // `fetcherKind = spacetrack-diff` → Redis-backed snapshot differ.
+    // URL kept for reviewer provenance; the fetcher itself pulls from Redis.
+    url: "https://www.space-track.org/basicspacedata/query/class/satcat/",
+    category: "catalog-drift",
+    metadata: {
+      observer: "Space-Track (18th SDS)",
+      fetcherKind: "spacetrack-diff",
+      targetTable: "amateur_track",
+      cadenceHours: 24,
+    },
   },
 ];
 

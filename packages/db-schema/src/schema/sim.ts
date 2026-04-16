@@ -36,7 +36,8 @@ import { vector, EMBEDDING_DIMENSIONS } from "./_vector";
 export type SimKind =
   | "uc1_operator_behavior"
   | "uc3_conjunction"
-  | "uc_telemetry_inference";
+  | "uc_telemetry_inference"
+  | "uc_pc_estimator";
 export type SimSwarmStatus = "pending" | "running" | "done" | "failed";
 export type SimRunStatus = "pending" | "running" | "paused" | "done" | "failed";
 export type ActorKind = "agent" | "god" | "system";
@@ -60,6 +61,19 @@ export interface SeedRefs {
   busDatasheetPrior?: {
     busArchetype: string;
     scalars: Record<string, { typical: number; min: number; max: number; unit: string }>;
+  };
+  /**
+   * UC_PC_ESTIMATOR: conjunction_event.id whose Pc the swarm should estimate.
+   * Present when sim_swarm.kind === "uc_pc_estimator".
+   */
+  pcEstimatorTarget?: number;
+  /**
+   * Per-fish perturbed Pc assumptions. Applied by applyPerturbation — one
+   * (hardBodyRadius, covarianceScale) tuple per fish seed.
+   */
+  pcAssumptions?: {
+    hardBodyRadiusMeters: number;
+    covarianceScale: "tight" | "nominal" | "loose";
   };
 }
 
@@ -103,7 +117,13 @@ export type PerturbationSpec =
       riskProfile: "conservative" | "balanced" | "aggressive";
     }
   | { kind: "launch_surge"; regimeId: number; extraSatellites: number }
-  | { kind: "delta_v_budget"; agentIndex: number; maxPerSat: number };
+  | { kind: "delta_v_budget"; agentIndex: number; maxPerSat: number }
+  | {
+      /** UC_PC_ESTIMATOR: per-fish (hard-body radius, covariance envelope). */
+      kind: "pc_assumptions";
+      hardBodyRadiusMeters: number;
+      covarianceScale: "tight" | "nominal" | "loose";
+    };
 
 export type TurnAction =
   | { kind: "maneuver"; satelliteId: number; deltaVmps: number; reason: string }
@@ -144,6 +164,31 @@ export type TurnAction =
       }>;
       confidence: number;   // self-reported, 0..1
       reason: string;
+    }
+  | {
+      /**
+       * Probabilistic collision-probability estimate for a conjunction event.
+       * One fish = one Pc point under perturbed (hardBodyRadius, covariance)
+       * assumptions. Aggregator computes median + σ across fish.
+       */
+      kind: "estimate_pc";
+      conjunctionId: number;
+      pcEstimate: number;
+      pcBand: { p5: number; p50: number; p95: number };
+      dominantMode:
+        | "elliptical-overlap"
+        | "short-encounter"
+        | "long-encounter"
+        | "unknown";
+      rationale: string;
+      assumptions: {
+        hardBodyRadiusMeters: number;
+        covarianceScale: "tight" | "nominal" | "loose";
+        conjunctionGeometry: string;
+      };
+      flags: Array<
+        "low-data" | "high-uncertainty" | "degraded-covariance" | "field-required"
+      >;
     };
 
 /**

@@ -87,6 +87,12 @@ NanoSweep.service ──► gpt-5.4-nano swarm ──► finding-routing ──�
 - **Resolution service** applies accepted changes inside a transaction, always with an audit trail. No silent writes. Every mutation reversible.
 - **Feedback** on accept/reject feeds back into the next swarm run's prompt per category. The system gets calibrated to the reviewer's standards without fine-tuning.
 - **Editorial copilot** reuses the same pipeline to draft structured briefings from audited data.
+- **Catalog enrichment pipeline** (April 2026) extends Sweep with two fill paths, both emitting navigable findings in the knowledge graph:
+  - **Web mission** (gpt-5.4-nano + `web_search`) — structured-outputs JSON schema + hedging-token blocklist + source-URL validation + per-column range guards + unit mismatch check + 2-vote corroboration. Per-satellite granularity (name + NORAD id in the prompt), payload-only filter.
+  - **KNN propagation** (zero-LLM) — for each payload missing a field, finds K nearest embedded neighbours (Voyage halfvec cosine) with the field set and propagates their consensus value. ±10 % agreement requirement on numeric, ⅔ mode coverage on text.
+  - Every fill emits a `research_finding` (`cortex=data_auditor`, `finding_type=insight`) with `research_edge`s — `about` → target, `similar_to` → neighbours / cited URL. Cortices can now cite and reason on factual fills.
+- **Orbital reflexion pass** — second-pass anomaly detector that cross-tabulates a suspect satellite's orbital fingerprint (inclination, RAAN, mean motion) against the declared classification. Surfaces military-lineage peers (Yaogan, Cosmos, NROL, Shiyan, …) sharing the same inclination belt. Emits `anomaly` findings with navigable provenance. Pure SQL, no LLM. Live verified on FENGYUN 3A.
+- **Autonomy loop** — `POST /api/autonomy/start` rotates Thalamus cycles (6 rotating SSA queries) with Sweep null-scans; topbar pill + FEED panel stream each tick live in the console.
 
 ## Primary build — Space Situational Awareness
 

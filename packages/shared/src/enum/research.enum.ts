@@ -35,6 +35,7 @@ export enum ResearchCortex {
   // Generic analysts reused across cortices.
   DataAuditor = "data_auditor",
   ClassificationAuditor = "classification_auditor",
+  OpacityScout = "opacity_scout",
   Strategist = "strategist",
 }
 

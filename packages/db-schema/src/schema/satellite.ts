@@ -8,6 +8,7 @@ import {
   real,
   jsonb,
   boolean,
+  numeric,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -113,6 +114,18 @@ export const satellite = pgTable("satellite", {
   id: bigserial("id", { mode: "bigint" }).primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
+  noradId: integer("norad_id").unique(),
+  /**
+   * Object classification — migration-step toward a dedicated `space_object`
+   * table (which would hold debris / rocket_stage alongside payload).
+   * For now we carry the enum inline so the screening pipeline can filter
+   * without touching the schema.
+   *   - payload: active or retired satellite bus (operational class)
+   *   - rocket_stage: upper stage / R/B left in orbit
+   *   - debris: fragmented / DEB-suffixed objects
+   *   - unknown: GCAT Type='C' (components) or unclassified analyst objects
+   */
+  objectClass: text("object_class"),
   launchYear: integer("launch_year"),
   operatorCountryId: bigint("operator_country_id", {
     mode: "bigint",
@@ -162,6 +175,9 @@ export const satellite = pgTable("satellite", {
   missionAge: real("mission_age"),
   telemetrySummary: jsonb("telemetry_summary"),
   metadata: jsonb("metadata"),
+  // OpacityScout — information-deficit score in [0..1]. Null until computed.
+  opacityScore: numeric("opacity_score", { precision: 4, scale: 3 }),
+  opacityComputedAt: timestamp("opacity_computed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

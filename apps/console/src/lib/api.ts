@@ -45,6 +45,7 @@ export type ConjunctionDTO = {
   secondaryId: number;
   primaryName: string;
   secondaryName: string;
+  regime: Regime;
   epoch: string;
   minRangeKm: number;
   relativeVelocityKmps: number;
@@ -52,8 +53,9 @@ export type ConjunctionDTO = {
   combinedSigmaKm: number;
   hardBodyRadiusM: number;
   pcMethod: string;
-  sourceClass: SourceClass;
-  corroborated: boolean;
+  computedAt: string;
+  covarianceQuality: "HIGH" | "MED" | "LOW";
+  action: "maneuver_candidate" | "monitor" | "no_action";
 };
 
 export type KgNodeDTO = {
@@ -142,6 +144,108 @@ export const api = {
     return (await res.json()) as { cycle: CycleDTO };
   },
   cycles: () => getJson<{ items: CycleDTO[] }>(`/api/cycles`),
+  sweepSuggestions: () =>
+    getJson<{ items: SweepSuggestionDTO[]; total: number }>(`/api/sweep/suggestions`),
+  missionStatus: () => getJson<MissionStateDTO>(`/api/sweep/mission/status`),
+  missionStart: async () => {
+    const res = await fetch(`/api/sweep/mission/start`, { method: "POST" });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return (await res.json()) as { ok: boolean; state: MissionStateDTO };
+  },
+  missionStop: async () => {
+    const res = await fetch(`/api/sweep/mission/stop`, { method: "POST" });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return (await res.json()) as { ok: boolean; state: MissionStateDTO };
+  },
+  autonomyStatus: () => getJson<AutonomyStateDTO>(`/api/autonomy/status`),
+  autonomyStart: async (intervalSec?: number) => {
+    const res = await fetch(`/api/autonomy/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ intervalSec }),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return (await res.json()) as { ok: boolean; state: AutonomyStateDTO };
+  },
+  autonomyStop: async () => {
+    const res = await fetch(`/api/autonomy/stop`, { method: "POST" });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return (await res.json()) as { ok: boolean; state: AutonomyStateDTO };
+  },
+  reviewSuggestion: async (id: string, accept: boolean, reason?: string) => {
+    const res = await fetch(`/api/sweep/suggestions/${encodeURIComponent(id)}/review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accept, reason }),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return (await res.json()) as {
+      ok: boolean;
+      reviewed: boolean;
+      resolution: { status: string; affectedRows: number; errors?: string[] } | null;
+    };
+  },
+};
+
+export type SweepSuggestionDTO = {
+  id: string;
+  title: string;
+  description: string;
+  suggestedAction: string;
+  category: string;
+  severity: "info" | "warning" | "critical";
+  operatorCountryName: string;
+  affectedSatellites: number;
+  createdAt: string;
+  accepted: boolean | null;
+  resolutionStatus: string | null;
+  hasPayload: boolean;
+};
+
+export type MissionTaskDTO = {
+  suggestionId: string;
+  field: string;
+  operatorCountry: string;
+  status: "pending" | "researching" | "filled" | "unobtainable" | "error";
+  value: string | number | null;
+  confidence: number;
+  source: string | null;
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+};
+
+export type MissionStateDTO = {
+  running: boolean;
+  startedAt: string | null;
+  total: number;
+  completed: number;
+  filled: number;
+  unobtainable: number;
+  errors: number;
+  cursor: number;
+  currentTask: MissionTaskDTO | null;
+  recent: MissionTaskDTO[];
+};
+
+export type AutonomyTickDTO = {
+  id: string;
+  action: "thalamus" | "sweep-nullscan" | "fish-swarm";
+  queryOrMode: string;
+  startedAt: string;
+  completedAt: string;
+  emitted: number;
+  error?: string;
+};
+
+export type AutonomyStateDTO = {
+  running: boolean;
+  intervalMs: number;
+  startedAt: string | null;
+  tickCount: number;
+  currentTick: AutonomyTickDTO | null;
+  history: AutonomyTickDTO[];
+  nextTickInMs: number | null;
 };
 
 export type CycleDTO = {

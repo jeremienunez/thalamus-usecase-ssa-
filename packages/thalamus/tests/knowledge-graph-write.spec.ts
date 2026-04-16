@@ -115,7 +115,7 @@ const RAW_SQL_PATTERN = /(?:\bsql`|\.query\s*\(\s*['"`]|\.execute\s*\(\s*['"`])/
  *  tracked to move those reads behind a repo. See `it.todo` below. */
 const SQL_ALLOW_PREFIXES = [
   "repositories/",
-  "cortices/sql-helpers",
+  "cortices/queries",
   "cortices/storage/", // SQL seed files live here
   "explorer/", // TODO: refactor explorer/{orchestrator,scout}.ts through a repo
 ];
@@ -131,7 +131,7 @@ function walk(dir: string): string[] {
 }
 
 describe("SPEC-TH-030 AC-1 — no raw SQL outside the data-access layer", () => {
-  it("every raw-SQL hit is under repositories/ or cortices/sql-helpers or cortices/storage", () => {
+  it("every raw-SQL hit is under repositories/ or cortices/queries or cortices/storage", () => {
     const files = walk(THALAMUS_SRC);
     expect(files.length).toBeGreaterThan(0);
 

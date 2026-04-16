@@ -97,8 +97,100 @@ const OPERATORS = [
   { slug: "maxar", name: "Maxar Technologies" },
   { slug: "boeing", name: "Boeing" },
   { slug: "lockheed", name: "Lockheed Martin" },
+  { slug: "eutelsat", name: "Eutelsat" },
+  { slug: "imagesat", name: "ImageSat International" },
+  { slug: "usaf", name: "United States Air Force / Space Force" },
   { slug: "other", name: "Other / Unknown" },
 ] as const;
+
+/** Prefix → operator-slug table. First-match-wins, longest prefixes first. */
+const OPERATOR_PREFIXES: Array<[string, string]> = [
+  ["STARLINK", "spacex"],
+  ["ONEWEB", "oneweb"],
+  ["IRIDIUM", "iridium"],
+  ["INTELSAT", "intelsat"],
+  ["GALAXY ", "intelsat"],
+  ["PLANET", "planet"],
+  ["FLOCK", "planet"],
+  ["DOVE", "planet"],
+  ["ISS", "nasa"],
+  ["SES", "ses"],
+  // Roscosmos
+  ["COSMOS", "roscosmos"],
+  ["MOLNIYA", "roscosmos"],
+  ["GONETS", "roscosmos"],
+  ["RESURS", "roscosmos"],
+  ["METEOR", "roscosmos"],
+  ["GLONASS", "roscosmos"],
+  // CNSA
+  ["BEIDOU", "cnsa"],
+  ["CHUANGXIN", "cnsa"],
+  ["CHINASAT", "cnsa"],
+  ["GAOFEN", "cnsa"],
+  ["YAOGAN", "cnsa"],
+  ["ZIYUAN", "cnsa"],
+  ["SHIYAN", "cnsa"],
+  ["TIANHUI", "cnsa"],
+  // Airbus / French EO
+  ["PLEIADES", "airbus-ds"],
+  ["SPOT", "airbus-ds"],
+  ["CSO", "airbus-ds"],
+  ["HELIOS", "airbus-ds"],
+  ["ATHENA-FIDUS", "airbus-ds"],
+  ["EUTELSAT", "eutelsat"],
+  // ISRO
+  ["GSAT", "isro"],
+  ["CARTOSAT", "isro"],
+  ["RESOURCESAT", "isro"],
+  ["OCEANSAT", "isro"],
+  ["SCATSAT", "isro"],
+  ["IRNSS", "isro"],
+  // JAXA
+  ["HIMAWARI", "jaxa"],
+  ["IGS ", "jaxa"],
+  ["QZS", "jaxa"],
+  ["GOSAT", "jaxa"],
+  // Israel
+  ["AMOS", "imagesat"],
+  ["OFEQ", "imagesat"],
+  ["EROS", "imagesat"],
+  // ESA
+  ["METOP", "esa"],
+  ["MSG", "esa"],
+  ["SENTINEL", "esa"],
+  ["ERS", "esa"],
+  ["ENVISAT", "esa"],
+  ["ALOS", "jaxa"],
+  ["CRYOSAT", "esa"],
+  // NASA
+  ["TERRA", "nasa"],
+  ["AQUA", "nasa"],
+  ["AURA", "nasa"],
+  ["LANDSAT", "nasa"],
+  ["GOES", "nasa"],
+  ["NOAA", "nasa"],
+  ["DMSP", "usaf"],
+  ["QUIKSCAT", "nasa"],
+  ["ICESAT", "nasa"],
+  // USAF/USSF
+  ["GPS", "usaf"],
+  ["NAVSTAR", "usaf"],
+  ["WGS", "usaf"],
+  ["USA-", "usaf"],
+  ["USA ", "usaf"],
+  ["TDRS", "nasa"],
+  ["ORBCOMM", "other"],
+  ["MILSTAR", "usaf"],
+  ["DSCS", "usaf"],
+  ["SBIRS", "usaf"],
+  ["NROL", "usaf"],
+  // US commercial comms
+  ["THOR ", "ses"],
+  ["ECHOSTAR", "ses"],
+  ["DIRECTV", "ses"],
+  ["TELSTAR", "intelsat"],
+  ["VIASAT", "ses"],
+];
 
 // ─── TLE parsing ─────────────────────────────────────────────────────────────
 
@@ -111,6 +203,28 @@ interface Tle {
   launchYear: number | null;
   line1: string;
   line2: string;
+  epoch: string | null; // ISO datetime parsed from line1[18:32]
+}
+
+/**
+ * Parse TLE epoch from line1 columns 18..32 (YYDDD.DDDDDDDD) into ISO datetime.
+ * YY < 57 → 2000+YY, else 1900+YY. DDD.DDDDDDDD is fractional day-of-year.
+ */
+export function parseTleEpoch(line1: string): string | null {
+  try {
+    const raw = line1.slice(18, 32).trim();
+    if (!raw) return null;
+    const yy = Number(raw.slice(0, 2));
+    const dayFrac = Number(raw.slice(2));
+    if (!Number.isFinite(yy) || !Number.isFinite(dayFrac)) return null;
+    const year = yy < 57 ? 2000 + yy : 1900 + yy;
+    // Jan 1 of `year` at 00:00 UTC plus (dayFrac - 1) days
+    const base = Date.UTC(year, 0, 1);
+    const ms = base + (dayFrac - 1) * 86400000;
+    return new Date(ms).toISOString();
+  } catch {
+    return null;
+  }
 }
 
 function parseTleBlock(name: string, l1: string, l2: string): Tle | null {
@@ -130,7 +244,7 @@ function parseTleBlock(name: string, l1: string, l2: string): Tle | null {
     const meanMotion = Number(l2.slice(52, 63).trim());
     if (![inclination, eccentricity, meanMotion].every(Number.isFinite))
       return null;
-    return { name: name.trim(), noradId, meanMotion, inclination, eccentricity, launchYear, line1: l1, line2: l2 };
+    return { name: name.trim(), noradId, meanMotion, inclination, eccentricity, launchYear, line1: l1, line2: l2, epoch: parseTleEpoch(l1) };
   } catch {
     return null;
   }
@@ -147,29 +261,30 @@ function classifyRegime(t: Tle): (typeof ORBIT_REGIMES)[number]["slug"] {
   return "leo";
 }
 
-function guessOperator(satName: string): string {
+export function guessOperator(satName: string): string {
   const n = satName.toUpperCase();
-  if (n.startsWith("STARLINK")) return "spacex";
-  if (n.startsWith("ONEWEB")) return "oneweb";
-  if (n.startsWith("IRIDIUM")) return "iridium";
-  if (n.startsWith("INTELSAT")) return "intelsat";
-  if (n.startsWith("PLANET") || n.startsWith("FLOCK") || n.startsWith("DOVE"))
-    return "planet";
-  if (n.startsWith("ISS")) return "nasa";
-  if (n.startsWith("SES")) return "ses";
+  // Prefix match first (longest wins)
+  for (const [pfx, slug] of OPERATOR_PREFIXES) {
+    if (n.startsWith(pfx)) return slug;
+  }
+  // Substring fallback
+  for (const [pfx, slug] of OPERATOR_PREFIXES) {
+    if (n.includes(pfx.trim())) return slug;
+  }
   return "other";
 }
 
-function guessCountry(satName: string, operatorSlug: string): string {
-  if (operatorSlug === "spacex" || operatorSlug === "nasa") return "us";
+export function guessCountry(_satName: string, operatorSlug: string): string {
+  if (operatorSlug === "spacex" || operatorSlug === "nasa" || operatorSlug === "usaf") return "us";
   if (operatorSlug === "esa") return "eu";
   if (operatorSlug === "roscosmos") return "ru";
   if (operatorSlug === "cnsa") return "cn";
   if (operatorSlug === "isro") return "in";
   if (operatorSlug === "jaxa") return "jp";
-  if (operatorSlug === "oneweb" || operatorSlug === "airbus-ds") return "eu";
+  if (operatorSlug === "oneweb" || operatorSlug === "airbus-ds" || operatorSlug === "eutelsat") return "eu";
   if (operatorSlug === "intelsat" || operatorSlug === "iridium") return "us";
   if (operatorSlug === "ses") return "eu";
+  if (operatorSlug === "imagesat") return "il";
   return "other";
 }
 
@@ -259,6 +374,7 @@ async function main() {
       launchYear: t.launchYear ?? null,
       operatorCountryId: countryBySlug.get(countrySlug) ?? null,
       operatorId: operatorBySlug.get(opSlug) ?? null,
+      noradId: t.noradId,
       telemetrySummary: {
         noradId: t.noradId,
         meanMotion: t.meanMotion,
@@ -267,6 +383,7 @@ async function main() {
         regime: regimeSlug,
         tleLine1: t.line1,
         tleLine2: t.line2,
+        tleEpoch: t.epoch,
       },
       metadata: { source: "celestrak:active" },
     };
@@ -325,7 +442,19 @@ async function main() {
   void regimeBySlug;
 }
 
-main().catch((err) => {
-  console.error("✗ seed failed:", err);
-  process.exit(1);
-});
+// Only auto-run when invoked as the entry script (not when imported by other scripts).
+const isDirectRun = (() => {
+  try {
+    const entry = process.argv[1] ?? "";
+    return entry.endsWith("seed/index.ts") || entry.endsWith("seed/index.js");
+  } catch {
+    return false;
+  }
+})();
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("✗ seed failed:", err);
+    process.exit(1);
+  });
+}

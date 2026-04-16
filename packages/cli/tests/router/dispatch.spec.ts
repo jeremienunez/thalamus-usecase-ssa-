@@ -21,6 +21,14 @@ function makeAdapters(): Adapters {
     why: {
       build: vi.fn().mockResolvedValue({ id: "f1", children: [] }),
     },
+    pcEstimator: {
+      estimate: vi.fn().mockResolvedValue({ medianPc: 1e-4, fishCount: 20 }),
+    },
+    candidates: {
+      propose: vi.fn().mockResolvedValue([
+        { candidateName: "IRIDIUM 33 DEB", candidateNoradId: 33732, candidateClass: "debris", cosDistance: 0.32, overlapKm: 28, apogeeKm: 512, perigeeKm: 504, inclinationDeg: 86.4, regime: "leo" },
+      ]),
+    },
   };
 }
 
@@ -57,6 +65,26 @@ describe("dispatch", () => {
     const exp = await dispatch({ action: "explain", findingId: "f1" }, ctx);
     expect(adapters.why.build).toHaveBeenCalledWith("f1");
     expect(exp).toEqual({ kind: "why", tree: { id: "f1", children: [] } });
+
+    const pc = await dispatch({ action: "pc", conjunctionId: "ce:1" }, ctx);
+    expect(adapters.pcEstimator.estimate).toHaveBeenCalledWith("ce:1");
+    expect(pc).toEqual({
+      kind: "pc",
+      conjunctionId: "ce:1",
+      estimate: { medianPc: 1e-4, fishCount: 20 },
+    });
+
+    const cand = await dispatch(
+      { action: "candidates", targetNoradId: 25544, objectClass: "debris", limit: 10 },
+      ctx,
+    );
+    expect(adapters.candidates.propose).toHaveBeenCalledWith({
+      targetNoradId: 25544, objectClass: "debris", limit: 10,
+    });
+    expect(cand).toMatchObject({
+      kind: "candidates", targetNoradId: 25544,
+      rows: [expect.objectContaining({ candidateClass: "debris", cosDistance: 0.32 })],
+    });
 
     const cl = await dispatch(
       { action: "clarify", question: "which?", options: ["query", "logs"] },

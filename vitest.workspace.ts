@@ -59,13 +59,11 @@ export default defineWorkspace([
     test: {
       ...base,
       name: "integration",
-      include: [
-        "packages/*/tests/integration/**/*.spec.ts",
-        "apps/*/tests/**/*.spec.ts",
-      ],
+      include: ["packages/*/tests/integration/**/*.spec.ts"],
       testTimeout: 15000,
     },
   },
+  "./apps/console-api/vitest.config.ts",
   {
     resolve: { alias: aliases },
     test: {

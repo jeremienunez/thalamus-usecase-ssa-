@@ -14,8 +14,9 @@ import type { Database } from "@interview/db-schema";
 import type { CortexRegistry, CortexSkill } from "./registry";
 import type { CortexInput, CortexOutput, CortexFinding } from "./types";
 import { analyzeCortexData } from "./cortex-llm";
-import { createLlmTransport, createLlmTransportWithMode } from "../transports/llm-chat";
-import * as sqlHelpers from "./sql-helpers";
+import { createLlmTransport } from "../transports/llm-chat";
+import { createLlmTransportWithMode } from "../transports/factory";
+import * as sqlHelpers from "./queries";
 import { sanitizeDataPayload, sanitizeText } from "./guardrails";
 import { fetchSourcesForCortex } from "./sources";
 import {

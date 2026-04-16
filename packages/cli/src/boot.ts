@@ -19,6 +19,7 @@ import {
   CortexRegistry,
   buildThalamusContainer,
   callNanoWithMode,
+  queryConjunctionCandidatesKnn,
 } from "@interview/thalamus";
 import { buildSweepContainer, startTelemetrySwarm } from "@interview/sweep";
 import {
@@ -282,6 +283,43 @@ export async function buildRealAdapters(
     why: {
       build: async (findingId: string) => {
         return buildWhyTreeFromDb(db, findingId);
+      },
+    },
+
+    // --- 7. pcEstimator.estimate ---------------------------------------
+    // Stubbed at boot level — real wiring lives behind startPcEstimatorSwarm.
+    // The web demo uses the fixture-backed adapter in apps/console-api/repl.ts.
+    pcEstimator: {
+      estimate: async (conjunctionId: string) => {
+        return {
+          conjunctionId,
+          medianPc: 0,
+          sigmaPc: 0,
+          p5Pc: 0,
+          p95Pc: 0,
+          fishCount: 0,
+          clusters: [],
+          samples: [],
+          severity: "info" as const,
+          methodology: "swarm-pc-estimator",
+          note: "pcEstimator boot-level stub — wire startPcEstimatorSwarm for live runs",
+        };
+      },
+    },
+
+    // --- 8. candidates.propose — KNN conjunction candidate proposer ----
+    // Runs the Voyage halfvec HNSW against the catalog with altitude-overlap
+    // filtering. Pre-narrow-phase: never computes Pc, only proposes.
+    candidates: {
+      propose: async ({ targetNoradId, objectClass, limit }) => {
+        return queryConjunctionCandidatesKnn(db, {
+          targetNoradId,
+          knnK: 300,
+          limit: limit ?? 25,
+          marginKm: 20,
+          objectClass: objectClass ?? null,
+          excludeSameFamily: true,
+        });
       },
     },
   };

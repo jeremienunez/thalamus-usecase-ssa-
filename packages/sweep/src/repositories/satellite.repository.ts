@@ -792,7 +792,7 @@ export class SatelliteRepository {
         count(s.id) FILTER (WHERE NOT EXISTS (
           SELECT 1 FROM satellite_payload sp WHERE sp.satellite_id = s.id
         ))::int as missing_payloads,
-        count(s.id) FILTER (WHERE s.orbit_regime_id IS NULL)::int as missing_orbit_regime,
+        count(s.id) FILTER (WHERE s.g_orbit_regime_description IS NULL OR s.g_orbit_regime_description = '')::int as missing_orbit_regime,
         count(s.id) FILTER (WHERE s.launch_year IS NULL)::int as missing_launch_year,
         count(s.id) FILTER (WHERE s.mass_kg = 0 OR s.mass_kg IS NULL)::int as missing_mass,
         (oc.doctrine IS NOT NULL) as has_doctrine,

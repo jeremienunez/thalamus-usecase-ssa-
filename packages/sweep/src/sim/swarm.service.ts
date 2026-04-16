@@ -84,6 +84,13 @@ export class SwarmService {
     if (kind === "uc1_operator_behavior" && (baseSeed.operatorIds?.length ?? 0) < 1) {
       throw new Error("UC1 swarm requires at least 1 operatorId in baseSeed");
     }
+    if (kind === "uc_pc_estimator") {
+      if (baseSeed.pcEstimatorTarget == null) {
+        throw new Error(
+          "UC_PC_ESTIMATOR swarm requires baseSeed.pcEstimatorTarget (conjunction_event.id)",
+        );
+      }
+    }
     if (kind === "uc_telemetry_inference") {
       if ((baseSeed.operatorIds?.length ?? 0) !== 1) {
         throw new Error(

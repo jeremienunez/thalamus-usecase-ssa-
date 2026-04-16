@@ -62,6 +62,38 @@ export const turnActionSchema = z.discriminatedUnion("kind", [
     confidence: z.number().min(0).max(1),
     reason: z.string().min(1),
   }),
+  z.object({
+    kind: z.literal("estimate_pc"),
+    conjunctionId: z.number().int().positive(),
+    pcEstimate: z.number().min(0).max(1),
+    pcBand: z.object({
+      p5: z.number().min(0).max(1),
+      p50: z.number().min(0).max(1),
+      p95: z.number().min(0).max(1),
+    }),
+    dominantMode: z.enum([
+      "elliptical-overlap",
+      "short-encounter",
+      "long-encounter",
+      "unknown",
+    ]),
+    rationale: z.string().max(600),
+    assumptions: z.object({
+      hardBodyRadiusMeters: z.number().positive(),
+      covarianceScale: z.enum(["tight", "nominal", "loose"]),
+      conjunctionGeometry: z.string().max(120),
+    }),
+    flags: z
+      .array(
+        z.enum([
+          "low-data",
+          "high-uncertainty",
+          "degraded-covariance",
+          "field-required",
+        ]),
+      )
+      .default([]),
+  }),
 ]);
 
 export const turnResponseSchema = z.object({
@@ -113,6 +145,11 @@ export const perturbationSchema = z.discriminatedUnion("kind", [
     agentIndex: z.number().int().nonnegative(),
     maxPerSat: z.number().positive(),
   }),
+  z.object({
+    kind: z.literal("pc_assumptions"),
+    hardBodyRadiusMeters: z.number().positive(),
+    covarianceScale: z.enum(["tight", "nominal", "loose"]),
+  }),
 ]);
 
 export const swarmConfigSchema = z.object({
@@ -144,6 +181,13 @@ export const seedRefsSchema = z.object({
   turnsPerDay: z.number().int().positive().default(1),
   telemetryTargetSatelliteId: z.number().int().positive().optional(),
   busDatasheetPrior: busDatasheetPriorSchema.optional(),
+  pcEstimatorTarget: z.number().int().positive().optional(),
+  pcAssumptions: z
+    .object({
+      hardBodyRadiusMeters: z.number().positive(),
+      covarianceScale: z.enum(["tight", "nominal", "loose"]),
+    })
+    .optional(),
 });
 
 export const launchSwarmSchema = z.object({
@@ -151,6 +195,7 @@ export const launchSwarmSchema = z.object({
     "uc1_operator_behavior",
     "uc3_conjunction",
     "uc_telemetry_inference",
+    "uc_pc_estimator",
   ]),
   title: z.string().min(1),
   baseSeed: seedRefsSchema,

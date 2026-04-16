@@ -75,7 +75,8 @@ export type DispatchResult =
   | { kind: "resolution"; suggestionId: string; ok: boolean; delta: { findingId: string } }
   | { kind: "why"; findingId: string; tree: WhyNode; stats: WhyStats }
   | { kind: "pc"; conjunctionId: string; estimate: PcEstimate }
-  | { kind: "clarify"; question: string; options: string[] };
+  | { kind: "clarify"; question: string; options: string[] }
+  | { kind: "chat"; text: string; provider: string };
 
 export type TurnResponse = {
   results: DispatchResult[];
@@ -83,7 +84,29 @@ export type TurnResponse = {
   tookMs: number;
 };
 
+const KNOWN_VERBS = /^\s*\/?(query|telemetry|logs|graph|accept|explain|pc|why|corroborate|tlm|tail|neighbou?rhood)\b/i;
+
+function looksLikeCommand(input: string): boolean {
+  return input.trim().startsWith("/") || KNOWN_VERBS.test(input);
+}
+
 export async function postTurn(input: string, sessionId: string): Promise<TurnResponse> {
+  // Bare free-text (no slash-command, no known verb) → chat path with real LLM.
+  if (!looksLikeCommand(input)) {
+    const t0 = Date.now();
+    const res = await fetch("/api/repl/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ input }),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const body = (await res.json()) as { kind: "chat"; text: string; provider: string; tookMs: number };
+    return {
+      results: [{ kind: "chat", text: body.text, provider: body.provider }],
+      costUsd: 0,
+      tookMs: body.tookMs ?? Date.now() - t0,
+    };
+  }
   const res = await fetch("/api/repl/turn", {
     method: "POST",
     headers: { "content-type": "application/json" },

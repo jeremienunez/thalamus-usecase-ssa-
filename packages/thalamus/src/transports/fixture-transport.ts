@@ -14,7 +14,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLogger } from "@interview/shared/observability";
-import { LlmChatTransport, type LlmResponse } from "./llm-chat";
+import type { LlmResponse, LlmTransport } from "./types";
 
 const logger = createLogger("fixture-transport");
 
@@ -33,7 +33,7 @@ export interface FixtureTransportOpts {
   systemPrompt: string;
   mode: FixtureMode;
   /** Real transport used in "record" mode to capture live responses */
-  realTransport?: LlmChatTransport;
+  realTransport?: LlmTransport;
   /** Override fixtures directory (test-friendly) */
   fixturesDir?: string;
   /**

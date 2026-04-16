@@ -5,15 +5,26 @@ import { FindingsGraph } from "./FindingsGraph";
 import { SweepDrawer } from "./SweepDrawer";
 import { SweepOverview } from "./SweepOverview";
 import { SweepStats } from "./SweepStats";
+import { SweepSuggestions } from "./SweepSuggestions";
 import { useUiStore } from "@/lib/uiStore";
+import { useSweepSuggestions } from "@/lib/queries";
 
-type Tab = "overview" | "map" | "stats";
+type Tab = "overview" | "suggestions" | "map" | "stats";
 
 export function SweepMode() {
   const [tab, setTab] = useState<Tab>("map");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const openDrawer = useUiStore((s) => s.openDrawer);
+  const closeDrawer = useUiStore((s) => s.closeDrawer);
   const { data } = useFindings();
+  const { data: suggData } = useSweepSuggestions();
+  const suggCount = suggData?.items.length ?? 0;
+
+  const switchTab = (t: Tab) => {
+    setTab(t);
+    setSelectedId(null);
+    closeDrawer();
+  };
 
   const handleSelect = (id: string) => {
     setSelectedId(id);
@@ -29,16 +40,21 @@ export function SweepMode() {
       {/* Tab bar */}
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-hairline bg-panel px-3">
         <nav className="flex h-full items-center gap-0">
-          {(["overview", "map", "stats"] as Tab[]).map((t) => (
+          {(["overview", "suggestions", "map", "stats"] as Tab[]).map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => switchTab(t)}
               className={clsx(
-                "flex h-9 items-center border-b-2 px-3 text-label transition-colors duration-fast ease-palantir cursor-pointer",
+                "flex h-9 items-center gap-1.5 border-b-2 px-3 text-label transition-colors duration-fast ease-palantir cursor-pointer",
                 tab === t ? "border-cyan text-primary" : "border-transparent text-muted hover:text-primary",
               )}
             >
               {t.toUpperCase()}
+              {t === "suggestions" && suggCount > 0 && (
+                <span className="mono text-caption text-amber tabular-nums">
+                  {suggCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -60,6 +76,7 @@ export function SweepMode() {
       {/* Content */}
       <div className="relative h-[calc(100%-2.25rem)]">
         {tab === "overview" && <SweepOverview onSelect={handleSelect} />}
+        {tab === "suggestions" && <SweepSuggestions />}
         {tab === "map" && data && (
           <FindingsGraph findings={data.items} onSelect={handleSelect} selectedId={selectedId} />
         )}

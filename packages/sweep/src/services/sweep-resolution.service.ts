@@ -296,6 +296,13 @@ export class SweepResolutionService {
   }> {
     const { field, value } = action;
 
+    // nullScan payloads emit value=null — the reviewer acknowledged the gap
+    // but we don't have a source value yet. Log the acknowledgement (the audit
+    // row is still written by the caller) and exit cleanly.
+    if (value === null || value === undefined) {
+      return { affected: 0 };
+    }
+
     // For FK fields, resolve name → id if value is a name string
     if (
       field === "operator_country_id" ||

@@ -25,6 +25,7 @@ export interface ConjunctionScreenRow {
   operatorPrimary: string | null;
   operatorSecondary: string | null;
   regime: string | null;
+  primaryTleEpoch: string | null;
 }
 
 export async function queryConjunctionScreen(
@@ -59,14 +60,13 @@ export async function queryConjunctionScreen(
       ce.pc_method AS "pcMethod",
       op_p.name AS "operatorPrimary",
       op_s.name AS "operatorSecondary",
-      orr.name AS "regime"
+      p.telemetry_summary->>'regime' AS "regime",
+      p.telemetry_summary->>'tleEpoch' AS "primaryTleEpoch"
     FROM conjunction_event ce
     JOIN satellite p ON p.id = ce.primary_satellite_id
     JOIN satellite s ON s.id = ce.secondary_satellite_id
     LEFT JOIN operator op_p   ON op_p.id = p.operator_id
     LEFT JOIN operator op_s   ON op_s.id = s.operator_id
-    LEFT JOIN operator_country oc ON oc.id = p.operator_country_id
-    LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
     WHERE ce.epoch BETWEEN now() AND now() + (${windowHours} || ' hours')::interval
       ${noradFilter}
     ORDER BY ce.probability_of_collision DESC NULLS LAST, ce.min_range_km ASC

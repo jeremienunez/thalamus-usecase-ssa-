@@ -304,10 +304,12 @@ describe("UC3 swarm — E2E", () => {
       expect(distribution!.clusters.length).toBeGreaterThanOrEqual(1);
 
       // The suggestion is indexed in the pending queue — a reviewer will see it.
-      const { rows: pending } = await container.sweepRepo.list({ reviewed: false });
-      const found = pending.find((r) => r.id === suggestionId);
-      expect(found).toBeDefined();
+      // Lookup by ID is O(1) and immune to dev-shared-Redis stale entries that
+      // would push the freshly-emitted suggestion past any list() pagination.
+      const found = await container.sweepRepo.getById(suggestionId);
+      expect(found).not.toBeNull();
       expect(found!.severity === "critical" || found!.severity === "warning").toBe(true);
+      expect(found!.reviewedAt).toBeNull();
 
       // ---------------------------------------------------------------
       // KG audit — swarm modal produces a research_cycle + finding + edge

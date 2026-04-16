@@ -5,6 +5,7 @@ import { Pause, Play } from "lucide-react";
 import { Globe } from "./Globe";
 import { SatelliteField } from "./SatelliteField";
 import { ConjunctionArcs } from "./ConjunctionArcs";
+import { ConjunctionMarkers } from "./ConjunctionMarkers";
 import { OpsDrawer } from "./OpsDrawer";
 import { SatelliteSearch } from "./SatelliteSearch";
 import { CameraFocus } from "./CameraFocus";
@@ -99,6 +100,13 @@ export function OpsMode() {
 
   const satellites = satData?.items ?? [];
   const conjunctions = cjData?.items ?? [];
+  const satellitesById = useMemo(() => {
+    const m = new Map<number, typeof satellites[number]>();
+    for (const s of satellites) m.set(s.id, s);
+    return m;
+  }, [satellites]);
+  const [hoveredCjId, setHoveredCjId] = useState<string | null>(null);
+  const [selectedCjId, setSelectedCjId] = useState<string | null>(null);
 
   const { threats, highCount, peakPc, labelIds } = useMemo(() => {
     const sorted = [...conjunctions].sort(
@@ -214,6 +222,15 @@ export function OpsMode() {
               conjunctions={conjunctions}
               timeScale={effectiveSpeed ?? 1}
             />
+            <ConjunctionMarkers
+              conjunctions={conjunctions}
+              satellitesById={satellitesById}
+              hoveredId={hoveredCjId}
+              selectedId={selectedCjId}
+              timeScale={effectiveSpeed ?? 1}
+              onHover={setHoveredCjId}
+              onSelect={setSelectedCjId}
+            />
           </>
         )}
         <OrbitControls
@@ -326,6 +343,9 @@ export function OpsMode() {
                     </div>
                     <div className="mono text-[10px] text-dim tabular-nums">
                       {c.minRangeKm.toFixed(2)} km · {c.relativeVelocityKmps.toFixed(1)} km/s
+                    </div>
+                    <div className="mono text-[9px] text-dim">
+                      {c.regime} · σ{c.covarianceQuality} · {c.action.replace(/_/g, " ")}
                     </div>
                   </div>
                   <span className={`mono text-[11px] tabular-nums ${pcColorCls}`}>

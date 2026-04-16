@@ -91,14 +91,24 @@ export type SweepStatsDto = z.infer<typeof sweepStatsDto>;
 export const updateFieldActionSchema = z.object({
   kind: z.literal("update_field"),
   satelliteIds: z.array(z.string()).optional(),
-  field: z.enum([
-    "mass_kg",
-    "launch_year",
-    "orbit_regime_id",
-    "operator_country_id",
-    "platform_class_id",
+  // Widened from a fixed enum to any snake_case column name. The handler
+  // whitelists against information_schema at execution time.
+  field: z.string().regex(/^[a-z_][a-z0-9_]*$/),
+  // Accepts any scalar column value the catalog might carry:
+  //   - string (text columns: name, g_orbit_regime_description, …)
+  //   - number (mass_kg, launch_year, telemetry scalars, …)
+  //   - boolean (is_experimental, is_active, …)
+  //   - number[] (embeddings, e.g. halfvec 2048-d for vector search)
+  //   - jsonb object (telemetry_summary, metadata, …)
+  //   - null (nullScan gap-acknowledgement — no source value yet)
+  value: z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.array(z.number()),
+    z.record(z.string(), z.unknown()),
+    z.null(),
   ]),
-  value: z.union([z.string(), z.number()]),
 });
 
 export const linkPayloadActionSchema = z.object({
@@ -148,7 +158,8 @@ export type ResolutionAction =
   | EnrichAction;
 
 export const resolutionPayloadSchema = z.object({
-  type: sweepCategoryEnum,
+  // nullScan-generated payloads don't carry a `type` — default to missing_data.
+  type: sweepCategoryEnum.optional().default("missing_data"),
   actions: z.array(resolutionActionSchema).min(1),
 });
 export type ResolutionPayload = z.infer<typeof resolutionPayloadSchema>;

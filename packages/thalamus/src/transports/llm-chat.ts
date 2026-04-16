@@ -15,26 +15,11 @@ import {
   isKimiEnabled,
 } from "../config/enrichment";
 import type { z } from "zod";
+import type { LlmChatConfig, LlmResponse, LlmTransport } from "./types";
+
+export type { LlmChatConfig, LlmResponse, LlmTransport };
 
 const logger = createLogger("llm-chat-transport");
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export interface LlmChatConfig {
-  /** System prompt sent as first message */
-  systemPrompt: string;
-  /** Max retries per provider (default: enrichmentConfig.maxRetries) */
-  maxRetries?: number;
-  /** Enable Kimi web search tool ($0.005/call) */
-  enableWebSearch?: boolean;
-}
-
-export interface LlmResponse {
-  content: string;
-  provider: "kimi" | "openai" | "none";
-}
 
 // ============================================================================
 // LlmChatTransport
@@ -253,50 +238,3 @@ export function createLlmTransport(
   });
 }
 
-/**
- * Generic LLM transport contract — `call(userPrompt) → LlmResponse`.
- * Both LlmChatTransport and FixtureLlmTransport satisfy this.
- */
-export interface LlmTransport {
-  call(userPrompt: string): Promise<LlmResponse>;
-}
-
-/**
- * Mode-aware factory. Reads `process.env.THALAMUS_MODE`:
- *   - "cloud"     → real LlmChatTransport (default)
- *   - "fixtures"  → FixtureLlmTransport (read-only, throws on miss)
- *   - "record"    → FixtureLlmTransport (write-through over real transport)
- *
- * Demos use this. Hot-path callers can keep using `createLlmTransport`
- * directly when DI swaps the transport at construction time.
- */
-export function createLlmTransportWithMode(
-  systemPrompt: string,
-  opts?: { maxRetries?: number; enableWebSearch?: boolean },
-): LlmTransport {
-  const mode = (process.env.THALAMUS_MODE ?? "cloud").toLowerCase();
-  const real = createLlmTransport(systemPrompt, opts);
-  if (mode === "cloud") return real;
-
-  // Lazy import to avoid pulling fs into pure cloud paths
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { FixtureLlmTransport } = require("./fixture-transport") as typeof import("./fixture-transport");
-
-  if (mode === "fixtures") {
-    // FIXTURES_FALLBACK env provides a filename (without .json) under the
-    // fixtures dir used when a hash-specific fixture is missing. Opt-in.
-    return new FixtureLlmTransport({
-      systemPrompt,
-      mode: "fixtures",
-      fallbackFixture: process.env.FIXTURES_FALLBACK || undefined,
-    });
-  }
-  if (mode === "record") {
-    return new FixtureLlmTransport({
-      systemPrompt,
-      mode: "record",
-      realTransport: real,
-    });
-  }
-  return real;
-}

@@ -122,7 +122,7 @@ async function main(): Promise<void> {
     .select({
       id: satellite.id,
       name: satellite.name,
-      telemetrySummary: satellite.telemetrySummary,
+      noradId: satellite.noradId,
       currentMass: satellite.massKg,
       currentBus: satellite.satelliteBusId,
     })
@@ -138,10 +138,8 @@ async function main(): Promise<void> {
   }> = [];
 
   for (const r of rows) {
-    const norad = Number(
-      (r.telemetrySummary as { noradId?: number } | null)?.noradId,
-    );
-    if (!Number.isFinite(norad)) continue;
+    const norad = r.noradId;
+    if (norad == null || !Number.isFinite(norad)) continue;
     const g = gcat.get(norad);
     if (!g) continue;
 

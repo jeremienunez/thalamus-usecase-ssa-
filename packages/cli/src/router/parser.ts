@@ -1,7 +1,7 @@
 import type { RouterPlan } from "./schema";
 
-type Verb = "query" | "telemetry" | "logs" | "graph" | "accept" | "explain";
-const VERBS: ReadonlySet<Verb> = new Set(["query", "telemetry", "logs", "graph", "accept", "explain"]);
+type Verb = "query" | "telemetry" | "logs" | "graph" | "accept" | "explain" | "pc" | "candidates";
+const VERBS: ReadonlySet<Verb> = new Set(["query", "telemetry", "logs", "graph", "accept", "explain", "pc", "candidates"]);
 const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 
 export function parseExplicitCommand(input: string): RouterPlan | null {
@@ -28,6 +28,35 @@ export function parseExplicitCommand(input: string): RouterPlan | null {
     case "explain":
       if (!args) return null;
       return { steps: [{ action: "explain", findingId: args.split(/\s+/)[0] }], confidence: 1 };
+    case "pc":
+      if (!args) return null;
+      return { steps: [{ action: "pc", conjunctionId: args.split(/\s+/)[0] }], confidence: 1 };
+    case "candidates": {
+      if (!args) return null;
+      const tokens = args.split(/\s+/).filter(Boolean);
+      const norad = Number(tokens[0]);
+      if (!Number.isFinite(norad) || norad <= 0) return null;
+      const flags = Object.fromEntries(
+        tokens.slice(1).map((kv) => {
+          const [k, v] = kv.split("=");
+          return [k, v];
+        }),
+      );
+      const objectClass =
+        flags.class && ["payload", "rocket_stage", "debris", "unknown"].includes(flags.class)
+          ? (flags.class as "payload" | "rocket_stage" | "debris" | "unknown")
+          : undefined;
+      const limit = flags.limit ? Math.max(1, Math.min(100, Number(flags.limit))) : undefined;
+      return {
+        steps: [{
+          action: "candidates",
+          targetNoradId: norad,
+          ...(objectClass && { objectClass }),
+          ...(limit && { limit }),
+        }],
+        confidence: 1,
+      };
+    }
     case "logs": {
       const flags = Object.fromEntries(
         args.split(/\s+/).filter(Boolean).map((kv) => {

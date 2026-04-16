@@ -1,7 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Activity, Globe2, Network, Radar } from "lucide-react";
+import { Globe2, Network, Radar } from "lucide-react";
 import { clsx } from "clsx";
 import { useUtcClock } from "@/lib/useUtcClock";
+import { AutonomyControl } from "./AutonomyControl";
 
 const modes = [
   { to: "/ops", label: "OPS", icon: Globe2, hint: "⌘1" },
@@ -43,17 +44,8 @@ export function TopBar() {
           })}
         </nav>
       </div>
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 text-caption">
-          <Activity size={12} strokeWidth={1.5} className="text-cold" />
-          <span className="label">SWARM</span>
-          <span className="mono text-cold">NOMINAL</span>
-        </div>
-        <span className="h-4 w-px bg-hairline" />
-        <div className="flex items-center gap-2 text-caption">
-          <span className="label">PENDING</span>
-          <span className="mono text-amber">0</span>
-        </div>
+      <div className="relative flex items-center gap-3">
+        <AutonomyControl />
         <span className="h-4 w-px bg-hairline" />
         <span className="mono text-caption text-numeric">{utc} UTC</span>
       </div>

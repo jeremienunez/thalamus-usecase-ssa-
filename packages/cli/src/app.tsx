@@ -13,6 +13,8 @@ import type { RouterPlan } from "./router/schema";
 import type { Estimate } from "./util/etaStore";
 import { BriefingRenderer } from "./renderers/briefing";
 import { TelemetryRenderer } from "./renderers/telemetry";
+import { PcEstimatorRenderer } from "./renderers/pcEstimator";
+import { CandidatesRenderer, type CandidateRow } from "./renderers/candidates";
 import { LogTailRenderer } from "./renderers/logTail";
 import { GraphTreeRenderer } from "./renderers/graphTree";
 import { WhyTreeRenderer } from "./renderers/whyTree";
@@ -88,6 +90,10 @@ export function App(p: AppProps): React.JSX.Element {
               );
             case "why":
               return <WhyTreeRenderer key={i} tree={r.tree} />;
+            case "pc":
+              return <PcEstimatorRenderer key={i} conjunctionId={r.conjunctionId} estimate={r.estimate} />;
+            case "candidates":
+              return <CandidatesRenderer key={i} targetNoradId={r.targetNoradId} rows={r.rows as CandidateRow[]} />;
             case "clarify":
               return <ClarifyRenderer key={i} question={r.question} options={r.options} />;
           }

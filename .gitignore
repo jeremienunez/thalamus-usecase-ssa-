@@ -47,3 +47,6 @@ data/seeds/local/
 
 # Frontend WIP — not ready for the portfolio tree yet
 design-system/
+
+# Git worktrees (superpowers isolation)
+.worktrees/

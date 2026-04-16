@@ -70,30 +70,45 @@ export function CommandPalette() {
               if (e.key !== "Enter") return;
               const trimmed = q.trim();
               if (!trimmed) return;
-              const wordCount = trimmed.split(/\s+/).length;
-              // slash-command OR >=3 words → REPL turn
-              if (trimmed.startsWith("/") || wordCount >= 3) {
-                e.preventDefault();
+              e.preventDefault();
+              // slash-command → REPL turn
+              if (trimmed.startsWith("/")) {
                 sendTurn(trimmed);
                 setQ("");
                 setOpen(false);
                 return;
               }
-              // else: fire the top filtered action
+              // action match? run the top one
               if (filtered.length > 0) {
-                e.preventDefault();
                 filtered[0]!.run();
                 setOpen(false);
+                return;
               }
+              // fallback: anything non-matching → ask the assistant
+              sendTurn(trimmed);
+              setQ("");
+              setOpen(false);
             }}
-            placeholder="Command, search, or ask... (/ or 3+ words runs as REPL)"
+            placeholder="Command, search, or ask the assistant..."
             className="w-full bg-transparent text-body text-primary placeholder:text-dim focus:outline-none"
           />
           <span className="mono text-caption text-dim">ESC</span>
         </div>
         <div className="max-h-[320px] overflow-y-auto py-1">
-          {filtered.length === 0 && (
-            <div className="px-3 py-6 text-center text-caption text-dim">no results</div>
+          {filtered.length === 0 && q.trim() && (
+            <button
+              onClick={() => { sendTurn(q.trim()); setQ(""); setOpen(false); }}
+              className="flex h-9 w-full items-center justify-between px-3 text-left text-body hover:bg-hover cursor-pointer bg-hover"
+            >
+              <span className="flex items-center gap-3">
+                <Search size={14} strokeWidth={1.5} className="text-muted" />
+                <span className="text-primary">Ask assistant: <span className="text-cyan">{q.trim()}</span></span>
+              </span>
+              <span className="mono text-caption text-dim">↵</span>
+            </button>
+          )}
+          {filtered.length === 0 && !q.trim() && (
+            <div className="px-3 py-6 text-center text-caption text-dim">type a command or question</div>
           )}
           {filtered.map((a, i) => {
             const Icon = a.icon;

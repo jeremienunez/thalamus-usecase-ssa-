@@ -27,17 +27,139 @@ interface NanoFixtureFile {
   recordedAt: string;
 }
 
-function hashNano(instructions: string, input: string, model: string): string {
-  return createHash("sha256")
-    .update(`${model}\n--nano--\n${instructions}\n--\n${input}`)
-    .digest("hex");
+export interface NanoResponseFormat {
+  type: "json_schema";
+  name: string;
+  schema: Record<string, unknown>;
+  strict: boolean;
 }
 
 export interface NanoRequest {
   instructions: string;
   input: string;
   enableWebSearch?: boolean;
+  responseFormat?: NanoResponseFormat;
+  logitBias?: Record<number, number>;
 }
+
+function sortForHash(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortForHash);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
+      out[k] = sortForHash(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function hashNano(req: NanoRequest, model: string): string {
+  const formatPart = JSON.stringify(sortForHash(req.responseFormat ?? null));
+  const biasPart = JSON.stringify(sortForHash(req.logitBias ?? null));
+  return createHash("sha256")
+    .update(
+      `${model}\n--nano--\n${req.instructions}\n--\n${req.input}\n--format--\n${formatPart}\n--bias--\n${biasPart}`,
+    )
+    .digest("hex");
+}
+
+// Decode-time token bans for BAS-NIVEAU anti-hedging constraints.
+export const BAS_NIVEAU_LOGIT_BIAS: Record<number, number> = {
+  2846: -100,
+  3352: -100,
+  5355: -100,
+  5694: -100,
+  5890: -100,
+  5985: -100,
+  6971: -100,
+  8614: -100,
+  9630: -100,
+  10269: -100,
+  11076: -100,
+  12190: -100,
+  12695: -100,
+  13729: -100,
+  13955: -100,
+  14537: -100,
+  14782: -100,
+  14882: -100,
+  14899: -100,
+  16679: -100,
+  17927: -100,
+  19261: -100,
+  19271: -100,
+  19827: -100,
+  20051: -100,
+  20102: -100,
+  20402: -100,
+  20967: -100,
+  22378: -100,
+  24560: -100,
+  24572: -100,
+  26714: -100,
+  28034: -100,
+  28125: -100,
+  30233: -100,
+  31074: -100,
+  31571: -100,
+  33269: -100,
+  33936: -100,
+  33956: -100,
+  36144: -100,
+  36336: -100,
+  36419: -100,
+  41855: -100,
+  42235: -100,
+  44130: -100,
+  44689: -100,
+  46975: -100,
+  47245: -100,
+  48812: -100,
+  50500: -100,
+  50956: -100,
+  51083: -100,
+  51777: -100,
+  56622: -100,
+  58435: -100,
+  62309: -100,
+  64968: -100,
+  65484: -100,
+  68753: -100,
+  76710: -100,
+  76945: -100,
+  77091: -100,
+  78435: -100,
+  89236: -100,
+  93476: -100,
+  96023: -100,
+  96726: -100,
+  105622: -100,
+  110129: -100,
+  110243: -100,
+  111766: -100,
+  112838: -100,
+  114843: -100,
+  116014: -100,
+  120237: -100,
+  123857: -100,
+  132620: -100,
+  134017: -100,
+  140634: -100,
+  143793: -100,
+  147682: -100,
+  148621: -100,
+  160401: -100,
+  164657: -100,
+  166832: -100,
+  175054: -100,
+  176916: -100,
+  178374: -100,
+  184812: -100,
+  188276: -100,
+};
 
 export interface NanoResponse {
   ok: boolean;
@@ -75,6 +197,12 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
         instructions: req.instructions,
         input: req.input,
         reasoning: { effort: "low" },
+        ...(req.responseFormat
+          ? { text: { format: req.responseFormat } }
+          : {}),
+        // NOTE: OpenAI Responses API does NOT support logit_bias (Chat
+        // Completions only). The strict JSON schema is the effective
+        // decode-time guardrail — no prose slot = no hedging possible.
         ...(req.enableWebSearch !== false
           ? { tools: [{ type: "web_search_preview" }] }
           : {}),
@@ -118,14 +246,14 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
  * record:   delegates to callNano(), persists the response to disk on hit.
  * cloud:    passthrough to callNano().
  *
- * Hash key: sha256(model + "\n--nano--\n" + instructions + "\n--\n" + input).
+ * Hash key includes prompt + guardrails (schema + logit bias) to avoid fixture bleed.
  * Distinct from LlmChatTransport's key so nano + Kimi fixtures don't collide.
  */
 export async function callNanoWithMode(req: NanoRequest): Promise<NanoResponse> {
   const mode = (process.env.THALAMUS_MODE ?? "cloud").toLowerCase();
   if (mode === "cloud") return callNano(req);
 
-  const hash = hashNano(req.instructions, req.input, NANO_MODEL);
+  const hash = hashNano(req, NANO_MODEL);
   const dir = fixturesDir();
   const path = join(dir, `${hash}.json`);
 

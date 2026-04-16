@@ -7,6 +7,8 @@ export type DispatchResult =
   | { kind: "graph"; tree: unknown }
   | { kind: "resolution"; suggestionId: string; ok: boolean; delta: unknown }
   | { kind: "why"; tree: unknown }
+  | { kind: "pc"; conjunctionId: string; estimate: unknown }
+  | { kind: "candidates"; targetNoradId: number; rows: unknown[] }
   | { kind: "clarify"; question: string; options: string[] };
 
 export interface Adapters {
@@ -31,6 +33,16 @@ export interface Adapters {
   };
   why: {
     build: (findingId: string) => Promise<unknown>;
+  };
+  pcEstimator: {
+    estimate: (conjunctionId: string) => Promise<unknown>;
+  };
+  candidates: {
+    propose: (q: {
+      targetNoradId: number;
+      objectClass?: "payload" | "rocket_stage" | "debris" | "unknown";
+      limit?: number;
+    }) => Promise<unknown[]>;
   };
 }
 
@@ -67,6 +79,22 @@ export async function dispatch(
     }
     case "explain":
       return { kind: "why", tree: await ctx.adapters.why.build(step.findingId) };
+    case "pc":
+      return {
+        kind: "pc",
+        conjunctionId: step.conjunctionId,
+        estimate: await ctx.adapters.pcEstimator.estimate(step.conjunctionId),
+      };
+    case "candidates":
+      return {
+        kind: "candidates",
+        targetNoradId: step.targetNoradId,
+        rows: await ctx.adapters.candidates.propose({
+          targetNoradId: step.targetNoradId,
+          objectClass: step.objectClass,
+          limit: step.limit,
+        }),
+      };
     case "clarify":
       return { kind: "clarify", question: step.question, options: step.options };
   }

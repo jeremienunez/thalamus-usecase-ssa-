@@ -121,9 +121,9 @@ export function OpsDrawer({
           <span className="inline-flex h-5 items-center border border-osint/50 bg-osint/10 px-2 text-label text-osint">
             OSINT
           </span>
-          {conjunctions.some((c) => c.corroborated) && (
+          {conjunctions.some((c) => c.covarianceQuality === "HIGH") && (
             <span className="inline-flex h-5 items-center border border-field/50 bg-field/10 px-2 text-label text-field">
-              FIELD
+              σHIGH
             </span>
           )}
         </div>

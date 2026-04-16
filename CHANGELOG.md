@@ -4,6 +4,275 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Orbit trails + conjunction markers on the OPS globe — 2026-04-16
+
+Ships the "satellite positions" view that matches real SSA console aesthetics:
+hybrid orbital trails behind every catalog object and severity-colored ✕
+markers at every conjunction's TCA, with a full-SSA info card on hover.
+
+- `/api/conjunctions` extended with `regime`, `covarianceQuality`, `action`,
+  `computedAt` — joined from `satellite` (primary mean-motion) and derived
+  server-side from `combined_sigma_km` / `probability_of_collision`. No mocks.
+- Shared `ConjunctionViewSchema` (Zod) in `packages/shared/src/ssa/` — single
+  DTO source of truth for frontend + future CLI consumers.
+- `apps/console` + `apps/console-api` moved out of `.gitignore` and tracked
+  (they are part of the portfolio tree now).
+- `OrbitTrails.tsx` — full orbit rings per regime (merged BufferGeometry, 4
+  draw calls across ~1215 sats) + fading 60-sample tails. Tri-state toggle
+  `off | tails | full` folded into `RegimeFilter`.
+- `ConjunctionMarkers.tsx` — one sprite per conjunction, hidden by default,
+  revealed on arc hover with severity palette (green < 1e-6, yellow < 1e-4,
+  red ≥ 1e-4) and an info card portal with the 10 SSA fields.
+- `orbit.ts` Kepler propagator now exposes `orbitRing(s, n)` — closed-loop
+  geometry sampler used by both the trails and the `orbit.test.ts`
+  closure/period unit tests (5/5 passing).
+- Integration test `tests/conjunctions.spec.ts` parses live `/api/conjunctions`
+  against `ConjunctionViewSchema` — guards the API shape against drift.
+
+Verified end-to-end: 13/13 console-api tests, 5/5 console tests, live ISS ↔
+POISK conjunction rendering as a red ✕ with `covarianceQuality: MED`,
+`action: maneuver_candidate`.
+
+Plan: `docs/specs/2026-04-15-orbit-trails-conjunction-markers.plan.md`
+Spec: `docs/specs/2026-04-15-orbit-trails-conjunction-markers.md`
+
+### Sweep enrichment pipeline + KNN propagation + orbital reflexion — 2026-04-16
+
+Closes the loop between catalog enrichment and Thalamus reasoning. Every value
+written to the catalog (by web mission or KNN propagation) now emits a
+`research_finding` with `research_edge`s — so cortices can cite, trace, and
+reason on factual fills rather than treating the DB as a mute oracle. Pitch:
+"Null plutôt que plausible" — the system refuses fabrications at decode time
+and cites its provenance in the knowledge graph.
+
+Sweep mission pipeline — hardened:
+
+- Structured-outputs JSON schema on gpt-5.4-nano `/v1/responses` (strict)
+  forces `{value, unit, confidence, source}` with `source` regex `^https://…`.
+  No prose slot = no hedging narrative possible at decode time.
+- Hedging-token post-hoc blocklist (typical / approx / around / unknown / …)
+  catches any residual narrative that slips through.
+- Source validation: the returned URL must appear in the builtin `web_search`
+  URL list — rejects invented citations.
+- **Range guards per column**: `lifetime ∈ [0.1, 50]`, `launch_year ∈ [1957,
+2035]`, `mass_kg ∈ [0.1, 30 000]`, `power ∈ [0.1, 30 000]`. Values outside
+  → unobtainable (no DB write).
+- **Unit mismatch check**: `lifetime` rejects `hours/days/months`;
+  `launch_year` rejects `BC/month/day`.
+- **2-vote corroboration**: two independent nano calls with different angles
+  (operator docs / eoPortal-Wikipedia), accept iff numeric values agree within
+  ±10 % of median (text: exact normalised match). Confidence boosted +0.15 on
+  agreement.
+- **Object-class filter**: mission only processes `object_class='payload'`
+  (debris and rocket stages have no meaningful `lifetime`/`variant`/`power`).
+- **Per-satellite granularity**: each suggestion (operator × field) expands to
+  N per-satellite tasks with `satelliteName` + `noradId` in the prompt (vs the
+  old operator-level question that always returned null).
+
+KNN propagation — zero-LLM enrichment:
+
+- `POST /api/sweep/mission/knn-propagate {field, k, minSim, limit, dryRun}`
+  — for each payload missing a field, finds K nearest embedded neighbours
+  (Voyage halfvec cosine) that have the field set and propagates their
+  consensus value. Consensus rule: numeric = all within ±10 % of median;
+  text = mode covers ≥ ⅔ of neighbours. Nearest-neighbour `cos_sim ≥ minSim`.
+- Range guards applied to neighbour values too (no garbage in → garbage out).
+- 10× cheaper than web mission (pure SQL + HNSW), covers the semantic long
+  tail the mission can't afford to hit one-by-one.
+
+Enrichment findings (mission + KNN) — bridge to Thalamus KG:
+
+- New `emitEnrichmentFinding()` called from both fill paths. Writes a
+  `research_finding` (`cortex=data_auditor`, `finding_type=insight`) carrying
+  the field / value / confidence / source in `evidence` JSONB + a
+  `reasoning` string explaining method (KNN propagation vs 2-vote).
+- `research_edge` rows: `about` → target sat, `similar_to` → every neighbour
+  that voted (KNN) or supporting source URL (mission). Provenance is now
+  navigable in the KG, not hidden in a log.
+- Feedback loop: each fill pushes an `enrichment` entry to `sweep:feedback`
+  so the next nano-sweep can de-prioritise fields that self-heal via KNN.
+- Lazy-created long-running cycle `trigger_source='catalog-enrichment'`
+  carries every enrichment finding across sessions.
+- Every PG parameter cast explicitly (`::bigint`, `::real`, `::jsonb`,
+  `::entity_type`, `::relation`, enum types) — `pg@8.x` does not infer these
+  via driver and silently drops INSERTs otherwise.
+
+Orbital reflexion pass — factual anomaly detection:
+
+- `POST /api/sweep/reflexion-pass {noradId, dIncMax, dRaanMax, dMmMax}`
+  runs **two orbital cross-tabs** on the existing `telemetry_summary`
+  (`inclination`, `raan`, `meanMotion`, `meanAnomaly`):
+  1. **Strict co-plane companions** — same (inc, raan, meanMotion) within
+     tight tolerance, with along-track phase lag in minutes (`Δma / 360 ×
+period`). This is the tandem-imaging / SIGINT-pair test.
+  2. **Inclination-belt peers** — same inclination regardless of RAAN,
+     cross-tabulated by `operator_country × classification_tier ×
+object_class`. The "who lives in your SSO neighbourhood" test.
+- MIL-lineage name-match (`YAOGAN%`, `COSMOS%`, `NROL%`, `LACROSSE%`,
+  `TOPAZ%`, `SHIYAN%`, …) surfaces explicit military platforms hiding in
+  the belt.
+- Emits an `anomaly` finding (`cortex=classification_auditor`,
+  `urgency=high` when MIL-peers ≥ 1, else `medium`) with every cited peer
+  traced via `similar_to` edges. Zero LLM, 100 % SQL.
+- Live case: FENGYUN 3A (32958, "civilian weather") returned `urgency=high`
+  with 3 MIL peers (YAOGAN-11, SHIYAN-3, SHIYAN-4) + SUOMI NPP strict
+  co-plane at 54 min phase lag. The orbital fingerprint reveals what the
+  declared classification doesn't.
+
+Autonomy controller — continuous Thalamus + Sweep rotation:
+
+- `POST /api/autonomy/start {intervalSec}` / `stop` / `GET /status`. Rotates
+  between Thalamus cycles (6 rotating SSA queries: detect suspicious
+  behaviour, audit conjunction risk, correlate OSINT feeds…) and Sweep
+  nullScan passes. Each tick emits findings live. 3 s refetch front-side so
+  the operator sees the catalogue move.
+- Briefing mode dropped from rotation (returned 0 operator-countries once
+  the catalogue is fully null-scanned) — kept thalamus ↔ sweep-nullscan.
+
+Catalog gap-fill (zero-LLM heuristic):
+
+- `packages/db-schema/src/seed/fill-catalog-gaps.ts` — deterministic filler
+  for the three columns that were 100 % NULL: `g_orbit_regime_description`
+  (from meanMotion + eccentricity + inclination), `classification_tier`
+  (operator name / country heuristic: military → restricted, dual-use →
+  sensitive, rest → unclassified), `is_experimental` (mass < 10 kg or
+  bus/name signals like CUBESAT / TESTBED / DEMOSAT). Result: 500/504
+  regime, 504/504 tier, 504/504 experimental, all traceable to a rule.
+
+Mission-UI — operator-visible state:
+
+- `apps/console/src/components/AutonomyControl.tsx` — topbar pill shows live
+  tick count + pulse, toggles the loop on / off. FEED panel below streams
+  recent ticks (action · query · `+N findings` · elapsed) + 3 live
+  counters (findings / suggestions / KG edges).
+- `apps/console/src/modes/sweep/SweepSuggestions.tsx` — LAUNCH FISH MISSION
+  button + running banner with completed / filled / unobtainable / errors +
+  scrollable recent-tasks feed with clickable source hosts.
+- `apps/console/src/components/CommandPalette.tsx` — bare free-text that
+  matches no action falls through to REPL chat automatically.
+- `/api/repl/chat` — classifier → run_cycle vs plain chat. On run_cycle
+  intent it actually dispatches a Thalamus cycle, loads findings, and
+  summarises them with satellite names cited. No fixtures, real pipeline.
+
+SQL constraint — cosine-distance threshold:
+
+- Mass-gap KNN propagation over 50 JILIN-1 payloads produced 6 fills at
+  `cos_sim ∈ [0.89, 0.92]` converging on 42 kg, 44 others rejected on
+  consensus disagreement. Illustrates that "Null rather than plausible" is
+  the operating contract, not the exception.
+
+Tests — 13/13 integration specs green:
+
+- `apps/console-api/tests/sweep-mission.spec.ts` (6) — queue expansion,
+  Other / Unknown skip, non-writable skip, idempotency, cap,
+  double-start-refused.
+- `apps/console-api/tests/knn-propagation.spec.ts` (5) — field whitelist
+  (400), shape contract, `k`/`minSim` clamping, sampleFills trail,
+  `tooFar` monotonicity under `minSim` ↑.
+- `apps/console-api/tests/enrichment-findings.spec.ts` (1) — every KNN
+  fill emits a `research_finding` with ≥ 1 `about` + ≥ 1 `similar_to`
+  edge.
+- Snapshot/restore of `sweep:index:pending` between tests — isolated from
+  the 163 live pending suggestions, no cross-test contamination.
+
+### SSA catalog expansion + Voyage embeddings + KNN cortex — 2026-04-15
+
+From 504 payloads to a **33,564-object operational catalog** (debris + rocket
+stages included), embedded end-to-end with Voyage `voyage-4-large` halfvec(2048)
+and served through a new KNN-based conjunction candidate cortex. Pitch: "SSA
+doctrine learned by cosine similarity, not coded by hand."
+
+Schema:
+
+- `packages/db-schema/src/schema/satellite.ts` — `objectClass` text column with
+  CHECK constraint (`payload`/`rocket_stage`/`debris`/`unknown`). First step
+  toward a dedicated `space_object` table; inline for now so the screening
+  pipeline can filter without another schema migration.
+- `satellite.embedding halfvec(2048)` + `embedding_model` + `embedded_at`
+  columns. HNSW cosine index (m=16, ef_construction=64) at
+  `satellite_embedding_hnsw`.
+
+Seed pipeline (all idempotent, all in `packages/db-schema/src/seed/`):
+
+- `populate-space-catalog.ts` — CelesTrak SATCAT (`celestrak.org/pub/satcat.csv`,
+  ~6 MB, 68k rows). Filters `DECAY_DATE=''` → 33,560 alive objects (18,556
+  payloads + 12,544 debris + 2,397 rocket stages + 63 unknown). UPSERT by
+  `norad_id`. Apogee / perigee / inclination / RCS / ops_status stashed in
+  `metadata` JSONB. 24h disk cache at `/tmp/celestrak-satcat.csv`.
+- `enrich-gcat.ts` — switched NORAD source from `telemetry_summary->>'noradId'`
+  (legacy JSON field) to the dedicated `norad_id` column. Enrichment pass now
+  hits the whole 33k catalog, not just the 504 legacy payloads. Result: 20,556
+  mass backfills + 20,213 bus backfills against GCAT (~63% coverage).
+- `screen-broadphase.ts` — sweep-line O(n log n + k) pruner with bounded top-K
+  max-heap (memory-safe). Stages: naive (542 M pairs) → regime bucketing (385 M)
+  → radial overlap @ ±50 km (145 M candidates, **4× pruning in 32 s**). Cross-
+  class mix surfaced: 29.5 M payload×debris, 6.7 M debris×rocket_stage.
+- `screen-narrow-phase.ts` — SGP4 pipeline: re-runs broad-phase → fetches TLEs
+  from CelesTrak `gp.php?CATNR=…` (disk-cached at `/tmp/tle-cache/`) → satellite.js
+  propagation → Foster-1992 isotropic Pc with regime-conditioned sigma →
+  UPSERT `conjunction_event` by (primary, secondary, epoch).
+- `embed-catalog.ts` — Voyage voyage-4-large document embedder. Batches of 128,
+  halfvec(2048) literal via `${literal}::halfvec(2048)` cast. One line of
+  structured text per object (name, object_class, regime, altitude band,
+  inclination, operator, bus, launch year, mass). **33,564/33,564 embedded in
+  3m39s, zero failures, ~$0.08 total cost.** Inline Voyage caller avoids the
+  circular dep with `@interview/thalamus`.
+- `build-embedding-index.sql` — HNSW cosine index + secondary composite index
+  on `(metadata->>'apogeeKm', object_class)`.
+
+Cortex (`packages/thalamus/src/cortices/`):
+
+- `queries/conjunction-candidates.ts::queryConjunctionCandidatesKnn` —
+  pre-narrow-phase candidate proposer. Combines (a) HNSW cosine KNN on the
+  halfvec embedding, (b) radial altitude overlap `[perigee − Δ, apogee + Δ]`,
+  (c) `excludeSameFamily` regex to suppress constellation self-clustering.
+  Session-scoped `hnsw.ef_search` set per query via a sanitised literal.
+  Latency: 100–170 ms on 33k catalog.
+- `skills/conjunction-candidate-knn.md` — cortex skill. One finding per KNN
+  survivor. Severity: `forecast` if `cos < 0.30 ∧ overlap > 15 km`, `insight`
+  otherwise. Explicitly forbidden from asserting Pc — that's the job of
+  `conjunction_analysis` downstream. Emits `recommendations: propagate_sgp4`
+  with narrow-phase params.
+- `queries/index.ts` — barrel re-export of `./conjunction-candidates` so
+  `SQL_HELPER_MAP` picks up `queryConjunctionCandidatesKnn` via the existing
+  `import * as sqlHelpers from "./queries"` pattern in `executor.ts`.
+- Public API: `queryConjunctionCandidatesKnn` + `ConjunctionCandidateKnn` /
+  `ConjunctionCandidatesKnnOpts` types exported from `@interview/thalamus`.
+
+KNN sanity (hand-picked validations):
+
+- ISS (NORAD 25544) nearest neighbours (debris-only, excludeSameFamily): 10×
+  `FREGAT DEB` at 336-425 km perigee, cos 0.326-0.339. These are the Fregat
+  upper-stage fragmentation debris that actually threaten the ISS altitude
+  band — the embedding reproduced the DOD watchlist without any rule.
+- HST (20580) nearest rocket bodies: `DELTA 2 R/B`, `H-2 R/B`, `SL-8 R/B`,
+  `ARIANE 42P R/B` — exactly the clutter Hubble operators track.
+- `COSMOS 2251 DEB` KNN: 10 × `COSMOS 2251 DEB` fragments (ASAT-1 cluster
+  recovered end-to-end from the name + altitude + regime embedding).
+
+CLI (`packages/cli/`):
+
+- `/candidates <norad> [class=debris] [limit=N]` — new slash verb. Parser
+  validates integer NORAD + optional flags; schema discriminated-union entry
+  for `action: "candidates"`; dispatch wires to a new `candidates` adapter;
+  boot-level real adapter calls `queryConjunctionCandidatesKnn` with `knnK=300`,
+  `marginKm=20`, `excludeSameFamily=true`.
+- `renderers/candidates.tsx` — colour-coded table (debris red, rocket_stage
+  yellow, payload cyan; cos<0.30 green / <0.40 yellow / else gray). Columns:
+  cos · ovl · class · alt · regime · name (+ NORAD).
+- `tests/router/dispatch.spec.ts` — extended `makeAdapters()` with a mocked
+  `candidates.propose`; added a `candidates` dispatch case. **55/55 green,
+  `pnpm -r typecheck` clean across 7 packages.**
+
+Bug fixes in the seed path:
+
+- `enrich-gcat.ts` was silently no-op after the NORAD-id migration — the
+  source field had moved from `telemetry_summary.noradId` to a dedicated
+  column, so 99 % of the catalog was being skipped.
+- `embed-catalog.ts` type hygiene: `db.execute<Row>` generic dropped (TS
+  rejected `Row` as an index signature), replaced with explicit `as unknown
+as Row[]` cast at the call site.
+
 ### Conversational CLI (`@interview/cli`) — 2026-04-14
 
 Interactive Ink-based REPL (`pnpm run ssa`) for the SSA console: two-lane

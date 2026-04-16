@@ -62,6 +62,14 @@ export function applyPerturbation(base: SeedRefs, spec: PerturbationSpec): SeedR
       // Surface the surge in the seed so downstream readers (reporter) can
       // cite it. It is also pushed as a god event by the orchestrator.
       return { ...base };
+    case "pc_assumptions":
+      return {
+        ...base,
+        pcAssumptions: {
+          hardBodyRadiusMeters: spec.hardBodyRadiusMeters,
+          covarianceScale: spec.covarianceScale,
+        },
+      };
     default: {
       const _exhaustive: never = spec;
       void _exhaustive;
