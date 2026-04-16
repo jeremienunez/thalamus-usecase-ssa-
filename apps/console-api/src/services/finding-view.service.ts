@@ -4,10 +4,10 @@ import {
   toDbStatus,
 } from "../transformers/finding-status.transformer";
 import {
-  entityRef,
   toFindingDetailView,
   toFindingListView,
 } from "../transformers/finding-view.transformer";
+import { entityRef } from "../transformers/kg-view.transformer";
 import { FindingRepository } from "../repositories/finding.repository";
 import { ResearchEdgeRepository } from "../repositories/research-edge.repository";
 

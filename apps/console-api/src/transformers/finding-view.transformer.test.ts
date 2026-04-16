@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  entityRef,
   toFindingDetailView,
   toFindingListView,
 } from "./finding-view.transformer";
@@ -154,12 +153,3 @@ describe("toFindingDetailView", () => {
   });
 });
 
-describe("entityRef (finding-view) — colocated duplicate of kg-view's", () => {
-  it.each([
-    ["satellite", "123", "sat:123"],
-    ["operator", "X", "op:X"],
-    ["payload", "7", "payload:7"],
-  ])("type=%s id=%s → %s", (type, id, expected) => {
-    expect(entityRef(type, id)).toBe(expected);
-  });
-});
