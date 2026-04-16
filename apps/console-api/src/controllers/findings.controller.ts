@@ -26,7 +26,7 @@ export function findingDecisionController(service: FindingViewService) {
   return asyncHandler<
     FastifyRequest<{
       Params: { id: string };
-      Body: { decision: string; reason?: string };
+      Body: { decision: string };
     }>
   >(async (req, reply) => {
     const decision = req.body?.decision ?? "";
