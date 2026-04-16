@@ -32,6 +32,13 @@ out="$(section 'Infra' 2>&1)"
 assert_contains "$out" 'Infra' 'section prints its title'
 assert_contains "$out" '─'     'section prints a rule line'
 
+# --- status helpers ---
+out="$(ok 'postgres ready' 2>&1)";    assert_contains "$out" '✓' 'ok uses check glyph'
+out="$(ok 'postgres ready' 2>&1)";    assert_contains "$out" 'postgres ready' 'ok carries the message'
+out="$(warn 'slow response' 2>&1)";   assert_contains "$out" '⚠' 'warn uses warning glyph'
+out="$(fail 'redis down' 2>&1)";      assert_contains "$out" '✗' 'fail uses cross glyph'
+out="$(step 'seeding' 2>&1)";         assert_contains "$out" '›' 'step uses chevron glyph'
+
 echo
 echo "  ${pass_count} passed, ${fail_count} failed"
 [[ "$fail_count" -eq 0 ]]

@@ -32,3 +32,10 @@ section() {
   printf '\n%s%s%s%s\n' "$C_BOLD" "$C_CYAN" "$title" "$C_RESET"
   printf '%s%s%s\n' "$C_GRAY" '────────────────────────────────────────' "$C_RESET"
 }
+
+# ── Status glyphs ─────────────────────────────────────────────────────────
+# step/ok/warn/fail each print one aligned line: "<glyph> <message>".
+step() { printf '  %s›%s %s\n' "$C_GRAY"   "$C_RESET" "$*"; }
+ok()   { printf '  %s✓%s %s\n' "$C_GREEN"  "$C_RESET" "$*"; }
+warn() { printf '  %s⚠%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
+fail() { printf '  %s✗%s %s\n' "$C_RED"    "$C_RESET" "$*"; }
