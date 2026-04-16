@@ -1,0 +1,299 @@
+// apps/console-api/src/services/reflexion.service.ts
+import type { ReflexionBody } from "../types";
+import type {
+  ReflexionRepository,
+  CoplaneRow,
+  BeltRow,
+  MilRow,
+  ReflexionTarget,
+} from "../repositories/reflexion.repository";
+import type { EnrichmentCycleRepository } from "../repositories/enrichment-cycle.repository";
+import type { FindingRepository } from "../repositories/finding.repository";
+import type { ResearchEdgeRepository } from "../repositories/research-edge.repository";
+
+export type ReflexionResult = {
+  target: {
+    noradId: number;
+    name: string;
+    declared: {
+      operator_country: string | null;
+      classification_tier: string | null;
+      object_class: string | null;
+      platform: string | null;
+    };
+    orbital: {
+      inclinationDeg: number;
+      raanDeg: number;
+      meanMotionRevPerDay: number;
+      apogeeKm: number | null;
+      perigeeKm: number | null;
+    };
+  };
+  strictCoplane: Array<{
+    noradId: number;
+    name: string;
+    country: string | null;
+    tier: string | null;
+    class: string | null;
+    platform: string | null;
+    dInc: number;
+    dRaan: number;
+    lagMin: number;
+  }>;
+  beltByCountry: Array<{
+    country: string | null;
+    tier: string | null;
+    class: string | null;
+    n: number;
+  }>;
+  milLineagePeers: Array<{
+    noradId: number;
+    name: string;
+    country: string | null;
+    tier: string | null;
+    dInc: number;
+  }>;
+  findingId: string | null;
+};
+
+export class ReflexionService {
+  constructor(
+    private readonly repo: ReflexionRepository,
+    private readonly cycles: EnrichmentCycleRepository,
+    private readonly findings: FindingRepository,
+    private readonly edges: ResearchEdgeRepository,
+  ) {}
+
+  async runPass(
+    body: ReflexionBody,
+  ): Promise<ReflexionResult | { error: string; code: 400 | 404 }> {
+    const norad = Number(body.noradId);
+    if (!Number.isFinite(norad))
+      return { error: "noradId required (number)", code: 400 };
+    const dIncMax = Math.max(0.01, Math.min(5, body.dIncMax ?? 0.3));
+    const dRaanMax = Math.max(0.1, Math.min(20, body.dRaanMax ?? 5.0));
+    const dMmMax = Math.max(0.001, Math.min(0.5, body.dMmMax ?? 0.05));
+
+    const t = await this.repo.findTarget(norad);
+    if (!t) return { error: "satellite not found", code: 404 };
+    if (t.inc == null || t.raan == null || t.mm == null)
+      return { error: "target missing orbital elements", code: 400 };
+
+    const [strict, belt, mil] = await Promise.all([
+      this.repo.findStrictCoplane(norad, t, dIncMax, dRaanMax, dMmMax),
+      this.repo.findInclinationBelt(norad, t.inc, dIncMax),
+      this.repo.findMilLineagePeers(norad, t.inc, dIncMax),
+    ]);
+
+    const declaredCountry = t.operator_country;
+    const beltTop = belt.length > 0 ? belt[0]! : null;
+    const mostCommonCountry = beltTop?.country ?? null;
+    const divergentCountry = Boolean(
+      mostCommonCountry &&
+        declaredCountry &&
+        mostCommonCountry !== declaredCountry,
+    );
+    const shouldEmit = mil.length > 0 || divergentCountry;
+
+    let findingId: bigint | null = null;
+    if (shouldEmit) {
+      findingId = await this.emitFinding({
+        t,
+        norad,
+        declaredCountry,
+        strict,
+        belt,
+        mil,
+        mostCommonCountry,
+        dIncMax,
+      });
+    }
+
+    return {
+      target: {
+        noradId: norad,
+        name: t.name,
+        declared: {
+          operator_country: declaredCountry,
+          classification_tier: t.classification_tier,
+          object_class: t.object_class,
+          platform: t.platform_name,
+        },
+        orbital: {
+          inclinationDeg: t.inc,
+          raanDeg: t.raan,
+          meanMotionRevPerDay: t.mm,
+          apogeeKm: t.apogee,
+          perigeeKm: t.perigee,
+        },
+      },
+      strictCoplane: strict.map((r) => ({
+        noradId: Number(r.norad_id),
+        name: r.name,
+        country: r.operator_country,
+        tier: r.tier,
+        class: r.object_class,
+        platform: r.platform,
+        dInc: Number(r.d_inc.toFixed(3)),
+        dRaan: Number(r.d_raan.toFixed(2)),
+        lagMin: Number(r.lag_min.toFixed(1)),
+      })),
+      beltByCountry: belt.map((r) => ({
+        country: r.country,
+        tier: r.tier,
+        class: r.object_class,
+        n: Number(r.n),
+      })),
+      milLineagePeers: mil.map((m) => ({
+        noradId: Number(m.norad_id),
+        name: m.name,
+        country: m.country,
+        tier: m.tier,
+        dInc: Number(m.d_inc.toFixed(3)),
+      })),
+      findingId: findingId ? String(findingId) : null,
+    };
+  }
+
+  private async emitFinding(args: {
+    t: ReflexionTarget;
+    norad: number;
+    declaredCountry: string | null;
+    strict: CoplaneRow[];
+    belt: BeltRow[];
+    mil: MilRow[];
+    mostCommonCountry: string | null;
+    dIncMax: number;
+  }): Promise<bigint> {
+    const {
+      t,
+      norad,
+      declaredCountry,
+      strict,
+      belt,
+      mil,
+      mostCommonCountry,
+      dIncMax,
+    } = args;
+    const cycleId = await this.cycles.getOrCreate();
+    const title =
+      mil.length > 0
+        ? `Orbital anomaly · ${t.name} shares inclination with ${mil.length} military-lineage peer(s)`
+        : `Orbital anomaly · ${t.name} inclination-belt dominated by ${mostCommonCountry} (declared ${declaredCountry})`;
+    const summary = [
+      `Target ${t.name} (NORAD ${norad}) declared ${t.object_class ?? "?"} / ${t.classification_tier ?? "?"} / ${declaredCountry ?? "?"}.`,
+      `Strict co-plane companions: ${strict.length}.`,
+      `Inclination-belt peers at Δi<${dIncMax}°: ${belt.reduce((s, r) => s + Number(r.n), 0)}, top by country = ${belt
+        .slice(0, 3)
+        .map((r) => `${r.country ?? "?"}:${r.n}`)
+        .join(", ")}.`,
+      mil.length > 0
+        ? `MIL-lineage name-matches in belt: ${mil
+            .slice(0, 5)
+            .map((m) => `${m.name} (${m.country}, Δi=${m.d_inc.toFixed(2)}°)`)
+            .join("; ")}.`
+        : "No explicit MIL-lineage name match.",
+    ].join(" ");
+    const evidence = [
+      {
+        source: "orbital_reflexion",
+        data: {
+          target: {
+            noradId: norad,
+            name: t.name,
+            inc: t.inc,
+            raan: t.raan,
+            mm: t.mm,
+            declared: {
+              operator_country: declaredCountry,
+              classification_tier: t.classification_tier,
+              object_class: t.object_class,
+              platform: t.platform_name,
+            },
+          },
+          strictCoplane: strict.slice(0, 10).map((r) => ({
+            noradId: Number(r.norad_id),
+            name: r.name,
+            country: r.operator_country,
+            platform: r.platform,
+            dInc: Number(r.d_inc.toFixed(3)),
+            dRaan: Number(r.d_raan.toFixed(2)),
+            lagMin: Number(r.lag_min.toFixed(1)),
+          })),
+          beltByCountry: belt.slice(0, 10).map((r) => ({
+            country: r.country,
+            tier: r.tier,
+            class: r.object_class,
+            n: Number(r.n),
+          })),
+          milLineagePeers: mil.map((m) => ({
+            noradId: Number(m.norad_id),
+            name: m.name,
+            country: m.country,
+            tier: m.tier,
+            dInc: Number(m.d_inc.toFixed(3)),
+          })),
+        },
+        weight: 0.9,
+      },
+    ];
+    const urgency = mil.length >= 1 ? "high" : "medium";
+    const reasoning =
+      "Orbital fingerprint reflexion: SQL cross-tab on (inc, raan, meanMotion) against declared classification. No LLM. Provenance: every cited peer traced via similar_to edges.";
+
+    const findingId = await this.findings.insert({
+      cycleId,
+      cortex: "classification_auditor",
+      findingType: "anomaly",
+      urgency,
+      title,
+      summary,
+      evidence,
+      reasoning,
+      confidence: 0.8,
+      impactScore: 0.7,
+    });
+
+    await this.edges.insert({
+      findingId,
+      entityType: "satellite",
+      entityId: BigInt(t.id),
+      relation: "about",
+      weight: 1.0,
+      context: {
+        noradId: norad,
+        declared: {
+          operator_country: declaredCountry,
+          tier: t.classification_tier,
+          object_class: t.object_class,
+        },
+      },
+    });
+    for (const m of mil.slice(0, 10)) {
+      await this.edges.insert({
+        findingId,
+        entityType: "satellite",
+        entityId: BigInt(m.id),
+        relation: "similar_to",
+        weight: 0.9,
+        context: { role: "mil_lineage_peer", dInc: Number(m.d_inc.toFixed(3)) },
+      });
+    }
+    for (const r of strict.slice(0, 5)) {
+      await this.edges.insert({
+        findingId,
+        entityType: "satellite",
+        entityId: BigInt(r.id),
+        relation: "similar_to",
+        weight: 0.95,
+        context: {
+          role: "strict_coplane",
+          dInc: Number(r.d_inc.toFixed(3)),
+          dRaan: Number(r.d_raan.toFixed(2)),
+          lagMin: Number(r.lag_min.toFixed(1)),
+        },
+      });
+    }
+    return findingId;
+  }
+}
