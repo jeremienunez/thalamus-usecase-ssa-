@@ -5,9 +5,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "demo-run": "node --env-file=../../.env --import tsx src/demo/run.ts",
-    "demo-telemetry": "node --env-file=../../.env --import tsx src/demo/telemetry-swarm.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@interview/shared": "workspace:*",
