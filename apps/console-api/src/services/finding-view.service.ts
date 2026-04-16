@@ -38,9 +38,9 @@ export class FindingViewService {
     return { items, total: items.length };
   }
 
-  async findById(idRaw: string): Promise<FindingView | null | "invalid"> {
+  async findById(idRaw: string): Promise<FindingView | null | "invalid-id"> {
     const fid = parseFindingId(idRaw);
-    if (fid === null) return "invalid";
+    if (fid === null) return "invalid-id";
     const row = await this.findings.findById(fid);
     if (!row) return null;
     const edgeRows = await this.edges.findByFindingId(fid, 20);
@@ -50,11 +50,11 @@ export class FindingViewService {
   async updateDecision(
     idRaw: string,
     decision: string,
-  ): Promise<FindingView | null | "invalid"> {
+  ): Promise<FindingView | null | "invalid-id" | "invalid-decision"> {
     const fid = parseFindingId(idRaw);
-    if (fid === null) return "invalid";
+    if (fid === null) return "invalid-id";
     if (!["accepted", "rejected", "pending", "in-review"].includes(decision))
-      return "invalid";
+      return "invalid-decision";
     const ok = await this.findings.updateStatus(fid, toDbStatus(decision));
     if (!ok) return null;
     return this.findById(idRaw);
