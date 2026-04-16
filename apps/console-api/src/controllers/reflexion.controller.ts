@@ -1,16 +1,17 @@
 // apps/console-api/src/controllers/reflexion.controller.ts
 import type { FastifyRequest } from "fastify";
 import type { ReflexionService } from "../services/reflexion.service";
-import type { ReflexionBody } from "../types";
 import { asyncHandler } from "../utils/async-handler";
+import { parseOrReply } from "../utils/parse-request";
+import { ReflexionPassBodySchema } from "../schemas";
 
 export function reflexionController(service: ReflexionService) {
-  return asyncHandler<FastifyRequest<{ Body: ReflexionBody }>>(
-    async (req, reply) => {
-      const result = await service.runPass(req.body);
-      if ("error" in result)
-        return reply.code(result.code).send({ error: result.error });
-      return result;
-    },
-  );
+  return asyncHandler<FastifyRequest<{ Body: unknown }>>(async (req, reply) => {
+    const body = parseOrReply(req.body, ReflexionPassBodySchema, reply);
+    if (body === null) return;
+    const result = await service.runPass(body);
+    if ("error" in result)
+      return reply.code(result.code).send({ error: result.error });
+    return result;
+  });
 }

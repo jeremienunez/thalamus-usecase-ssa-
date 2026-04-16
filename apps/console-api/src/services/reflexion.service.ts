@@ -1,5 +1,5 @@
 // apps/console-api/src/services/reflexion.service.ts
-import type { ReflexionBody } from "../types";
+import type { ReflexionPassBody } from "../schemas";
 import type {
   ReflexionRepository,
   CoplaneRow,
@@ -65,14 +65,12 @@ export class ReflexionService {
   ) {}
 
   async runPass(
-    body: ReflexionBody,
+    body: ReflexionPassBody,
   ): Promise<ReflexionResult | { error: string; code: 400 | 404 }> {
-    const norad = Number(body.noradId);
-    if (!Number.isFinite(norad))
-      return { error: "noradId required (number)", code: 400 };
-    const dIncMax = Math.max(0.01, Math.min(5, body.dIncMax ?? 0.3));
-    const dRaanMax = Math.max(0.1, Math.min(20, body.dRaanMax ?? 5.0));
-    const dMmMax = Math.max(0.001, Math.min(0.5, body.dMmMax ?? 0.05));
+    // Schema (H3) enforces: noradId positive integer; dIncMax/dRaanMax/dMmMax
+    // bounded with defaults. No re-clamp needed here.
+    const norad = body.noradId;
+    const { dIncMax, dRaanMax, dMmMax } = body;
 
     const t = await this.repo.findTarget(norad);
     if (!t) return { error: "satellite not found", code: 404 };

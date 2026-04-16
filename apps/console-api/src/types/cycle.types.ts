@@ -1,5 +1,7 @@
 // apps/console-api/src/types/cycle.types.ts
-export type CycleKind = "thalamus" | "fish" | "both";
+import type { CycleKind } from "../schemas/cycles.schema";
+
+export type { CycleKind };
 
 export type CycleRun = {
   id: string;

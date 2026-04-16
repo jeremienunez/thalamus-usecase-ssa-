@@ -150,6 +150,9 @@ importers:
       pg:
         specifier: ^8.11.0
         version: 8.20.0
+      zod:
+        specifier: ^3.22.0
+        version: 3.25.76
     devDependencies:
       '@types/geojson':
         specifier: ^7946.0.16
