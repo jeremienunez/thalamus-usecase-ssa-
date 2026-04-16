@@ -6,15 +6,16 @@
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
+##@ Infra
 # ── Infra ────────────────────────────────────────────────────────────────────
 
 .PHONY: up
 up: ## Start Postgres (pgvector) + Redis in background, wait until healthy
-	docker compose up -d
-	@echo "⏳ waiting for services to be healthy..."
-	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' thalamus-postgres 2>/dev/null)" = "healthy" ]; do sleep 1; done
-	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' thalamus-redis    2>/dev/null)" = "healthy" ]; do sleep 1; done
-	@echo "✓ postgres + redis healthy"
+	@bash -c '. ./scripts/ui.sh; \
+	  section "Infra"; \
+	  docker compose up -d >/dev/null 2>&1 || true; \
+	  spinner_until "docker inspect -f {{.State.Health.Status}} thalamus-postgres 2>/dev/null | grep -q healthy" "postgres (pgvector)" 60; \
+	  spinner_until "docker inspect -f {{.State.Health.Status}} thalamus-redis    2>/dev/null | grep -q healthy" "redis" 60'
 
 .PHONY: down
 down: ## Stop services (keeps volumes)
@@ -36,6 +37,7 @@ psql: ## Open psql shell on the dev DB
 redis-cli: ## Open redis-cli shell
 	docker exec -it thalamus-redis redis-cli
 
+##@ Schema
 # ── Schema ───────────────────────────────────────────────────────────────────
 
 .PHONY: migrate
@@ -54,12 +56,20 @@ migrate-drop: ## Drop the latest migration (requires interactive confirm in driz
 studio: ## Open Drizzle Studio (web UI on :4983)
 	pnpm --filter @interview/db-schema drizzle-kit studio
 
+##@ Seed
 # ── Seed ─────────────────────────────────────────────────────────────────────
 
 .PHONY: seed
 seed: ## Seed reference tables + ~500 satellites from CelesTrak TLE
-	pnpm --filter @interview/db-schema seed
+	@bash -c '. ./scripts/ui.sh; \
+	  section "Seeding catalog"; \
+	  step "pnpm --filter @interview/db-schema seed"; \
+	  pnpm --filter @interview/db-schema seed; \
+	  sats=$$(docker exec thalamus-postgres psql -U thalamus -d thalamus -tAc "select count(*) from satellites" 2>/dev/null || echo "?"); \
+	  regimes=$$(docker exec thalamus-postgres psql -U thalamus -d thalamus -tAc "select count(distinct regime_id) from satellites where regime_id is not null" 2>/dev/null || echo "?"); \
+	  ok "$$sats satellites, $$regimes regimes in catalog"'
 
+##@ Demo
 # ── Demo ─────────────────────────────────────────────────────────────────────
 
 .PHONY: demo
@@ -77,6 +87,7 @@ thalamus-cycle: ## Run one research cycle end-to-end (SSA catalog query)
 ssa: ## Interactive SSA REPL (query → briefing loop)
 	pnpm --filter @interview/thalamus ssa
 
+##@ Local LLM
 # ── Local LLM (Gemma 4 via llama.cpp Vulkan) ─────────────────────────────────
 # llm-serve:       26B MoE Q3_K_M — best quality, ~16 tok/s (partial offload)
 # llm-serve-fast:  E4B Q8         — fast fallback, ~43 tok/s (full GPU)
@@ -134,10 +145,12 @@ ssa-local: ## Interactive SSA REPL routed to local Gemma (requires `make llm-ser
 	@echo "✓ local LLM up — launching REPL with provider=local"
 	LOCAL_LLM_URL=$(LLM_URL) pnpm --filter @interview/thalamus ssa
 
+##@ Sweep
 .PHONY: sweep-run
 sweep-run: ## Run one sweep audit pass against the seeded catalog
 	pnpm --filter @interview/sweep demo-run
 
+##@ Console
 # ── Console (operator UI) ────────────────────────────────────────────────────
 
 .PHONY: console
@@ -156,6 +169,7 @@ console-api: ## Run the read-only Fastify API backing the console
 console-ui: ## Run the Vite dev server for the console only
 	pnpm --filter @interview/console dev
 
+##@ Quality
 # ── Quality ──────────────────────────────────────────────────────────────────
 
 .PHONY: typecheck
@@ -177,5 +191,25 @@ hooks-install: ## Point git at .githooks/ (pre-commit gate)
 # ── Help ─────────────────────────────────────────────────────────────────────
 
 .PHONY: help
-help:
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage: make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
+help: ## Show this help — grouped targets and quick-start
+	@bash -c '. ./scripts/ui.sh; \
+	  satellite_logo; \
+	  printf "\n  $${C_BOLD}Thalamus + Sweep$${C_RESET}  $${C_GRAY}·$${C_RESET} Space Situational Awareness dev environment\n\n"; \
+	  printf "  $${C_BOLD}Quick start$${C_RESET}\n"; \
+	  printf "    $${C_CYAN}make up$${C_RESET}        # Postgres + Redis (pgvector)\n"; \
+	  printf "    $${C_CYAN}make demo$${C_RESET}      # migrate + seed ~500 satellites\n"; \
+	  printf "    $${C_CYAN}make console$${C_RESET}   # UI on :5173, API on :4000\n\n"; \
+	  printf "  $${C_BOLD}Targets$${C_RESET}\n"; \
+	  awk '\''BEGIN {FS=":.*##"} \
+	    /^##@/ { section=substr($$0,5); targets[section]=""; order[++n]=section; next } \
+	    /^[a-zA-Z_-]+:.*##/ { \
+	      split($$1, a, ":"); \
+	      if (section != "" && a[1] != "help") targets[section] = targets[section] " " a[1]; \
+	    } \
+	    END { \
+	      for (i=1; i<=n; i++) { \
+	        s=order[i]; \
+	        printf "    \033[36m▸\033[0m %-10s\033[90m%s\033[0m\n", s, targets[s]; \
+	      } \
+	    }'\'' $(MAKEFILE_LIST); \
+	  printf "\n"'

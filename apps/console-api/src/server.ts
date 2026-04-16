@@ -8,13 +8,17 @@
 import "./init"; // MUST be first — bumps process.setMaxListeners before imports register handlers
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { buildContainer } from "./container";
 import { registerAllRoutes } from "./routes";
+import type { HealthSnapshot } from "./infra/health-snapshot";
 
 export type AppHandle = {
   app: FastifyInstance;
   close: () => Promise<void>;
   info: { databaseUrl: string; redisUrl: string; cortices: number };
+  snapshot: HealthSnapshot;
 };
 
 export type ServerHandle = AppHandle & { port: number };
@@ -46,57 +50,40 @@ function durationColor(ms: number): string {
   return C.gray;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+/**
+ * Print the shared satellite ASCII logo read from scripts/ui/satellite.txt.
+ * Same glyph source as the bash `satellite_logo` helper used by the Makefile,
+ * so changing the file updates both surfaces. Colors applied per-token to
+ * match the bash rendering: yellow panels, cyan bus + antenna, green eye.
+ */
+function printSatelliteLogo(): void {
+  const y = C.yellow, c = C.cyan, g = C.green, r = C.reset;
+  const path = fileURLToPath(new URL("../../../scripts/ui/satellite.txt", import.meta.url));
+  const raw = readFileSync(path, "utf8").replace(/\n$/, "");
+  const colored = raw
+    .replace(/◉/g, `${g}◉${c}`)
+    .replace(/┌──┐/g, `${y}┌──┐${r}`)
+    .replace(/└──┘/g, `${y}└──┘${r}`)
+    .replace(/│▓▓│/g, `${y}│▓▓│${r}`)
+    .replace(/╔═══╗/g, `${c}╔═══╗${r}`)
+    .replace(/╚═╤═╝/g, `${c}╚═╤═╝${r}`)
+    .replace(/╣/g, `${c}╣`)
+    .replace(/╠/g, `╠${r}`)
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+  process.stdout.write("\n" + colored + "\n");
 }
 
-async function animateSatellite(): Promise<void> {
-  if (!process.stdout.isTTY) return;
-  const y = C.yellow, c = C.cyan, g = C.green, gr = C.gray, r = C.reset;
-  const frames: string[][] = [
-    [
-      `  ${y}┌──┐${r}  ${c}╔═══╗${r}  ${y}┌──┐${r}`,
-      `  ${y}│${gr}░░${y}│${r}${gr}··${c}╣ ${gr}·${c} ╠${r}${gr}··${y}│${gr}░░${y}│${r}`,
-      `  ${y}└──┘${r}  ${c}╚═╤═╝${r}  ${y}└──┘${r}`,
-    ],
-    [
-      `  ${y}┌──┐${r}  ${c}╔═══╗${r}  ${y}┌──┐${r}`,
-      `  ${y}│${gr}▒▒${y}│${r}${gr}══${c}╣ ${gr}◦${c} ╠${r}${gr}══${y}│${gr}▒▒${y}│${r}`,
-      `  ${y}└──┘${r}  ${c}╚═╤═╝${r}  ${y}└──┘${r}`,
-    ],
-    [
-      `  ${y}┌──┐${r}  ${c}╔═══╗${r}  ${y}┌──┐${r}`,
-      `  ${y}│▓▓│${c}══╣ ${g}◉${c} ╠══${y}│▓▓│${r}`,
-      `  ${y}└──┘${r}  ${c}╚═╤═╝${r}  ${y}└──┘${r}`,
-    ],
-  ];
-  process.stdout.write("\n");
-  for (let i = 0; i < frames.length; i++) {
-    if (i > 0) process.stdout.write("\x1b[3A\r");
-    process.stdout.write(frames[i].join("\n") + "\n");
-    await sleep(160);
-  }
-  // twinkle pass
-  const stars = [
-    `        ${gr}·${r} ${gr}·${r}   ${gr}·${r}`,
-    `       ${gr}·  ${r}${c}∴${r}${gr}   ·${r}`,
-  ];
-  const starsOff = [
-    `        ${gr} ${r} ${gr}·${r}   ${gr} ${r}`,
-    `       ${gr}·  ${r}${gr}·${r}${gr}   ·${r}`,
-  ];
-  for (let k = 0; k < 3; k++) {
-    process.stdout.write((k % 2 === 0 ? stars : starsOff).join("\n") + "\n");
-    await sleep(120);
-    process.stdout.write("\x1b[2A\r");
-  }
-  process.stdout.write(stars.join("\n") + "\n");
-}
-
-function printBanner(port: number, info: { databaseUrl: string; redisUrl: string; cortices: number }): void {
+function printBanner(
+  port: number,
+  info: { databaseUrl: string; redisUrl: string; cortices: number },
+  snapshot: HealthSnapshot,
+): void {
   const mode = isProd ? "production" : "development";
   const c = C.cyan, g = C.green, gr = C.gray, b = C.bold, r = C.reset;
   const base = `http://localhost:${port}`;
+  const dot = (ok: boolean) => `${ok ? g : C.red}●${r}`;
   const header = [
     ``,
     `  ${b}${c}console-api${r} ${gr}·${r} ${g}ready${r} ${gr}on${r} ${b}${base}${r}`,
@@ -105,7 +92,14 @@ function printBanner(port: number, info: { databaseUrl: string; redisUrl: string
     `  ${gr}mode${r}      ${mode}`,
     `  ${gr}postgres${r}  ${info.databaseUrl}`,
     `  ${gr}redis${r}     ${info.redisUrl}`,
-    `  ${gr}cortices${r}  ${info.cortices}`,
+  ];
+  const pad = (s: string | number | null, n: number) => String(s ?? "—").padEnd(n);
+  const system = [
+    `  ${b}System${r}`,
+    `    ${dot(snapshot.postgres.ok)} postgres    ${pad(snapshot.postgres.pgvector ? `pgvector ${snapshot.postgres.pgvector}` : "pgvector —", 24)}`,
+    `    ${dot(snapshot.redis.ok)} redis       ${pad(snapshot.redis.ok ? "ready" : "unreachable", 24)}`,
+    `    ${dot(true)} cortices    ${pad(snapshot.cortices, 24)} ${gr}loaded${r}`,
+    `    ${dot(snapshot.postgres.ok)} catalog     ${pad(snapshot.catalog.satellites, 6)} sats   ${pad(snapshot.catalog.regimes, 6)} regimes`,
   ];
   const hints = [
     `  ${b}Try this:${r}`,
@@ -117,7 +111,10 @@ function printBanner(port: number, info: { databaseUrl: string; redisUrl: string
     `  ${gr}›${r} ${c}curl -X POST${r} ${base}/api/repl/turn ${gr}-d '{"query":"LEO traffic"}'${r}`,
   ];
   process.stdout.write(
-    header.join("\n") + "\n\n" + cfg.join("\n") + "\n\n" + hints.join("\n") + "\n\n",
+    header.join("\n") + "\n\n" +
+    cfg.join("\n") + "\n\n" +
+    system.join("\n") + "\n\n" +
+    hints.join("\n") + "\n\n",
   );
 }
 
@@ -161,11 +158,12 @@ export async function createApp(): Promise<AppHandle> {
     done();
   });
 
-  const container = buildContainer(app.log);
+  const container = await buildContainer(app.log);
   registerAllRoutes(app, container.services);
   return {
     app,
     info: container.info,
+    snapshot: container.snapshot,
     close: async () => {
       await app.close();
       await container.close();
@@ -179,15 +177,15 @@ export async function startServer(
   if (!Number.isFinite(port) || port < 0) {
     throw new Error(`startServer: invalid port ${port}`);
   }
-  await animateSatellite();
-  const { app, close, info } = await createApp();
+  printSatelliteLogo();
+  const { app, close, info, snapshot } = await createApp();
   const address = await app.listen({ port, host: "0.0.0.0" });
   const boundPort = (() => {
     const m = address.match(/:(\d+)$/);
     return m ? Number(m[1]) : port;
   })();
-  printBanner(boundPort, info);
-  return { app, port: boundPort, close, info };
+  printBanner(boundPort, info, snapshot);
+  return { app, port: boundPort, close, info, snapshot };
 }
 
 async function main(): Promise<void> {

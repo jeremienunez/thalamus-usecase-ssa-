@@ -43,12 +43,14 @@ import { ReplTurnService } from "./services/repl-turn.service";
 import { SweepSuggestionsService } from "./services/sweep-suggestions.service";
 
 import type { AppServices } from "./routes";
+import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
 
-export function buildContainer(logger: FastifyBaseLogger): {
+export async function buildContainer(logger: FastifyBaseLogger): Promise<{
   services: AppServices;
   close: () => Promise<void>;
   info: { databaseUrl: string; redisUrl: string; cortices: number };
-} {
+  snapshot: HealthSnapshot;
+}> {
   const databaseUrl =
     process.env.DATABASE_URL ??
     "postgres://thalamus:thalamus@localhost:5433/thalamus";
@@ -122,6 +124,8 @@ export function buildContainer(logger: FastifyBaseLogger): {
     }),
   };
 
+  const snapshot = await snapshotHealth(db, redis, thalamus.registry.size());
+
   return {
     services,
     close: async () => {
@@ -133,5 +137,6 @@ export function buildContainer(logger: FastifyBaseLogger): {
       redisUrl,
       cortices: thalamus.registry.size(),
     },
+    snapshot,
   };
 }
