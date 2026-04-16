@@ -4,6 +4,48 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### console-api test pyramid + polish fixes — 2026-04-16
+
+**Test reorganization.** All console-api tests moved into a single pyramidal
+structure under [apps/console-api/tests/](apps/console-api/tests/):
+
+```
+tests/
+  unit/                  # 50+ tests — pure functions, no I/O
+    utils/               # 4 test files (async-handler, fabrication, field-constraints, sql-field)
+    transformers/        # 5 test files (the row→DTO layer)
+    services/            # 2 test files (satellite-view, conjunction-view)
+  integration/           # real DB, below HTTP
+    repositories/        # satellite.repository.spec.ts (live Postgres)
+  e2e/                   # full HTTP via startServer(0)
+    setup.ts             # vitest globalSetup, boots Fastify
+    conjunctions.spec.ts, enrichment-findings.spec.ts,
+    knn-propagation.spec.ts, sweep-mission.spec.ts
+  README.md              # documents the pyramid
+```
+
+Naming convention enforced: `.test.ts` = unit (fast, parallel-safe),
+`.spec.ts` = integration + e2e (requires infra).
+[apps/console-api/vitest.config.ts](apps/console-api/vitest.config.ts) updated
+to match.
+
+**Polish fixes** (code-review follow-ups):
+
+- `entityRef` de-duplicated between `kg-view.transformer` and
+  `finding-view.transformer` — single source of truth in kg-view.
+- `asyncHandler` now redacts internal 500 errors in production
+  (`NODE_ENV=production` + no explicit `statusCode` → `{ error: "internal error" }`;
+  real message still goes to `req.log.error`). Explicit HTTP errors
+  (with `.statusCode`) pass through untouched.
+- `satellitesController` validates `regime` via `RegimeSchema.safeParse` —
+  bad regime values fall through to `undefined` instead of silently matching
+  nothing.
+- `ConjunctionViewService.list(minPc)` → `list({ minPc })` — symmetry with
+  `SatelliteViewService.list(opts)` and `FindingViewService.list(filters)`.
+- `FindingViewService` sentinel `"invalid"` split into `"invalid-id"` vs
+  `"invalid-decision"` — controller now returns distinct error messages
+  (matches original server.ts behaviour, better for UI field-level errors).
+
 ### console-api transformers layer — 2026-04-16
 
 Follow-up to the 5-layer refactor: extracted all row→DTO mapping functions
