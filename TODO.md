@@ -581,3 +581,55 @@ object_class`.
 CLI + interpreter cortex (P1) + **Pc estimator + maneuver Pareto + Why button**
 (first three P2) = decision-support under uncertainty with auditable
 provenance, live. Matches the README pitch. Everything else is polish.
+
+---
+
+## Priority 6 — Thalamus content quality (post-SSE)
+
+Discovered while smoke-testing the SSE stream (cycle 264, 160s, 4 iterations,
+59 findings, $0.108). The SSE plumbing works — the content Thalamus surfaces
+doesn't. Three root causes, ranked by ROI:
+
+### Root causes (cycle 264 diagnostic)
+
+- **Dedup tax — ~40% of findings collide with prior cycles.** Cycle 264
+  emitted 13 `Semantic dedup: merging into existing finding` lines
+  (existingId 226, 184, 154, 417, 402, 468, 172, 351, 710, 711, 382, 237)
+  across 59 candidates. `data_auditor` + `classification_auditor` keep
+  re-discovering the same P0/P1 catalogue gaps (33 202 sans PlatformClass,
+  33 060 sans opérateur, 12 495 sans masse) because nothing upstream
+  enriches those fields.
+- **Web-search fallback without payoff.** `debris_forecaster` ran with
+  `webSearch: true`, fetched 10 015 chars in 15 s, emitted `findings: 0`.
+  The fallback pulls generic debris doc, but the cortex prompt can't map
+  it onto *our* catalogue state, so nothing lands.
+- **Budget exhausted mid-cycle.** `Stopping: cost budget exhausted
+  totalCost: 0.107778 maxCost: 0.1 iteration: 4`. The cycle aborts before
+  the next planner pass could consume the fresh strategist output, which
+  is exactly where the named-satellite findings live (AQUA 5 090 kg, etc.).
+  The summariser then falls back to listing finding IDs.
+
+### Fix backlog
+
+- [ ] **(a)** Pimp summariser prompt — `apps/console-api/src/prompts/repl-chat.prompt.ts`
+      `summariserPrompt()` to privilege `findingType=strategy` +
+      `urgency=high` + cite satellite names instead of flat ID lists.
+      ~30 min, single file. Biggest visible win in the REPL.
+- [ ] **(c)** Bump `maxCost` for user-triggered cycles to $0.25
+      (vs $0.10 daemon default). Config in
+      `packages/thalamus/src/cortices/config.ts` → `THALAMUS_CONFIG` /
+      `ITERATION_BUDGETS`. ~2 min. Lets the cycle actually converge.
+- [ ] **(b)** Planner cortex filter by intent — strip
+      `data_auditor` / `classification_auditor` from the cortex pool
+      when the user query is not an audit request. Today the planner
+      picks them because the catalogue is so thin they're the only
+      cortices with guaranteed findings. Touches
+      `packages/thalamus/src/services/thalamus-planner.service.ts`.
+      ~1 h. Second-order effect: less dedup tax.
+
+### Underlying (Priority 7, future)
+
+- Enrich the seed so `data_auditor` stops dominating. Join more
+  Celestrak SATCAT fields (`operator`, `mass`, `country`,
+  `platform_class`) into `seed/populate-space-catalog.ts`. Until the DB
+  has meat on the bones, Thalamus will keep reporting the same holes.

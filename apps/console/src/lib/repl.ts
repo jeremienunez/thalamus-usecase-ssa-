@@ -90,22 +90,19 @@ function looksLikeCommand(input: string): boolean {
   return input.trim().startsWith("/") || KNOWN_VERBS.test(input);
 }
 
+export function isSlashCommand(input: string): boolean {
+  return looksLikeCommand(input);
+}
+
+/**
+ * Slash-command path only. Free-text chat now streams through
+ * postChatStream (see ./repl-stream) — do not call postTurn for it.
+ */
 export async function postTurn(input: string, sessionId: string): Promise<TurnResponse> {
-  // Bare free-text (no slash-command, no known verb) → chat path with real LLM.
   if (!looksLikeCommand(input)) {
-    const t0 = Date.now();
-    const res = await fetch("/api/repl/chat", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ input }),
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const body = (await res.json()) as { kind: "chat"; text: string; provider: string; tookMs: number };
-    return {
-      results: [{ kind: "chat", text: body.text, provider: body.provider }],
-      costUsd: 0,
-      tookMs: body.tookMs ?? Date.now() - t0,
-    };
+    throw new Error(
+      "postTurn handles slash-commands only; use postChatStream for free-text",
+    );
   }
   const res = await fetch("/api/repl/turn", {
     method: "POST",
