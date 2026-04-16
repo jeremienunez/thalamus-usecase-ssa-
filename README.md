@@ -207,10 +207,30 @@ Each uses the same `docs/specs/` contracts. Each is a schema + skill-pack swap. 
 
 ```bash
 pnpm install
-pnpm -r typecheck   # all packages
+pnpm -r typecheck   # all 7 packages
 pnpm test           # vitest workspace (unit / integration / e2e)
 pnpm run ssa        # conversational CLI (Ink REPL — see §SSA console below)
 ```
+
+### Full end-to-end SSA pipeline (live infra)
+
+```bash
+make up             # Postgres (pgvector) + Redis via docker-compose
+make migrate        # Drizzle schema + enum prelude + HNSW halfvec(2048) index
+make seed           # 33k-obj catalog (CelesTrak SATCAT) + Voyage-4-large
+                    # embeddings (~$0.08) + SGP4 narrow-phase screen with
+                    # Foster-1992 Pc on regime-conditioned σ
+
+THALAMUS_MODE=record   make thalamus-cycle   # live LLMs, caches transcripts
+THALAMUS_MODE=fixtures make thalamus-cycle   # replay from fixtures/recorded/, zero network
+make sweep-run                                # nano-swarm audit + reviewer loop
+make hooks-install                            # wire .githooks/pre-commit (spec-check + typecheck gate)
+```
+
+Fresh run from a clean volume produces `research_finding` rows with per-event
+titles (`NORAD 28252 × 38332 — 2.1 km miss, 2026-04-17T14:12Z, Pc=1.8e-04`),
+`research_edge` rows binding each finding to both satellites, and an
+`hnsw halfvec_cosine_ops` index serving semantic dedup at 2048-dim.
 
 ## SSA console — `pnpm run ssa`
 
