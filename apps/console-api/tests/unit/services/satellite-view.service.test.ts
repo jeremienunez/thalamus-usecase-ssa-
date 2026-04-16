@@ -47,7 +47,7 @@ describe("SatelliteViewService.list", () => {
     const svc = new SatelliteViewService(repo);
     const res = await svc.list({ limit: 100 });
     expect(res).toEqual({ items: [], total: 0 });
-    expect(repo.listWithOrbital).toHaveBeenCalledWith(100);
+    expect(repo.listWithOrbital).toHaveBeenCalledWith(100, undefined);
   });
 
   it("maps a single row to a SatelliteView with Number-converted id", async () => {
@@ -159,26 +159,35 @@ describe("SatelliteViewService.list", () => {
     expect(items[2]!.classificationTier).toBe("unclassified");
   });
 
-  it("applies regime filter AFTER mapping (keeps only matches)", async () => {
+  it("forwards regime filter to the repository (push-down — no in-memory re-filter)", async () => {
     const repo = mockRepo();
+    // Repo is the source of truth for regime filtering now — service trusts
+    // whatever it returns without a second-pass memory filter.
     (repo.listWithOrbital as ReturnType<typeof vi.fn>).mockResolvedValue([
       row({ id: "1", telemetry_summary: { regime: "GEO", raan: 0 } }),
-      row({ id: "2", telemetry_summary: { regime: "LEO", raan: 0 } }),
       row({ id: "3", telemetry_summary: { regime: "GEO", raan: 0 } }),
     ]);
     const svc = new SatelliteViewService(repo);
     const { items, total } = await svc.list({ limit: 10, regime: "GEO" });
+    expect(repo.listWithOrbital).toHaveBeenCalledWith(10, "GEO");
     expect(items.map((i) => i.id)).toEqual([1, 3]);
     expect(total).toBe(2);
   });
 
-  it("returns empty items when regime filter matches nothing", async () => {
+  it("returns empty items when the repo returns no rows for the regime", async () => {
     const repo = mockRepo();
-    (repo.listWithOrbital as ReturnType<typeof vi.fn>).mockResolvedValue([
-      row({ id: "1", telemetry_summary: { regime: "LEO", raan: 0 } }),
-    ]);
+    (repo.listWithOrbital as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     const svc = new SatelliteViewService(repo);
     const res = await svc.list({ limit: 10, regime: "GEO" });
+    expect(repo.listWithOrbital).toHaveBeenCalledWith(10, "GEO");
     expect(res).toEqual({ items: [], total: 0 });
+  });
+
+  it("omits regime arg when no regime filter requested", async () => {
+    const repo = mockRepo();
+    (repo.listWithOrbital as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const svc = new SatelliteViewService(repo);
+    await svc.list({ limit: 50 });
+    expect(repo.listWithOrbital).toHaveBeenCalledWith(50, undefined);
   });
 });

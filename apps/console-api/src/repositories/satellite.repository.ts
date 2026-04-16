@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type { Regime } from "@interview/shared";
 import { fieldSqlFor } from "../utils/sql-field";
 
 export type SatelliteOrbitalRow = {
@@ -25,7 +26,27 @@ export type SatelliteNameRow = {
 export class SatelliteRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
-  async listWithOrbital(limit: number): Promise<SatelliteOrbitalRow[]> {
+  async listWithOrbital(
+    limit: number,
+    regime?: Regime,
+  ): Promise<SatelliteOrbitalRow[]> {
+    // Regime filter pushed to SQL so it composes with LIMIT correctly.
+    // Prefer the explicit regime field on telemetry_summary when present;
+    // otherwise derive from meanMotion using the same thresholds as
+    // regimeFromMeanMotion() in @interview/shared
+    // (<1.1 → GEO, <5 → MEO, <11 → HEO, else LEO).
+    const regimeFilter = regime
+      ? sql`AND COALESCE(
+          UPPER(NULLIF(s.telemetry_summary->>'regime', '')),
+          CASE
+            WHEN (s.telemetry_summary->>'meanMotion')::float < 1.1 THEN 'GEO'
+            WHEN (s.telemetry_summary->>'meanMotion')::float < 5   THEN 'MEO'
+            WHEN (s.telemetry_summary->>'meanMotion')::float < 11  THEN 'HEO'
+            ELSE 'LEO'
+          END
+        ) = ${regime}`
+      : sql``;
+
     const rows = await this.db.execute<SatelliteOrbitalRow>(sql`
       SELECT
         s.id::text                                       AS id,
@@ -42,6 +63,7 @@ export class SatelliteRepository {
       LEFT JOIN operator op          ON op.id = s.operator_id
       LEFT JOIN operator_country oc  ON oc.id = s.operator_country_id
       WHERE s.telemetry_summary ? 'raan'
+        ${regimeFilter}
       ORDER BY s.id
       LIMIT ${limit}
     `);

@@ -9,11 +9,9 @@ export class SatelliteViewService {
     limit: number;
     regime?: Regime;
   }): Promise<{ items: SatelliteView[]; total: number }> {
-    const rows = await this.repo.listWithOrbital(opts.limit);
+    // Regime filter is pushed down into SQL so it composes with LIMIT.
+    const rows = await this.repo.listWithOrbital(opts.limit, opts.regime);
     const items = rows.map(toSatelliteView);
-    const filtered = opts.regime
-      ? items.filter((s) => s.regime === opts.regime)
-      : items;
-    return { items: filtered, total: filtered.length };
+    return { items, total: items.length };
   }
 }
