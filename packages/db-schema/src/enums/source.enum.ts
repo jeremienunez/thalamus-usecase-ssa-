@@ -1,27 +1,20 @@
 import { pgEnum } from "drizzle-orm/pg-core";
+import { SourceKind } from "@interview/shared";
 
 /**
- * Source kind — distinguishes ingestion lanes for the unified `source` /
- * `source_item` polymorphic catalogue.
+ * Source kind pgEnum — tuple derived from the TS enum declared in
+ * [@interview/shared/enum/source.enum](../../../shared/src/enum/source.enum.ts).
  *
- *   rss     — generic RSS 2.0 / Atom feed
- *   arxiv   — arXiv API (Atom XML)
- *   ntrs    — NASA Technical Reports Server JSON API
- *   osint   — bespoke OSINT scraper output
- *   field   — operator/field reports (manual)
- *   radar   — radar/observation network telemetry
- *   press   — press releases / official agency comms
- *
- * Keep in sync with prelude DDL in
+ * Single source of values: TS enum → `Object.values()` → pgEnum tuple.
+ * Stays in sync with live DB by construction; prelude DDL lives at
  * [migrations/0000_enums_prelude.sql](../../migrations/0000_enums_prelude.sql).
  */
-export const sourceKindEnum = pgEnum("source_kind", [
-  "rss",
-  "arxiv",
-  "ntrs",
-  "osint",
-  "field",
-  "radar",
-  "press",
-]);
+
+const asTuple = (values: readonly string[]): [string, ...string[]] =>
+  values as [string, ...string[]];
+
+export const sourceKindEnum = pgEnum(
+  "source_kind",
+  asTuple(Object.values(SourceKind)),
+);
 export type SourceKindValue = (typeof sourceKindEnum.enumValues)[number];

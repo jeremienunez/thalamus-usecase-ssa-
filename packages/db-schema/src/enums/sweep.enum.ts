@@ -1,35 +1,36 @@
 import { pgEnum } from "drizzle-orm/pg-core";
+import {
+  SweepCategory,
+  SweepSeverity,
+  SweepResolutionStatus,
+} from "@interview/shared";
 
 /**
- * Sweep enums — category, severity, resolution status.
+ * Sweep pgEnums — tuples derived from the TS enums declared in
+ * [@interview/shared/enum/sweep.enum](../../../shared/src/enum/sweep.enum.ts).
  *
- * Sourced from [sweep.dto.ts](../../../sweep/src/transformers/sweep.dto.ts) where the
- * review-loop contract is declared. Replicated as pgEnum here to back the durable
- * `sweep_audit` table. Values MUST stay in sync with the DTO literal unions.
+ * Single source of values: TS enum → `Object.values()` → pgEnum tuple.
+ * Stays in sync with live DB by construction.
  */
 
-export const sweepCategoryEnum = pgEnum("sweep_category", [
-  "mass_anomaly",
-  "missing_data",
-  "doctrine_mismatch",
-  "relationship_error",
-  "enrichment",
-  "briefing_angle",
-]);
-export type SweepCategory = (typeof sweepCategoryEnum.enumValues)[number];
+const asTuple = (values: readonly string[]): [string, ...string[]] =>
+  values as [string, ...string[]];
 
-export const sweepSeverityEnum = pgEnum("sweep_severity", [
-  "critical",
-  "warning",
-  "info",
-]);
-export type SweepSeverity = (typeof sweepSeverityEnum.enumValues)[number];
+export const sweepCategoryEnum = pgEnum(
+  "sweep_category",
+  asTuple(Object.values(SweepCategory)),
+);
+export type SweepCategoryValue = (typeof sweepCategoryEnum.enumValues)[number];
 
-export const sweepResolutionStatusEnum = pgEnum("sweep_resolution_status", [
-  "success",
-  "partial",
-  "failed",
-  "pending_selection",
-]);
-export type SweepResolutionStatus =
+export const sweepSeverityEnum = pgEnum(
+  "sweep_severity",
+  asTuple(Object.values(SweepSeverity)),
+);
+export type SweepSeverityValue = (typeof sweepSeverityEnum.enumValues)[number];
+
+export const sweepResolutionStatusEnum = pgEnum(
+  "sweep_resolution_status",
+  asTuple(Object.values(SweepResolutionStatus)),
+);
+export type SweepResolutionStatusValue =
   (typeof sweepResolutionStatusEnum.enumValues)[number];
