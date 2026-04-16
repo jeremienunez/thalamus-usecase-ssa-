@@ -103,6 +103,20 @@ Every spec has a Traceability table; tests must land at those paths and the `des
 - [ ] Follow-ups from code review: redact error messages from `asyncHandler` before sending to client in prod, tighten `satellitesController` to validate `regime` via `RegimeSchema.safeParse`, reshape `ConjunctionViewService.list(minPc)` to options-object for symmetry with other services, split `findingDecisionController`'s `"invalid"` sentinel into `"invalid-id"` vs `"invalid-decision"` for field-specific UI errors. `entityRef` duplicated between `kg-view.transformer` and `finding-view.transformer` — de-dup by importing the kg-view one from finding-view (no new file needed).
 - [ ] Follow-up from code review: `MissionService` start/stop race preserved from server.ts — add generation counter to prevent concurrent ticks from two rapid start/stop cycles.
 
+### console-api — test surface gaps
+
+Post-refactor audit (2026-04-16). Current: **21 test files, 486 passing**. Foundation solid (transformers 5/5, utils 4/6, 6/14 services, satellite repo integration), but ~60% coverage overall. Top priorities ordered by impact × complexity:
+
+- [ ] **Unit test `ReflexionService`** (`services/reflexion.service.ts`, 299L) — two emit branches (MIL peers vs divergent country), 4 SQL call sites, `HttpError.notFound` / `badRequest` throw paths. Most critical untested service.
+- [ ] **Unit test `MissionService`** (`services/mission.service.ts`, 266L) — state machine with setInterval + busy flag + cursor; cover `publicState`, `start/stop` idempotence, `tick` advancement, `runTask` 2-vote consensus, `applyFill` range-guard rejection.
+- [ ] **Unit test `KnnPropagationService`** (`services/knn-propagation.service.ts`, 186L) — median-within-10% numeric consensus, mode-≥2/3 text consensus, tooFar / disagree / outOfRange bucket accounting, dryRun short-circuit.
+- [ ] **Integration spec repos** against live Postgres: `finding.repository.spec.ts`, `research-edge.repository.spec.ts`, `reflexion.repository.spec.ts`, `stats.repository.spec.ts` — all write paths currently only exercised via e2e through services.
+- [ ] Remaining services without unit tests: `KgViewService`, `StatsService`, `EnrichmentFindingService`, `NanoResearchService`, `ReplChatService`, `ReplTurnService`, `SweepSuggestionsService` (already has tests — verify coverage), `AutonomyService` (has tests — verify clamp/NaN branches).
+- [ ] e2e gap: 4 endpoints covered / ~20 exist. Add smoke specs for `/api/satellites`, `/api/kg/{nodes,edges}`, `/api/findings` (list + byId + decision), `/api/stats`, `/api/sweep/suggestions` (list + review), `/api/sweep/reflexion-pass`, `/api/autonomy/{start,stop,status}`, `/api/cycles/{run,list}`, `/api/repl/{chat,turn}`.
+- [ ] Schema tests — `schemas/*.schema.ts` have no direct tests. Each schema should have a small unit test asserting: strict fields reject invalid inputs (400 expected), clamp fields accept+clamp (no 400), `.finite()` rejects NaN/Infinity/bool. Would catch future drift in the strict/clamp rule.
+- [ ] Controller-layer tests — currently 0 direct controller tests (covered indirectly by e2e). Parse→service→response contract would benefit from tight controller-level tests that mock the service and assert status codes (400 / 404 / 500) per route.
+- [ ] Add `pnpm test:coverage` script + codecov-style report; target ≥80% on `services/` + `transformers/` + `utils/`, ≥70% overall.
+
 ## Domain pivot to SSA (Space Situational Awareness) — done 2026-04-13
 
 The repo was pivoted from its original commercial domain to SSA (collision avoidance, dual-stream OSINT × classified radar, HITL = mission operator). Mapping is schema-level, not cosmetic: `satellite / operator / operator_country / payload / orbit_regime / platform_class / satellite_bus / satellite_payload` are the canonical entities. Cortices are now SSA-native: `catalog / observations / conjunction-analysis / correlation / maneuver-planning` (core 5) plus 13 analysts / auditors.
