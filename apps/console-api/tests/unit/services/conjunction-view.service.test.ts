@@ -37,7 +37,7 @@ describe("ConjunctionViewService.list", () => {
     (repo.listAboveMinPc as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     const svc = new ConjunctionViewService(repo);
     const res = await svc.list({ minPc: 0 });
-    expect(res).toEqual({ items: [], total: 0 });
+    expect(res).toEqual({ items: [], count: 0 });
     expect(repo.listAboveMinPc).toHaveBeenCalledWith(0);
   });
 
@@ -215,7 +215,7 @@ describe("ConjunctionViewService.list", () => {
     expect(items[0]!.secondaryId).toBe(99);
   });
 
-  it("returns total matching items length", async () => {
+  it("returns count matching items length", async () => {
     const repo = mockRepo();
     (repo.listAboveMinPc as ReturnType<typeof vi.fn>).mockResolvedValue([
       row({ id: "1" }),
@@ -223,8 +223,8 @@ describe("ConjunctionViewService.list", () => {
       row({ id: "3" }),
     ]);
     const svc = new ConjunctionViewService(repo);
-    const { items, total } = await svc.list({ minPc: 0 });
+    const { items, count } = await svc.list({ minPc: 0 });
     expect(items.length).toBe(3);
-    expect(total).toBe(3);
+    expect(count).toBe(3);
   });
 });

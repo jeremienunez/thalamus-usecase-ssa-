@@ -20,7 +20,7 @@ export class FindingViewService {
   async list(filters: {
     status?: string;
     cortex?: string;
-  }): Promise<{ items: FindingView[]; total: number }> {
+  }): Promise<{ items: FindingView[]; count: number }> {
     // Translate DTO status vocab ("pending"|"accepted"|"rejected"|"in-review") to
     // DB enum ("active"|"archived"|"invalidated"). If the incoming status isn't
     // a known DTO value, drop it (don't let arbitrary strings reach the DB enum).
@@ -51,7 +51,7 @@ export class FindingViewService {
       }
       for (const f of items) f.linkedEntityIds = edgeMap.get(f.id) ?? [];
     }
-    return { items, total: items.length };
+    return { items, count: items.length };
   }
 
   async findById(idRaw: string): Promise<FindingView | null | "invalid-id"> {

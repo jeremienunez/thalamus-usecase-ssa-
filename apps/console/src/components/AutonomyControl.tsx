@@ -95,7 +95,7 @@ export function AutonomyControl() {
           {/* Live counters — these move when autonomy writes */}
           <div className="grid grid-cols-3 border-b border-hairline">
             <Stat label="FINDINGS" value={stats?.findings ?? 0} tone="cyan" />
-            <Stat label="SUGGESTIONS" value={sugg?.total ?? 0} tone="amber" />
+            <Stat label="SUGGESTIONS" value={sugg?.count ?? 0} tone="amber" />
             <Stat label="KG EDGES" value={stats?.kgEdges ?? 0} tone="cold" />
           </div>
 

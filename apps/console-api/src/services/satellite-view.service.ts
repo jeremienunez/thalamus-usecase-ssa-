@@ -8,10 +8,10 @@ export class SatelliteViewService {
   async list(opts: {
     limit: number;
     regime?: Regime;
-  }): Promise<{ items: SatelliteView[]; total: number }> {
+  }): Promise<{ items: SatelliteView[]; count: number }> {
     // Regime filter is pushed down into SQL so it composes with LIMIT.
     const rows = await this.repo.listWithOrbital(opts.limit, opts.regime);
     const items = rows.map(toSatelliteView);
-    return { items, total: items.length };
+    return { items, count: items.length };
   }
 }

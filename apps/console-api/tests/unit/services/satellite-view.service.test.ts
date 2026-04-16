@@ -41,12 +41,12 @@ function row(overrides: Partial<SatelliteOrbitalRow> = {}): SatelliteOrbitalRow 
 }
 
 describe("SatelliteViewService.list", () => {
-  it("returns empty items/total when repo returns no rows", async () => {
+  it("returns empty items/count when repo returns no rows", async () => {
     const repo = mockRepo();
     (repo.listWithOrbital as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     const svc = new SatelliteViewService(repo);
     const res = await svc.list({ limit: 100 });
-    expect(res).toEqual({ items: [], total: 0 });
+    expect(res).toEqual({ items: [], count: 0 });
     expect(repo.listWithOrbital).toHaveBeenCalledWith(100, undefined);
   });
 
@@ -56,8 +56,8 @@ describe("SatelliteViewService.list", () => {
       row({ id: "42" }),
     ]);
     const svc = new SatelliteViewService(repo);
-    const { items, total } = await svc.list({ limit: 10 });
-    expect(total).toBe(1);
+    const { items, count } = await svc.list({ limit: 10 });
+    expect(count).toBe(1);
     expect(items[0]!.id).toBe(42);
     expect(items[0]!.name).toBe("TEST-SAT");
     expect(items[0]!.noradId).toBe(12345);
@@ -168,10 +168,10 @@ describe("SatelliteViewService.list", () => {
       row({ id: "3", telemetry_summary: { regime: "GEO", raan: 0 } }),
     ]);
     const svc = new SatelliteViewService(repo);
-    const { items, total } = await svc.list({ limit: 10, regime: "GEO" });
+    const { items, count } = await svc.list({ limit: 10, regime: "GEO" });
     expect(repo.listWithOrbital).toHaveBeenCalledWith(10, "GEO");
     expect(items.map((i) => i.id)).toEqual([1, 3]);
-    expect(total).toBe(2);
+    expect(count).toBe(2);
   });
 
   it("returns empty items when the repo returns no rows for the regime", async () => {
@@ -180,7 +180,7 @@ describe("SatelliteViewService.list", () => {
     const svc = new SatelliteViewService(repo);
     const res = await svc.list({ limit: 10, regime: "GEO" });
     expect(repo.listWithOrbital).toHaveBeenCalledWith(10, "GEO");
-    expect(res).toEqual({ items: [], total: 0 });
+    expect(res).toEqual({ items: [], count: 0 });
   });
 
   it("omits regime arg when no regime filter requested", async () => {

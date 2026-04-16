@@ -30,7 +30,7 @@ export type ReviewResult =
 export class SweepSuggestionsService {
   constructor(private readonly deps: SweepDeps) {}
 
-  async list(): Promise<{ items: SuggestionListItem[]; total: number }> {
+  async list(): Promise<{ items: SuggestionListItem[]; count: number }> {
     const res = await this.deps.sweepRepo.list({ reviewed: false, limit: 100 });
     const items: SuggestionListItem[] = res.rows.map((r) => ({
       id: r.id,
@@ -46,7 +46,7 @@ export class SweepSuggestionsService {
       resolutionStatus: r.resolutionStatus,
       hasPayload: Boolean(r.resolutionPayload),
     }));
-    return { items, total: items.length };
+    return { items, count: items.length };
   }
 
   async review(
