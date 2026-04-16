@@ -99,18 +99,18 @@ async function getJson<T>(url: string): Promise<T> {
 
 export const api = {
   satellites: (regime?: Regime) =>
-    getJson<{ items: SatelliteDTO[]; total: number }>(
+    getJson<{ items: SatelliteDTO[]; count: number }>(
       `/api/satellites${regime ? `?regime=${regime}` : ""}`,
     ),
   conjunctions: (minPc = 0) =>
-    getJson<{ items: ConjunctionDTO[]; total: number }>(`/api/conjunctions?minPc=${minPc}`),
+    getJson<{ items: ConjunctionDTO[]; count: number }>(`/api/conjunctions?minPc=${minPc}`),
   kgNodes: () => getJson<{ items: KgNodeDTO[] }>(`/api/kg/nodes`),
   kgEdges: () => getJson<{ items: KgEdgeDTO[] }>(`/api/kg/edges`),
   findings: (params?: { status?: FindingStatus; cortex?: string }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
     if (params?.cortex) qs.set("cortex", params.cortex);
-    return getJson<{ items: FindingDTO[]; total: number }>(
+    return getJson<{ items: FindingDTO[]; count: number }>(
       `/api/findings${qs.toString() ? `?${qs}` : ""}`,
     );
   },
@@ -145,7 +145,7 @@ export const api = {
   },
   cycles: () => getJson<{ items: CycleDTO[] }>(`/api/cycles`),
   sweepSuggestions: () =>
-    getJson<{ items: SweepSuggestionDTO[]; total: number }>(`/api/sweep/suggestions`),
+    getJson<{ items: SweepSuggestionDTO[]; count: number }>(`/api/sweep/suggestions`),
   missionStatus: () => getJson<MissionStateDTO>(`/api/sweep/mission/status`),
   missionStart: async () => {
     const res = await fetch(`/api/sweep/mission/start`, { method: "POST" });

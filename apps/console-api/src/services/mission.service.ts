@@ -76,10 +76,9 @@ export class MissionService {
   }> {
     if (this.state.running)
       return { ok: true, alreadyRunning: true, state: this.publicState() };
-    const cap = Math.max(
-      1,
-      Math.min(20, opts.maxSatsPerSuggestion ?? MAX_SATS_PER_SUGGESTION),
-    );
+    // Controller-side MissionStartBodySchema already clamps to [1, 20]. We
+    // still allow `undefined` for programmatic callers without a schema.
+    const cap = opts.maxSatsPerSuggestion ?? MAX_SATS_PER_SUGGESTION;
     const listing = await this.sweepRepo.list({ reviewed: false, limit: 300 });
     const tasks: MissionTask[] = [];
 

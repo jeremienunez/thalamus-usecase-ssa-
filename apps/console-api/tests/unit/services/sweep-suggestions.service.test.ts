@@ -61,12 +61,12 @@ describe("SweepSuggestionsService.list", () => {
         row({ id: "s:2", resolutionPayload: null }),
       ],
     });
-    const { items, total } = await svc.list();
+    const { items, count } = await svc.list();
     expect(deps.sweepRepo.list).toHaveBeenCalledWith({
       reviewed: false,
       limit: 100,
     });
-    expect(total).toBe(2);
+    expect(count).toBe(2);
     expect(items[0]).toMatchObject({ id: "s:1", hasPayload: true });
     expect(items[1]).toMatchObject({ id: "s:2", hasPayload: false });
     // ensure resolutionPayload itself is NOT leaked to the DTO
@@ -78,7 +78,7 @@ describe("SweepSuggestionsService.list", () => {
       rows: [],
     });
     const res = await svc.list();
-    expect(res).toEqual({ items: [], total: 0 });
+    expect(res).toEqual({ items: [], count: 0 });
   });
 });
 

@@ -55,9 +55,10 @@ export class AutonomyService {
   } {
     if (this.state.running)
       return { ok: true, alreadyRunning: true, state: this.publicState() };
-    // Defense-in-depth: guard against NaN/Infinity that would otherwise
-    // propagate through Math.max/Math.min and land in setInterval as NaN,
-    // which Node coerces to 1 ms → runaway timer.
+    // Controller-side schema (AutonomyStartBodySchema) already rejects
+    // NaN/Infinity via .finite() and clamps to [15, 600]. Defense-in-depth:
+    // keep a trivial safety net so a misuse from internal callers can't
+    // land NaN into setInterval (Node would coerce it to 1 ms).
     const safe = Number.isFinite(intervalSec) ? intervalSec : 45;
     const sec = Math.max(15, Math.min(600, safe));
     this.state.intervalMs = sec * 1000;

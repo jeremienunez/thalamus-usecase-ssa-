@@ -60,7 +60,7 @@ export class CycleRunnerService {
   async runUserCycle(
     kind: CycleKind,
     query: string,
-  ): Promise<{ cycle: CycleRun } | { cycle: CycleRun; error: string }> {
+  ): Promise<{ cycle: CycleRun }> {
     const startedAt = new Date().toISOString();
     const id = `cyc:${Date.now().toString(36)}`;
     try {
@@ -97,7 +97,9 @@ export class CycleRunnerService {
         error: errMsg,
       };
       this.pushHistory(run);
-      return { cycle: run, error: errMsg };
+      // Failure info travels on `cycle.error`; the controller promotes it to a
+      // 500 status. Returning a single shape keeps the contract flat.
+      return { cycle: run };
     }
   }
 

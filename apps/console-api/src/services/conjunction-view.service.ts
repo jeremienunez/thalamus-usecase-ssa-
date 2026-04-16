@@ -9,9 +9,9 @@ export class ConjunctionViewService {
     minPc,
   }: {
     minPc: number;
-  }): Promise<{ items: ConjunctionView[]; total: number }> {
+  }): Promise<{ items: ConjunctionView[]; count: number }> {
     const rows = await this.repo.listAboveMinPc(minPc);
     const items = rows.map(toConjunctionView);
-    return { items, total: items.length };
+    return { items, count: items.length };
   }
 }

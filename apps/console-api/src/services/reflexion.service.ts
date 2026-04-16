@@ -1,5 +1,5 @@
 // apps/console-api/src/services/reflexion.service.ts
-import type { ReflexionBody } from "../types";
+import type { ReflexionPassBody } from "../schemas";
 import type {
   ReflexionRepository,
   CoplaneRow,
@@ -10,6 +10,7 @@ import type {
 import type { EnrichmentCycleRepository } from "../repositories/enrichment-cycle.repository";
 import type { FindingRepository } from "../repositories/finding.repository";
 import type { ResearchEdgeRepository } from "../repositories/research-edge.repository";
+import { HttpError } from "../utils/http-error";
 
 export type ReflexionResult = {
   target: {
@@ -64,20 +65,16 @@ export class ReflexionService {
     private readonly edges: ResearchEdgeRepository,
   ) {}
 
-  async runPass(
-    body: ReflexionBody,
-  ): Promise<ReflexionResult | { error: string; code: 400 | 404 }> {
-    const norad = Number(body.noradId);
-    if (!Number.isFinite(norad))
-      return { error: "noradId required (number)", code: 400 };
-    const dIncMax = Math.max(0.01, Math.min(5, body.dIncMax ?? 0.3));
-    const dRaanMax = Math.max(0.1, Math.min(20, body.dRaanMax ?? 5.0));
-    const dMmMax = Math.max(0.001, Math.min(0.5, body.dMmMax ?? 0.05));
+  async runPass(body: ReflexionPassBody): Promise<ReflexionResult> {
+    // Schema (H3) enforces: noradId positive integer; dIncMax/dRaanMax/dMmMax
+    // bounded with defaults. No re-clamp needed here.
+    const norad = body.noradId;
+    const { dIncMax, dRaanMax, dMmMax } = body;
 
     const t = await this.repo.findTarget(norad);
-    if (!t) return { error: "satellite not found", code: 404 };
+    if (!t) throw HttpError.notFound("satellite not found");
     if (t.inc == null || t.raan == null || t.mm == null)
-      return { error: "target missing orbital elements", code: 400 };
+      throw HttpError.badRequest("target missing orbital elements");
 
     const [strict, belt, mil] = await Promise.all([
       this.repo.findStrictCoplane(norad, t, dIncMax, dRaanMax, dMmMax),

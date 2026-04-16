@@ -9,7 +9,11 @@ import {
   jsonb,
   index,
 } from "drizzle-orm/pg-core";
-import type { SweepCategory, SweepSeverity, SweepResolutionStatus } from "../enums";
+import type {
+  SweepCategoryValue as SweepCategory,
+  SweepSeverityValue as SweepSeverity,
+  SweepResolutionStatusValue as SweepResolutionStatus,
+} from "../enums";
 import {
   sweepCategoryEnum,
   sweepSeverityEnum,

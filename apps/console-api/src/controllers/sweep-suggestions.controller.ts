@@ -2,6 +2,8 @@
 import type { FastifyRequest } from "fastify";
 import type { SweepSuggestionsService } from "../services/sweep-suggestions.service";
 import { asyncHandler } from "../utils/async-handler";
+import { parseOrReply } from "../utils/parse-request";
+import { SweepReviewParamsSchema, SweepReviewBodySchema } from "../schemas";
 
 /**
  * Structural deps for sweep-suggestions controllers. Kept here so the
@@ -38,17 +40,16 @@ export function sweepSuggestionsListController(
 }
 
 export function sweepReviewController(service: SweepSuggestionsService) {
-  return asyncHandler<
-    FastifyRequest<{
-      Params: { id: string };
-      Body: { accept: boolean; reason?: string };
-    }>
-  >(async (req, reply) => {
-    const { id } = req.params;
-    const { accept, reason } = req.body ?? { accept: false };
-    const result = await service.review(id, accept, reason);
-    if (result.ok === false)
-      return reply.code(404).send({ error: "not found" });
-    return result;
-  });
+  return asyncHandler<FastifyRequest<{ Params: unknown; Body: unknown }>>(
+    async (req, reply) => {
+      const params = parseOrReply(req.params, SweepReviewParamsSchema, reply);
+      if (params === null) return;
+      const body = parseOrReply(req.body, SweepReviewBodySchema, reply);
+      if (body === null) return;
+      const result = await service.review(params.id, body.accept, body.reason);
+      if (result.ok === false)
+        return reply.code(404).send({ error: "not found" });
+      return result;
+    },
+  );
 }
