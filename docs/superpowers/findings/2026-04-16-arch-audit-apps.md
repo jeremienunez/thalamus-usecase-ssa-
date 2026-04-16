@@ -12,6 +12,13 @@ The main upward leaks are not SSA métier. They are reusable app-runtime pattern
 
 The inverse finding is important: **SSA prompts currently in `packages/thalamus` and `packages/sweep` are business/domain assets, not kernel.** Under the stated hypothesis they should move down into an app-owned SSA prompt/domain pack and be injected into Thalamus/Sweep kernels.
 
+Procedure evidence:
+
+- Ran `ls -R apps/console-api/src/ apps/console/src/` and used it as the scope map for the audit.
+- Ran the requested `grep -rn "SSA\|satellite\|conjunction\|orbital" apps/`; because it traversed generated/build artifacts too, repeated the signal check over `apps/console-api/src` and `apps/console/src`.
+- Searched reusable patterns explicitly: connection pool/resource lifecycle, Fastify boot/middleware/helpers, scheduler/autonomous loop, SSE stream read/write.
+- Verified `apps/console-api/src/prompts/`, `packages/thalamus/src/prompts/`, Thalamus skill markdown, and Sweep inline/sim prompts.
+
 ## Kernel-leaked-UP (du code dans apps/ qui devrait remonter packages/)
 
 | File | Reason | Where |
