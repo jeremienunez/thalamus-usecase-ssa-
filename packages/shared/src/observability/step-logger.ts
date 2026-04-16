@@ -1,5 +1,6 @@
 import type { Logger } from "pino";
 import { STEP_REGISTRY, type StepName } from "./steps";
+import { stepContextStore } from "./step-context";
 
 export { STEP_REGISTRY } from "./steps";
 export type { StepName, StepEntry } from "./steps";
@@ -27,29 +28,24 @@ export function stepLog(
   phase: StepPhase,
   extra: Record<string, unknown> = {},
 ): void {
+  const event = buildStepEvent(step, phase, extra);
+  logger.info(event);
+  stepContextStore.getStore()?.onStep(event);
+}
+
+function buildStepEvent(
+  step: StepName,
+  phase: StepPhase,
+  extra: Record<string, unknown>,
+): StepEvent {
   const entry = STEP_REGISTRY[step];
   if (!entry) {
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.warn(`[stepLog] unknown step: ${step}`);
     }
-    const event: StepEvent = {
-      step: "unknown",
-      phase,
-      frames: [],
-      terminal: "❔",
-      ...extra,
-    };
-    logger.info(event);
-    return;
+    return { step: "unknown", phase, frames: [], terminal: "❔", ...extra };
   }
   const terminal = phase === "error" ? (entry.error ?? entry.terminal) : entry.terminal;
-  const event: StepEvent = {
-    step,
-    phase,
-    frames: entry.frames ?? [],
-    terminal,
-    ...extra,
-  };
-  logger.info(event);
+  return { step, phase, frames: entry.frames ?? [], terminal, ...extra };
 }
