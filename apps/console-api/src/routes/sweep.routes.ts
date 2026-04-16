@@ -1,10 +1,10 @@
 // apps/console-api/src/routes/sweep.routes.ts
 import type { FastifyInstance } from "fastify";
 import type { MissionService } from "../services/mission.service";
+import type { SweepSuggestionsService } from "../services/sweep-suggestions.service";
 import {
   sweepSuggestionsListController,
   sweepReviewController,
-  type SweepDeps,
 } from "../controllers/sweep-suggestions.controller";
 import {
   missionStartController,
@@ -14,14 +14,17 @@ import {
 
 export function registerSweepRoutes(
   app: FastifyInstance,
-  deps: SweepDeps,
+  suggestions: SweepSuggestionsService,
   mission: MissionService,
 ): void {
-  app.get("/api/sweep/suggestions", sweepSuggestionsListController(deps));
+  app.get(
+    "/api/sweep/suggestions",
+    sweepSuggestionsListController(suggestions),
+  );
   app.post<{
     Params: { id: string };
     Body: { accept: boolean; reason?: string };
-  }>("/api/sweep/suggestions/:id/review", sweepReviewController(deps));
+  }>("/api/sweep/suggestions/:id/review", sweepReviewController(suggestions));
   app.post<{ Body: { maxSatsPerSuggestion?: number } }>(
     "/api/sweep/mission/start",
     missionStartController(mission),

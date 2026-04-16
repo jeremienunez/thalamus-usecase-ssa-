@@ -55,7 +55,11 @@ export class AutonomyService {
   } {
     if (this.state.running)
       return { ok: true, alreadyRunning: true, state: this.publicState() };
-    const sec = Math.max(15, Math.min(600, intervalSec));
+    // Defense-in-depth: guard against NaN/Infinity that would otherwise
+    // propagate through Math.max/Math.min and land in setInterval as NaN,
+    // which Node coerces to 1 ms → runaway timer.
+    const safe = Number.isFinite(intervalSec) ? intervalSec : 45;
+    const sec = Math.max(15, Math.min(600, safe));
     this.state.intervalMs = sec * 1000;
     this.state.running = true;
     this.state.startedAt = new Date().toISOString();

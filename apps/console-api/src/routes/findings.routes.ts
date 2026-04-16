@@ -20,6 +20,6 @@ export function registerFindingsRoutes(
   );
   app.post<{
     Params: { id: string };
-    Body: { decision: string; reason?: string };
+    Body: { decision: string };
   }>("/api/findings/:id/decision", findingDecisionController(service));
 }

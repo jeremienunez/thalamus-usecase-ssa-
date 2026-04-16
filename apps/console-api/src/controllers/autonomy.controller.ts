@@ -3,10 +3,15 @@ import type { FastifyRequest } from "fastify";
 import type { AutonomyService } from "../services/autonomy.service";
 import { asyncHandler } from "../utils/async-handler";
 
+const DEFAULT_INTERVAL_SEC = 45;
+
 export function autonomyStartController(service: AutonomyService) {
   return asyncHandler<FastifyRequest<{ Body: { intervalSec?: number } }>>(
     async (req) => {
-      return service.start(Number(req.body?.intervalSec ?? 45));
+      const raw = req.body?.intervalSec;
+      const n = typeof raw === "number" ? raw : Number(raw);
+      const intervalSec = Number.isFinite(n) ? n : DEFAULT_INTERVAL_SEC;
+      return service.start(intervalSec);
     },
   );
 }

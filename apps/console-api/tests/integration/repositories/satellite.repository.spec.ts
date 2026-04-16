@@ -38,6 +38,54 @@ describe("SatelliteRepository", () => {
     });
   });
 
+  describe("listWithOrbital with regime filter", () => {
+    it("returns only GEO rows when regime='GEO'", async () => {
+      const rows = await repo.listWithOrbital(5, "GEO");
+      if (rows.length === 0) return; // dev DB may not have GEO sats — skip
+      for (const r of rows) {
+        const ts = (r.telemetry_summary ?? {}) as {
+          meanMotion?: number;
+          regime?: string;
+        };
+        const mm = Number(ts.meanMotion ?? 15);
+        const derived =
+          typeof ts.regime === "string"
+            ? ts.regime.toUpperCase()
+            : mm < 1.1
+              ? "GEO"
+              : mm < 5
+                ? "MEO"
+                : mm < 11
+                  ? "HEO"
+                  : "LEO";
+        expect(derived).toBe("GEO");
+      }
+    });
+
+    it("returns only LEO rows when regime='LEO'", async () => {
+      const rows = await repo.listWithOrbital(5, "LEO");
+      if (rows.length === 0) return;
+      for (const r of rows) {
+        const ts = (r.telemetry_summary ?? {}) as {
+          meanMotion?: number;
+          regime?: string;
+        };
+        const mm = Number(ts.meanMotion ?? 15);
+        const derived =
+          typeof ts.regime === "string"
+            ? ts.regime.toUpperCase()
+            : mm < 1.1
+              ? "GEO"
+              : mm < 5
+                ? "MEO"
+                : mm < 11
+                  ? "HEO"
+                  : "LEO";
+        expect(derived).toBe("LEO");
+      }
+    });
+  });
+
   describe("listNullCandidatesForField", () => {
     it("rejects unknown field via fieldSqlFor whitelist", async () => {
       await expect(repo.listNullCandidatesForField("password", 5))

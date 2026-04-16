@@ -33,7 +33,9 @@ export class CycleRunnerService {
   ) {}
 
   listHistory(): CycleRun[] {
-    return this.history;
+    // Defensive copy — callers (controllers, tests) should not be able to
+    // mutate internal history by reference.
+    return [...this.history];
   }
 
   async runThalamus(query: string): Promise<number> {

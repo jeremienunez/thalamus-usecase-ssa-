@@ -1,7 +1,7 @@
 // apps/console-api/src/controllers/repl.controller.ts
 import type { FastifyRequest } from "fastify";
 import type { ReplChatService } from "../services/repl-chat.service";
-import { runTurn } from "../repl";
+import type { ReplTurnService } from "../services/repl-turn.service";
 import { asyncHandler } from "../utils/async-handler";
 
 export function replChatController(service: ReplChatService) {
@@ -15,7 +15,7 @@ export function replChatController(service: ReplChatService) {
   );
 }
 
-export function replTurnController() {
+export function replTurnController(service: ReplTurnService) {
   return asyncHandler<
     FastifyRequest<{ Body: { input: string; sessionId: string } }>
   >(async (req, reply) => {
@@ -23,10 +23,6 @@ export function replTurnController() {
       req.body ?? ({} as { input: string; sessionId: string });
     if (!input || typeof input !== "string")
       return reply.code(400).send({ error: "input required" });
-    return runTurn(
-      input,
-      { satellites: [], kgNodes: [], kgEdges: [], findings: [] },
-      sessionId ?? "anon",
-    );
+    return service.handle(input, sessionId ?? "anon");
   });
 }
