@@ -10,6 +10,7 @@ import type {
 import type { EnrichmentCycleRepository } from "../repositories/enrichment-cycle.repository";
 import type { FindingRepository } from "../repositories/finding.repository";
 import type { ResearchEdgeRepository } from "../repositories/research-edge.repository";
+import { HttpError } from "../utils/http-error";
 
 export type ReflexionResult = {
   target: {
@@ -64,18 +65,16 @@ export class ReflexionService {
     private readonly edges: ResearchEdgeRepository,
   ) {}
 
-  async runPass(
-    body: ReflexionPassBody,
-  ): Promise<ReflexionResult | { error: string; code: 400 | 404 }> {
+  async runPass(body: ReflexionPassBody): Promise<ReflexionResult> {
     // Schema (H3) enforces: noradId positive integer; dIncMax/dRaanMax/dMmMax
     // bounded with defaults. No re-clamp needed here.
     const norad = body.noradId;
     const { dIncMax, dRaanMax, dMmMax } = body;
 
     const t = await this.repo.findTarget(norad);
-    if (!t) return { error: "satellite not found", code: 404 };
+    if (!t) throw HttpError.notFound("satellite not found");
     if (t.inc == null || t.raan == null || t.mm == null)
-      return { error: "target missing orbital elements", code: 400 };
+      throw HttpError.badRequest("target missing orbital elements");
 
     const [strict, belt, mil] = await Promise.all([
       this.repo.findStrictCoplane(norad, t, dIncMax, dRaanMax, dMmMax),

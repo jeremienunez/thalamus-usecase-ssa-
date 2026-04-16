@@ -10,6 +10,7 @@ import {
 import { entityRef } from "../transformers/kg-view.transformer";
 import { FindingRepository } from "../repositories/finding.repository";
 import { ResearchEdgeRepository } from "../repositories/research-edge.repository";
+import { HttpError } from "../utils/http-error";
 
 export class FindingViewService {
   constructor(
@@ -54,11 +55,13 @@ export class FindingViewService {
     return { items, count: items.length };
   }
 
-  async findById(idRaw: string): Promise<FindingView | null | "invalid-id"> {
+  async findById(idRaw: string): Promise<FindingView> {
+    // Controller validates id via FindingIdParamsSchema; the re-check is
+    // defense-in-depth for programmatic callers that bypass the controller.
     const fid = parseFindingId(idRaw);
-    if (fid === null) return "invalid-id";
+    if (fid === null) throw HttpError.badRequest("invalid id");
     const row = await this.findings.findById(fid);
-    if (!row) return null;
+    if (!row) throw HttpError.notFound("finding not found");
     const edgeRows = await this.edges.findByFindingId(fid, 20);
     return toFindingDetailView(row, edgeRows);
   }
@@ -66,13 +69,13 @@ export class FindingViewService {
   async updateDecision(
     idRaw: string,
     decision: string,
-  ): Promise<FindingView | null | "invalid-id" | "invalid-decision"> {
+  ): Promise<FindingView> {
     const fid = parseFindingId(idRaw);
-    if (fid === null) return "invalid-id";
+    if (fid === null) throw HttpError.badRequest("invalid id");
     if (!["accepted", "rejected", "pending", "in-review"].includes(decision))
-      return "invalid-decision";
+      throw HttpError.badRequest("invalid decision");
     const ok = await this.findings.updateStatus(fid, toDbStatus(decision));
-    if (!ok) return null;
+    if (!ok) throw HttpError.notFound("finding not found");
     return this.findById(idRaw);
   }
 }

@@ -14,7 +14,8 @@ export function cycleRunController(service: CycleRunnerService) {
     if (body === null) return;
     const query = body.query ?? DEFAULT_QUERY;
     const result = await service.runUserCycle(body.kind, query);
-    if ("error" in result) return reply.code(500).send(result);
+    if (result.cycle.error)
+      return reply.code(500).send({ ...result, error: result.cycle.error });
     return result;
   });
 }
