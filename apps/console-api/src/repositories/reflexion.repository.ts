@@ -47,6 +47,17 @@ export type MilRow = {
   d_inc: number;
 };
 
+const SENSITIVE_OPERATOR_COUNTRIES = [
+  "US Space Force",
+  "USSF",
+  "NRO",
+  "National Reconnaissance Office",
+  "GRU",
+  "SSF",
+  "Strategic Support Force",
+  "MVR",
+] as const;
+
 export class ReflexionRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
@@ -157,4 +168,140 @@ export class ReflexionRepository {
     `);
     return rows.rows;
   }
+
+  // ── Cortex-consumed reads ──
+
+  /** List satellites with opacity signal candidates. */ // ← absorbed from cortices/queries/opacity-scout.ts
+  async listOpacityCandidates(
+    opts: { limit?: number; minScoreFloor?: number } = {},
+  ): Promise<
+    {
+      satelliteId: number;
+      name: string;
+      noradId: number | null;
+      operator: string | null;
+      operatorCountry: string | null;
+      platformClass: string | null;
+      orbitRegime: string | null;
+      launchYear: number | null;
+      payloadUndisclosed: boolean;
+      operatorSensitive: boolean;
+      amateurObservationsCount: number;
+      catalogDropoutCount: number;
+      distinctAmateurSources: number;
+      lastAmateurObservedAt: string | null;
+      opacityScore: number | null;
+    }[]
+  > {
+    const sensitive = sql.join(
+      SENSITIVE_OPERATOR_COUNTRIES.map((s) => sql`${s.toLowerCase()}`),
+      sql`, `,
+    );
+    const limit = opts.limit ?? 50;
+
+    const result = await this.db.execute(sql`
+      WITH amateur_agg AS (
+        SELECT
+          at.resolved_satellite_id             AS satellite_id,
+          COUNT(*)                             AS obs_count,
+          COUNT(DISTINCT at.source_id)         AS distinct_sources,
+          MAX(at.observed_at)                  AS last_observed_at,
+          COUNT(*) FILTER (
+            WHERE s.slug = 'spacetrack-satcat-diff'
+          )                                    AS dropout_count
+        FROM amateur_track at
+        LEFT JOIN source s ON s.id = at.source_id
+        WHERE at.resolved_satellite_id IS NOT NULL
+        GROUP BY at.resolved_satellite_id
+      ),
+      payload_agg AS (
+        SELECT
+          sp.satellite_id,
+          bool_or(
+            p.name IS NULL OR lower(p.name) LIKE '%undisclosed%'
+              OR lower(p.name) LIKE '%classified%'
+          ) AS payload_undisclosed
+        FROM satellite_payload sp
+        LEFT JOIN payload p ON p.id = sp.payload_id
+        GROUP BY sp.satellite_id
+      )
+      SELECT
+        s.id::int                                           AS "satelliteId",
+        s.name,
+        NULLIF(s.telemetry_summary->>'noradId', '')::int    AS "noradId",
+        op.name                                             AS "operator",
+        oc.name                                             AS "operatorCountry",
+        pc.name                                             AS "platformClass",
+        orr.name                                            AS "orbitRegime",
+        s.launch_year                                       AS "launchYear",
+        COALESCE(pa.payload_undisclosed, true)              AS "payloadUndisclosed",
+        (lower(COALESCE(oc.name, '')) IN (${sensitive})) AS "operatorSensitive",
+        COALESCE(aa.obs_count, 0)::int                      AS "amateurObservationsCount",
+        COALESCE(aa.dropout_count, 0)::int                  AS "catalogDropoutCount",
+        COALESCE(aa.distinct_sources, 0)::int               AS "distinctAmateurSources",
+        aa.last_observed_at::text                           AS "lastAmateurObservedAt",
+        s.opacity_score::float                              AS "opacityScore"
+      FROM satellite s
+      LEFT JOIN operator op          ON op.id  = s.operator_id
+      LEFT JOIN operator_country oc  ON oc.id  = s.operator_country_id
+      LEFT JOIN platform_class pc    ON pc.id  = s.platform_class_id
+      LEFT JOIN orbit_regime orr     ON orr.id = oc.orbit_regime_id
+      LEFT JOIN amateur_agg aa       ON aa.satellite_id = s.id
+      LEFT JOIN payload_agg pa       ON pa.satellite_id = s.id
+      WHERE
+        COALESCE(pa.payload_undisclosed, true) = true
+        OR lower(COALESCE(oc.name, '')) IN (${sensitive})
+        OR aa.obs_count > 0
+      ORDER BY
+        (CASE WHEN aa.obs_count > 0 THEN 1 ELSE 0 END
+          + CASE WHEN aa.dropout_count > 0 THEN 1 ELSE 0 END
+          + CASE WHEN lower(COALESCE(oc.name, '')) IN (${sensitive}) THEN 1 ELSE 0 END
+          + CASE WHEN COALESCE(pa.payload_undisclosed, true) THEN 1 ELSE 0 END
+        ) DESC,
+        aa.obs_count DESC NULLS LAST
+      LIMIT ${limit}
+    `);
+
+    return result.rows as unknown as Awaited<ReturnType<ReflexionRepository["listOpacityCandidates"]>>;
+  }
+
+  /** Persist computed opacity score back to satellite. */ // ← absorbed from cortices/queries/opacity-scout.ts
+  async writeOpacityScore(
+    satelliteId: number,
+    score: number,
+  ): Promise<void> {
+    await this.db.execute(sql`
+      UPDATE satellite
+      SET
+        opacity_score = ${score}::numeric(4, 3),
+        opacity_computed_at = now()
+      WHERE id = ${satelliteId}
+    `);
+  }
+}
+
+/**
+ * Pure — compute an opacity score from signal flags.
+ *
+ * Weights:
+ *   0.25 payload undisclosed
+ *   0.25 sensitive operator country
+ *   0.20 has amateur observations
+ *   0.20 catalog dropout present
+ *   0.10 multiple distinct amateur sources agree (corroboration bonus)
+ */ // ← absorbed from cortices/queries/opacity-scout.ts
+export function computeOpacityScore(signals: {
+  payloadUndisclosed: boolean;
+  operatorSensitive: boolean;
+  amateurObservationsCount: number;
+  catalogDropoutCount: number;
+  distinctAmateurSources: number;
+}): number {
+  let score = 0;
+  if (signals.payloadUndisclosed) score += 0.25;
+  if (signals.operatorSensitive) score += 0.25;
+  if (signals.amateurObservationsCount > 0) score += 0.2;
+  if (signals.catalogDropoutCount > 0) score += 0.2;
+  if (signals.distinctAmateurSources >= 2) score += 0.1;
+  return Math.min(1, Math.max(0, score));
 }
