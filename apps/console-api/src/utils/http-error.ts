@@ -27,6 +27,19 @@ export class HttpError extends Error {
     return new HttpError(409, msg);
   }
 
+  /**
+   * Emit an explicit 500 carrying a caller-controlled message.
+   *
+   * ⚠ The message will be serialized to the client AS-IS, even in production.
+   * `asyncHandler` only redacts 500s that originate from *uncaught* errors
+   * (no `statusCode` set). An `HttpError` with `statusCode=500` is considered
+   * intentionally-surfaced by the developer and bypasses redaction.
+   *
+   * Use only for operator-facing diagnostics you would paste into a bug
+   * report. For anything involving raw DB errors, `pg` strings, or internal
+   * stack traces, let the error propagate uncaught and let `asyncHandler`
+   * redact it to `"internal error"`.
+   */
   static internal(msg: string): HttpError {
     return new HttpError(500, msg);
   }
