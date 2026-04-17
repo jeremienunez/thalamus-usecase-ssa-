@@ -1,64 +1,23 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  AdvisoryRow,
+  RssTrendRow,
+  ManeuverPlanRow,
+  ObservationIngestRow,
+  CorrelationMergeRow,
+  OrbitalPrimerRow,
+} from "../types/source-data.types";
 
-export type AdvisoryRow = {
-  sourceName: string;
-  sourceKind: string;
-  title: string;
-  summary: string | null;
-  url: string | null;
-  publishedAt: string | null;
-  score: number | null;
-};
-
-export type RssTrendRow = {
-  sourceCategory: string;
-  sourceName: string;
-  title: string;
-  summary: string | null;
-  link: string | null;
-  publishedAt: string | null;
-  score: number | null;
-};
-
-export type ManeuverPlanRow = {
-  sourceName: string;
-  sourceKind: string;
-  title: string;
-  summary: string | null;
-  url: string | null;
-  publishedAt: string | null;
-};
-
-export type ObservationIngestRow = {
-  sourceName: string;
-  sourceKind: string;
-  title: string;
-  summary: string | null;
-  url: string | null;
-  publishedAt: string | null;
-};
-
-export type CorrelationMergeRow = {
-  streamKind: "field" | "osint";
-  sourceName: string;
-  title: string;
-  summary: string | null;
-  url: string | null;
-  publishedAt: string | null;
-  score: number | null;
-};
-
-export type OrbitalPrimerRow = {
-  kind: "paper" | "news" | "finding";
-  title: string;
-  abstract: string | null;
-  authors: string[] | null;
-  url: string | null;
-  publishedAt: string | null;
-  sourceName: string | null;
-};
+export type {
+  AdvisoryRow,
+  RssTrendRow,
+  ManeuverPlanRow,
+  ObservationIngestRow,
+  CorrelationMergeRow,
+  OrbitalPrimerRow,
+} from "../types/source-data.types";
 
 export class SourceRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -79,7 +38,7 @@ export class SourceRepository {
       ? sql`AND s.category = ${opts.category}`
       : sql``;
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<AdvisoryRow>(sql`
       SELECT
         s.name                        AS "sourceName",
         s.kind::text                  AS "sourceKind",
@@ -106,7 +65,7 @@ export class SourceRepository {
       LIMIT ${opts.limit ?? 25}
     `);
 
-    return results.rows as unknown as AdvisoryRow[];
+    return results.rows;
   }
 
   // ← absorbed from cortices/queries/rss.ts
@@ -118,7 +77,7 @@ export class SourceRepository {
       ? sql`AND s.category = ${opts.category}`
       : sql``;
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<RssTrendRow>(sql`
       SELECT s.category as "sourceCategory", s.name as "sourceName",
         si.title, si.abstract as "summary", si.url as "link",
         si.published_at as "publishedAt",
@@ -132,7 +91,7 @@ export class SourceRepository {
       LIMIT ${opts.limit ?? 50}
     `);
 
-    return results.rows as unknown as RssTrendRow[];
+    return results.rows;
   }
 
   // ← absorbed from cortices/queries/maneuver.ts
@@ -143,7 +102,7 @@ export class SourceRepository {
       limit?: number;
     } = {},
   ): Promise<ManeuverPlanRow[]> {
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<ManeuverPlanRow>(sql`
       SELECT
         s.name                         AS "sourceName",
         s.kind::text                   AS "sourceKind",
@@ -164,7 +123,7 @@ export class SourceRepository {
       LIMIT ${opts.limit ?? 15}
     `);
 
-    return results.rows as unknown as ManeuverPlanRow[];
+    return results.rows;
   }
 
   // ← absorbed from cortices/queries/observations.ts
@@ -177,7 +136,7 @@ export class SourceRepository {
   ): Promise<ObservationIngestRow[]> {
     const limit = opts.limit ?? 20;
 
-    const preferred = await this.db.execute(sql`
+    const preferred = await this.db.execute<ObservationIngestRow>(sql`
       SELECT
         s.name                  AS "sourceName",
         s.kind::text            AS "sourceKind",
@@ -193,10 +152,10 @@ export class SourceRepository {
     `);
 
     if (preferred.rows.length > 0) {
-      return preferred.rows as unknown as ObservationIngestRow[];
+      return preferred.rows;
     }
 
-    const fallback = await this.db.execute(sql`
+    const fallback = await this.db.execute<ObservationIngestRow>(sql`
       SELECT
         s.name                  AS "sourceName",
         s.kind::text            AS "sourceKind",
@@ -218,7 +177,7 @@ export class SourceRepository {
       LIMIT ${limit}
     `);
 
-    return fallback.rows as unknown as ObservationIngestRow[];
+    return fallback.rows;
   }
 
   // ← absorbed from cortices/queries/correlation.ts
@@ -231,7 +190,7 @@ export class SourceRepository {
     const perBranchLimit = Math.max(5, Math.ceil((opts.limit ?? 20) / 2));
     const totalLimit = opts.limit ?? 20;
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<CorrelationMergeRow>(sql`
       (
         SELECT
           'field'::text                   AS "streamKind",
@@ -266,7 +225,7 @@ export class SourceRepository {
       LIMIT ${totalLimit}
     `);
 
-    return results.rows as unknown as CorrelationMergeRow[];
+    return results.rows;
   }
 
   // ← absorbed from cortices/queries/orbital-primer.ts
@@ -285,7 +244,7 @@ export class SourceRepository {
     const perBranchLimit = Math.max(4, Math.ceil((opts.limit ?? 20) / 3));
     const totalLimit = opts.limit ?? 20;
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<OrbitalPrimerRow>(sql`
       (
         SELECT
           'paper'::text                 AS "kind",
@@ -337,6 +296,6 @@ export class SourceRepository {
       LIMIT ${totalLimit}
     `);
 
-    return results.rows as unknown as OrbitalPrimerRow[];
+    return results.rows;
   }
 }

@@ -1,30 +1,83 @@
-import { FleetAnalysisRepository } from "../repositories/fleet-analysis.repository";
-import { TrafficForecastRepository } from "../repositories/traffic-forecast.repository";
 import {
   toFleetAnalysisView,
   toRegimeProfileView,
   toOrbitSlotView,
-  type FleetAnalysisView,
-  type RegimeProfileView,
-  type OrbitSlotView,
 } from "../transformers/fleet-analysis.transformer";
+import type {
+  FleetAnalysisRow,
+  RegimeProfileRow,
+  OrbitSlotRow,
+  FleetAnalysisView,
+  RegimeProfileView,
+  OrbitSlotView,
+} from "../types/fleet-analysis.types";
 import {
   toOrbitalTrafficView,
   toDebrisForecastView,
   toLaunchManifestView,
   toLaunchEpochWeatherView,
-  type OrbitalTrafficView,
-  type DebrisForecastView,
-  type LaunchManifestView,
-  type LaunchEpochWeatherView,
 } from "../transformers/traffic-forecast.transformer";
+import type {
+  OrbitalTrafficRow,
+  DebrisForecastRow,
+  LaunchManifestRow,
+  LaunchEpochWeatherRow,
+  OrbitalTrafficView,
+  DebrisForecastView,
+  LaunchManifestView,
+  LaunchEpochWeatherView,
+} from "../types/traffic-forecast.types";
+
+// ── Ports (structural — repos satisfy these by duck typing) ────────
+export interface FleetAnalysisReadPort {
+  analyzeOperatorFleet(opts: {
+    operatorId?: string | number | bigint;
+    userId?: string | number | bigint;
+    limit?: number;
+  }): Promise<FleetAnalysisRow[]>;
+  profileOrbitRegime(opts: {
+    operatorCountryName?: string;
+    operatorCountryId?: string | number;
+    orbitRegime?: string;
+    limit?: number;
+  }): Promise<RegimeProfileRow[]>;
+  planOrbitSlots(opts: {
+    operatorId?: string | number | bigint;
+    horizonYears?: number;
+    limit?: number;
+  }): Promise<OrbitSlotRow[]>;
+}
+
+export interface TrafficForecastReadPort {
+  analyzeOrbitalTraffic(opts: {
+    windowDays?: number;
+    regimeId?: string | number | bigint;
+    limit?: number;
+  }): Promise<OrbitalTrafficRow[]>;
+  forecastDebris(opts: {
+    regimeId?: string | number | bigint;
+    horizonYears?: number;
+    limit?: number;
+  }): Promise<DebrisForecastRow[]>;
+  listLaunchManifest(opts: {
+    horizonDays?: number;
+    regimeId?: string | number | bigint;
+    limit?: number;
+  }): Promise<LaunchManifestRow[]>;
+  getLaunchEpochWeather(opts: {
+    operatorCountryName?: string;
+    operatorCountryId?: string | number;
+    orbitRegime?: string;
+    limit?: number;
+  }): Promise<LaunchEpochWeatherRow[]>;
+}
 
 type ListResult<T> = { items: T[]; count: number };
 
 export class OrbitalAnalysisService {
   constructor(
-    private readonly fleetRepo: FleetAnalysisRepository,
-    private readonly trafficRepo: TrafficForecastRepository,
+    private readonly fleetRepo: FleetAnalysisReadPort,
+    private readonly trafficRepo: TrafficForecastReadPort,
   ) {}
 
   async analyzeFleet(opts: {

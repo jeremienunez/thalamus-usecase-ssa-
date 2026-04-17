@@ -1,8 +1,19 @@
-// DTOs + transformers for SatelliteEnrichmentService.
+// Transformers for SatelliteEnrichmentService.
 // Invariants: id: string, dates ISO, nulls explicit, camelCase.
-
-import type { SatelliteRepository } from "../repositories/satellite.repository";
-import type { SatelliteEnrichmentRepository } from "../repositories/satellite-enrichment.repository";
+import type {
+  FindByIdFullRow,
+  ListByOperatorRow,
+  CatalogContextRow,
+  ReplacementCostRow,
+  LaunchCostRow,
+  PayloadContextRow,
+  SatelliteFullView,
+  SatelliteListView,
+  CatalogContextView,
+  ReplacementCostView,
+  LaunchCostView,
+  PayloadContextView,
+} from "../types/satellite.types";
 
 // ---- shared helpers ----------------------------------------------------
 function toIso(v: Date | string | null | undefined): string | null {
@@ -16,26 +27,6 @@ function idOrNull(
 ): string | null {
   return v === null || v === undefined ? null : String(v);
 }
-
-// ---- row aliases (inferred from repositories) --------------------------
-type FindByIdFullRow = NonNullable<
-  Awaited<ReturnType<SatelliteRepository["findByIdFull"]>>
->;
-type ListByOperatorRow = Awaited<
-  ReturnType<SatelliteRepository["listByOperator"]>
->[number];
-type CatalogContextRow = Awaited<
-  ReturnType<SatelliteEnrichmentRepository["listCatalogContext"]>
->[number];
-type ReplacementCostRow = Awaited<
-  ReturnType<SatelliteEnrichmentRepository["estimateReplacementCost"]>
->[number];
-type LaunchCostRow = Awaited<
-  ReturnType<SatelliteEnrichmentRepository["getLaunchCostContext"]>
->[number];
-type PayloadContextRow = Awaited<
-  ReturnType<SatelliteEnrichmentRepository["getPayloadContext"]>
->[number];
 
 // ---- shared DTO fragment ----------------------------------------------
 type OperatorHeader = {
@@ -71,61 +62,6 @@ function toOperatorHeader(r: FindByIdFullRow | ListByOperatorRow): OperatorHeade
     telemetrySummary: r.telemetrySummary ?? null,
   };
 }
-
-// ---- DTO types ---------------------------------------------------------
-export type SatelliteFullView = OperatorHeader;
-export type SatelliteListView = OperatorHeader;
-
-export type CatalogContextView = {
-  satelliteId: string;
-  name: string;
-  noradId: number | null;
-  operator: string | null;
-  operatorCountry: string | null;
-  platformClass: string | null;
-  orbitRegime: string | null;
-  launchYear: number | null;
-  ingestedAt: string | null;
-};
-
-export type ReplacementCostView = {
-  satelliteId: string;
-  name: string;
-  operatorName: string | null;
-  massKg: number | null;
-  busName: string | null;
-  payloadNames: string[];
-  estimatedCost: { low: number; mid: number; high: number; currency: "USD" };
-  breakdown: { bus: number; payload: number; launch: number };
-};
-
-export type LaunchCostView = {
-  id: string;
-  name: string;
-  launchCost: number | null;
-  launchYear: number | null;
-  operatorCountryName: string;
-  orbitRegimeName: string;
-  platformClass: string | null;
-  kMultiplier: number | null;
-  busName: string | null;
-  manifestSourceCount: number;
-  inclinationDeg: number | null;
-  altitudeKm: number | null;
-  eccentricity: number | null;
-  regimeType: string | null;
-  slotCapacityMax: string | null;
-  solarFluxZone: string | null;
-  radiationZone: string | null;
-  solarFluxIndex: number | null;
-  kpIndex: number | null;
-  radiationIndex: number | null;
-};
-
-export type PayloadContextView = {
-  type: string;
-  [key: string]: unknown;
-};
 
 // ---- transformers ------------------------------------------------------
 export function toSatelliteFullView(r: FindByIdFullRow): SatelliteFullView {

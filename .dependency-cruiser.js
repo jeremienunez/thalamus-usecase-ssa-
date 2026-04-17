@@ -122,6 +122,66 @@ module.exports = {
         dependencyTypesNot: ["type-only"]
       }
     },
+    {
+      name: 'console-api-repos-no-business-imports',
+      severity: 'error',
+      comment:
+        'console-api repositories are the data-access layer. They may depend on db-schema, local types and utils, but not on business or HTTP layers.',
+      from: {
+        path: '^apps/console-api/src/repositories/'
+      },
+      to: {
+        path: '^apps/console-api/src/(services|controllers|routes|agent|prompts|infra)/'
+      }
+    },
+    {
+      name: 'console-api-repos-no-transformers',
+      severity: 'error',
+      comment:
+        'console-api repositories must return row shapes/types, not depend on transformer/view projection modules.',
+      from: {
+        path: '^apps/console-api/src/repositories/'
+      },
+      to: {
+        path: '^apps/console-api/src/transformers/'
+      }
+    },
+    {
+      name: 'console-api-services-no-http-imports',
+      severity: 'error',
+      comment:
+        'console-api services own use-case logic and may not import controllers or routes.',
+      from: {
+        path: '^apps/console-api/src/services/'
+      },
+      to: {
+        path: '^apps/console-api/src/(controllers|routes)/'
+      }
+    },
+    {
+      name: 'console-api-controllers-no-repositories',
+      severity: 'error',
+      comment:
+        'console-api controllers should delegate to services, not reach into repositories directly.',
+      from: {
+        path: '^apps/console-api/src/controllers/'
+      },
+      to: {
+        path: '^apps/console-api/src/repositories/'
+      }
+    },
+    {
+      name: 'console-api-routes-no-repositories',
+      severity: 'error',
+      comment:
+        'console-api routes are wiring only; they may not depend on repositories directly.',
+      from: {
+        path: '^apps/console-api/src/routes/'
+      },
+      to: {
+        path: '^apps/console-api/src/repositories/'
+      }
+    },
 
     // rules you might want to tweak for your specific situation:
     

@@ -26,6 +26,24 @@ vi.mock("@interview/thalamus", async () => {
 
 // Import AFTER vi.mock so the mocked transport is bound.
 import { ReplChatService } from "../../../src/services/repl-chat.service";
+import { IntentClassifier } from "../../../src/services/intent-classifier.service";
+import { ChatReplyService } from "../../../src/services/chat-reply.service";
+import { CycleStreamPump } from "../../../src/services/cycle-stream-pump.service";
+import { CycleSummariser } from "../../../src/services/cycle-summariser.service";
+import { thalamusLlmTransportFactory } from "../../../src/services/llm-transport.adapter";
+
+function buildReplChat(
+  deps: ConstructorParameters<typeof ReplChatService>[0],
+): ReplChatService {
+  const factory = thalamusLlmTransportFactory;
+  return new ReplChatService(
+    deps,
+    new IntentClassifier(factory),
+    new ChatReplyService(factory),
+    new CycleStreamPump(),
+    new CycleSummariser(factory),
+  );
+}
 
 async function drain(
   gen: AsyncGenerator<ReplStreamEvent>,
@@ -43,7 +61,7 @@ describe("ReplChatService.handleStream — chat branch", () => {
   });
 
   it("emits classified → chat.complete → done when classifier routes to chat", async () => {
-    const svc = new ReplChatService({
+    const svc = buildReplChat({
       thalamusService: { runCycle: vi.fn() as never },
       findingRepo: { findByCycleId: vi.fn() as never },
     });
@@ -81,7 +99,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
   });
 
   it("emits classified → cycle.start → step* → finding* → summary.complete → done", async () => {
-    // runCycle emits step events — because ReplChatService wraps this call in
+    // runCycle emits step events — because CycleStreamPump wraps this call in
     // stepContextStore.run, those events reach the generator via the ALS hook.
     const runCycle = vi.fn(async () => {
       const logger = { info: () => {} } as unknown as Parameters<typeof stepLog>[0];
@@ -93,7 +111,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       return { id: "cyc:42" };
     });
 
-    const svc = new ReplChatService({
+    const svc = buildReplChat({
       thalamusService: { runCycle } as never,
       findingRepo: {
         findByCycleId: async () => [

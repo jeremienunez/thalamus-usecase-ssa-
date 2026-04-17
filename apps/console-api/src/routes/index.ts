@@ -18,6 +18,7 @@ import type { SatelliteAuditService } from "../services/satellite-audit.service"
 import type { SatelliteEnrichmentService } from "../services/satellite-enrichment.service";
 import type { OrbitalAnalysisService } from "../services/orbital-analysis.service";
 import type { OpacityService } from "../services/opacity.service";
+import type { IngestionService } from "../services/ingestion.service";
 
 import { registerHealthRoutes } from "./health.routes";
 import { registerSatelliteRoutes } from "./satellites.routes";
@@ -36,8 +37,9 @@ import { registerSatelliteAuditRoutes } from "./satellite-audit.routes";
 import { registerSatelliteEnrichmentRoutes } from "./satellite-enrichment.routes";
 import { registerOrbitalRoutes } from "./orbital.routes";
 import { registerOpacityRoutes } from "./opacity.routes";
+import { registerIngestionRoutes } from "./ingestion.routes";
 
-export type { SweepDeps } from "../controllers/sweep-suggestions.controller";
+export type { SweepSuggestionsDeps } from "../services/sweep-suggestions.service";
 
 export type AppServices = {
   satelliteView: SatelliteViewService;
@@ -58,6 +60,7 @@ export type AppServices = {
   satelliteEnrichment: SatelliteEnrichmentService;
   orbitalAnalysis: OrbitalAnalysisService;
   opacity: OpacityService;
+  ingestion: IngestionService;
 };
 
 export function registerAllRoutes(
@@ -81,4 +84,5 @@ export function registerAllRoutes(
   registerSatelliteEnrichmentRoutes(app, s.satelliteEnrichment);
   registerOrbitalRoutes(app, s.orbitalAnalysis);
   registerOpacityRoutes(app, s.opacity);
+  registerIngestionRoutes(app, s.ingestion);
 }

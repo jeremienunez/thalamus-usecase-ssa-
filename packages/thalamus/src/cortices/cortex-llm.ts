@@ -24,6 +24,14 @@ export interface CortexLlmInput {
   enableWebSearch?: boolean;
   lang?: "fr" | "en";
   mode?: "investment" | "audit";
+  /** Domain-owned extra sourcing rules. The kernel injects these verbatim
+   *  after its generic SOURCING RULE. Passed in by the strategy from
+   *  DomainConfig.sourcingRules; optional. */
+  sourcingRules?: string;
+  /** Domain-owned finding-edge entityType vocabulary. Kernel was previously
+   *  hardcoded to an SSA list; now injected. Falls back to a minimal
+   *  placeholder when absent. */
+  entityTypes?: string[];
 }
 
 /**
@@ -54,21 +62,31 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
   // If the skill defines its own output format, defer to the system prompt
   const hasCustomFormat = input.systemPrompt.includes("## Output Format");
 
+  const domainRules = input.sourcingRules
+    ? `\nDOMAIN RULES:\n${input.sourcingRules}\n`
+    : "";
+  const entityTypeLine = input.entityTypes?.length
+    ? `  Valid entityType values: ${input.entityTypes.join(", ")}.`
+    : `  entityType values are domain-specific; leave edges empty if unsure.`;
+  const edgePlaceholder = input.entityTypes?.length
+    ? `[{"entityType":"${input.entityTypes[0]}", "entityId":0, "relation":"about"}]`
+    : `[]`;
+
   const userPrompt = hasCustomFormat
     ? `Follow the instructions in your system prompt exactly.
 ${langInstruction}
 
 SOURCING RULE: Every claim you make must cite its source (URL, DOI, or data item from the DATA section). If you cannot cite a source for a value, set it to null — never guess.
-
+${domainRules}
 DATA:
 ${input.dataPayload}
 
 Respond with a JSON object: { "findings": [...] } as described in your Output Format section.
 Max ${input.maxFindings ?? 3} findings.`
-    : `Analyze the following SSA data and produce up to ${input.maxFindings ?? 3} findings.
+    : `Analyze the following data and produce up to ${input.maxFindings ?? 3} findings.
 ${langInstruction}
 ${modeInstruction}
-
+${domainRules}
 DATA:
 ${input.dataPayload}
 
@@ -81,9 +99,8 @@ Each finding needs:
 - confidence: 0.0-1.0
 - impactScore: 0-10
 - evidence: [{"source":"...", "weight":1}]
-- edges: [{"entityType":"satellite", "entityId":0, "relation":"about"}]
-  Valid entityType values: satellite, operator, operator_country, launch,
-  satellite_bus, payload, orbit_regime, conjunction_event, maneuver, finding.
+- edges: ${edgePlaceholder}
+${entityTypeLine}
 
 If data comes from web search, use entityId:0 and describe the entity in evidence.source.
 Keep it SHORT. Max ${input.maxFindings ?? 3} findings.`;

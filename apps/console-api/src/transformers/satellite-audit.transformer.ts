@@ -1,98 +1,14 @@
 /**
  * DTO transformers for satellite audit endpoints.
- *
- * Invariants:
- *  - ids exposed as string (never bigint / numeric leak)
- *  - timestamps exposed as ISO string
- *  - nullable columns stay explicitly `| null` (no silent fallback)
- *  - camelCase throughout
  */
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Row types (input) — match repository shapes exactly
-// ──────────────────────────────────────────────────────────────────────────────
-
-export type SatelliteDataAuditRow = {
-  regimeId: string | null;
-  regimeName: string | null;
-  satellitesInRegime: number;
-  missingMass: number;
-  missingLaunchYear: number;
-  outOfRangeLaunchYear: number;
-  missingOperator: number;
-  missingOperatorCountry: number;
-  missingPlatformClass: number;
-  missingTelemetrySummary: number;
-  avgTelemetryScalarNullCount: number;
-  flaggedCount: number;
-};
-
-export type SatelliteClassificationAuditRow = {
-  satelliteId: string;
-  satelliteName: string;
-  operatorName: string | null;
-  platformClass: string | null;
-  classificationTier: string | null;
-  launchYear: number | null;
-  massKg: number | null;
-  flag: string;
-  details: string;
-};
-
-export type ApogeeHistoryRow = {
-  kind: "news" | "satellite";
-  title: string;
-  summary: string | null;
-  url: string | null;
-  publishedAt: string | null;
-  noradId: number | null;
-  meanMotion: number | null;
-  inclination: number | null;
-  eccentricity: number | null;
-};
-
-// ──────────────────────────────────────────────────────────────────────────────
-// DTO types (output)
-// ──────────────────────────────────────────────────────────────────────────────
-
-export type SatelliteDataAuditView = {
-  regimeId: string | null;
-  regimeName: string | null;
-  satellitesInRegime: number;
-  missingMass: number;
-  missingLaunchYear: number;
-  outOfRangeLaunchYear: number;
-  missingOperator: number;
-  missingOperatorCountry: number;
-  missingPlatformClass: number;
-  missingTelemetrySummary: number;
-  avgTelemetryScalarNullCount: number;
-  flaggedCount: number;
-};
-
-export type SatelliteClassificationAuditView = {
-  satelliteId: string;
-  satelliteName: string;
-  operatorName: string | null;
-  platformClass: string | null;
-  classificationTier: string | null;
-  launchYear: number | null;
-  massKg: number | null;
-  flag: string;
-  details: string;
-};
-
-export type ApogeeHistoryView = {
-  kind: "news" | "satellite";
-  title: string;
-  summary: string | null;
-  url: string | null;
-  publishedAt: string | null;
-  noradId: number | null;
-  meanMotion: number | null;
-  inclination: number | null;
-  eccentricity: number | null;
-};
+import type {
+  SatelliteDataAuditRow,
+  SatelliteClassificationAuditRow,
+  ApogeeHistoryRow,
+  SatelliteDataAuditView,
+  SatelliteClassificationAuditView,
+  ApogeeHistoryView,
+} from "../types/satellite-audit.types";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -138,6 +54,7 @@ export function toSatelliteClassificationAuditView(
   return {
     satelliteId: String(r.satelliteId),
     satelliteName: r.satelliteName,
+    noradId: r.noradId ?? null,
     operatorName: r.operatorName ?? null,
     platformClass: r.platformClass ?? null,
     classificationTier: r.classificationTier ?? null,
@@ -159,5 +76,10 @@ export function toApogeeHistoryView(r: ApogeeHistoryRow): ApogeeHistoryView {
     meanMotion: r.meanMotion ?? null,
     inclination: r.inclination ?? null,
     eccentricity: r.eccentricity ?? null,
+    f107: r.f107 ?? null,
+    apIndex: r.apIndex ?? null,
+    kpIndex: r.kpIndex ?? null,
+    sunspotNumber: r.sunspotNumber ?? null,
+    weatherSource: r.weatherSource ?? null,
   };
 }

@@ -1,32 +1,17 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  FindingRow,
+  FindingDetailRow,
+  FindingInsertInput,
+} from "../types/finding.types";
 
-export type FindingRow = {
-  id: string;
-  title: string;
-  summary: string;
-  cortex: string;
-  status: string;
-  confidence: number;
-  created_at: Date | string;
-  research_cycle_id: string;
-};
-
-export type FindingDetailRow = FindingRow & { evidence: unknown };
-
-export type FindingInsertInput = {
-  cycleId: bigint;
-  cortex: string;
-  findingType: string;
-  urgency: string;
-  title: string;
-  summary: string;
-  evidence: unknown;
-  reasoning: string;
-  confidence: number;
-  impactScore: number;
-};
+export type {
+  FindingRow,
+  FindingDetailRow,
+  FindingInsertInput,
+} from "../types/finding.types";
 
 export class FindingRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}

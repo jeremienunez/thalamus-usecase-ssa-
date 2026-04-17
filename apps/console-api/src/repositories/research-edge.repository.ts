@@ -1,31 +1,15 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  EdgeRow,
+  EdgeInsertInput,
+} from "../types/finding.types";
 
-export type EdgeRow = {
-  finding_id: string;
-  entity_type: string;
-  entity_id: string;
-};
-
-export type EdgeInsertInput = {
-  findingId: bigint;
-  entityType:
-    | "satellite"
-    | "operator"
-    | "operator_country"
-    | "payload"
-    | "orbit_regime";
-  entityId: bigint;
-  relation:
-    | "about"
-    | "supports"
-    | "contradicts"
-    | "similar_to"
-    | "derived_from";
-  weight: number;
-  context: unknown;
-};
+export type {
+  EdgeRow,
+  EdgeInsertInput,
+} from "../types/finding.types";
 
 export class ResearchEdgeRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}

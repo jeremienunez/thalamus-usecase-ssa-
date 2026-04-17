@@ -5,14 +5,64 @@
  * configured Fastify instance without listening, or startServer() to boot
  * on a port. Both return a `close()` that tears down the DB + Redis pool.
  */
-import "./init"; // MUST be first — bumps process.setMaxListeners before imports register handlers
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { buildContainer } from "./container";
+import { Pool } from "pg";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import Redis from "ioredis";
+import * as schema from "@interview/db-schema";
+import {
+  NullWebSearchAdapter,
+  OpenAIWebSearchAdapter,
+  type WebSearchPort,
+} from "@interview/thalamus";
+import { buildContainer, type ContainerConfig } from "./container";
 import { registerAllRoutes } from "./routes";
 import type { HealthSnapshot } from "./infra/health-snapshot";
+
+export interface ServerEnv {
+  databaseUrl: string;
+  redisUrl: string;
+  openaiApiKey?: string;
+}
+
+export function readServerEnv(): ServerEnv {
+  return {
+    databaseUrl:
+      process.env.DATABASE_URL ??
+      "postgres://thalamus:thalamus@localhost:5433/thalamus",
+    redisUrl: process.env.REDIS_URL ?? "redis://localhost:6380",
+    openaiApiKey: process.env.OPENAI_API_KEY,
+  };
+}
+
+function buildInfra(env: ServerEnv): {
+  config: ContainerConfig;
+  close: () => Promise<void>;
+  redactedUrls: { databaseUrl: string; redisUrl: string };
+} {
+  const pool = new Pool({ connectionString: env.databaseUrl });
+  const db = drizzle(pool, { schema }) as unknown as NodePgDatabase<
+    typeof schema
+  >;
+  const redis = new Redis(env.redisUrl, { maxRetriesPerRequest: null });
+  const webSearch: WebSearchPort = env.openaiApiKey
+    ? new OpenAIWebSearchAdapter(env.openaiApiKey, "gpt-5.4-mini")
+    : new NullWebSearchAdapter();
+  return {
+    config: { db, redis, webSearch },
+    close: async () => {
+      await pool.end();
+      redis.disconnect();
+    },
+    redactedUrls: {
+      databaseUrl: env.databaseUrl.replace(/:\/\/[^@]+@/, "://***@"),
+      redisUrl: env.redisUrl,
+    },
+  };
+}
 
 export type AppHandle = {
   app: FastifyInstance;
@@ -120,7 +170,9 @@ function printBanner(
 
 /** Builds + configures a Fastify app with CORS, container, and routes.
  *  Does NOT call listen. */
-export async function createApp(): Promise<AppHandle> {
+export async function createApp(
+  env: ServerEnv = readServerEnv(),
+): Promise<AppHandle> {
   const app = Fastify({
     disableRequestLogging: true,
     logger: isProd || isTest
@@ -158,15 +210,16 @@ export async function createApp(): Promise<AppHandle> {
     done();
   });
 
-  const container = await buildContainer(app.log);
+  const infra = buildInfra(env);
+  const container = await buildContainer(infra.config, app.log);
   registerAllRoutes(app, container.services);
   return {
     app,
-    info: container.info,
+    info: { ...infra.redactedUrls, cortices: container.info.cortices },
     snapshot: container.snapshot,
     close: async () => {
       await app.close();
-      await container.close();
+      await infra.close();
     },
   };
 }

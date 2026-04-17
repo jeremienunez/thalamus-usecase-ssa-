@@ -1,6 +1,17 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  FleetAnalysisRow,
+  RegimeProfileRow,
+  OrbitSlotRow,
+} from "../types/fleet-analysis.types";
+
+export type {
+  FleetAnalysisRow,
+  RegimeProfileRow,
+  OrbitSlotRow,
+} from "../types/fleet-analysis.types";
 
 export class FleetAnalysisRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -12,23 +23,12 @@ export class FleetAnalysisRepository {
       userId?: string | number | bigint;
       limit?: number;
     } = {},
-  ): Promise<
-    Array<{
-      operatorId: number;
-      operatorName: string;
-      country: string | null;
-      satelliteCount: number;
-      avgAgeYears: number | null;
-      regimeMix: Record<string, number>;
-      platformMix: Record<string, number>;
-      busMix: Record<string, number>;
-    }>
-  > {
+  ): Promise<FleetAnalysisRow[]> {
     const opFilter = opts.operatorId
       ? sql`WHERE op.id = ${BigInt(opts.operatorId as string | number)}`
       : sql``;
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<FleetAnalysisRow>(sql`
       WITH base AS (
         SELECT
           op.id AS operator_id,
@@ -94,16 +94,7 @@ export class FleetAnalysisRepository {
       LIMIT ${opts.limit ?? 10}
     `);
 
-    return results.rows as unknown as Array<{
-      operatorId: number;
-      operatorName: string;
-      country: string | null;
-      satelliteCount: number;
-      avgAgeYears: number | null;
-      regimeMix: Record<string, number>;
-      platformMix: Record<string, number>;
-      busMix: Record<string, number>;
-    }>;
+    return results.rows;
   }
 
   // ← absorbed from cortices/queries/orbit-regime.ts
@@ -114,19 +105,7 @@ export class FleetAnalysisRepository {
       orbitRegime?: string;
       limit?: number;
     } = {},
-  ): Promise<
-    Array<{
-      regimeId: string;
-      regimeName: string;
-      altitudeBand: string | null;
-      operatorCountryId: string | null;
-      operatorCountryName: string | null;
-      satelliteCount: number;
-      operatorCount: number;
-      topOperators: string[];
-      doctrineKeys: string[];
-    }>
-  > {
+  ): Promise<RegimeProfileRow[]> {
     const limit = opts.limit ?? 10;
 
     let filter = sql``;
@@ -138,7 +117,7 @@ export class FleetAnalysisRepository {
       filter = sql`AND orr.name = ${opts.orbitRegime}`;
     }
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<RegimeProfileRow>(sql`
       WITH regime_counts AS (
         SELECT
           orr.id AS regime_id,
@@ -209,19 +188,7 @@ export class FleetAnalysisRepository {
       LIMIT ${limit}
     `);
 
-    type Row = {
-      regimeId: string;
-      regimeName: string;
-      altitudeBand: string | null;
-      operatorCountryId: string | null;
-      operatorCountryName: string | null;
-      satelliteCount: number;
-      operatorCount: number;
-      topOperators: string[];
-      doctrineKeys: string[];
-    };
-
-    return (results.rows as unknown as Row[]).map((r) => ({
+    return results.rows.map((r) => ({
       ...r,
       regimeId: String(r.regimeId),
       operatorCountryId:
@@ -240,21 +207,12 @@ export class FleetAnalysisRepository {
       horizonYears?: number;
       limit?: number;
     } = {},
-  ): Promise<
-    Array<{
-      regimeId: number;
-      regimeName: string;
-      operatorId: number | null;
-      operatorName: string | null;
-      satellitesInRegime: number;
-      shareOfRegimePct: number;
-    }>
-  > {
+  ): Promise<OrbitSlotRow[]> {
     const opFilter = opts.operatorId
       ? sql`AND op.id = ${BigInt(opts.operatorId as string | number)}`
       : sql``;
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<OrbitSlotRow>(sql`
       WITH regime_totals AS (
         SELECT oc.orbit_regime_id AS rid, count(s.id)::int AS total
         FROM satellite s
@@ -281,13 +239,6 @@ export class FleetAnalysisRepository {
       LIMIT ${opts.limit ?? 20}
     `);
 
-    return results.rows as unknown as Array<{
-      regimeId: number;
-      regimeName: string;
-      operatorId: number | null;
-      operatorName: string | null;
-      satellitesInRegime: number;
-      shareOfRegimePct: number;
-    }>;
+    return results.rows;
   }
 }

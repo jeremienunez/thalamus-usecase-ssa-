@@ -2,17 +2,9 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type { AuditInsertInput } from "../types/sweep.types";
 
-export type AuditInsertInput = {
-  suggestionId: string;
-  operatorCountryName: string;
-  title: string;
-  description: string;
-  suggestedAction: string;
-  affectedSatellites: number;
-  webEvidence: string;
-  resolutionPayload: unknown;
-};
+export type { AuditInsertInput } from "../types/sweep.types";
 
 export class SweepAuditRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}

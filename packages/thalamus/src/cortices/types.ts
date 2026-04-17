@@ -38,6 +38,12 @@ export interface CortexFinding {
   confidence: number;
   impactScore: number;
   /**
+   * Name of the cortex that produced this finding. Stamped by normalizeFinding
+   * so the persister can attribute findings correctly — a DAG runs many cortices
+   * in parallel and the aggregated stream otherwise loses per-finding provenance.
+   */
+  sourceCortex?: string;
+  /**
    * Optional satellite-bus / platform-class context attached to the finding.
    * Carries SSA platform / bus identifiers.
    */
@@ -169,6 +175,15 @@ export interface DomainConfig {
    * Domain-specific grouping/aggregation logic (e.g. group by mission-health
    * signal, severity bucket, payload category). Default = pass-through.
    */
+  /** Domain-owned sourcing rules injected into the finding-generation user
+   *  prompt. The kernel stays domain-agnostic; SSA ships its NORAD cite rule
+   *  here, other domains ship their own. Optional — absent means no extra
+   *  rules beyond the kernel's generic SOURCING RULE. */
+  sourcingRules?: string;
+  /** Domain-owned list of valid `entityType` strings for finding edges. The
+   *  kernel used to hardcode an SSA-specific list; moved here so other
+   *  domains (threat-intel, pharmacovigilance…) ship their own vocabulary. */
+  entityTypes?: string[];
   preSummarize: (
     rows: Record<string, unknown>[],
     cortexName: string,

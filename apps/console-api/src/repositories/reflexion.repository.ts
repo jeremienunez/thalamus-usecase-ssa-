@@ -2,50 +2,20 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  ReflexionTarget,
+  CoplaneRow,
+  BeltRow,
+  MilRow,
+} from "../types/reflexion.types";
+import type { OpacityCandidateRow } from "../types/opacity.types";
 
-export type ReflexionTarget = {
-  id: string;
-  name: string;
-  object_class: string | null;
-  operator_country: string | null;
-  classification_tier: string | null;
-  platform_name: string | null;
-  inc: number | null;
-  raan: number | null;
-  mm: number | null;
-  ma: number | null;
-  apogee: number | null;
-  perigee: number | null;
-};
-
-export type CoplaneRow = {
-  id: string;
-  norad_id: string;
-  name: string;
-  operator_country: string | null;
-  tier: string | null;
-  object_class: string | null;
-  platform: string | null;
-  d_inc: number;
-  d_raan: number;
-  lag_min: number;
-};
-
-export type BeltRow = {
-  country: string | null;
-  tier: string | null;
-  object_class: string | null;
-  n: string;
-};
-
-export type MilRow = {
-  id: string;
-  norad_id: string;
-  name: string;
-  country: string | null;
-  tier: string | null;
-  d_inc: number;
-};
+export type {
+  ReflexionTarget,
+  CoplaneRow,
+  BeltRow,
+  MilRow,
+} from "../types/reflexion.types";
 
 const SENSITIVE_OPERATOR_COUNTRIES = [
   "US Space Force",
@@ -66,6 +36,7 @@ export class ReflexionRepository {
       SELECT
         s.id::text AS id,
         s.name,
+        s.norad_id AS norad_id,
         s.object_class::text AS object_class,
         oc.name AS operator_country,
         s.classification_tier,
@@ -174,32 +145,14 @@ export class ReflexionRepository {
   /** List satellites with opacity signal candidates. */ // ← absorbed from cortices/queries/opacity-scout.ts
   async listOpacityCandidates(
     opts: { limit?: number; minScoreFloor?: number } = {},
-  ): Promise<
-    {
-      satelliteId: number;
-      name: string;
-      noradId: number | null;
-      operator: string | null;
-      operatorCountry: string | null;
-      platformClass: string | null;
-      orbitRegime: string | null;
-      launchYear: number | null;
-      payloadUndisclosed: boolean;
-      operatorSensitive: boolean;
-      amateurObservationsCount: number;
-      catalogDropoutCount: number;
-      distinctAmateurSources: number;
-      lastAmateurObservedAt: string | null;
-      opacityScore: number | null;
-    }[]
-  > {
+  ): Promise<OpacityCandidateRow[]> {
     const sensitive = sql.join(
       SENSITIVE_OPERATOR_COUNTRIES.map((s) => sql`${s.toLowerCase()}`),
       sql`, `,
     );
     const limit = opts.limit ?? 50;
 
-    const result = await this.db.execute(sql`
+    const result = await this.db.execute<OpacityCandidateRow>(sql`
       WITH amateur_agg AS (
         SELECT
           at.resolved_satellite_id             AS satellite_id,
@@ -262,7 +215,7 @@ export class ReflexionRepository {
       LIMIT ${limit}
     `);
 
-    return result.rows as unknown as Awaited<ReturnType<ReflexionRepository["listOpacityCandidates"]>>;
+    return result.rows;
   }
 
   /** Persist computed opacity score back to satellite. */ // ← absorbed from cortices/queries/opacity-scout.ts
@@ -279,16 +232,3 @@ export class ReflexionRepository {
     `);
   }
 }
-
-/**
- * Pure — compute an opacity score from signal flags.
- *
- * Weights:
- *   0.25 payload undisclosed
- *   0.25 sensitive operator country
- *   0.20 has amateur observations
- *   0.20 catalog dropout present
- *   0.10 multiple distinct amateur sources agree (corroboration bonus)
- */
-export { computeOpacityScore } from "../agent/ssa/opacity-score";
-export type { OpacitySignals } from "../agent/ssa/opacity-score";

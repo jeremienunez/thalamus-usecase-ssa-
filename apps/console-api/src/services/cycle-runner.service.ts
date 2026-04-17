@@ -1,14 +1,13 @@
 // apps/console-api/src/services/cycle-runner.service.ts
 import type { FastifyBaseLogger } from "fastify";
+import { ResearchCycleTrigger } from "@interview/shared";
 import type { CycleKind, CycleRun } from "../types";
-
-const TRIGGER_USER = "user" as const;
 
 export interface ThalamusDep {
   thalamusService: {
     runCycle(args: {
       query: string;
-      triggerType: never;
+      triggerType: ResearchCycleTrigger;
       triggerSource: string;
     }): Promise<{ findingsCount?: number | null }>;
   };
@@ -41,7 +40,7 @@ export class CycleRunnerService {
   async runThalamus(query: string): Promise<number> {
     const cycle = await this.thalamus.thalamusService.runCycle({
       query,
-      triggerType: TRIGGER_USER as unknown as never,
+      triggerType: ResearchCycleTrigger.User,
       triggerSource: "console-ui",
     });
     return cycle.findingsCount ?? 0;

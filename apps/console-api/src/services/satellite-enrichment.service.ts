@@ -1,5 +1,3 @@
-import { SatelliteRepository } from "../repositories/satellite.repository";
-import { SatelliteEnrichmentRepository } from "../repositories/satellite-enrichment.repository";
 import {
   toSatelliteFullView,
   toSatelliteListView,
@@ -7,18 +5,61 @@ import {
   toReplacementCostView,
   toLaunchCostView,
   toPayloadContextView,
-  type SatelliteFullView,
-  type SatelliteListView,
-  type CatalogContextView,
-  type ReplacementCostView,
-  type LaunchCostView,
-  type PayloadContextView,
 } from "../transformers/satellite-enrichment.transformer";
+import type {
+  SatelliteFullView,
+  SatelliteListView,
+  CatalogContextView,
+  ReplacementCostView,
+  LaunchCostView,
+  PayloadContextView,
+  FindByIdFullRow,
+  ListByOperatorRow,
+  CatalogContextRow,
+  ReplacementCostRawRow,
+  LaunchCostRow,
+  PayloadContextRow,
+} from "../types/satellite.types";
+import { computeReplacementCost } from "../utils/replacement-cost";
+
+// ── Ports (structural — repos satisfy these by duck typing) ────────
+export interface SatellitesFullReadPort {
+  findByIdFull(id: bigint | number): Promise<FindByIdFullRow | null>;
+  listByOperator(opts: {
+    operator?: string;
+    limit?: number;
+  }): Promise<ListByOperatorRow[]>;
+}
+
+export interface SatelliteEnrichmentReadPort {
+  listCatalogContext(opts: {
+    source?: string;
+    sinceEpoch?: string;
+    limit?: number;
+  }): Promise<CatalogContextRow[]>;
+  findReplacementCostInputs(opts: {
+    satelliteId: string | number | bigint;
+  }): Promise<ReplacementCostRawRow[]>;
+  getLaunchCostContext(opts: {
+    orbitRegime?: string;
+    minLaunchCost?: number;
+    maxLaunchCost?: number;
+    limit?: number;
+  }): Promise<LaunchCostRow[]>;
+  getPayloadContext(opts: {
+    payloadId?: number | bigint;
+    payloadName?: string;
+    payloadKind?: string;
+    batch?: boolean;
+    limit?: number;
+    [key: string]: unknown;
+  }): Promise<PayloadContextRow[]>;
+}
 
 export class SatelliteEnrichmentService {
   constructor(
-    private readonly satRepo: SatelliteRepository,
-    private readonly enrichRepo: SatelliteEnrichmentRepository,
+    private readonly satRepo: SatellitesFullReadPort,
+    private readonly enrichRepo: SatelliteEnrichmentReadPort,
   ) {}
 
   async findFull(
@@ -49,8 +90,10 @@ export class SatelliteEnrichmentService {
   async replacementCost(opts: {
     satelliteId: string;
   }): Promise<{ items: ReplacementCostView[]; count: number }> {
-    const rows = await this.enrichRepo.estimateReplacementCost(opts);
-    const items = rows.map(toReplacementCostView);
+    const rawRows = await this.enrichRepo.findReplacementCostInputs(opts);
+    const items = rawRows
+      .map(computeReplacementCost)
+      .map(toReplacementCostView);
     return { items, count: items.length };
   }
 
@@ -66,7 +109,7 @@ export class SatelliteEnrichmentService {
   }
 
   async payloadContext(
-    opts: Parameters<SatelliteEnrichmentRepository["getPayloadContext"]>[0],
+    opts: Parameters<SatelliteEnrichmentReadPort["getPayloadContext"]>[0],
   ): Promise<{ items: PayloadContextView[]; count: number }> {
     const rows = await this.enrichRepo.getPayloadContext(opts);
     const items = rows.map(toPayloadContextView);

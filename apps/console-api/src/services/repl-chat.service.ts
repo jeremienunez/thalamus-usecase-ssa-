@@ -1,20 +1,32 @@
 // apps/console-api/src/services/repl-chat.service.ts
-import { createLlmTransportWithMode } from "@interview/thalamus";
-import { stepContextStore } from "@interview/shared";
+//
+// Thin orchestrator for the console REPL stream. Given a user input, it
+// asks the intent classifier which branch to take, then stitches the
+// appropriate collaborators into a single event stream:
+//   - chat branch:      classified → chat.complete → done
+//   - run_cycle branch: classified → cycle.start → step* → finding* →
+//                        summary.complete → done
+//                       (or …→ error → done on cycle failure)
+//
+// All LLM work sits behind the `LlmTransportFactory` port, so the service
+// and its collaborators never import the thalamus transport directly —
+// the concrete factory is wired in `container.ts`.
+import { ResearchCycleTrigger } from "@interview/shared/enum";
 import type { ReplStreamEvent } from "@interview/shared";
 import {
-  CONSOLE_CHAT_SYSTEM_PROMPT,
-  CLASSIFIER_SYSTEM_PROMPT,
-  summariserPrompt,
-} from "../prompts/repl-chat.prompt";
-
-const TRIGGER_USER = "user" as const;
+  toReplFindingStreamView,
+  toReplFindingSummaryView,
+} from "../transformers/repl-chat.transformer";
+import type { IntentClassifier } from "./intent-classifier.service";
+import type { ChatReplyService } from "./chat-reply.service";
+import type { CycleStreamPump } from "./cycle-stream-pump.service";
+import type { CycleSummariser } from "./cycle-summariser.service";
 
 export interface ThalamusChatDep {
   thalamusService: {
     runCycle(args: {
       query: string;
-      triggerType: never;
+      triggerType: ResearchCycleTrigger;
       triggerSource: string;
     }): Promise<{ id: bigint | string }>;
   };
@@ -34,23 +46,19 @@ export interface ThalamusChatDep {
   };
 }
 
-type StepData = Extract<ReplStreamEvent, { event: "step" }>["data"];
-
 export class ReplChatService {
-  constructor(private readonly deps: ThalamusChatDep) {}
+  constructor(
+    private readonly deps: ThalamusChatDep,
+    private readonly classifier: IntentClassifier,
+    private readonly chatReply: ChatReplyService,
+    private readonly pump: CycleStreamPump,
+    private readonly summariser: CycleSummariser,
+  ) {}
 
   async *handleStream(input: string): AsyncGenerator<ReplStreamEvent> {
     const t0 = Date.now();
 
-    const classifier = createLlmTransportWithMode(CLASSIFIER_SYSTEM_PROMPT);
-    const routed = await classifier.call(input);
-    let intent: { action: "chat" } | { action: "run_cycle"; query: string };
-    try {
-      const m = routed.content.match(/\{[\s\S]*\}/);
-      intent = m ? JSON.parse(m[0]) : { action: "chat" };
-    } catch {
-      intent = { action: "chat" };
-    }
+    const intent = await this.classifier.classify(input);
 
     yield {
       event: "classified",
@@ -61,16 +69,12 @@ export class ReplChatService {
     };
 
     if (intent.action === "chat") {
-      const chat = createLlmTransportWithMode(CONSOLE_CHAT_SYSTEM_PROMPT);
-      const response = await chat.call(input);
-      yield {
-        event: "chat.complete",
-        data: { text: response.content, provider: response.provider },
-      };
+      const { text, provider } = await this.chatReply.reply(input);
+      yield { event: "chat.complete", data: { text, provider } };
       yield {
         event: "done",
         data: {
-          provider: response.provider,
+          provider,
           costUsd: 0,
           tookMs: Date.now() - t0,
           findingsCount: 0,
@@ -84,73 +88,31 @@ export class ReplChatService {
     const cycleId = `cyc:${Date.now().toString(36)}`;
     yield { event: "cycle.start", data: { cycleId, query } };
 
-    // Queue-based interleaving: runCycle runs inside stepContextStore.run so
-    // every stepLog inside the cycle pushes into `pending`. We alternate
-    // between draining the queue and waiting for either a new step or the
-    // cycle to finish.
-    const pending: StepData[] = [];
-    let waiter: (() => void) | null = null;
-    const wake = (): void => {
-      const w = waiter;
-      waiter = null;
-      if (w) w();
-    };
-    const t1 = Date.now();
-    const onStep = (e: {
-      step: string;
-      phase: string;
-      terminal: string;
-    } & Record<string, unknown>): void => {
-      pending.push({
-        step: e.step as StepData["step"],
-        phase: e.phase as StepData["phase"],
-        terminal: e.terminal,
-        elapsedMs: Date.now() - t1,
-        extra: e,
-      });
-      wake();
-    };
+    const pumpGen = this.pump.pump(() =>
+      this.deps.thalamusService.runCycle({
+        query,
+        triggerType: ResearchCycleTrigger.User,
+        triggerSource: "console-chat",
+      }),
+    );
 
-    let cycleDone = false;
-    let cycleErr: Error | null = null;
+    // Relay each step event; the generator's final `return` carries the
+    // cycle's terminal state ({result, err}).
     let cycleResultId: string | bigint = cycleId;
-
-    const cycleP = stepContextStore
-      .run({ onStep }, () =>
-        this.deps.thalamusService.runCycle({
-          query,
-          triggerType: TRIGGER_USER as unknown as never,
-          triggerSource: "console-chat",
-        }),
-      )
-      .then((r) => {
-        cycleResultId = r.id;
-      })
-      .catch((err: unknown) => {
-        cycleErr = err instanceof Error ? err : new Error(String(err));
-      })
-      .finally(() => {
-        cycleDone = true;
-        wake();
-      });
-
-    while (!cycleDone || pending.length > 0) {
-      if (pending.length > 0) {
-        yield { event: "step", data: pending.shift()! };
-        continue;
+    let cycleErr: Error | null = null;
+    for (;;) {
+      const next = await pumpGen.next();
+      if (next.done === true) {
+        cycleErr = next.value.err;
+        if (next.value.result) cycleResultId = next.value.result.id;
+        break;
       }
-      if (cycleDone) break;
-      await new Promise<void>((resolve) => {
-        waiter = resolve;
-      });
+      const stepData = next.value;
+      yield { event: "step", data: stepData };
     }
-    await cycleP;
 
     if (cycleErr) {
-      yield {
-        event: "error",
-        data: { message: (cycleErr as Error).message },
-      };
+      yield { event: "error", data: { message: cycleErr.message } };
       yield {
         event: "done",
         data: {
@@ -164,40 +126,23 @@ export class ReplChatService {
     }
 
     const findings = await this.deps.findingRepo.findByCycleId(cycleResultId);
-    const top = findings.slice(0, 8);
+    // Pass the full cycle to the summariser. Slicing at 8 by confidence DESC
+    // was excluding briefing_producer findings (the ones that actually answer
+    // the user's query) when strategist self-rated higher. The summariser LLM
+    // is responsible for relevance — give it the full picture.
+    const top = findings.slice(0, 25);
     for (const f of top) {
-      yield {
-        event: "finding",
-        data: {
-          id: String(f.id),
-          title: f.title ?? f.summary?.slice(0, 80) ?? "(no title)",
-          summary: f.summary?.slice(0, 300) ?? null,
-          cortex: f.cortex ?? null,
-          urgency: f.urgency ?? null,
-          confidence: Number(f.confidence ?? 0),
-        },
-      };
+      yield { event: "finding", data: toReplFindingStreamView(f) };
     }
 
-    const summariser = createLlmTransportWithMode(summariserPrompt(input));
-    const payload = JSON.stringify(
-      {
-        cycleId: String(cycleResultId),
-        findings: top.map((f) => ({
-          id: String(f.id),
-          title: f.title ?? f.summary?.slice(0, 80) ?? "(no title)",
-          cortex: f.cortex,
-          urgency: f.urgency,
-          confidence: Number(f.confidence ?? 0),
-        })),
-      },
-      null,
-      2,
+    const summary = await this.summariser.summarise(
+      input,
+      String(cycleResultId),
+      top.map(toReplFindingSummaryView),
     );
-    const summary = await summariser.call(payload);
     yield {
       event: "summary.complete",
-      data: { text: summary.content, provider: summary.provider },
+      data: { text: summary.text, provider: summary.provider },
     };
 
     yield {

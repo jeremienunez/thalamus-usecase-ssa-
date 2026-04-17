@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeOpacityScore } from "../../../../src/agent/ssa/opacity-score";
+import { computeOpacityScore } from "../../../../src/utils/opacity-score";
 
 const ZERO = {
   payloadUndisclosed: false,

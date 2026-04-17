@@ -1,4 +1,3 @@
-import type { SourceRepository } from "../repositories/source.repository";
 import {
   toAdvisoryView,
   toRssView,
@@ -6,16 +5,58 @@ import {
   toObservationView,
   toCorrelationView,
   toOrbitalPrimerView,
-  type AdvisoryView,
-  type RssView,
-  type ManeuverView,
-  type ObservationView,
-  type CorrelationView,
-  type OrbitalPrimerView,
 } from "../transformers/source-data.transformer";
+import type {
+  AdvisoryRow,
+  RssTrendRow,
+  ManeuverPlanRow,
+  ObservationIngestRow,
+  CorrelationMergeRow,
+  OrbitalPrimerRow,
+  AdvisoryView,
+  RssView,
+  ManeuverView,
+  ObservationView,
+  CorrelationView,
+  OrbitalPrimerView,
+} from "../types/source-data.types";
+
+// ── Port (structural — repo satisfies this by duck typing) ────────
+export interface SourcesReadPort {
+  listAdvisoryFeed(opts: {
+    sinceIso?: string;
+    operatorId?: string | number | bigint;
+    category?: string;
+    limit?: number;
+  }): Promise<AdvisoryRow[]>;
+  listRssItems(opts: {
+    category?: string;
+    days?: number;
+    limit?: number;
+  }): Promise<RssTrendRow[]>;
+  listManeuverPlanSources(opts: {
+    conjunctionEventId?: string | number | bigint;
+    maxDeltaVmps?: number;
+    limit?: number;
+  }): Promise<ManeuverPlanRow[]>;
+  listObservationSources(opts: {
+    stationId?: string;
+    windowMinutes?: number;
+    limit?: number;
+  }): Promise<ObservationIngestRow[]>;
+  listCorrelationSources(opts: {
+    conjunctionEventId?: string | number | bigint;
+    limit?: number;
+  }): Promise<CorrelationMergeRow[]>;
+  listOrbitalPrimerSources(opts: {
+    topic?: string;
+    stakeholderLevel?: string;
+    limit?: number;
+  }): Promise<OrbitalPrimerRow[]>;
+}
 
 export class SourceDataService {
-  constructor(private readonly repo: SourceRepository) {}
+  constructor(private readonly repo: SourcesReadPort) {}
 
   async listAdvisory(opts: {
     sinceIso?: string;

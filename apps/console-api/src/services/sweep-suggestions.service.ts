@@ -6,46 +6,49 @@
  * sweep resolution service. Controllers delegate to this class so route
  * handlers stay boring (just request/reply glue).
  */
-import type { SweepDeps } from "../controllers/sweep-suggestions.controller";
+import { toSuggestionListItem } from "../transformers/sweep-suggestions.transformer";
+import type { SuggestionListItem } from "../types/sweep.types";
 
-export type SuggestionListItem = {
-  id: string;
-  title: string;
-  description: string;
-  suggestedAction: string;
-  category: string;
-  severity: string;
-  operatorCountryName: string | null;
-  affectedSatellites: number;
-  createdAt: string;
-  accepted: boolean;
-  resolutionStatus: string;
-  hasPayload: boolean;
-};
+export type { SuggestionListItem } from "../types/sweep.types";
+
+/**
+ * Structural deps for sweep-suggestions. Owned by the service (DIP: the
+ * consumer declares its port). The container composes this from
+ * `@interview/sweep` at boot; the controller imports this type for wiring.
+ */
+export interface SweepSuggestionsDeps {
+  sweepRepo: {
+    list(opts: { reviewed: boolean; limit: number }): Promise<{
+      rows: Array<{
+        id: string;
+        title: string;
+        description: string;
+        suggestedAction: string;
+        category: string;
+        severity: string;
+        operatorCountryName: string | null;
+        affectedSatellites: number;
+        createdAt: string;
+        accepted: boolean;
+        resolutionStatus: string;
+        resolutionPayload: string | null;
+      }>;
+    }>;
+    review(id: string, accept: boolean, reason?: string): Promise<boolean>;
+  };
+  resolutionService: { resolve(id: string): Promise<unknown> };
+}
 
 export type ReviewResult =
   | { ok: true; reviewed: true; resolution: unknown | null }
   | { ok: false; notFound: true };
 
 export class SweepSuggestionsService {
-  constructor(private readonly deps: SweepDeps) {}
+  constructor(private readonly deps: SweepSuggestionsDeps) {}
 
   async list(): Promise<{ items: SuggestionListItem[]; count: number }> {
     const res = await this.deps.sweepRepo.list({ reviewed: false, limit: 100 });
-    const items: SuggestionListItem[] = res.rows.map((r) => ({
-      id: r.id,
-      title: r.title,
-      description: r.description,
-      suggestedAction: r.suggestedAction,
-      category: r.category,
-      severity: r.severity,
-      operatorCountryName: r.operatorCountryName,
-      affectedSatellites: r.affectedSatellites,
-      createdAt: r.createdAt,
-      accepted: r.accepted,
-      resolutionStatus: r.resolutionStatus,
-      hasPayload: Boolean(r.resolutionPayload),
-    }));
+    const items = res.rows.map(toSuggestionListItem);
     return { items, count: items.length };
   }
 

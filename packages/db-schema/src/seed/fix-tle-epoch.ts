@@ -39,10 +39,10 @@ async function main() {
     updated++;
   }
 
-  const check = await db.execute(sql`
+  const check = await db.execute<{ n: number }>(sql`
     SELECT count(*) AS n FROM satellite WHERE telemetry_summary ? 'tleEpoch'
   `);
-  console.log(`✓ updated ${updated} (skipped ${skipped}); satellites with tleEpoch = ${(check.rows[0] as any).n}`);
+  console.log(`✓ updated ${updated} (skipped ${skipped}); satellites with tleEpoch = ${check.rows[0]?.n}`);
 
   await pool.end();
 }

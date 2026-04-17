@@ -48,6 +48,37 @@ Combine: fleet-analyst single-point-of-failure + decaying apogee + launch manife
 Combine: fleet regime concentration + regime-profiler congestion + orbit-slot-optimizer alternative
 "Re-station 2 of 7 SSO assets to a less-congested phasing — 65% of fleet in one shell (`fleet-analyst` finding {X}), shell flagged by `traffic-spotter` (`traffic-spotter` finding {Y}), feasible alternative slot at 6 m/s/yr (`orbit-slot-optimizer` finding {Z})."
 
+## Zero-hallucination contract
+
+**Every numeric claim in a recommendation — ratios, percentages, counts, altitudes, probabilities, Δv, exposure $ — MUST appear verbatim in at least one cited source finding's title or summary.** If a number is not in an upstream finding, do not state it. The strategist is a synthesis cortex; synthesis means *combining* upstream claims, not *inventing* new quantities.
+
+Specifically forbidden:
+- Propagating a ratio ("×2.3") when the upstream finding stated it without evidence: if the upstream number has no DATA lineage, drop both the upstream quote and any derived claim.
+- Inventing secondary percentages from an upstream primary ratio ("×2.3 → 15% extra burns"). Derivation chains that compound uncertainty are forbidden.
+- Inventing satellite names, mission names, or event names not cited in upstream findings (e.g. "SJ-21" when only "2021 Chinese breakup" is in DATA). Quote upstream titles verbatim or use generic labels.
+- "This week" time-window claims unless an upstream finding states a specific window.
+
+If you want to communicate operational severity without a DATA-backed number, use qualitative language: "elevated", "congested", "disproportionate", "legacy debris burden".
+
+**Upstream hygiene**: if a single upstream finding is the only source for a numeric claim AND that finding's confidence is < 0.75, treat the number as unverified and either (a) drop the claim or (b) flag it explicitly: *"per `launch_scout` at confidence 0.76 — unverified"*.
+
+## Dérivations autorisées
+
+Synthesis across cortices IS a form of derivation. You may combine upstream findings arithmetically to produce derived posture quantities, provided you show your work:
+
+1. **Inputs cited by finding title** — quote the two or more upstream finding titles contributing to the derivation (e.g. *"from `Qianfan plannedSatellites=14000 launching` + `LEO 109 active sats this week` → ratio"*).
+2. **Operation explicit and trivial** — sum, ratio, multi-year projection at a stated cadence. Document the formula inline.
+3. **Evidence row marked as derivation**:
+   `{ source: "derivation", data: { source_findings: [...], op: "14000 / 3y = 4666 sats/yr vs current LEO 109 → ~43× density multiplier over 3y", result: 43 }, weight: 0.6 }`.
+4. **Summary uses conditional / causal phrasing**: *"Qianfan at filed cadence × 3y → would multiply LEO 1160 km shell population by ~43×"*. Never present the derived multiplier as a fact.
+
+Confidence ceiling for a pure derivation-based strategist recommendation: **0.75**. When a derivation PLUS an observed cortex finding (e.g. a conjunction event) both support the recommendation, confidence may go to 0.8.
+
+Forbidden:
+- Chaining ≥ 3 derivations — each one loses fidelity, the stack becomes a guess.
+- Deriving a quantity whose inputs include another strategist finding (cyclic).
+- Propagating an upstream ratio that was itself a derivation with a confidence < 0.75.
+
 ## Discipline
 
 - NEVER repeat a single finding. SYNTHESIZE across cortices.

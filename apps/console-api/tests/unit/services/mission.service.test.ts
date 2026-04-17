@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyBaseLogger } from "fastify";
 import { MissionService, type SweepListProvider } from "../../../src/services/mission.service";
+import { SweepTaskPlanner } from "../../../src/services/sweep-task-planner.service";
+import { MissionTaskWorker } from "../../../src/services/mission-worker.service";
+import { MissionFillWriter } from "../../../src/services/mission-fill-writer.service";
 import type { SatelliteRepository } from "../../../src/repositories/satellite.repository";
 import type { SweepAuditRepository } from "../../../src/repositories/sweep-audit.repository";
 import type { NanoResearchService } from "../../../src/services/nano-research.service";
@@ -111,14 +114,10 @@ describe("MissionService", () => {
     enrichment = mockEnrichment();
     sweepRepo = mockSweepRepo();
     logger = mockLogger();
-    svc = new MissionService(
-      satellites,
-      audit,
-      nano,
-      enrichment,
-      sweepRepo,
-      logger,
-    );
+    const planner = new SweepTaskPlanner(satellites);
+    const filler = new MissionFillWriter(satellites, audit, enrichment);
+    const worker = new MissionTaskWorker(nano, filler, logger);
+    svc = new MissionService(planner, worker, sweepRepo, logger);
   });
 
   afterEach(() => {

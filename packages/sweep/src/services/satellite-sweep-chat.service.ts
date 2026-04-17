@@ -7,8 +7,11 @@
 import { createLogger } from "@interview/shared/observability";
 import type { SatelliteRepository } from "../repositories/satellite.repository";
 import type { SatelliteSweepChatRepository } from "../repositories/satellite-sweep-chat.repository";
-import type { VizService } from "./viz.service";
-import type { SatelliteService } from "./satellite.service";
+import type { LifetimeCurve, VizService } from "./viz.service";
+import type {
+  EphemerisHistoryPoint,
+  SatelliteService,
+} from "./satellite.service";
 import {
   callNano,
   callNanoStream,
@@ -66,10 +69,12 @@ export class SatelliteSweepChatService {
     // Load lifetime curve + ephemeris history + chat context in parallel
     const [lifetimeCurve, ephemerisHistory, history, pastFindings] =
       await Promise.all([
-        this.vizService.getLifetimeCurve(Number(satelliteId)).catch(() => null),
+        this.vizService
+          .getLifetimeCurve(Number(satelliteId))
+          .catch((): LifetimeCurve | null => null),
         this.satelliteService
           .getEphemerisHistory(Number(satelliteId))
-          .catch(() => []),
+          .catch((): EphemerisHistoryPoint[] => []),
         this.sweepRepo.getHistory(satelliteId, userId),
         this.sweepRepo.getFindings(satelliteId),
       ]);

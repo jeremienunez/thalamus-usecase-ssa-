@@ -4,10 +4,26 @@ import {
   deriveCovarianceQuality,
   regimeFromMeanMotion,
 } from "@interview/shared";
-import type { ConjunctionRow } from "../repositories/conjunction.repository";
+import type {
+  ConjunctionRow,
+  ScreenedConjunctionRow,
+  KnnCandidateRow,
+  ScreenedConjunctionView,
+  KnnCandidateView,
+} from "../types/conjunction.types";
 
 function toIso(v: Date | string): string {
   return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+}
+
+export function toScreenedConjunctionView(
+  r: ScreenedConjunctionRow,
+): ScreenedConjunctionView {
+  return { ...r, id: `conj:${r.conjunctionId}` };
+}
+
+export function toKnnCandidateView(r: KnnCandidateRow): KnnCandidateView {
+  return { ...r, id: `knn:${r.targetNoradId}:${r.candidateId}` };
 }
 
 export function toConjunctionView(r: ConjunctionRow): ConjunctionView {

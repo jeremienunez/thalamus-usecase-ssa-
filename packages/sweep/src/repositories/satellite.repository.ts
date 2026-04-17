@@ -669,7 +669,7 @@ export class SatelliteRepository {
       .from(satellite)
       .where(isNull(satellite.operatorCountryId))
       .limit(limit);
-    return rows.map((r) => ({ ...r, operatorCountryName: null }));
+    return rows.map((r) => ({ ...r, operatorCountryName: null as string | null }));
   }
 
   async findByNamePatternMismatch(

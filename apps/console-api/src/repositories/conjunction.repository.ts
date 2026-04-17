@@ -1,23 +1,17 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  ConjunctionRow,
+  ScreenedConjunctionRow,
+  KnnCandidateRow,
+} from "../types/conjunction.types";
 
-export type ConjunctionRow = {
-  id: string;
-  primary_id: string;
-  secondary_id: string;
-  primary_name: string;
-  secondary_name: string;
-  primary_mm: number | null;
-  epoch: Date | string;
-  min_range_km: number;
-  relative_velocity_kmps: number | null;
-  probability_of_collision: number | null;
-  combined_sigma_km: number | null;
-  hard_body_radius_m: number | null;
-  pc_method: string | null;
-  computed_at: Date | string;
-};
+export type {
+  ConjunctionRow,
+  ScreenedConjunctionRow,
+  KnnCandidateRow,
+} from "../types/conjunction.types";
 
 export class ConjunctionRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -30,6 +24,8 @@ export class ConjunctionRepository {
         ce.secondary_satellite_id::text                     AS secondary_id,
         sp.name                                             AS primary_name,
         ss.name                                             AS secondary_name,
+        sp.norad_id                                         AS primary_norad_id,
+        ss.norad_id                                         AS secondary_norad_id,
         NULLIF(sp.telemetry_summary->>'meanMotion','')::float AS primary_mm,
         ce.epoch,
         ce.min_range_km,
@@ -58,35 +54,14 @@ export class ConjunctionRepository {
       primaryNoradId?: string | number;
       limit?: number;
     } = {},
-  ): Promise<
-    {
-      conjunctionId: number;
-      primarySatellite: string;
-      primaryNoradId: number | null;
-      secondarySatellite: string;
-      secondaryNoradId: number | null;
-      epoch: string;
-      minRangeKm: number;
-      relativeVelocityKmps: number | null;
-      probabilityOfCollision: number | null;
-      primarySigmaKm: number | null;
-      secondarySigmaKm: number | null;
-      combinedSigmaKm: number | null;
-      hardBodyRadiusM: number | null;
-      pcMethod: string | null;
-      operatorPrimary: string | null;
-      operatorSecondary: string | null;
-      regime: string | null;
-      primaryTleEpoch: string | null;
-    }[]
-  > {
+  ): Promise<ScreenedConjunctionRow[]> {
     const windowHours = opts.windowHours ?? 168;
     const noradFilter = opts.primaryNoradId
       ? sql`AND (p.telemetry_summary->>'noradId' = ${String(opts.primaryNoradId)}
                  OR s.telemetry_summary->>'noradId' = ${String(opts.primaryNoradId)})`
       : sql``;
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<ScreenedConjunctionRow>(sql`
       SELECT
         ce.id::int AS "conjunctionId",
         p.name AS "primarySatellite",
@@ -117,7 +92,7 @@ export class ConjunctionRepository {
       LIMIT ${opts.limit ?? 20}
     `);
 
-    return results.rows as unknown as ReturnType<ConjunctionRepository["screenConjunctions"]> extends Promise<infer R> ? R : never;
+    return results.rows;
   }
 
   /** KNN candidate proposer using Voyage halfvec HNSW + altitude overlap. */ // ← absorbed from cortices/queries/conjunction-candidates.ts
@@ -129,22 +104,7 @@ export class ConjunctionRepository {
     objectClass?: string | null;
     excludeSameFamily?: boolean;
     efSearch?: number;
-  }): Promise<
-    {
-      targetNoradId: number;
-      targetName: string;
-      candidateId: number;
-      candidateName: string;
-      candidateNoradId: number | null;
-      candidateClass: string | null;
-      cosDistance: number;
-      overlapKm: number;
-      apogeeKm: number | null;
-      perigeeKm: number | null;
-      inclinationDeg: number | null;
-      regime: "leo" | "meo" | "geo" | "heo" | "unknown";
-    }[]
-  > {
+  }): Promise<KnnCandidateRow[]> {
     const knnK = opts.knnK ?? 200;
     const limit = opts.limit ?? 50;
     const marginKm = opts.marginKm ?? 20;
@@ -153,7 +113,7 @@ export class ConjunctionRepository {
     const ef = Math.max(10, Math.min(1000, Math.floor(efSearch)));
     await this.db.execute(sql.raw(`SET hnsw.ef_search = ${ef}`));
 
-    const rows = await this.db.execute(sql`
+    const rows = await this.db.execute<KnnCandidateRow>(sql`
       WITH target AS (
         SELECT
           id, name, norad_id, embedding,
@@ -213,6 +173,6 @@ export class ConjunctionRepository {
       LIMIT ${limit}
     `);
 
-    return rows.rows as unknown as Awaited<ReturnType<ConjunctionRepository["findKnnCandidates"]>>;
+    return rows.rows;
   }
 }

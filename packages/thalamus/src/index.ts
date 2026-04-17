@@ -48,6 +48,20 @@ export {
 export { createLlmTransport } from "./transports/llm-chat";
 export { createLlmTransportWithMode } from "./transports/factory";
 export type { LlmChatConfig, LlmResponse, LlmTransport } from "./transports/types";
+export {
+  OpenAIWebSearchAdapter,
+  NullWebSearchAdapter,
+} from "./transports/openai-web-search.adapter";
+
+// Ports
+export type { WebSearchPort } from "./ports/web-search.port";
+
+// Cortex execution strategies (extension points)
+export {
+  StandardStrategy,
+  StrategistStrategy,
+} from "./cortices/strategies";
+export type { CortexExecutionStrategy } from "./cortices/strategies";
 
 // Repositories
 export { ResearchFindingRepository } from "./repositories/research-finding.repository";

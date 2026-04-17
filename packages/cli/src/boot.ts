@@ -123,8 +123,8 @@ export async function main(
   // In prod, when we own the pool/redis, make sure they close on exit.
   if (ownedPool || ownedRedis) {
     app.waitUntilExit().finally(() => {
-      ownedPool?.end().catch(() => undefined);
-      ownedRedis?.quit().catch(() => undefined);
+      ownedPool?.end().catch((): void => undefined);
+      ownedRedis?.quit().catch((): void => undefined);
     });
   }
 }
@@ -206,7 +206,7 @@ export async function buildRealAdapters(
             title: f.title,
             sourceClass: "KG",
             confidence: f.confidence,
-            evidenceRefs: [],
+            evidenceRefs: [] as string[],
           })),
           costUsd: cycle.totalCost ?? 0,
         };
@@ -392,7 +392,7 @@ async function buildWhyTreeFromDb(
     .from(researchEdge)
     .where(eq(researchEdge.findingId, fid));
 
-  const children: WhyNode[] = edges.map((e) => ({
+  const children: WhyNode[] = edges.map((e): WhyNode => ({
     id: `edge:${e.id}`,
     label: `${e.relation} → ${e.entityType}:${e.entityId}`,
     kind: "edge",

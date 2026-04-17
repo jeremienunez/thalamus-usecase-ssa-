@@ -24,12 +24,26 @@ export { satelliteSweepChatRoutes } from "./routes/satellite-sweep-chat.routes";
 
 // Jobs
 export { createSweepWorker } from "./jobs/workers/sweep.worker";
+export { createIngestionWorker } from "./jobs/workers/ingestion.worker";
+export {
+  IngestionRegistry,
+  createIngestionRegistry,
+} from "./jobs/ingestion-registry";
+export type {
+  IngestionContext,
+  IngestionResult,
+  IngestionFetcher,
+  IngestionRegistryDeps,
+} from "./jobs/ingestion-registry";
 export {
   sweepQueue,
   satelliteQueue,
+  ingestionQueue,
   sweepQueueEvents,
+  ingestionQueueEvents,
   closeQueues,
 } from "./jobs/queues";
+export type { Queue as BullQueue } from "bullmq";
 export { registerSchedulers } from "./jobs/schedulers";
 
 // Transformers / DTOs

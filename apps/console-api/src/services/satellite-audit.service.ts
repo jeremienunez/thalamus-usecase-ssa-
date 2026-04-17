@@ -1,12 +1,32 @@
-import { SatelliteAuditRepository } from "../repositories/satellite-audit.repository";
 import {
   toSatelliteDataAuditView,
   toSatelliteClassificationAuditView,
   toApogeeHistoryView,
-  type SatelliteDataAuditView,
-  type SatelliteClassificationAuditView,
-  type ApogeeHistoryView,
 } from "../transformers/satellite-audit.transformer";
+import type {
+  SatelliteDataAuditRow,
+  SatelliteClassificationAuditRow,
+  ApogeeHistoryRow,
+  SatelliteDataAuditView,
+  SatelliteClassificationAuditView,
+  ApogeeHistoryView,
+} from "../types/satellite-audit.types";
+
+// ── Port (structural — repos satisfy by duck typing) ──────────────
+export interface SatelliteAuditReadPort {
+  auditDataCompleteness(opts: {
+    orbitRegime?: string;
+    limit?: number;
+  }): Promise<SatelliteDataAuditRow[]>;
+  auditClassification(opts: {
+    limit?: number;
+  }): Promise<SatelliteClassificationAuditRow[]>;
+  listApogeeHistory(opts: {
+    noradId?: string | number;
+    windowDays?: number;
+    limit?: number;
+  }): Promise<ApogeeHistoryRow[]>;
+}
 
 export type SatelliteAuditPage<T> = {
   items: T[];
@@ -14,7 +34,7 @@ export type SatelliteAuditPage<T> = {
 };
 
 export class SatelliteAuditService {
-  constructor(private readonly repo: SatelliteAuditRepository) {}
+  constructor(private readonly repo: SatelliteAuditReadPort) {}
 
   async auditData(opts: {
     orbitRegime?: string;

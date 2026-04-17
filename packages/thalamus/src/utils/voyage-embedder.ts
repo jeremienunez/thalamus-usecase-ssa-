@@ -91,7 +91,7 @@ export class VoyageEmbedder {
   async embedDocuments(texts: string[]): Promise<(number[] | null)[]> {
     if (!this.apiKey) {
       logger.warn("VOYAGE_API_KEY not set, embedding disabled");
-      return texts.map(() => null);
+      return texts.map((): number[] | null => null);
     }
 
     if (texts.length === 0) return [];

@@ -1,74 +1,48 @@
 // apps/console-api/src/services/enrichment-finding.service.ts
-import type Redis from "ioredis";
-import type { EnrichmentCycleRepository } from "../repositories/enrichment-cycle.repository";
-import type { FindingRepository } from "../repositories/finding.repository";
-import type { ResearchEdgeRepository } from "../repositories/research-edge.repository";
+import {
+  toEnrichmentFindingInsert,
+  toSweepFeedbackEntry,
+} from "../transformers/enrichment-finding.transformer";
+import type { EmitArgs, SweepFeedbackEntry } from "../types/sweep.types";
+import type {
+  FindingInsertInput,
+  EdgeInsertInput,
+} from "../types/finding.types";
 
-export type EmitArgs = {
-  kind: "knn" | "mission";
-  satelliteId: string;
-  field: string;
-  value: string | number;
-  confidence: number;
-  source: string;
-  neighbourIds?: string[];
-  cosSim?: number;
-};
+export type { EmitArgs } from "../types/sweep.types";
+
+// ── Ports (structural — repos satisfy these by duck typing) ────────
+export interface CyclesPort {
+  getOrCreate(): Promise<bigint>;
+}
+
+export interface FindingsWritePort {
+  insert(input: FindingInsertInput): Promise<bigint>;
+}
+
+export interface EdgesWritePort {
+  insert(input: EdgeInsertInput): Promise<void>;
+}
+
+export interface SweepFeedbackPort {
+  push(entry: SweepFeedbackEntry): Promise<void>;
+}
 
 export class EnrichmentFindingService {
   constructor(
-    private readonly cycles: EnrichmentCycleRepository,
-    private readonly findings: FindingRepository,
-    private readonly edges: ResearchEdgeRepository,
-    private readonly redis: Redis,
+    private readonly cycles: CyclesPort,
+    private readonly findings: FindingsWritePort,
+    private readonly edges: EdgesWritePort,
+    private readonly feedback: SweepFeedbackPort,
   ) {}
 
   async emit(args: EmitArgs): Promise<void> {
     const cycleId = await this.cycles.getOrCreate();
     const satBig = BigInt(args.satelliteId);
-    const title = `${args.kind === "knn" ? "KNN" : "Mission"} fill · ${args.field}=${args.value}`;
-    const summary =
-      args.kind === "knn"
-        ? `${args.field} propagated to satellite #${args.satelliteId} from ${args.neighbourIds?.length ?? 0} semantically similar payloads (cos_sim=${args.cosSim?.toFixed(3) ?? "?"}).`
-        : `${args.field} written to satellite #${args.satelliteId} from web-search source (confidence=${args.confidence.toFixed(2)}).`;
-    const evidence =
-      args.kind === "knn"
-        ? [
-            {
-              source: "knn",
-              data: {
-                field: args.field,
-                value: args.value,
-                cosSim: args.cosSim,
-                neighbours: args.neighbourIds ?? [],
-              },
-              weight: args.confidence,
-            },
-          ]
-        : [
-            {
-              source: "web",
-              data: { field: args.field, value: args.value, url: args.source },
-              weight: args.confidence,
-            },
-          ];
-    const reasoning =
-      args.kind === "knn"
-        ? `Zero-LLM propagation: median consensus of K=${args.neighbourIds?.length ?? 0} nearest payloads in Voyage halfvec(2048) space.`
-        : `Web-mission 2-vote corroboration: two independent nano calls agreed on this value from ${args.source}.`;
 
-    const findingId = await this.findings.insert({
-      cycleId,
-      cortex: "data_auditor",
-      findingType: "insight",
-      urgency: "low",
-      title,
-      summary,
-      evidence,
-      reasoning,
-      confidence: args.confidence,
-      impactScore: 0.3,
-    });
+    const findingId = await this.findings.insert(
+      toEnrichmentFindingInsert(args, cycleId),
+    );
 
     await this.edges.insert({
       findingId,
@@ -92,16 +66,6 @@ export class EnrichmentFindingService {
       }
     }
 
-    await this.redis.lpush(
-      "sweep:feedback",
-      JSON.stringify({
-        category: "enrichment",
-        wasAccepted: true,
-        reviewerNote: `${args.kind}-fill: ${args.field}=${args.value}`,
-        operatorCountryName:
-          args.kind === "knn" ? "knn-propagation" : "web-mission",
-      }),
-    );
-    await this.redis.ltrim("sweep:feedback", 0, 199);
+    await this.feedback.push(toSweepFeedbackEntry(args));
   }
 }

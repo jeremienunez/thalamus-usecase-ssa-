@@ -1,6 +1,19 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  CatalogContextRow,
+  ReplacementCostRawRow,
+  LaunchCostRow,
+  PayloadContextRow,
+} from "../types/satellite.types";
+
+export type {
+  CatalogContextRow,
+  ReplacementCostRawRow,
+  LaunchCostRow,
+  PayloadContextRow,
+} from "../types/satellite.types";
 
 export class SatelliteEnrichmentRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -8,24 +21,12 @@ export class SatelliteEnrichmentRepository {
   /** Catalog ingestion view with operator / country / platform / regime. */
   async listCatalogContext(
     opts: { source?: string; sinceEpoch?: string; limit?: number } = {},
-  ): Promise<
-    Array<{
-      satelliteId: number;
-      name: string;
-      noradId: number | null;
-      operator: string | null;
-      operatorCountry: string | null;
-      platformClass: string | null;
-      orbitRegime: string | null;
-      launchYear: number | null;
-      ingestedAt: string;
-    }>
-  > {
+  ): Promise<CatalogContextRow[]> {
     const sinceFilter = opts.sinceEpoch
       ? sql`AND s.created_at > ${opts.sinceEpoch}::timestamptz`
       : sql``;
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<CatalogContextRow>(sql`
       SELECT
         s.id::int AS "satelliteId",
         s.name,
@@ -47,45 +48,24 @@ export class SatelliteEnrichmentRepository {
       LIMIT ${opts.limit ?? 50}
     `);
 
-    return results.rows as unknown as Array<{
-      satelliteId: number;
-      name: string;
-      noradId: number | null;
-      operator: string | null;
-      operatorCountry: string | null;
-      platformClass: string | null;
-      orbitRegime: string | null;
-      launchYear: number | null;
-      ingestedAt: string;
-    }>;
+    return results.rows;
   }
 
-  /** Heuristic replacement cost estimate for a satellite. */
-  async estimateReplacementCost(
+  /** Raw bus/payload context for replacement-cost estimation. Math lives in the service. */
+  async findReplacementCostInputs(
     opts: { satelliteId: string | number | bigint },
-  ): Promise<
-    Array<{
-      satelliteId: number;
-      name: string;
-      operatorName: string | null;
-      massKg: number | null;
-      busName: string | null;
-      payloadNames: string[];
-      estimatedCost: { low: number; mid: number; high: number; currency: "USD" };
-      breakdown: { bus: number; payload: number; launch: number };
-    }>
-  > {
+  ): Promise<ReplacementCostRawRow[]> {
     if (opts.satelliteId == null) return [];
 
-    const FALLBACK_MASS_KG = 500;
-    const USD_PER_KG_BUS = 50_000;
-    const USD_PER_PAYLOAD_FIXED = 10_000_000;
-    const USD_PER_KG_LAUNCH = 10_000;
+    type NullablePayloads = Omit<ReplacementCostRawRow, "payloadNames"> & {
+      payloadNames: string[] | null;
+    };
 
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<NullablePayloads>(sql`
       SELECT
         s.id::int           AS "satelliteId",
         s.name,
+        s.norad_id          AS "noradId",
         op.name             AS "operatorName",
         s.mass_kg           AS "massKg",
         sb.name             AS "busName",
@@ -102,46 +82,9 @@ export class SatelliteEnrichmentRepository {
       LIMIT 1
     `);
 
-    type RawRow = {
-      satelliteId: number;
-      name: string;
-      operatorName: string | null;
-      massKg: number | null;
-      busName: string | null;
-      payloadNames: string[] | null;
-    };
-
-    const row = results.rows[0] as unknown as RawRow | undefined;
+    const row = results.rows[0];
     if (!row) return [];
-
-    const massKg = row.massKg ?? FALLBACK_MASS_KG;
-    const payloadNames = row.payloadNames ?? [];
-    const bus = massKg * USD_PER_KG_BUS;
-    const payload = Math.max(payloadNames.length, 1) * USD_PER_PAYLOAD_FIXED;
-    const launch = massKg * USD_PER_KG_LAUNCH;
-    const mid = bus + payload + launch;
-
-    return [
-      {
-        satelliteId: row.satelliteId,
-        name: row.name,
-        operatorName: row.operatorName,
-        massKg: row.massKg,
-        busName: row.busName,
-        payloadNames,
-        estimatedCost: {
-          low: Math.round(mid * 0.7),
-          mid: Math.round(mid),
-          high: Math.round(mid * 1.3),
-          currency: "USD",
-        },
-        breakdown: {
-          bus: Math.round(bus),
-          payload: Math.round(payload),
-          launch: Math.round(launch),
-        },
-      },
-    ];
+    return [{ ...row, payloadNames: row.payloadNames ?? [] }];
   }
 
   /** Launch cost context for the Launch-Cost cortex. */
@@ -150,30 +93,7 @@ export class SatelliteEnrichmentRepository {
     minLaunchCost?: number;
     maxLaunchCost?: number;
     limit?: number;
-  }): Promise<
-    {
-      id: string;
-      name: string;
-      launchCost: number | null;
-      launchYear: number | null;
-      operatorCountryName: string;
-      orbitRegimeName: string;
-      platformClass: string | null;
-      kMultiplier: number | null;
-      busName: string | null;
-      manifestSourceCount: number;
-      inclinationDeg: number | null;
-      altitudeKm: number | null;
-      eccentricity: number | null;
-      regimeType: string | null;
-      slotCapacityMax: string | null;
-      solarFluxZone: string | null;
-      radiationZone: string | null;
-      solarFluxIndex: number | null;
-      kpIndex: number | null;
-      radiationIndex: number | null;
-    }[]
-  > {
+  }): Promise<LaunchCostRow[]> {
     const limit = opts.limit ?? 50;
     const regimeFilter = opts.orbitRegime
       ? sql`AND orr.name = ${opts.orbitRegime}`
@@ -184,30 +104,11 @@ export class SatelliteEnrichmentRepository {
     if (opts.maxLaunchCost)
       costFilter = sql`${costFilter} AND s.launch_cost <= ${opts.maxLaunchCost}`;
 
-    const results = await this.db.execute<{
-      id: string;
-      name: string;
-      launchCost: number | null;
-      launchYear: number | null;
-      operatorCountryName: string;
-      orbitRegimeName: string;
-      platformClass: string | null;
-      kMultiplier: number | null;
-      busName: string | null;
-      manifestSourceCount: number;
-      inclinationDeg: number | null;
-      altitudeKm: number | null;
-      eccentricity: number | null;
-      regimeType: string | null;
-      slotCapacityMax: string | null;
-      solarFluxZone: string | null;
-      radiationZone: string | null;
-      solarFluxIndex: number | null;
-      kpIndex: number | null;
-      radiationIndex: number | null;
-    }>(sql`
+    const results = await this.db.execute<LaunchCostRow>(sql`
       SELECT
-        s.id::text, s.name, s.launch_cost as "launchCost",
+        s.id::text, s.name,
+        s.norad_id AS "noradId",
+        s.launch_cost as "launchCost",
         s.launch_year as "launchYear",
         oc.name as "operatorCountryName",
         orr.name as "orbitRegimeName",
@@ -258,6 +159,7 @@ export class SatelliteEnrichmentRepository {
     {
       id: bigint;
       name: string;
+      noradId: number | null;
       massKg: number | null;
       operatorCountryName: string;
       orbitRegimeName: string;
@@ -271,12 +173,15 @@ export class SatelliteEnrichmentRepository {
     const results = await this.db.execute<{
       id: bigint;
       name: string;
+      noradId: number | null;
       massKg: number | null;
       operatorCountryName: string;
       orbitRegimeName: string;
       similarity: number;
     }>(sql`
-      SELECT s.id, s.name, s.mass_kg as "massKg",
+      SELECT s.id, s.name,
+        s.norad_id AS "noradId",
+        s.mass_kg as "massKg",
         oc.name as "operatorCountryName", orb.name as "orbitRegimeName",
         1.0 - (s.telemetry_14d <=> ${JSON.stringify(profile)}::vector) as similarity
       FROM satellite s
@@ -298,7 +203,7 @@ export class SatelliteEnrichmentRepository {
     batch?: boolean;
     limit?: number;
     [key: string]: unknown;
-  }): Promise<{ type: string; [key: string]: unknown }[]> {
+  }): Promise<PayloadContextRow[]> {
     const limit = opts.limit ?? 10;
 
     // Batch mode: return priority list of payloads needing profiles

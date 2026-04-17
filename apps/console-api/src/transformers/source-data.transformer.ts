@@ -1,3 +1,4 @@
+// Transformers for source-data domain (advisories, RSS, maneuver, etc.)
 import type {
   AdvisoryRow,
   RssTrendRow,
@@ -5,7 +6,14 @@ import type {
   ObservationIngestRow,
   CorrelationMergeRow,
   OrbitalPrimerRow,
-} from "../repositories/source.repository";
+  SourceHeader,
+  AdvisoryView,
+  RssView,
+  ManeuverView,
+  ObservationView,
+  CorrelationView,
+  OrbitalPrimerView,
+} from "../types/source-data.types";
 
 // ---- shared helpers ----------------------------------------------------
 function toIso(v: Date | string | null | undefined): string | null {
@@ -13,14 +21,6 @@ function toIso(v: Date | string | null | undefined): string | null {
   const d = v instanceof Date ? v : new Date(v);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-
-type SourceHeader = {
-  sourceName: string;
-  title: string;
-  summary: string | null;
-  url: string | null;
-  publishedAt: string | null;
-};
 
 function sourceHeader(r: {
   sourceName: string;
@@ -38,46 +38,6 @@ function sourceHeader(r: {
     publishedAt: toIso(r.publishedAt),
   };
 }
-
-// ---- DTO types ---------------------------------------------------------
-export type AdvisoryView = SourceHeader & {
-  id: string;
-  sourceKind: string;
-  score: number | null;
-};
-
-export type RssView = SourceHeader & {
-  id: string;
-  sourceCategory: string;
-  score: number | null;
-};
-
-export type ManeuverView = SourceHeader & {
-  id: string;
-  sourceKind: string;
-};
-
-export type ObservationView = SourceHeader & {
-  id: string;
-  sourceKind: string;
-};
-
-export type CorrelationView = SourceHeader & {
-  id: string;
-  streamKind: "field" | "osint";
-  score: number | null;
-};
-
-export type OrbitalPrimerView = {
-  id: string;
-  kind: "paper" | "news" | "finding";
-  title: string;
-  abstract: string | null;
-  authors: string[];
-  url: string | null;
-  publishedAt: string | null;
-  sourceName: string | null;
-};
 
 // ---- transformers ------------------------------------------------------
 export function toAdvisoryView(r: AdvisoryRow, i: number): AdvisoryView {

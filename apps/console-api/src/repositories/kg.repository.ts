@@ -1,18 +1,21 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  KgSatRow,
+  KgOpRow,
+  KgRegimeRow,
+  KgFindingRow,
+  KgEdgeRow,
+} from "../types/kg.types";
 
-export type KgSatRow = { id: string; name: string };
-export type KgOpRow = { id: string; name: string };
-export type KgRegimeRow = { id: string; name: string };
-export type KgFindingRow = { id: string; title: string; cortex: string };
-export type KgEdgeRow = {
-  id: string;
-  finding_id: string;
-  entity_type: string;
-  entity_id: string;
-  relation: string;
-};
+export type {
+  KgSatRow,
+  KgOpRow,
+  KgRegimeRow,
+  KgFindingRow,
+  KgEdgeRow,
+} from "../types/kg.types";
 
 export class KgRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}

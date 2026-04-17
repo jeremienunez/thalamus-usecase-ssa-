@@ -9,3 +9,8 @@ export * from "./source";
 export * from "./sim";
 export * from "./conjunction";
 export * from "./amateur-track";
+export * from "./tle-history";
+export * from "./space-weather";
+export * from "./notam";
+export * from "./fragmentation-event";
+export * from "./itu-filing";

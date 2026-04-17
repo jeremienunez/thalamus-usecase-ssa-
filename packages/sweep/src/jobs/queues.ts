@@ -90,10 +90,29 @@ export const swarmAggregateQueue = new Queue<SwarmAggregateJobPayloadWire>(
   },
 );
 
+/**
+ * Ingestion queue — periodic + on-demand structured-data fetchers
+ * (TLE history, solar weather, launch manifest, NOTAMs, ITU filings,
+ * fragmentation events). Job `name` selects the fetcher in the
+ * ingestion registry; data payload is fetcher-specific.
+ */
+export const ingestionQueue = new Queue("ingestion", {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 30_000 },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 200 },
+  },
+});
+
 export const sweepQueueEvents = new QueueEvents("sweep", { connection: redis });
 export const simTurnQueueEvents = new QueueEvents("sim-turn", { connection: redis });
 export const swarmFishQueueEvents = new QueueEvents("swarm-fish", { connection: redis });
 export const swarmAggregateQueueEvents = new QueueEvents("swarm-aggregate", {
+  connection: redis,
+});
+export const ingestionQueueEvents = new QueueEvents("ingestion", {
   connection: redis,
 });
 
@@ -112,9 +131,11 @@ export async function closeQueues(): Promise<void> {
     simTurnQueue.close(),
     swarmFishQueue.close(),
     swarmAggregateQueue.close(),
+    ingestionQueue.close(),
     sweepQueueEvents.close(),
     simTurnQueueEvents.close(),
     swarmFishQueueEvents.close(),
     swarmAggregateQueueEvents.close(),
+    ingestionQueueEvents.close(),
   ]);
 }

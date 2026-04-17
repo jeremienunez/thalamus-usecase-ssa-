@@ -22,10 +22,12 @@ function mockEdges(): ResearchEdgeRepository {
   } as unknown as ResearchEdgeRepository;
 }
 
-function mockRedis() {
+// EnrichmentFindingService now depends on a SweepFeedbackPort whose only
+// method is `push(entry)` — Redis lpush/ltrim moved into the
+// SweepFeedbackRepository implementation. Tests mock the port directly.
+function mockFeedback() {
   return {
-    lpush: vi.fn().mockResolvedValue(1),
-    ltrim: vi.fn().mockResolvedValue("OK"),
+    push: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -34,7 +36,7 @@ describe("EnrichmentFindingService.emit", () => {
     const cycles = mockCycles();
     const findings = mockFindings();
     const edges = mockEdges();
-    const redis = mockRedis();
+    const feedback = mockFeedback();
     (cycles.getOrCreate as ReturnType<typeof vi.fn>).mockResolvedValue(77n);
     (findings.insert as ReturnType<typeof vi.fn>).mockResolvedValue(501n);
 
@@ -42,7 +44,7 @@ describe("EnrichmentFindingService.emit", () => {
       cycles,
       findings,
       edges,
-      redis as never,
+      feedback,
     ).emit({
       kind: "knn",
       satelliteId: "42",
@@ -98,23 +100,19 @@ describe("EnrichmentFindingService.emit", () => {
       context: { role: "knn_neighbour", cosSim: 0.934 },
     });
 
-    expect(redis.lpush).toHaveBeenCalledWith(
-      "sweep:feedback",
-      JSON.stringify({
-        category: "enrichment",
-        wasAccepted: true,
-        reviewerNote: "knn-fill: lifetime=12",
-        operatorCountryName: "knn-propagation",
-      }),
-    );
-    expect(redis.ltrim).toHaveBeenCalledWith("sweep:feedback", 0, 199);
+    expect(feedback.push).toHaveBeenCalledWith({
+      category: "enrichment",
+      wasAccepted: true,
+      reviewerNote: "knn-fill: lifetime=12",
+      operatorCountryName: "knn-propagation",
+    });
   });
 
   it("emits the mission branch with web evidence and no neighbour edges", async () => {
     const cycles = mockCycles();
     const findings = mockFindings();
     const edges = mockEdges();
-    const redis = mockRedis();
+    const feedback = mockFeedback();
     (cycles.getOrCreate as ReturnType<typeof vi.fn>).mockResolvedValue(88n);
     (findings.insert as ReturnType<typeof vi.fn>).mockResolvedValue(502n);
 
@@ -122,7 +120,7 @@ describe("EnrichmentFindingService.emit", () => {
       cycles,
       findings,
       edges,
-      redis as never,
+      feedback,
     ).emit({
       kind: "mission",
       satelliteId: "7",
@@ -167,14 +165,11 @@ describe("EnrichmentFindingService.emit", () => {
       context: { field: "operator", value: "CNES" },
     });
 
-    expect(redis.lpush).toHaveBeenCalledWith(
-      "sweep:feedback",
-      JSON.stringify({
-        category: "enrichment",
-        wasAccepted: true,
-        reviewerNote: "mission-fill: operator=CNES",
-        operatorCountryName: "web-mission",
-      }),
-    );
+    expect(feedback.push).toHaveBeenCalledWith({
+      category: "enrichment",
+      wasAccepted: true,
+      reviewerNote: "mission-fill: operator=CNES",
+      operatorCountryName: "web-mission",
+    });
   });
 });

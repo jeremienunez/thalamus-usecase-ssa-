@@ -2,9 +2,31 @@ import type { FindingView } from "@interview/shared";
 import type {
   FindingRow,
   FindingDetailRow,
-} from "../repositories/finding.repository";
-import { mapFindingStatus } from "./finding-status.transformer";
+  EdgeRow,
+} from "../types/finding.types";
+import { mapFindingStatus, parseFindingId } from "./finding-status.transformer";
 import { entityRef } from "./kg-view.transformer";
+
+export function extractFindingIds(items: FindingView[]): bigint[] {
+  return items
+    .map((i) => parseFindingId(i.id))
+    .filter((id): id is bigint => id !== null);
+}
+
+export function attachLinkedEntityIds(
+  items: FindingView[],
+  edgeRows: EdgeRow[],
+): FindingView[] {
+  const edgeMap = new Map<string, string[]>();
+  for (const e of edgeRows) {
+    const key = `f:${e.finding_id}`;
+    const linked = entityRef(e.entity_type, e.entity_id);
+    if (!edgeMap.has(key)) edgeMap.set(key, []);
+    edgeMap.get(key)!.push(linked);
+  }
+  for (const f of items) f.linkedEntityIds = edgeMap.get(f.id) ?? [];
+  return items;
+}
 
 export function toFindingListView(f: FindingRow): FindingView {
   return {

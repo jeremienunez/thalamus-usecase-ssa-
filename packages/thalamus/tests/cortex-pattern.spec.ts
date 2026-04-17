@@ -31,6 +31,9 @@ vi.mock("../src/transports/llm-chat", () => ({
 import { CortexExecutor } from "../src/cortices/executor";
 import { CortexRegistry, type CortexSkill } from "../src/cortices/registry";
 import { noopDomainConfig } from "../src/cortices/types";
+import { StandardStrategy } from "../src/cortices/strategies/standard-strategy";
+import { StrategistStrategy } from "../src/cortices/strategies/strategist-strategy";
+import { NullWebSearchAdapter } from "../src/transports/openai-web-search.adapter";
 import {
   ResearchCortex,
   ResearchFindingType,
@@ -84,6 +87,17 @@ const testDomainConfig = {
   ]),
 };
 
+// Build the default strategy list the production container also wires:
+// Strategist first (specialised), Standard last (catch-all). Empty data
+// provider — tests that exercise SQL helpers point the skill at a helper
+// name absent from the map, exercising the "no data provider mapped" path.
+function buildTestStrategies() {
+  return [
+    new StrategistStrategy(testDomainConfig),
+    new StandardStrategy({}, testDomainConfig, new NullWebSearchAdapter()),
+  ];
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -91,7 +105,7 @@ beforeEach(() => {
 describe("SPEC-TH-003 AC-2 — unknown cortex yields empty output", () => {
   it("returns findings: [] and model === 'none'", async () => {
     const registry = fakeRegistry({}); // empty
-    const executor = new CortexExecutor(registry, {}, testDomainConfig);
+    const executor = new CortexExecutor(registry, buildTestStrategies());
 
     const out = await executor.execute("does_not_exist", {
       query: "any",
@@ -154,7 +168,7 @@ describe("SPEC-TH-003 AC-1 / AC-3 — nominal execution normalises findings", ()
         header: { name: "catalog", description: "", sqlHelper: "none", params: {} },
       },
     });
-    const executor = new CortexExecutor(registry, {}, testDomainConfig);
+    const executor = new CortexExecutor(registry, buildTestStrategies());
 
     const out = await executor.execute("catalog", {
       query: "screen conjunctions",
@@ -193,7 +207,7 @@ describe("SPEC-TH-003 AC-4 — user-scoped cortex requires userId", () => {
         },
       },
     });
-    const executor = new CortexExecutor(registry, {}, testDomainConfig);
+    const executor = new CortexExecutor(registry, buildTestStrategies());
 
     const out = await executor.execute(ResearchCortex.FleetAnalyst, {
       query: "fleet",
@@ -227,7 +241,7 @@ describe("SPEC-TH-003 AC-5 — helper throw is swallowed, executor keeps going",
         },
       },
     });
-    const executor = new CortexExecutor(registry, {}, testDomainConfig);
+    const executor = new CortexExecutor(registry, buildTestStrategies());
 
     const promise = executor.execute("catalog", {
       query: "screen",
@@ -236,7 +250,15 @@ describe("SPEC-TH-003 AC-5 — helper throw is swallowed, executor keeps going",
     });
     await expect(promise).resolves.toBeDefined();
     const out = await promise;
-    expect(out.findings).toEqual([]);
+    // Bug #3 L1 fix (2026-04-17 morning audit): when the LLM emits 0
+    // findings while DATA was non-empty (here: 1 structured-source row
+    // from the mocked `fetchSourcesForCortex`), the strategy now emits
+    // a synthetic data-gap "anomaly" meta-finding so the silence is
+    // visible to the strategist + /api/stats. AC-5's invariant is "the
+    // executor does not reject" — that still holds.
+    expect(out.findings).toHaveLength(1);
+    expect(out.findings[0].findingType).toBe(ResearchFindingType.Anomaly);
+    expect(out.findings[0].title).toMatch(/0 findings from \d+ data items/);
     expect(out.metadata).toBeDefined();
   });
 });

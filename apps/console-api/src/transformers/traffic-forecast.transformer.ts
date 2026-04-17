@@ -1,105 +1,20 @@
+import type {
+  OrbitalTrafficRow,
+  OrbitalTrafficView,
+  DebrisForecastRow,
+  DebrisForecastView,
+  LaunchManifestRow,
+  LaunchManifestView,
+  LaunchEpochWeatherRow,
+  LaunchEpochWeatherView,
+} from "../types/traffic-forecast.types";
+
 // ---- shared helpers ----------------------------------------------------
 function toIso(v: Date | string | null | undefined): string | null {
   if (v === null || v === undefined) return null;
   const d = v instanceof Date ? v : new Date(v);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-
-// ---- row types (mirror repo return shapes) ----------------------------
-export type OrbitalTrafficRow = {
-  kind: "density" | "news";
-  regimeName: string | null;
-  satelliteCount: number | null;
-  title: string | null;
-  url: string | null;
-  publishedAt: string | null;
-  baselines: Record<string, unknown> | null;
-};
-
-export type DebrisForecastRow = {
-  kind: "density" | "paper" | "news";
-  regimeName: string | null;
-  satelliteCount: number | null;
-  avgMissionAge: number | null;
-  title: string | null;
-  abstract: string | null;
-  authors: string[] | null;
-  url: string | null;
-  publishedAt: string | null;
-};
-
-export type LaunchManifestRow = {
-  kind: "db" | "news";
-  title: string;
-  detail: string | null;
-  year: number | null;
-  vehicle: string | null;
-  url: string | null;
-  publishedAt: string | null;
-};
-
-export type LaunchEpochWeatherRow = {
-  year: number;
-  operatorCountryName: string;
-  orbitRegimeName: string;
-  solarFluxIndex: number | null;
-  solarFluxRegion: string | null;
-  kpIndex: number | null;
-  kpClass: string | null;
-  radiationIndex: number | null;
-  radiationClass: string | null;
-  climate: Record<string, unknown> | null;
-};
-
-// ---- DTO types ---------------------------------------------------------
-export type OrbitalTrafficView = {
-  id: string;
-  kind: "density" | "news";
-  regimeName: string | null;
-  satelliteCount: number | null;
-  title: string | null;
-  url: string | null;
-  publishedAt: string | null;
-  baselines: Record<string, unknown> | null;
-};
-
-export type DebrisForecastView = {
-  id: string;
-  kind: "density" | "paper" | "news";
-  regimeName: string | null;
-  satelliteCount: number | null;
-  avgMissionAge: number | null;
-  title: string | null;
-  abstract: string | null;
-  authors: string[];
-  url: string | null;
-  publishedAt: string | null;
-};
-
-export type LaunchManifestView = {
-  id: string;
-  kind: "db" | "news";
-  title: string;
-  detail: string | null;
-  year: number | null;
-  vehicle: string | null;
-  url: string | null;
-  publishedAt: string | null;
-};
-
-export type LaunchEpochWeatherView = {
-  id: string;
-  year: number;
-  operatorCountryName: string;
-  orbitRegimeName: string;
-  solarFluxIndex: number | null;
-  solarFluxRegion: string | null;
-  kpIndex: number | null;
-  kpClass: string | null;
-  radiationIndex: number | null;
-  radiationClass: string | null;
-  climate: Record<string, unknown> | null;
-};
 
 // ---- transformers ------------------------------------------------------
 export function toOrbitalTrafficView(
@@ -133,6 +48,18 @@ export function toDebrisForecastView(
     authors: Array.isArray(r.authors) ? r.authors : [],
     url: r.url ?? null,
     publishedAt: toIso(r.publishedAt),
+    f107: r.f107 ?? null,
+    apIndex: r.apIndex ?? null,
+    kpIndex: r.kpIndex ?? null,
+    sunspotNumber: r.sunspotNumber ?? null,
+    weatherSource: r.weatherSource ?? null,
+    fragmentParentName: r.fragmentParentName ?? null,
+    fragmentParentNoradId: r.fragmentParentNoradId ?? null,
+    fragmentParentCountry: r.fragmentParentCountry ?? null,
+    fragmentsCataloged: r.fragmentsCataloged ?? null,
+    fragmentParentMassKg: r.fragmentParentMassKg ?? null,
+    fragmentEventType: r.fragmentEventType ?? null,
+    fragmentCause: r.fragmentCause ?? null,
   };
 }
 
@@ -141,7 +68,7 @@ export function toLaunchManifestView(
   i: number,
 ): LaunchManifestView {
   return {
-    id: `launch:${r.kind}:${i}:${r.url ?? r.title}`,
+    id: `launch:${r.kind}:${i}:${r.url ?? r.externalLaunchId ?? r.title}`,
     kind: r.kind,
     title: r.title,
     detail: r.detail ?? null,
@@ -149,6 +76,32 @@ export function toLaunchManifestView(
     vehicle: r.vehicle ?? null,
     url: r.url ?? null,
     publishedAt: toIso(r.publishedAt),
+    externalLaunchId: r.externalLaunchId ?? null,
+    operatorName: r.operatorName ?? null,
+    operatorCountry: r.operatorCountry ?? null,
+    padName: r.padName ?? null,
+    padLocation: r.padLocation ?? null,
+    plannedNet: toIso(r.plannedNet),
+    plannedWindowStart: toIso(r.plannedWindowStart),
+    plannedWindowEnd: toIso(r.plannedWindowEnd),
+    status: r.status ?? null,
+    orbitName: r.orbitName ?? null,
+    missionName: r.missionName ?? null,
+    missionDescription: r.missionDescription ?? null,
+    rideshare: r.rideshare ?? null,
+    notamId: r.notamId ?? null,
+    notamState: r.notamState ?? null,
+    notamType: r.notamType ?? null,
+    notamStart: toIso(r.notamStart),
+    notamEnd: toIso(r.notamEnd),
+    ituFilingId: r.ituFilingId ?? null,
+    ituConstellation: r.ituConstellation ?? null,
+    ituAdministration: r.ituAdministration ?? null,
+    ituOrbitClass: r.ituOrbitClass ?? null,
+    ituAltitudeKm: r.ituAltitudeKm ?? null,
+    ituPlannedSatellites: r.ituPlannedSatellites ?? null,
+    ituFrequencyBands: r.ituFrequencyBands ?? null,
+    ituStatus: r.ituStatus ?? null,
   };
 }
 

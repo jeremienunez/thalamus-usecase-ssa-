@@ -1,9 +1,13 @@
 import type { Regime, SatelliteView } from "@interview/shared";
-import { SatelliteRepository } from "../repositories/satellite.repository";
 import { toSatelliteView } from "../transformers/satellite-view.transformer";
+import type { SatelliteOrbitalRow } from "../types/satellite.types";
+
+export interface SatellitesReadPort {
+  listWithOrbital(limit: number, regime?: Regime): Promise<SatelliteOrbitalRow[]>;
+}
 
 export class SatelliteViewService {
-  constructor(private readonly repo: SatelliteRepository) {}
+  constructor(private readonly repo: SatellitesReadPort) {}
 
   async list(opts: {
     limit: number;

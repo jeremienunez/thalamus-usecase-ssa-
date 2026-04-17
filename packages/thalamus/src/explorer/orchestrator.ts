@@ -242,22 +242,22 @@ export class ExplorerOrchestrator {
   }
 
   private async getOrCreateExplorerSource(): Promise<bigint> {
-    const existing = await this.db.execute(sql`
+    const existing = await this.db.execute<{ id: string | bigint }>(sql`
       SELECT id FROM source WHERE slug = 'thalamus-explorer' LIMIT 1
     `);
 
     if (existing.rows.length > 0) {
-      return BigInt((existing.rows[0] as any).id);
+      return BigInt(existing.rows[0]!.id);
     }
 
-    const result = await this.db.execute(sql`
+    const result = await this.db.execute<{ id: string | bigint }>(sql`
       INSERT INTO source (name, slug, kind, url, category, is_enabled)
       VALUES ('Thalamus Explorer', 'thalamus-explorer', 'osint', 'internal://explorer', 'DISCOVERY', true)
       ON CONFLICT (slug) DO UPDATE SET name = 'Thalamus Explorer'
       RETURNING id
     `);
 
-    return BigInt((result.rows[0] as any).id);
+    return BigInt(result.rows[0]!.id);
   }
 
   private async injectFeedItem(

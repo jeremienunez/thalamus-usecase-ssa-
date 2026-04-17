@@ -14,6 +14,7 @@ import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJson } from "../utils/llm-json-parser";
 import type { CortexRegistry } from "../cortices/registry";
 import { buildPlannerSystemPrompt } from "../prompts";
+import { DAEMON_DAGS as DEFAULT_DAEMON_DAGS } from "../config/daemon-dags.config";
 
 const logger = createLogger("thalamus-planner");
 
@@ -48,138 +49,32 @@ const dagPlanSchema = z.object({
 });
 
 // ============================================================================
-// Predefined DAGs for daemon triggers (no LLM needed)
-//
-// Cortex keys track the SSA `ResearchCortex` enum values (snake_case).
-// ============================================================================
-
-export const DAEMON_DAGS: Record<string, DAGPlan> = {
-  "daily-scan": {
-    intent: "Daily scan for conjunction anomalies and tasking opportunities",
-    complexity: "moderate",
-    nodes: [
-      { cortex: "fleet_analyst", params: { limit: 200 }, dependsOn: [] },
-      { cortex: "conjunction_analysis", params: {}, dependsOn: [] },
-      {
-        cortex: "strategist",
-        params: {},
-        dependsOn: ["fleet_analyst", "conjunction_analysis"],
-      },
-    ],
-  },
-  "weekly-trends": {
-    intent:
-      "Weekly traffic analysis, orbital-regime insights, and advisory monitoring",
-    complexity: "moderate",
-    nodes: [
-      { cortex: "fleet_analyst", params: { window: "7d" }, dependsOn: [] },
-      {
-        cortex: "regime_profiler",
-        params: { focus: "underexplored" },
-        dependsOn: [],
-      },
-      {
-        cortex: "advisory_radar",
-        params: { category: "ADVISORIES", days: 14 },
-        dependsOn: [],
-      },
-      {
-        cortex: "strategist",
-        params: {},
-        dependsOn: ["fleet_analyst", "regime_profiler", "advisory_radar"],
-      },
-    ],
-  },
-  "debris-forecast": {
-    intent: "Monthly debris / fragmentation forecast",
-    complexity: "simple",
-    nodes: [
-      {
-        cortex: "debris_forecaster",
-        params: { year: new Date().getFullYear() },
-        dependsOn: [],
-      },
-    ],
-  },
-  "monthly-audit": {
-    intent: "Monthly catalog data quality and classification audit",
-    complexity: "deep",
-    nodes: [
-      { cortex: "data_auditor", params: { regime: "ALL" }, dependsOn: [] },
-      { cortex: "classification_auditor", params: {}, dependsOn: [] },
-    ],
-  },
-  "weekly-fleet": {
-    intent: "Weekly fleet analysis and orbital-slot optimization",
-    complexity: "moderate",
-    nodes: [
-      { cortex: "fleet_analyst", params: {}, dependsOn: [] },
-      { cortex: "fleet_analyst", params: { mode: "slot_optimization" }, dependsOn: [] },
-      {
-        cortex: "strategist",
-        params: {},
-        dependsOn: ["fleet_analyst"],
-      },
-    ],
-  },
-  "content-generation": {
-    intent: "Generate editorial briefing from accumulated research findings",
-    complexity: "moderate",
-    nodes: [
-      { cortex: "briefing_producer", params: {}, dependsOn: [] },
-      {
-        cortex: "strategist",
-        params: { pageType: "briefing" },
-        dependsOn: [],
-      },
-      {
-        cortex: "briefing_producer",
-        params: { mode: "generate" },
-        dependsOn: ["strategist"],
-      },
-    ],
-  },
-  "content-copilot": {
-    intent: "Assist with briefing section rewriting using KG data",
-    complexity: "simple",
-    nodes: [
-      {
-        cortex: "briefing_producer",
-        params: { mode: "copilot" },
-        dependsOn: [],
-      },
-    ],
-  },
-  "content-audit": {
-    intent: "Audit existing briefing content against KG",
-    complexity: "simple",
-    nodes: [
-      {
-        cortex: "strategist",
-        params: { pageType: "briefing" },
-        dependsOn: [],
-      },
-      {
-        cortex: "briefing_producer",
-        params: { mode: "audit" },
-        dependsOn: ["strategist"],
-      },
-    ],
-  },
-};
-
-// ============================================================================
 // Planner
 // ============================================================================
 
+export interface PlanOptions {
+  /** False when running autonomously — user-scoped cortices are stripped. */
+  hasUser?: boolean;
+}
+
 export class ThalamusPlanner {
-  constructor(private registry: CortexRegistry) {}
+  private readonly daemonDags: Record<string, DAGPlan>;
+  private readonly userScopedCortices: Set<string>;
+
+  constructor(
+    private registry: CortexRegistry,
+    daemonDags: Record<string, DAGPlan> = DEFAULT_DAEMON_DAGS,
+    userScopedCortices: Set<string> = new Set(),
+  ) {
+    this.daemonDags = daemonDags;
+    this.userScopedCortices = userScopedCortices;
+  }
 
   /**
    * Plan a research cycle from a user query.
    * Reads skill headers, calls LLM to produce optimal DAG.
    */
-  async plan(query: string): Promise<DAGPlan> {
+  async plan(query: string, opts: PlanOptions = {}): Promise<DAGPlan> {
     stepLog(logger, "planner", "start", { query });
     const plannerStartedAt = Date.now();
     const headers = this.registry.getHeadersForPlanner();
@@ -196,6 +91,10 @@ export class ThalamusPlanner {
 
       // Validate cortex names
       plan.nodes = plan.nodes.filter((n) => this.registry.has(n.cortex));
+
+      // Drop user-scoped cortices when running without a user context —
+      // they'd short-circuit to empty output and burn a DAG slot.
+      plan.nodes = this.stripUserScoped(plan.nodes, opts, query);
 
       if (plan.nodes.length === 0) {
         logger.warn({ query }, "Planner produced empty DAG, using fallback");
@@ -237,9 +136,44 @@ export class ThalamusPlanner {
 
   /**
    * Get a predefined DAG for daemon triggers.
+   * Daemon runs never have a user, so user-scoped cortices are stripped.
    */
   getDaemonDag(jobName: string): DAGPlan | null {
-    return DAEMON_DAGS[jobName] ?? null;
+    const base = this.daemonDags[jobName];
+    if (!base) return null;
+    const nodes = this.stripUserScoped(base.nodes, { hasUser: false }, jobName);
+    return { ...base, nodes };
+  }
+
+  /**
+   * Remove user-scoped cortices when no user is in scope, and also prune any
+   * `dependsOn` references pointing to stripped nodes (keeps the DAG executable).
+   */
+  private stripUserScoped(
+    nodes: DAGNode[],
+    opts: PlanOptions,
+    context: string,
+  ): DAGNode[] {
+    if (opts.hasUser !== false || this.userScopedCortices.size === 0) {
+      return nodes;
+    }
+    const dropped = new Set<string>();
+    const kept = nodes.filter((n) => {
+      if (this.userScopedCortices.has(n.cortex)) {
+        dropped.add(n.cortex);
+        return false;
+      }
+      return true;
+    });
+    if (dropped.size === 0) return nodes;
+    logger.warn(
+      { context, dropped: [...dropped] },
+      "Stripped user-scoped cortices from DAG (no user in scope)",
+    );
+    return kept.map((n) => ({
+      ...n,
+      dependsOn: n.dependsOn.filter((d) => !dropped.has(d)),
+    }));
   }
 
   /**

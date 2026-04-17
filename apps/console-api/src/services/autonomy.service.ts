@@ -2,7 +2,12 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { AutonomyAction, AutonomyState, AutonomyTick } from "../types";
 import { THALAMUS_QUERIES } from "../prompts/autonomy-queries.prompt";
-import type { CycleRunnerService } from "./cycle-runner.service";
+
+export interface CycleOrchestratorPort {
+  runThalamus(query: string): Promise<number>;
+  runFish(): Promise<number>;
+  runBriefing(limit: number): Promise<number>;
+}
 
 const ROTATION: AutonomyAction[] = ["thalamus", "sweep-nullscan"];
 
@@ -21,7 +26,7 @@ export class AutonomyService {
   };
 
   constructor(
-    private readonly cycles: CycleRunnerService,
+    private readonly cycles: CycleOrchestratorPort,
     private readonly logger: FastifyBaseLogger,
   ) {}
 

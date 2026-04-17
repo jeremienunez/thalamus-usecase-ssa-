@@ -259,7 +259,7 @@ export class NanoSweepService {
           operatorCountryId: r.operatorCountryId,
           limit: NULL_SCAN_MAX_IDS_PER_SUGGESTION,
         })
-        .catch(() => []);
+        .catch((): bigint[] => []);
 
       const pct = Math.round(r.nullFraction * 100);
       const severity: "critical" | "warning" | "info" =

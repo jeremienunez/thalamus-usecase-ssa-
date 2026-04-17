@@ -6,31 +6,54 @@ import {
 import {
   toFindingDetailView,
   toFindingListView,
+  attachLinkedEntityIds,
+  extractFindingIds,
 } from "../transformers/finding-view.transformer";
-import { entityRef } from "../transformers/kg-view.transformer";
-import { FindingRepository } from "../repositories/finding.repository";
-import { ResearchEdgeRepository } from "../repositories/research-edge.repository";
+import type {
+  FindingRow,
+  FindingDetailRow,
+  EdgeRow,
+} from "../types/finding.types";
 import { HttpError } from "../utils/http-error";
+
+// ── Ports (structural — repos satisfy these by duck typing) ────────
+export interface FindingsPort {
+  list(filters: {
+    status?: string;
+    cortex?: string;
+  }): Promise<FindingRow[]>;
+  findById(id: bigint): Promise<FindingDetailRow | null>;
+  updateStatus(
+    id: bigint,
+    status: "active" | "archived" | "invalidated",
+  ): Promise<boolean>;
+}
+
+export interface EdgesReadPort {
+  findByFindingIds(ids: bigint[]): Promise<EdgeRow[]>;
+  findByFindingId(
+    id: bigint,
+    limit: number,
+  ): Promise<Array<{ entity_type: string; entity_id: string }>>;
+}
+
+const KNOWN_DTO_STATUSES = new Set([
+  "pending",
+  "accepted",
+  "rejected",
+  "in-review",
+]);
 
 export class FindingViewService {
   constructor(
-    private readonly findings: FindingRepository,
-    private readonly edges: ResearchEdgeRepository,
+    private readonly findings: FindingsPort,
+    private readonly edges: EdgesReadPort,
   ) {}
 
   async list(filters: {
     status?: string;
     cortex?: string;
   }): Promise<{ items: FindingView[]; count: number }> {
-    // Translate DTO status vocab ("pending"|"accepted"|"rejected"|"in-review") to
-    // DB enum ("active"|"archived"|"invalidated"). If the incoming status isn't
-    // a known DTO value, drop it (don't let arbitrary strings reach the DB enum).
-    const KNOWN_DTO_STATUSES = new Set([
-      "pending",
-      "accepted",
-      "rejected",
-      "in-review",
-    ]);
     const dbStatus =
       filters.status && KNOWN_DTO_STATUSES.has(filters.status)
         ? toDbStatus(filters.status)
@@ -39,25 +62,15 @@ export class FindingViewService {
       status: dbStatus,
       cortex: filters.cortex,
     });
-    const items: FindingView[] = rows.map(toFindingListView);
+    const items = rows.map(toFindingListView);
     if (items.length > 0) {
-      const ids = items.map((i) => BigInt(i.id.slice(2)));
-      const edgeRows = await this.edges.findByFindingIds(ids);
-      const edgeMap = new Map<string, string[]>();
-      for (const e of edgeRows) {
-        const key = `f:${e.finding_id}`;
-        const linked = entityRef(e.entity_type, e.entity_id);
-        if (!edgeMap.has(key)) edgeMap.set(key, []);
-        edgeMap.get(key)!.push(linked);
-      }
-      for (const f of items) f.linkedEntityIds = edgeMap.get(f.id) ?? [];
+      const edgeRows = await this.edges.findByFindingIds(extractFindingIds(items));
+      attachLinkedEntityIds(items, edgeRows);
     }
     return { items, count: items.length };
   }
 
   async findById(idRaw: string): Promise<FindingView> {
-    // Controller validates id via FindingIdParamsSchema; the re-check is
-    // defense-in-depth for programmatic callers that bypass the controller.
     const fid = parseFindingId(idRaw);
     if (fid === null) throw HttpError.badRequest("invalid id");
     const row = await this.findings.findById(fid);

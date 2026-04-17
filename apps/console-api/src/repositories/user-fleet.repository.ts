@@ -19,7 +19,7 @@ export class UserFleetRepository {
       count: number;
     }>(sql`
       WITH fleet_satellites AS (
-        SELECT s.id, s.name, s.launch_cost, s.launch_year,
+        SELECT s.id, s.name, s.norad_id, s.launch_cost, s.launch_year,
           oc.name as operator_country, orr.name as orbit_regime,
           s.k_multiplier
         FROM fleet f
@@ -54,7 +54,9 @@ export class UserFleetRepository {
       )
       SELECT phase_bucket as phase,
         json_agg(json_build_object(
-          'id', id::text, 'name', name, 'launchCost', launch_cost,
+          'id', id::text, 'name', name,
+          'noradId', norad_id,
+          'launchCost', launch_cost,
           'launchYear', launch_year, 'operatorCountry', operator_country,
           'orbitRegime', orbit_regime, 'currentPhase', current_phase,
           'nominalLifeYears', nominal_life_years, 'yearsToEol', years_to_eol,

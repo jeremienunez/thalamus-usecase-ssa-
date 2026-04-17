@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Standalone extraction of Thalamus (multi-cortex research agent) and Sweep (nano swarm DB audit) for technical interview",
   "scripts": {
+    "arch:check": "pnpm exec depcruise --config .dependency-cruiser.js apps/console-api/src --output-type err-long",
     "typecheck": "pnpm -r typecheck",
     "ssa": "pnpm --filter @interview/cli start",
     "test": "vitest run",

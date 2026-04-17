@@ -1,5 +1,5 @@
 /**
- * Opacity score — pure function for SSA satellite transparency scoring.
+ * Opacity score - pure function for SSA satellite transparency scoring.
  *
  * Composite of 5 independent signals. No DB, no LLM, no IO.
  */

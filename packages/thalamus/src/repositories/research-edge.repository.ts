@@ -18,10 +18,12 @@ import {
   platformClass,
   type Database,
 } from "@interview/db-schema";
+import type { NewResearchEdgeEntity } from "../entities/research.entity";
 import type {
   ResearchEdge,
   NewResearchEdge,
-} from "../entities/research.entity";
+} from "../types/research.types";
+import { toResearchEdge } from "../transformers/research.transformer";
 import type { ResearchEntityType } from "@interview/shared/enum";
 
 // Touch imports so tree-shaking can't drop them (they're part of the public
@@ -40,29 +42,35 @@ export class ResearchEdgeRepository {
 
   async createMany(edges: NewResearchEdge[]): Promise<ResearchEdge[]> {
     if (edges.length === 0) return [];
-    return this.db.insert(researchEdge).values(edges).returning();
+    const rows = await this.db
+      .insert(researchEdge)
+      .values(edges as NewResearchEdgeEntity[])
+      .returning();
+    return rows.map(toResearchEdge);
   }
 
   async findByFinding(findingId: bigint): Promise<ResearchEdge[]> {
-    return this.db
+    const rows = await this.db
       .select()
       .from(researchEdge)
       .where(eq(researchEdge.findingId, findingId));
+    return rows.map(toResearchEdge);
   }
 
   async findByFindings(findingIds: bigint[]): Promise<ResearchEdge[]> {
     if (findingIds.length === 0) return [];
-    return this.db
+    const rows = await this.db
       .select()
       .from(researchEdge)
       .where(inArray(researchEdge.findingId, findingIds));
+    return rows.map(toResearchEdge);
   }
 
   async findByEntity(
     entityType: ResearchEntityType,
     entityId: bigint,
   ): Promise<ResearchEdge[]> {
-    return this.db
+    const rows = await this.db
       .select()
       .from(researchEdge)
       .where(
@@ -71,6 +79,7 @@ export class ResearchEdgeRepository {
           eq(researchEdge.entityId, entityId),
         ),
       );
+    return rows.map(toResearchEdge);
   }
 
   /**

@@ -234,6 +234,8 @@ export class SweepResolutionService {
           ? new Date(suggestion.reviewedAt)
           : new Date(),
         resolutionStatus: result.status,
+        // JSON serialization boundary: payload is a typed discriminated union;
+        // jsonb column accepts any Record-shaped value.
         resolutionPayload: payload as unknown as Record<string, unknown>,
         resolutionErrors: errors.length > 0 ? errors : null,
         resolvedAt: result.resolvedAt ? new Date(result.resolvedAt) : new Date(),
@@ -595,27 +597,22 @@ export class SweepResolutionService {
     }
     if (!operatorCountryId) return [];
 
-    const rows = await this.db.execute(
+    const result = await this.db.execute<{ id: bigint }>(
       sql`SELECT id FROM satellite WHERE operator_country_id = ${BigInt(operatorCountryId)}`,
     );
-    return ((rows as unknown as { rows: { id: bigint }[] }).rows ?? []).map(
-      (r) => r.id,
-    );
+    return (result.rows ?? []).map((r) => r.id);
   }
 
   private async findPayloadsByName(
     name: string,
   ): Promise<Array<{ id: bigint; name: string }>> {
-    const rows = await this.db.execute(
+    const result = await this.db.execute<{ id: bigint; name: string }>(
       sql`SELECT id, name FROM payload
           WHERE lower(unaccent(name)) LIKE '%' || lower(unaccent(${name})) || '%'
           ORDER BY CASE WHEN lower(name) = lower(${name}) THEN 0 ELSE 1 END, name
           LIMIT 10`,
     );
-    return (
-      (rows as unknown as { rows: Array<{ id: bigint; name: string }> }).rows ??
-      []
-    );
+    return result.rows ?? [];
   }
 
   private async findOperatorCountriesByName(
@@ -623,7 +620,11 @@ export class SweepResolutionService {
   ): Promise<
     Array<{ id: bigint; name: string; orbitRegime: string | null }>
   > {
-    const rows = await this.db.execute(
+    const result = await this.db.execute<{
+      id: bigint;
+      name: string;
+      orbitRegime: string | null;
+    }>(
       sql`SELECT oc.id, oc.name, orb.name as "orbitRegime"
           FROM operator_country oc
           LEFT JOIN orbit_regime orb ON orb.id = oc.orbit_regime_id
@@ -631,13 +632,7 @@ export class SweepResolutionService {
           ORDER BY CASE WHEN lower(oc.name) = lower(${name}) THEN 0 ELSE 1 END, oc.name
           LIMIT 10`,
     );
-    return (
-      (
-        rows as unknown as {
-          rows: Array<{ id: bigint; name: string; orbitRegime: string | null }>;
-        }
-      ).rows ?? []
-    );
+    return result.rows ?? [];
   }
 
   /**
@@ -749,14 +744,12 @@ export class SweepResolutionService {
     // orbit_regime_id, platform_class_id — simple lookup
     const table =
       field === "orbit_regime_id" ? "orbit_regime" : "platform_class";
-    const rows = await this.db.execute(
+    const result = await this.db.execute<{ id: bigint; name: string }>(
       sql`SELECT id, name FROM ${sql.identifier(table)}
           WHERE lower(unaccent(name)) = lower(unaccent(${valueName}))
           LIMIT 5`,
     );
-    const matches =
-      (rows as unknown as { rows: Array<{ id: bigint; name: string }> }).rows ??
-      [];
+    const matches = result.rows ?? [];
     if (matches.length === 0)
       return { affected: 0, errors: [`${table} not found: ${valueName}`] };
     if (matches.length > 1) {
@@ -821,6 +814,9 @@ export class SweepResolutionService {
           },
         },
         edges: [],
+        // Composite payload cast at the KG boundary: local literal lacks
+        // brand/discriminator fields that StoreFindingInput requires; the
+        // graph service tolerates the structural shape we emit here.
       } as unknown as StoreFindingInput);
     } catch (err) {
       logger.warn({ err }, "Failed to log resolution to KG");

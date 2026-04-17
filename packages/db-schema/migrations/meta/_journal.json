@@ -36,6 +36,55 @@
       "when": 1776185720478,
       "tag": "0004_icy_deadpool",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1776423708430,
+      "tag": "0005_third_shinko_yamashiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1776427379250,
+      "tag": "0006_massive_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1776428046535,
+      "tag": "0007_special_moondragon",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1776429551919,
+      "tag": "0008_mighty_havok",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1776429966414,
+      "tag": "0009_known_chamber",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1776430589922,
+      "tag": "0010_calm_ares",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1776440566073,
+      "tag": "0011_complete_supernaut",
+      "breakpoints": true
     }
   ]
 }

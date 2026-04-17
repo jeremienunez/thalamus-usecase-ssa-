@@ -1,7 +1,10 @@
 /**
- * Thalamus Service — Main orchestrator for autonomous SSA research
+ * Thalamus Service — Thin orchestrator for autonomous SSA research.
  *
- * Planner → DAG Executor → Reflexion → Knowledge Graph
+ * Resolves a DAG plan, delegates the recursive loop to `CycleLoopRunner`,
+ * delegates persistence to `FindingPersister`, then updates the cycle
+ * record. All heavy logic (loop, stop rules, storage) lives in injected
+ * collaborators; this file only composes them.
  *
  * Two modes:
  * - Daemon: predefined DAGs, Kimi K2 only, no reflexion
@@ -12,21 +15,30 @@ import { createLogger, stepLog } from "@interview/shared/observability";
 import {
   THALAMUS_CONFIG,
   ITERATION_BUDGETS,
-  noveltyThreshold,
 } from "../cortices/config";
 import {
   ResearchCycleTrigger,
   ResearchCycleStatus,
-  ResearchStatus,
 } from "@interview/shared/enum";
-import type { CortexRegistry } from "../cortices/registry";
-import type { CortexExecutor } from "../cortices/executor";
 import type { ResearchGraphService } from "./research-graph.service";
-import type { ResearchCycleRepository } from "../repositories/research-cycle.repository";
-import type { ResearchCycle } from "../entities/research.entity";
-import { ThalamusPlanner, type DAGPlan } from "./thalamus-planner.service";
-import { ThalamusDAGExecutor } from "./thalamus-executor.service";
-import { ThalamusReflexion } from "./thalamus-reflexion.service";
+import type {
+  ResearchCycle,
+  NewResearchCycle,
+} from "../types/research.types";
+import type { ThalamusPlanner, DAGPlan } from "./thalamus-planner.service";
+import type { CycleLoopRunner } from "./cycle-loop.service";
+import type { FindingPersister } from "./finding-persister.service";
+
+// ── Port (structural — repo satisfies this by duck typing) ────────
+export interface CyclesPort {
+  create(data: NewResearchCycle): Promise<ResearchCycle>;
+  findById(id: bigint): Promise<ResearchCycle | null>;
+  updateStatus(
+    id: bigint,
+    status: ResearchCycleStatus,
+    opts?: { completedAt?: Date; error?: string; totalCost?: number },
+  ): Promise<void>;
+}
 
 const logger = createLogger("thalamus");
 
@@ -48,23 +60,16 @@ export interface RunCycleInput {
 }
 
 export class ThalamusService {
-  private planner: ThalamusPlanner;
-  private dagExecutor: ThalamusDAGExecutor;
-  private reflexion: ThalamusReflexion;
-
   constructor(
-    private registry: CortexRegistry,
-    private cortexExecutor: CortexExecutor,
+    private planner: ThalamusPlanner,
+    private cycleLoop: CycleLoopRunner,
+    private persister: FindingPersister,
+    private cycleRepo: CyclesPort,
     private graphService: ResearchGraphService,
-    private cycleRepo: ResearchCycleRepository,
-  ) {
-    this.planner = new ThalamusPlanner(registry);
-    this.dagExecutor = new ThalamusDAGExecutor(cortexExecutor);
-    this.reflexion = new ThalamusReflexion();
-  }
+  ) {}
 
   /**
-   * Run a full research cycle: plan → execute → reflect → store.
+   * Run a full research cycle: plan → loop (execute + reflect) → store.
    * Returns the cycle record with findings count.
    */
   async runCycle(input: RunCycleInput): Promise<ResearchCycle> {
@@ -74,21 +79,9 @@ export class ThalamusService {
       trigger: input.triggerType,
       daemonJob: input.daemonJob,
     });
-    // 1. Get DAG plan
-    let plan: DAGPlan;
-    if (input.dag) {
-      // Caller provided a pre-built DAG — use it directly (no planner LLM call)
-      plan = input.dag;
-    } else if (input.daemonJob) {
-      plan = this.planner.getDaemonDag(input.daemonJob) ?? {
-        intent: input.query,
-        complexity: "moderate" as const,
-        nodes: [],
-      };
-    } else {
-      plan = await this.planner.plan(input.query);
-    }
 
+    // 1. Resolve DAG plan
+    const plan = await this.resolvePlan(input);
     if (plan.nodes.length === 0) {
       logger.warn({ query: input.query }, "Empty DAG plan, aborting cycle");
       throw new Error("Planner produced empty DAG — no cortices to activate");
@@ -115,18 +108,7 @@ export class ThalamusService {
     );
 
     try {
-      // ================================================================
-      // Recursive Research Loop (Karpathy autoresearch pattern)
-      // Run → Evaluate → Keep/Discard → Iterate until sufficient
-      // ================================================================
-
-      const allFindings: CortexFinding[] = [];
-      let iteration = 0;
-      let totalCost = 0;
-      let consecutiveZeroRuns = 0;
-      let currentPlan = plan;
-
-      // Complexity-based iteration budget (falls back to moderate)
+      // 3. Compute loop budget (complexity-aware, clamped by global caps)
       const budget =
         ITERATION_BUDGETS[plan.complexity] ?? ITERATION_BUDGETS.moderate;
       const maxIter = Math.min(
@@ -148,206 +130,28 @@ export class ThalamusService {
         "Iteration budget set",
       );
 
-      while (iteration < maxIter) {
-        iteration++;
+      // 4. Run recursive research loop
+      const { allFindings, totalCost, iterations } = await this.cycleLoop.run(
+        plan,
+        cycle.id,
+        { maxIter, maxCost, budget },
+        {
+          query: input.query,
+          minConfidence: input.minConfidence,
+          lang: input.lang,
+          mode: input.mode,
+          hasUser: input.userId !== undefined && input.userId !== null,
+        },
+      );
 
-        // 3a. Execute DAG
-        const { outputs } = await this.dagExecutor.execute(
-          currentPlan,
-          cycle.id,
-          input.lang,
-          input.mode,
-        );
-        const newFindings = [...outputs.values()].flatMap((o) => o.findings);
-        const iterationCost = [...outputs.values()].reduce(
-          (sum, o) => sum + o.metadata.tokensUsed * 0.000002,
-          0,
-        );
-        totalCost += iterationCost;
-
-        // 3b. Keep/Discard — only keep findings above confidence threshold
-        const minConf = input.minConfidence ?? 0.7;
-        const kept = newFindings.filter((f) => f.confidence >= minConf);
-        const discarded = newFindings.length - kept.length;
-        allFindings.push(...kept);
-
-        logger.info(
-          {
-            iteration,
-            newFindings: newFindings.length,
-            kept: kept.length,
-            discarded,
-            totalFindings: allFindings.length,
-            cost: totalCost.toFixed(4),
-          },
-          "Research loop iteration complete",
-        );
-
-        // 3c. Check stop conditions
-        if (kept.length === 0) {
-          consecutiveZeroRuns++;
-          if (consecutiveZeroRuns >= THALAMUS_CONFIG.loop.consecutiveZeroStop) {
-            logger.info(
-              { iteration },
-              "Stopping: consecutive zero-finding iterations",
-            );
-            break;
-          }
-        } else {
-          consecutiveZeroRuns = 0;
-        }
-
-        // Budget check (complexity-aware)
-        if (totalCost >= maxCost) {
-          logger.info(
-            { totalCost, maxCost, iteration },
-            "Stopping: cost budget exhausted",
-          );
-          break;
-        }
-
-        // Eagerness check — 3 dimensions: confidence, coverage, novelty
-        const avgConfidence =
-          allFindings.length > 0
-            ? allFindings.reduce((s, f) => s + f.confidence, 0) /
-              allFindings.length
-            : 0;
-
-        // Coverage: how many DISTINCT cortices produced findings?
-        const corticesWithFindings = new Set(
-          allFindings.map((f) => f.edges?.[0]?.entityType ?? "unknown"),
-        ).size;
-        const totalCorticesInPlan = new Set(
-          currentPlan.nodes.map((n) => n.cortex),
-        ).size;
-        const coverageRatio =
-          totalCorticesInPlan > 0
-            ? corticesWithFindings / totalCorticesInPlan
-            : 0;
-
-        // Novelty: how many findings in THIS iteration are truly new?
-        // Diminishing returns: threshold rises with iteration count
-        const prevTitles = new Set(
-          allFindings
-            .slice(0, -kept.length)
-            .map((f) => f.title.toLowerCase().slice(0, 40)),
-        );
-        const novelFindings = kept.filter(
-          (f) => !prevTitles.has(f.title.toLowerCase().slice(0, 40)),
-        ).length;
-        const noveltyRatio = kept.length > 0 ? novelFindings / kept.length : 0;
-        const novThreshold = noveltyThreshold(iteration);
-
-        // Eagerness: all 3 must be satisfied to stop early
-        const shouldStop =
-          avgConfidence >= budget.confidenceTarget &&
-          allFindings.length >= budget.minFindingsToStop &&
-          coverageRatio >= budget.coverageTarget &&
-          noveltyRatio < novThreshold;
-
-        logger.info(
-          {
-            iteration,
-            complexity: plan.complexity,
-            avgConfidence: avgConfidence.toFixed(2),
-            coverage: `${corticesWithFindings}/${totalCorticesInPlan}`,
-            novelty: `${novelFindings}/${kept.length} (threshold: ${novThreshold.toFixed(2)})`,
-            shouldStop,
-          },
-          "Eagerness evaluation",
-        );
-
-        if (shouldStop) {
-          logger.info(
-            { iteration },
-            "Stopping: confident + covered + novelty declining",
-          );
-          break;
-        }
-
-        // 3d. Reflexion — should we iterate? What's missing?
-        if (iteration < maxIter) {
-          // Pass BOTH raw (every finding this iteration emitted) and kept
-          // (high-confidence survivors accumulated across iterations).
-          // Low-confidence rounds are a replan signal, not a stop signal.
-          const reflexionResult = await this.reflexion.evaluate(
-            currentPlan.intent,
-            newFindings,
-            allFindings,
-            iteration,
-            {
-              complexity: plan.complexity,
-              remainingBudget: maxCost - totalCost,
-              maxIterations: maxIter,
-            },
-          );
-
-          if (!reflexionResult.replan) {
-            logger.info(
-              { iteration, notes: reflexionResult.notes },
-              "Reflexion: sufficient",
-            );
-            break;
-          }
-
-          // Replan with accumulated context
-          const gaps = reflexionResult.gaps?.join(", ") ?? "need more evidence";
-          const prevFindingTitles = allFindings.map((f) => f.title).join("; ");
-          const refinedQuery = `${input.query}\n\nIteration ${iteration}. Previous findings: ${prevFindingTitles}\nGaps: ${gaps}`;
-
-          logger.info({ gaps, iteration }, "Reflexion: replanning");
-          currentPlan = await this.planner.plan(refinedQuery);
-        }
-      }
-
-      // 5. Store findings in knowledge graph
-      let storedCount = 0;
-      for (const finding of allFindings) {
-        try {
-          await this.graphService.storeFinding({
-            finding: {
-              cortex: findingCortex(finding, plan),
-              findingType: finding.findingType,
-              title: finding.title,
-              summary: finding.summary,
-              evidence: finding.evidence,
-              reasoning: null,
-              confidence: finding.confidence,
-              impactScore: finding.impactScore,
-              urgency: finding.urgency,
-              busContext: finding.busContext ?? null,
-              researchCycleId: cycle.id,
-              reflexionNotes: null,
-              iteration,
-              status: ResearchStatus.Active,
-              expiresAt: computeTTL(finding.confidence),
-            },
-            edges: input.entityOverride
-              ? [
-                  {
-                    entityType: input.entityOverride.entityType,
-                    entityId: input.entityOverride.entityId,
-                    relation: "about",
-                    weight: 1.0,
-                    context: null,
-                  },
-                ]
-              : finding.edges.map((e) => ({
-                  entityType: e.entityType,
-                  entityId: BigInt(e.entityId),
-                  relation: e.relation,
-                  weight: 1.0,
-                  context: e.context ?? null,
-                })),
-          });
-          storedCount++;
-        } catch (err) {
-          logger.error(
-            { finding: finding.title, err },
-            "Failed to store finding",
-          );
-        }
-      }
+      // 5. Persist findings to the knowledge graph (cortex resolved from
+      // the INITIAL plan — matches pre-refactor behaviour).
+      const storedCount = await this.persister.persist(allFindings, {
+        cycleId: cycle.id,
+        iteration: iterations,
+        plan,
+        entityOverride: input.entityOverride,
+      });
 
       // 6. Complete cycle
       await this.cycleRepo.updateStatus(
@@ -363,7 +167,7 @@ export class ThalamusService {
         {
           cycleId: cycle.id,
           findings: storedCount,
-          iterations: iteration,
+          iterations,
           cost: totalCost.toFixed(4),
         },
         "Research cycle completed",
@@ -374,7 +178,7 @@ export class ThalamusService {
         durationMs: Date.now() - cycleStartedAt,
         costUsd: totalCost,
         findings: storedCount,
-        iterations: iteration,
+        iterations,
       });
 
       // Refresh cycle with updated counts
@@ -413,41 +217,26 @@ export class ThalamusService {
   async maintenance(): Promise<{ expired: number; orphans: number }> {
     return this.graphService.expireAndClean();
   }
-}
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-import type { CortexFinding } from "../cortices/types";
-import { ResearchCortex } from "@interview/shared/enum";
-
-/**
- * Derive which cortex produced a finding from the DAG plan.
- * CortexFinding doesn't carry its source cortex, so we match
- * by checking DAG node order (findings come out in DAG execution order).
- */
-function findingCortex(_finding: CortexFinding, plan: DAGPlan): ResearchCortex {
-  // Best effort: use first cortex in the plan as default
-  const first = plan.nodes[0]?.cortex;
-  if (
-    first &&
-    Object.values(ResearchCortex).includes(first as ResearchCortex)
-  ) {
-    return first as ResearchCortex;
+  /**
+   * Select the DAG plan for a cycle:
+   * - Caller-supplied DAG wins (no planner LLM call).
+   * - Daemon jobs use pre-baked plans.
+   * - Otherwise the planner LLM decomposes the query.
+   */
+  private async resolvePlan(input: RunCycleInput): Promise<DAGPlan> {
+    if (input.dag) return input.dag;
+    if (input.daemonJob) {
+      return (
+        this.planner.getDaemonDag(input.daemonJob) ?? {
+          intent: input.query,
+          complexity: "moderate" as const,
+          nodes: [],
+        }
+      );
+    }
+    return this.planner.plan(input.query, {
+      hasUser: input.userId !== undefined && input.userId !== null,
+    });
   }
-  return ResearchCortex.FleetAnalyst;
-}
-
-/**
- * TTL based on confidence:
- * - confidence < 0.5 → 14 days
- * - confidence 0.5-0.7 → 30 days
- * - confidence 0.7-0.85 → 60 days
- * - confidence > 0.85 → 90 days
- */
-function computeTTL(confidence: number): Date {
-  const days =
-    confidence < 0.5 ? 14 : confidence < 0.7 ? 30 : confidence < 0.85 ? 60 : 90;
-  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
