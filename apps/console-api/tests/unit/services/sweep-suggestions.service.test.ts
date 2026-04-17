@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SweepSuggestionsService } from "../../../src/services/sweep-suggestions.service";
-import type { SweepDeps } from "../../../src/controllers/sweep-suggestions.controller";
+import {
+  SweepSuggestionsService,
+  type SweepSuggestionsDeps,
+} from "../../../src/services/sweep-suggestions.service";
 
 function row(overrides: Partial<{
   id: string;
@@ -33,7 +35,7 @@ function row(overrides: Partial<{
   };
 }
 
-function mockDeps(): SweepDeps {
+function mockDeps(): SweepSuggestionsDeps {
   return {
     sweepRepo: {
       list: vi.fn(),
@@ -46,7 +48,7 @@ function mockDeps(): SweepDeps {
 }
 
 describe("SweepSuggestionsService.list", () => {
-  let deps: SweepDeps;
+  let deps: SweepSuggestionsDeps;
   let svc: SweepSuggestionsService;
 
   beforeEach(() => {
@@ -83,7 +85,7 @@ describe("SweepSuggestionsService.list", () => {
 });
 
 describe("SweepSuggestionsService.review", () => {
-  let deps: SweepDeps;
+  let deps: SweepSuggestionsDeps;
   let svc: SweepSuggestionsService;
 
   beforeEach(() => {

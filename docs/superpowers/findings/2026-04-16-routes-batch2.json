@@ -1,0 +1,404 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/findings",
+    "controller": {
+      "file": "controllers/findings.controller.ts",
+      "method": "findingsListController"
+    },
+    "service": {
+      "file": "services/finding-view.service.ts",
+      "method": "FindingViewService.list"
+    },
+    "repo": [
+      {
+        "file": "repositories/finding.repository.ts",
+        "method": "FindingRepository.list"
+      },
+      {
+        "file": "repositories/research-edge.repository.ts",
+        "method": "ResearchEdgeRepository.findByFindingIds"
+      }
+    ],
+    "tables": ["research_finding", "research_edge"],
+    "returnShape": {
+      "items": [
+        {
+          "id": "string (prefixed f:)",
+          "title": "string",
+          "summary": "string",
+          "cortex": "string",
+          "status": "pending|accepted|rejected|in-review",
+          "priority": "number (0-100)",
+          "createdAt": "ISO string",
+          "linkedEntityIds": "string[]",
+          "evidence": "[]"
+        }
+      ],
+      "count": "number"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/findings/:id",
+    "controller": {
+      "file": "controllers/findings.controller.ts",
+      "method": "findingByIdController"
+    },
+    "service": {
+      "file": "services/finding-view.service.ts",
+      "method": "FindingViewService.findById"
+    },
+    "repo": [
+      {
+        "file": "repositories/finding.repository.ts",
+        "method": "FindingRepository.findById"
+      },
+      {
+        "file": "repositories/research-edge.repository.ts",
+        "method": "ResearchEdgeRepository.findByFindingId"
+      }
+    ],
+    "tables": ["research_finding", "research_edge"],
+    "returnShape": {
+      "id": "string (prefixed f:)",
+      "title": "string",
+      "summary": "string",
+      "cortex": "string",
+      "status": "pending|accepted|rejected|in-review",
+      "priority": "number (0-100)",
+      "createdAt": "ISO string",
+      "linkedEntityIds": "string[]",
+      "evidence": [
+        {
+          "kind": "osint|field|derived",
+          "uri": "string",
+          "snippet": "string"
+        }
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/findings/:id/decision",
+    "controller": {
+      "file": "controllers/findings.controller.ts",
+      "method": "findingDecisionController"
+    },
+    "service": {
+      "file": "services/finding-view.service.ts",
+      "method": "FindingViewService.updateDecision"
+    },
+    "repo": [
+      {
+        "file": "repositories/finding.repository.ts",
+        "method": "FindingRepository.updateStatus"
+      },
+      {
+        "file": "repositories/finding.repository.ts",
+        "method": "FindingRepository.findById"
+      },
+      {
+        "file": "repositories/research-edge.repository.ts",
+        "method": "ResearchEdgeRepository.findByFindingId"
+      }
+    ],
+    "tables": ["research_finding", "research_edge"],
+    "returnShape": {
+      "ok": true,
+      "finding": {
+        "id": "string (prefixed f:)",
+        "title": "string",
+        "summary": "string",
+        "cortex": "string",
+        "status": "pending|accepted|rejected|in-review",
+        "priority": "number (0-100)",
+        "createdAt": "ISO string",
+        "linkedEntityIds": "string[]",
+        "evidence": [
+          {
+            "kind": "osint|field|derived",
+            "uri": "string",
+            "snippet": "string"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/sweep/suggestions",
+    "controller": {
+      "file": "controllers/sweep-suggestions.controller.ts",
+      "method": "sweepSuggestionsListController"
+    },
+    "service": {
+      "file": "services/sweep-suggestions.service.ts",
+      "method": "SweepSuggestionsService.list"
+    },
+    "repo": [
+      {
+        "file": "@interview/sweep :: repositories/sweep.repository.ts",
+        "method": "SweepRepository.list",
+        "note": "Redis-backed, not SQL"
+      }
+    ],
+    "tables": [],
+    "storage": "Redis (keys: sweep:suggestions:{id}, sweep:index:pending)",
+    "returnShape": {
+      "items": [
+        {
+          "id": "string",
+          "title": "string",
+          "description": "string",
+          "suggestedAction": "string",
+          "category": "string",
+          "severity": "string",
+          "operatorCountryName": "string|null",
+          "affectedSatellites": "number",
+          "createdAt": "string",
+          "accepted": "boolean",
+          "resolutionStatus": "string",
+          "hasPayload": "boolean"
+        }
+      ],
+      "count": "number"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/sweep/suggestions/:id/review",
+    "controller": {
+      "file": "controllers/sweep-suggestions.controller.ts",
+      "method": "sweepReviewController"
+    },
+    "service": {
+      "file": "services/sweep-suggestions.service.ts",
+      "method": "SweepSuggestionsService.review"
+    },
+    "repo": [
+      {
+        "file": "@interview/sweep :: repositories/sweep.repository.ts",
+        "method": "SweepRepository.review",
+        "note": "Redis-backed, not SQL"
+      },
+      {
+        "file": "@interview/sweep :: services/sweep-resolution.service.ts",
+        "method": "resolutionService.resolve (if accepted)"
+      }
+    ],
+    "tables": [],
+    "storage": "Redis (keys: sweep:suggestions:{id}, sweep:index:pending, sweep:feedback)",
+    "returnShape": {
+      "ok": true,
+      "reviewed": true,
+      "resolution": "unknown|null"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/sweep/mission/start",
+    "controller": {
+      "file": "controllers/sweep-mission.controller.ts",
+      "method": "missionStartController"
+    },
+    "service": {
+      "file": "services/mission.service.ts",
+      "method": "MissionService.start"
+    },
+    "repo": [
+      {
+        "file": "@interview/sweep :: repositories/sweep.repository.ts",
+        "method": "SweepRepository.list",
+        "note": "Redis-backed"
+      },
+      {
+        "file": "repositories/satellite.repository.ts",
+        "method": "SatelliteRepository.findPayloadNamesByIds"
+      },
+      {
+        "file": "repositories/satellite.repository.ts",
+        "method": "SatelliteRepository.updateField (during tick)"
+      },
+      {
+        "file": "repositories/sweep-audit.repository.ts",
+        "method": "SweepAuditRepository.insertEnrichmentSuccess (during tick)"
+      }
+    ],
+    "tables": ["satellite", "sweep_audit"],
+    "storage": "Redis (sweep:suggestions via SweepRepository.list)",
+    "returnShape": {
+      "ok": true,
+      "alreadyRunning": "boolean (optional)",
+      "state": {
+        "running": "boolean",
+        "startedAt": "string|null",
+        "total": "number",
+        "completed": "number",
+        "filled": "number",
+        "unobtainable": "number",
+        "errors": "number",
+        "cursor": "number",
+        "currentTask": "MissionTask|null",
+        "recent": "MissionTask[] (last 20 non-pending, reversed)"
+      }
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/sweep/mission/stop",
+    "controller": {
+      "file": "controllers/sweep-mission.controller.ts",
+      "method": "missionStopController"
+    },
+    "service": {
+      "file": "services/mission.service.ts",
+      "method": "MissionService.stop"
+    },
+    "repo": [],
+    "tables": [],
+    "note": "In-memory state only, clears interval timer",
+    "returnShape": {
+      "ok": true,
+      "state": {
+        "running": "boolean",
+        "startedAt": "string|null",
+        "total": "number",
+        "completed": "number",
+        "filled": "number",
+        "unobtainable": "number",
+        "errors": "number",
+        "cursor": "number",
+        "currentTask": "MissionTask|null",
+        "recent": "MissionTask[]"
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/sweep/mission/status",
+    "controller": {
+      "file": "controllers/sweep-mission.controller.ts",
+      "method": "missionStatusController"
+    },
+    "service": {
+      "file": "services/mission.service.ts",
+      "method": "MissionService.publicState"
+    },
+    "repo": [],
+    "tables": [],
+    "note": "In-memory state only, no DB call",
+    "returnShape": {
+      "running": "boolean",
+      "startedAt": "string|null",
+      "total": "number",
+      "completed": "number",
+      "filled": "number",
+      "unobtainable": "number",
+      "errors": "number",
+      "cursor": "number",
+      "currentTask": "MissionTask|null",
+      "recent": "MissionTask[]"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/sweep/reflexion-pass",
+    "controller": {
+      "file": "controllers/reflexion.controller.ts",
+      "method": "reflexionController"
+    },
+    "service": {
+      "file": "services/reflexion.service.ts",
+      "method": "ReflexionService.runPass"
+    },
+    "repo": [
+      {
+        "file": "repositories/reflexion.repository.ts",
+        "method": "ReflexionRepository.findTarget"
+      },
+      {
+        "file": "repositories/reflexion.repository.ts",
+        "method": "ReflexionRepository.findStrictCoplane"
+      },
+      {
+        "file": "repositories/reflexion.repository.ts",
+        "method": "ReflexionRepository.findInclinationBelt"
+      },
+      {
+        "file": "repositories/reflexion.repository.ts",
+        "method": "ReflexionRepository.findMilLineagePeers"
+      },
+      {
+        "file": "repositories/enrichment-cycle.repository.ts",
+        "method": "EnrichmentCycleRepository.getOrCreate (if finding emitted)"
+      },
+      {
+        "file": "repositories/finding.repository.ts",
+        "method": "FindingRepository.insert (if finding emitted)"
+      },
+      {
+        "file": "repositories/research-edge.repository.ts",
+        "method": "ResearchEdgeRepository.insert (if finding emitted, multiple)"
+      }
+    ],
+    "tables": [
+      "satellite",
+      "operator_country",
+      "platform_class",
+      "research_cycle",
+      "research_finding",
+      "research_edge"
+    ],
+    "returnShape": {
+      "target": {
+        "noradId": "number",
+        "name": "string",
+        "declared": {
+          "operator_country": "string|null",
+          "classification_tier": "string|null",
+          "object_class": "string|null",
+          "platform": "string|null"
+        },
+        "orbital": {
+          "inclinationDeg": "number",
+          "raanDeg": "number",
+          "meanMotionRevPerDay": "number",
+          "apogeeKm": "number|null",
+          "perigeeKm": "number|null"
+        }
+      },
+      "strictCoplane": [
+        {
+          "noradId": "number",
+          "name": "string",
+          "country": "string|null",
+          "tier": "string|null",
+          "class": "string|null",
+          "platform": "string|null",
+          "dInc": "number",
+          "dRaan": "number",
+          "lagMin": "number"
+        }
+      ],
+      "beltByCountry": [
+        {
+          "country": "string|null",
+          "tier": "string|null",
+          "class": "string|null",
+          "n": "number"
+        }
+      ],
+      "milLineagePeers": [
+        {
+          "noradId": "number",
+          "name": "string",
+          "country": "string|null",
+          "tier": "string|null",
+          "dInc": "number"
+        }
+      ],
+      "findingId": "string|null"
+    }
+  }
+]

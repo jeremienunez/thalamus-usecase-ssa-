@@ -6,12 +6,15 @@ import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 import {
   researchFinding,
   researchEdge,
+  researchCycleFinding,
   type Database,
 } from "@interview/db-schema";
+import type { NewResearchFindingEntity } from "../entities/research.entity";
 import type {
   ResearchFinding,
   NewResearchFinding,
-} from "../entities/research.entity";
+} from "../types/research.types";
+import { toResearchFinding } from "../transformers/research.transformer";
 import type {
   ResearchCortex,
   ResearchFindingType,
@@ -32,22 +35,24 @@ export class ResearchFindingRepository {
   async create(data: NewResearchFinding): Promise<ResearchFinding> {
     const [result] = await this.db
       .insert(researchFinding)
-      .values(data)
+      .values(data as NewResearchFindingEntity)
       .returning();
-    return result;
+    return toResearchFinding(result);
   }
 
   /**
    * Upsert by dedup hash — for daemon mode.
-   * If an active finding with the same dedup_hash exists, update confidence + evidence.
-   * Otherwise insert new.
+   * Returns `inserted: true` when a new row was created, `false` on hit-and-update.
+   * Callers gate edge-write / cross-link side effects on `inserted` to avoid
+   * unbounded duplicate edges when the same finding is re-emitted across cycles.
    */
-  async upsertByDedupHash(data: NewResearchFinding): Promise<ResearchFinding> {
+  async upsertByDedupHash(
+    data: NewResearchFinding,
+  ): Promise<{ finding: ResearchFinding; inserted: boolean }> {
     if (!data.dedupHash) {
-      return this.create(data);
+      return { finding: await this.create(data), inserted: true };
     }
 
-    // Check if active finding with same dedup hash exists
     const [existing] = await this.db
       .select()
       .from(researchFinding)
@@ -60,7 +65,6 @@ export class ResearchFindingRepository {
       .limit(1);
 
     if (existing) {
-      // Update existing finding
       const [updated] = await this.db
         .update(researchFinding)
         .set({
@@ -73,11 +77,10 @@ export class ResearchFindingRepository {
         })
         .where(eq(researchFinding.id, existing.id))
         .returning();
-      return updated;
+      return { finding: toResearchFinding(updated), inserted: false };
     }
 
-    // Insert new finding
-    return this.create(data);
+    return { finding: await this.create(data), inserted: true };
   }
 
   async findById(id: bigint): Promise<ResearchFinding | null> {
@@ -86,15 +89,52 @@ export class ResearchFindingRepository {
       .from(researchFinding)
       .where(eq(researchFinding.id, id))
       .limit(1);
-    return result ?? null;
+    return result ? toResearchFinding(result) : null;
   }
 
+  /**
+   * Findings surfaced by a cycle, JOINed through `research_cycle_finding`.
+   * This includes both NEW inserts and dedup-hit re-emissions — the dedup
+   * flow merges content into a pre-existing finding row, so its
+   * `research_cycle_id` column still points to the ORIGIN cycle. The
+   * junction table is the source of truth for "what cycle N actually
+   * surfaced", which is what the summariser needs.
+   */
   async findByCycleId(cycleId: bigint): Promise<ResearchFinding[]> {
-    return this.db
+    const rows = await this.db
       .select()
       .from(researchFinding)
-      .where(eq(researchFinding.researchCycleId, cycleId))
+      .innerJoin(
+        researchCycleFinding,
+        eq(researchCycleFinding.researchFindingId, researchFinding.id),
+      )
+      .where(eq(researchCycleFinding.researchCycleId, cycleId))
       .orderBy(desc(researchFinding.confidence));
+    return rows.map((r) => toResearchFinding(r.research_finding));
+  }
+
+  /**
+   * Link a finding to a cycle in the junction table.
+   * Idempotent: re-calling with the same (cycleId, findingId) is a no-op
+   * thanks to the composite PK + ON CONFLICT DO NOTHING. Callers in the
+   * graph service invoke this on every storeFinding regardless of whether
+   * the underlying finding row was inserted or dedup-merged.
+   */
+  async linkToCycle(opts: {
+    cycleId: bigint;
+    findingId: bigint;
+    iteration: number;
+    isDedupHit: boolean;
+  }): Promise<void> {
+    await this.db
+      .insert(researchCycleFinding)
+      .values({
+        researchCycleId: opts.cycleId,
+        researchFindingId: opts.findingId,
+        iteration: opts.iteration,
+        isDedupHit: opts.isDedupHit,
+      })
+      .onConflictDoNothing();
   }
 
   /**
@@ -115,14 +155,14 @@ export class ResearchFindingRepository {
       conditions.push(gte(researchFinding.confidence, opts.minConfidence));
     }
 
-    return this.db
+    const rows = await this.db
       .select({ finding: researchFinding })
       .from(researchFinding)
       .innerJoin(researchEdge, eq(researchEdge.findingId, researchFinding.id))
       .where(and(...conditions))
       .orderBy(desc(researchFinding.confidence))
-      .limit(opts?.limit ?? 20)
-      .then((rows) => rows.map((r) => r.finding));
+      .limit(opts?.limit ?? 20);
+    return rows.map((r) => toResearchFinding(r.finding));
   }
 
   /**
@@ -132,7 +172,9 @@ export class ResearchFindingRepository {
     embedding: number[],
     limit = 10,
   ): Promise<Array<ResearchFinding & { similarity: number }>> {
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<
+      ResearchFinding & { similarity: number } & Record<string, unknown>
+    >(sql`
       SELECT rf.*,
         1.0 - (rf.embedding <=> ${JSON.stringify(embedding)}::halfvec) as similarity
       FROM research_finding rf
@@ -141,7 +183,7 @@ export class ResearchFindingRepository {
       ORDER BY rf.embedding <=> ${JSON.stringify(embedding)}::halfvec
       LIMIT ${limit}
     `);
-    return results.rows as Array<ResearchFinding & { similarity: number }>;
+    return results.rows;
   }
 
   async findActive(opts: FindActiveOptions = {}): Promise<ResearchFinding[]> {
@@ -153,7 +195,7 @@ export class ResearchFindingRepository {
     if (opts.minConfidence)
       conditions.push(gte(researchFinding.confidence, opts.minConfidence));
 
-    return this.db
+    const rows = await this.db
       .select()
       .from(researchFinding)
       .where(and(...conditions))
@@ -163,6 +205,7 @@ export class ResearchFindingRepository {
       )
       .limit(opts.limit ?? 20)
       .offset(opts.offset ?? 0);
+    return rows.map(toResearchFinding);
   }
 
   async archive(id: bigint): Promise<void> {
@@ -191,7 +234,9 @@ export class ResearchFindingRepository {
             AND entity_id = ${entityFilter.entityId}
         )`
       : sql``;
-    const results = await this.db.execute(sql`
+    const results = await this.db.execute<
+      ResearchFinding & { similarity: number } & Record<string, unknown>
+    >(sql`
       SELECT *,
         (1.0 - (embedding <=> ${vectorStr}::halfvec)) as similarity
       FROM research_finding
@@ -202,9 +247,7 @@ export class ResearchFindingRepository {
       ORDER BY embedding <=> ${vectorStr}::halfvec ASC
       LIMIT ${limit}
     `);
-    return results.rows as unknown as Array<
-      ResearchFinding & { similarity: number }
-    >;
+    return results.rows;
   }
 
   /**

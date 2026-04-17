@@ -3,9 +3,10 @@
 #
 # Gates (fail-fast, ordered by speed):
 #   1. No .env* files in the staged set (safety net beyond .gitignore)
-#   2. pnpm typecheck          — all packages compile
-#   3. pnpm spec:check         — every AC in APPROVED/IMPLEMENTED specs has a traced test
-#   4. pnpm test               — the traced tests (and all others) pass
+#   2. pnpm arch:check         — console-api layer boundaries hold
+#   3. pnpm typecheck          — all packages compile
+#   4. pnpm spec:check         — every AC in APPROVED/IMPLEMENTED specs has a traced test
+#   5. pnpm test               — the traced tests (and all others) pass
 #
 # DRAFT / REVIEW specs are ignored — work-in-progress doesn't block commits.
 # Bypass only with explicit --no-verify AND a written reason. Don't make a habit of it.
@@ -29,17 +30,22 @@ if [ -n "$STAGED_ENV" ]; then
 fi
 ok "no env files staged"
 
-# ── 2. typecheck ────────────────────────────────────────────────────────────
+# ── 2. architecture boundaries ──────────────────────────────────────────────
+step "pnpm arch:check (layer boundaries)"
+pnpm -s arch:check || fail "arch:check failed — a layer boundary was crossed"
+ok "arch check passed"
+
+# ── 3. typecheck ────────────────────────────────────────────────────────────
 step "pnpm typecheck"
 pnpm -s typecheck || fail "typecheck failed — fix types before committing"
 ok "typecheck passed"
 
-# ── 3. spec traceability ────────────────────────────────────────────────────
+# ── 4. spec traceability ────────────────────────────────────────────────────
 step "pnpm spec:check (AC ↔ test traceability)"
 pnpm -s spec:check || fail "spec-check failed — every AC in APPROVED/IMPLEMENTED specs must have a passing test"
 ok "spec-check passed"
 
-# ── 4. tests ────────────────────────────────────────────────────────────────
+# ── 5. tests ────────────────────────────────────────────────────────────────
 step "pnpm test"
 pnpm -s test || fail "tests failed — the spec's 'attendu réel' is not met"
 ok "tests passed"

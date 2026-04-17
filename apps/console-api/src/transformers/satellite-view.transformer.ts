@@ -5,7 +5,7 @@ import {
   smaFromMeanMotion,
   classificationTier,
 } from "@interview/shared";
-import type { SatelliteOrbitalRow } from "../repositories/satellite.repository";
+import type { SatelliteOrbitalRow } from "../types/satellite.types";
 
 export function toSatelliteView(r: SatelliteOrbitalRow): SatelliteView {
   const ts = r.telemetry_summary ?? {};

@@ -8,12 +8,6 @@ export { ThalamusPlanner } from "./services/thalamus-planner.service";
 export { ThalamusDAGExecutor } from "./services/thalamus-executor.service";
 export { ResearchGraphService } from "./services/research-graph.service";
 
-// Cortex queries (public for CLI / downstream wiring)
-export { queryConjunctionCandidatesKnn } from "./cortices/queries/conjunction-candidates";
-export type {
-  ConjunctionCandidateKnn,
-  ConjunctionCandidatesKnnOpts,
-} from "./cortices/queries/conjunction-candidates";
 
 // Cortices
 export { CortexExecutor } from "./cortices/executor";
@@ -54,6 +48,20 @@ export {
 export { createLlmTransport } from "./transports/llm-chat";
 export { createLlmTransportWithMode } from "./transports/factory";
 export type { LlmChatConfig, LlmResponse, LlmTransport } from "./transports/types";
+export {
+  OpenAIWebSearchAdapter,
+  NullWebSearchAdapter,
+} from "./transports/openai-web-search.adapter";
+
+// Ports
+export type { WebSearchPort } from "./ports/web-search.port";
+
+// Cortex execution strategies (extension points)
+export {
+  StandardStrategy,
+  StrategistStrategy,
+} from "./cortices/strategies";
+export type { CortexExecutionStrategy } from "./cortices/strategies";
 
 // Repositories
 export { ResearchFindingRepository } from "./repositories/research-finding.repository";

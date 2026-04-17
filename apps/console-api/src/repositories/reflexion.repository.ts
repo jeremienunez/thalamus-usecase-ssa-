@@ -2,50 +2,31 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  ReflexionTarget,
+  CoplaneRow,
+  BeltRow,
+  MilRow,
+} from "../types/reflexion.types";
+import type { OpacityCandidateRow } from "../types/opacity.types";
 
-export type ReflexionTarget = {
-  id: string;
-  name: string;
-  object_class: string | null;
-  operator_country: string | null;
-  classification_tier: string | null;
-  platform_name: string | null;
-  inc: number | null;
-  raan: number | null;
-  mm: number | null;
-  ma: number | null;
-  apogee: number | null;
-  perigee: number | null;
-};
+export type {
+  ReflexionTarget,
+  CoplaneRow,
+  BeltRow,
+  MilRow,
+} from "../types/reflexion.types";
 
-export type CoplaneRow = {
-  id: string;
-  norad_id: string;
-  name: string;
-  operator_country: string | null;
-  tier: string | null;
-  object_class: string | null;
-  platform: string | null;
-  d_inc: number;
-  d_raan: number;
-  lag_min: number;
-};
-
-export type BeltRow = {
-  country: string | null;
-  tier: string | null;
-  object_class: string | null;
-  n: string;
-};
-
-export type MilRow = {
-  id: string;
-  norad_id: string;
-  name: string;
-  country: string | null;
-  tier: string | null;
-  d_inc: number;
-};
+const SENSITIVE_OPERATOR_COUNTRIES = [
+  "US Space Force",
+  "USSF",
+  "NRO",
+  "National Reconnaissance Office",
+  "GRU",
+  "SSF",
+  "Strategic Support Force",
+  "MVR",
+] as const;
 
 export class ReflexionRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -55,6 +36,7 @@ export class ReflexionRepository {
       SELECT
         s.id::text AS id,
         s.name,
+        s.norad_id AS norad_id,
         s.object_class::text AS object_class,
         oc.name AS operator_country,
         s.classification_tier,
@@ -156,5 +138,97 @@ export class ReflexionRepository {
       LIMIT 20
     `);
     return rows.rows;
+  }
+
+  // ── Cortex-consumed reads ──
+
+  /** List satellites with opacity signal candidates. */ // ← absorbed from cortices/queries/opacity-scout.ts
+  async listOpacityCandidates(
+    opts: { limit?: number; minScoreFloor?: number } = {},
+  ): Promise<OpacityCandidateRow[]> {
+    const sensitive = sql.join(
+      SENSITIVE_OPERATOR_COUNTRIES.map((s) => sql`${s.toLowerCase()}`),
+      sql`, `,
+    );
+    const limit = opts.limit ?? 50;
+
+    const result = await this.db.execute<OpacityCandidateRow>(sql`
+      WITH amateur_agg AS (
+        SELECT
+          at.resolved_satellite_id             AS satellite_id,
+          COUNT(*)                             AS obs_count,
+          COUNT(DISTINCT at.source_id)         AS distinct_sources,
+          MAX(at.observed_at)                  AS last_observed_at,
+          COUNT(*) FILTER (
+            WHERE s.slug = 'spacetrack-satcat-diff'
+          )                                    AS dropout_count
+        FROM amateur_track at
+        LEFT JOIN source s ON s.id = at.source_id
+        WHERE at.resolved_satellite_id IS NOT NULL
+        GROUP BY at.resolved_satellite_id
+      ),
+      payload_agg AS (
+        SELECT
+          sp.satellite_id,
+          bool_or(
+            p.name IS NULL OR lower(p.name) LIKE '%undisclosed%'
+              OR lower(p.name) LIKE '%classified%'
+          ) AS payload_undisclosed
+        FROM satellite_payload sp
+        LEFT JOIN payload p ON p.id = sp.payload_id
+        GROUP BY sp.satellite_id
+      )
+      SELECT
+        s.id::int                                           AS "satelliteId",
+        s.name,
+        NULLIF(s.telemetry_summary->>'noradId', '')::int    AS "noradId",
+        op.name                                             AS "operator",
+        oc.name                                             AS "operatorCountry",
+        pc.name                                             AS "platformClass",
+        orr.name                                            AS "orbitRegime",
+        s.launch_year                                       AS "launchYear",
+        COALESCE(pa.payload_undisclosed, true)              AS "payloadUndisclosed",
+        (lower(COALESCE(oc.name, '')) IN (${sensitive})) AS "operatorSensitive",
+        COALESCE(aa.obs_count, 0)::int                      AS "amateurObservationsCount",
+        COALESCE(aa.dropout_count, 0)::int                  AS "catalogDropoutCount",
+        COALESCE(aa.distinct_sources, 0)::int               AS "distinctAmateurSources",
+        aa.last_observed_at::text                           AS "lastAmateurObservedAt",
+        s.opacity_score::float                              AS "opacityScore"
+      FROM satellite s
+      LEFT JOIN operator op          ON op.id  = s.operator_id
+      LEFT JOIN operator_country oc  ON oc.id  = s.operator_country_id
+      LEFT JOIN platform_class pc    ON pc.id  = s.platform_class_id
+      LEFT JOIN orbit_regime orr     ON orr.id = oc.orbit_regime_id
+      LEFT JOIN amateur_agg aa       ON aa.satellite_id = s.id
+      LEFT JOIN payload_agg pa       ON pa.satellite_id = s.id
+      WHERE
+        COALESCE(pa.payload_undisclosed, true) = true
+        OR lower(COALESCE(oc.name, '')) IN (${sensitive})
+        OR aa.obs_count > 0
+      ORDER BY
+        (CASE WHEN aa.obs_count > 0 THEN 1 ELSE 0 END
+          + CASE WHEN aa.dropout_count > 0 THEN 1 ELSE 0 END
+          + CASE WHEN lower(COALESCE(oc.name, '')) IN (${sensitive}) THEN 1 ELSE 0 END
+          + CASE WHEN COALESCE(pa.payload_undisclosed, true) THEN 1 ELSE 0 END
+        ) DESC,
+        aa.obs_count DESC NULLS LAST
+      LIMIT ${limit}
+    `);
+
+    return result.rows;
+  }
+
+  /** Persist computed opacity score back to satellite. */ // ← absorbed from cortices/queries/opacity-scout.ts
+  async writeOpacityScore(
+    satelliteId: number,
+    score: number,
+  ): Promise<void> {
+    await this.db.execute(sql`
+      UPDATE satellite
+      SET
+        opacity_score = ${score}::numeric(4, 3),
+        opacity_computed_at = now()
+      WHERE id = ${satelliteId}
+    `);
   }
 }

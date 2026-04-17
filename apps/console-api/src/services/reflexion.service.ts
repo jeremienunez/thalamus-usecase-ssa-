@@ -1,75 +1,82 @@
 // apps/console-api/src/services/reflexion.service.ts
-import type { ReflexionPassBody } from "../schemas";
+import {
+  toReflexionTargetView,
+  toCoplaneView,
+  toBeltView,
+  toMilPeerView,
+} from "../transformers/reflexion.transformer";
 import type {
-  ReflexionRepository,
+  ReflexionTarget,
   CoplaneRow,
   BeltRow,
   MilRow,
-  ReflexionTarget,
-} from "../repositories/reflexion.repository";
-import type { EnrichmentCycleRepository } from "../repositories/enrichment-cycle.repository";
-import type { FindingRepository } from "../repositories/finding.repository";
-import type { ResearchEdgeRepository } from "../repositories/research-edge.repository";
+  ReflexionTargetView,
+  CoplaneView,
+  BeltView,
+  MilPeerView,
+  ReflexionPassInput,
+} from "../types/reflexion.types";
+import type {
+  FindingInsertInput,
+  EdgeInsertInput,
+} from "../types/finding.types";
 import { HttpError } from "../utils/http-error";
 
+// ── Ports (structural — repos satisfy these by duck typing) ────────
+export interface ReflexionReadPort {
+  findTarget(norad: number): Promise<ReflexionTarget | null>;
+  findStrictCoplane(
+    norad: number,
+    t: Pick<ReflexionTarget, "inc" | "raan" | "mm" | "ma">,
+    dIncMax: number,
+    dRaanMax: number,
+    dMmMax: number,
+  ): Promise<CoplaneRow[]>;
+  findInclinationBelt(
+    norad: number,
+    inc: number,
+    dIncMax: number,
+  ): Promise<BeltRow[]>;
+  findMilLineagePeers(
+    norad: number,
+    inc: number,
+    dIncMax: number,
+  ): Promise<MilRow[]>;
+}
+
+export interface CyclesPort {
+  getOrCreate(): Promise<bigint>;
+}
+
+export interface FindingsWritePort {
+  insert(input: FindingInsertInput): Promise<bigint>;
+}
+
+export interface EdgesWritePort {
+  insert(input: EdgeInsertInput): Promise<void>;
+}
+
 export type ReflexionResult = {
-  target: {
-    noradId: number;
-    name: string;
-    declared: {
-      operator_country: string | null;
-      classification_tier: string | null;
-      object_class: string | null;
-      platform: string | null;
-    };
-    orbital: {
-      inclinationDeg: number;
-      raanDeg: number;
-      meanMotionRevPerDay: number;
-      apogeeKm: number | null;
-      perigeeKm: number | null;
-    };
-  };
-  strictCoplane: Array<{
-    noradId: number;
-    name: string;
-    country: string | null;
-    tier: string | null;
-    class: string | null;
-    platform: string | null;
-    dInc: number;
-    dRaan: number;
-    lagMin: number;
-  }>;
-  beltByCountry: Array<{
-    country: string | null;
-    tier: string | null;
-    class: string | null;
-    n: number;
-  }>;
-  milLineagePeers: Array<{
-    noradId: number;
-    name: string;
-    country: string | null;
-    tier: string | null;
-    dInc: number;
-  }>;
+  target: ReflexionTargetView;
+  strictCoplane: CoplaneView[];
+  beltByCountry: BeltView[];
+  milLineagePeers: MilPeerView[];
   findingId: string | null;
 };
 
 export class ReflexionService {
   constructor(
-    private readonly repo: ReflexionRepository,
-    private readonly cycles: EnrichmentCycleRepository,
-    private readonly findings: FindingRepository,
-    private readonly edges: ResearchEdgeRepository,
+    private readonly repo: ReflexionReadPort,
+    private readonly cycles: CyclesPort,
+    private readonly findings: FindingsWritePort,
+    private readonly edges: EdgesWritePort,
   ) {}
 
-  async runPass(body: ReflexionPassBody): Promise<ReflexionResult> {
+  async runPass(input: ReflexionPassInput): Promise<ReflexionResult> {
     // Schema (H3) enforces: noradId positive integer; dIncMax/dRaanMax/dMmMax
     // bounded with defaults. No re-clamp needed here.
-    const norad = body.noradId;
-    const { dIncMax, dRaanMax, dMmMax } = body;
+    const norad = input.noradId;
+    const { dIncMax, dRaanMax, dMmMax } = input;
 
     const t = await this.repo.findTarget(norad);
     if (!t) throw HttpError.notFound("satellite not found");
@@ -107,47 +114,15 @@ export class ReflexionService {
     }
 
     return {
-      target: {
-        noradId: norad,
-        name: t.name,
-        declared: {
-          operator_country: declaredCountry,
-          classification_tier: t.classification_tier,
-          object_class: t.object_class,
-          platform: t.platform_name,
-        },
-        orbital: {
-          inclinationDeg: t.inc,
-          raanDeg: t.raan,
-          meanMotionRevPerDay: t.mm,
-          apogeeKm: t.apogee,
-          perigeeKm: t.perigee,
-        },
-      },
-      strictCoplane: strict.map((r) => ({
-        noradId: Number(r.norad_id),
-        name: r.name,
-        country: r.operator_country,
-        tier: r.tier,
-        class: r.object_class,
-        platform: r.platform,
-        dInc: Number(r.d_inc.toFixed(3)),
-        dRaan: Number(r.d_raan.toFixed(2)),
-        lagMin: Number(r.lag_min.toFixed(1)),
-      })),
-      beltByCountry: belt.map((r) => ({
-        country: r.country,
-        tier: r.tier,
-        class: r.object_class,
-        n: Number(r.n),
-      })),
-      milLineagePeers: mil.map((m) => ({
-        noradId: Number(m.norad_id),
-        name: m.name,
-        country: m.country,
-        tier: m.tier,
-        dInc: Number(m.d_inc.toFixed(3)),
-      })),
+      target: toReflexionTargetView(norad, {
+        ...t,
+        inc: t.inc,
+        raan: t.raan,
+        mm: t.mm,
+      }),
+      strictCoplane: strict.map(toCoplaneView),
+      beltByCountry: belt.map(toBeltView),
+      milLineagePeers: mil.map(toMilPeerView),
       findingId: findingId ? String(findingId) : null,
     };
   }

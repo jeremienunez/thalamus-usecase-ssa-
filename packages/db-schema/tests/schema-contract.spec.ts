@@ -294,6 +294,8 @@ describe("SPEC-DB-001 AC-6 — schema hygiene", () => {
     "goals",
     "constraints",
     "action",
+    // ITU filing raw payload (Phase 3f)
+    "raw",
   ]);
 
   it("every jsonb column is in the documented allow-list", () => {

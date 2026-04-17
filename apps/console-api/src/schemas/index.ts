@@ -8,3 +8,7 @@ export * from "./sweep.schema";
 export * from "./reflexion.schema";
 export * from "./knn-propagation.schema";
 export * from "./repl.schema";
+export * from "./sources.schema";
+export * from "./orbital.schema";
+export * from "./satellite-audit.schema";
+export * from "./opacity.schema";

@@ -220,7 +220,9 @@ export class AggregatorService {
     // Batch-embed in parallel (bounded), filling terminal.embedding in place.
     if (this.deps.embed && textsToEmbed.length > 0) {
       const vectors = await Promise.all(
-        textsToEmbed.map((t) => this.deps.embed!(t).catch(() => null)),
+        textsToEmbed.map((t) =>
+          this.deps.embed!(t).catch((): number[] | null => null),
+        ),
       );
       for (let i = 0; i < vectors.length; i++) {
         terminals[embedTargets[i]].embedding = vectors[i];
@@ -254,7 +256,10 @@ export class AggregatorService {
     //   - Vectored: assigned by k-means.
     //   - Vectorless: bucketed by action.kind into the existing cluster whose
     //     exemplar shares that kind, else into their own fallback cluster.
-    const clusterFish: FishTerminal[][] = Array.from({ length: k }, () => []);
+    const clusterFish: FishTerminal[][] = Array.from(
+      { length: k },
+      (): FishTerminal[] => [],
+    );
     for (let i = 0; i < withVec.length; i++) {
       clusterFish[clusters.assignments[i]].push(withVec[i]);
     }

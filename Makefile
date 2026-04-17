@@ -75,23 +75,12 @@ seed: ## Seed reference tables + ~500 satellites from CelesTrak TLE
 .PHONY: demo
 demo: up migrate seed ## Full bring-up: infra → migrations → seeds → stop-ready
 	@echo ""
-	@echo "✓ stack is up and seeded. Next:"
-	@echo "  make thalamus-cycle   — run one research cycle against seeded catalog"
-	@echo "  make sweep-run        — run one nano-swarm audit pass"
-
-.PHONY: thalamus-cycle
-thalamus-cycle: ## Run one research cycle end-to-end (SSA catalog query)
-	pnpm --filter @interview/thalamus demo-cycle
-
-.PHONY: ssa
-ssa: ## Interactive SSA REPL (query → briefing loop)
-	pnpm --filter @interview/thalamus ssa
+	@echo "✓ stack is up and seeded. Next: make console"
 
 ##@ Local LLM
 # ── Local LLM (Gemma 4 via llama.cpp Vulkan) ─────────────────────────────────
 # llm-serve:       26B MoE Q3_K_M — best quality, ~16 tok/s (partial offload)
 # llm-serve-fast:  E4B Q8         — fast fallback, ~43 tok/s (full GPU)
-# ssa-local:       runs the REPL against http://127.0.0.1:8080 (provider=local)
 
 LLM_MODELS_DIR ?= /media/jerem/ubuntu/models/gguf
 LLM_TEMPLATE   := $(LLM_MODELS_DIR)/gemma-template.jinja
@@ -138,17 +127,6 @@ llm-down: ## Stop background llama-server
 llm-logs: ## Tail llama-server logs
 	tail -f $(LLM_LOG)
 
-.PHONY: ssa-local
-ssa-local: ## Interactive SSA REPL routed to local Gemma (requires `make llm-serve` running)
-	@curl -sf $(LLM_URL)/health >/dev/null 2>&1 || \
-		(echo "✗ local LLM not responding at $(LLM_URL) — run 'make llm-serve' in another terminal"; exit 1)
-	@echo "✓ local LLM up — launching REPL with provider=local"
-	LOCAL_LLM_URL=$(LLM_URL) pnpm --filter @interview/thalamus ssa
-
-##@ Sweep
-.PHONY: sweep-run
-sweep-run: ## Run one sweep audit pass against the seeded catalog
-	pnpm --filter @interview/sweep demo-run
 
 ##@ Console
 # ── Console (operator UI) ────────────────────────────────────────────────────

@@ -2,6 +2,75 @@
 
 Interview-readiness checklist for Thalamus + Sweep — **target interview: CortAIx (Thales AI division)**.
 
+## Thalamus deep audit — 2026-04-17 (done)
+
+- [x] Bug #1 — all findings attributed to `plan.nodes[0]`. Fix: `sourceCortex` field stamped in [normalizeFinding](packages/thalamus/src/cortices/strategies/helpers.ts), read by [findingCortex()](packages/thalamus/src/services/finding-persister.service.ts). Migration re-tagged 286 historical rows; backup in `research_finding_cortex_backup_20260417`.
+- [x] Bug #2 — user-scoped cortices (`fleet_analyst`, `advisory_radar`) burning DAG slots when no user. Fix: `stripUserScoped()` in [thalamus-planner.service.ts](packages/thalamus/src/services/thalamus-planner.service.ts) + `hasUser` threading through [cycle-loop](packages/thalamus/src/services/cycle-loop.service.ts) and [thalamus.service](packages/thalamus/src/services/thalamus.service.ts).
+- [x] Bug #3 L1 — silent cortices invisible. Fix: `buildDataGapFinding()` in [standard-strategy.ts](packages/thalamus/src/cortices/strategies/standard-strategy.ts) emits an `Anomaly` meta-finding (confidence 0.7, above gate) when LLM returns 0 from non-empty data.
+- [x] Bug #4 — runaway iterations. Fix A: coverage metric in [stop-criteria.service.ts](packages/thalamus/src/services/stop-criteria.service.ts) now reads `sourceCortex` not `entityType` so eagerness can fire. Fix B: gap-plateau circuit-breaker — 2 identical reflexion gap rounds → force-stop.
+
+## Thalamus reliability sweep #2 — 2026-04-17 afternoon (done)
+
+Audit driven by adversarial queries on `launch_scout` (7-day rideshare / SpaceX-vs-non-SpaceX / China-vs-USA posture). Each query exposed a different layer; compounding they produced briefings that paraphrased DB rows into plausible hallucinations (e.g. "Kakushin Rising" → "rideshare Kiwi", operator Rocket Lab → JAXA, Kuiper density projection → fabricated `×200` factor). 8 distinct structural fixes shipped.
+
+**SQL / data-provider layer:**
+
+- [x] Bug #5 — `listLaunchManifest` horizon param declared but never used in SQL + `ORDER BY planned_net DESC` returned year-end TBD placeholders for "next N days" queries. Fix in [`traffic-forecast.repository.ts`](apps/console-api/src/repositories/traffic-forecast.repository.ts): `AND planned_net BETWEEN now() AND now() + make_interval(days => ${horizonDays})`, `ORDER BY planned_net ASC`.
+- [x] Bug #6 — `listLaunchManifest` UNION column-count mismatch after ITU ingester (Phase 3f) added 8 `itu*` columns to 3 branches but not the `'db'` branch → every `queryLaunchManifest` call crashed. Padded with `NULL::*` casts.
+- [x] Bug #7 — planner emits param names (`window_days`, `size_max`) the helper signature doesn't accept (`horizonDays`, `limit`) → silent drop + default 30d horizon → "next 7 days" query cites J+10 launches. Added `pickNumber()` alias resolver at [`cortex-data-provider.ts`](apps/console-api/src/agent/ssa/cortex-data-provider.ts) normalising `horizonDays | horizon_days | window_days | windowDays | days | horizon`. Default lowered to 14d.
+
+**Cycle ↔ finding M:N (schema + dedup):**
+
+- [x] Bug #8 — `findByCycleId(N)` returned only findings with `research_cycle_id = N`. Dedup hits kept their origin `cycleId`, so re-emissions were invisible to the summariser — cycle 316 had 12 findings produced but only 5 persisted with cycleId=316. Fix: new junction table [`research_cycle_finding`](packages/db-schema/src/schema/research.ts) (migration 0011, composite PK, 2 indexes, ON DELETE CASCADE). [`research-graph.service.storeFinding`](packages/thalamus/src/services/research-graph.service.ts) calls `linkToCycle()` in all 3 branches (semantic-merge, hash-dedup, fresh insert) via `ON CONFLICT DO NOTHING`. Backfilled 639 historical rows from origin column. `research_finding.research_cycle_id` retained as origin marker.
+- [x] Bug #9 — semantic dedup (`cosine ≥ 0.92 AND same primary entity`) collapsed per-launch findings onto thematic aggregates because `entityId=0` (unresolved `external:<uuid>` ref) made the entity filter toothless. Two fixes: (a) skip semantic dedup entirely when `entityId=0`, (b) require matching `findingType` (opportunity never merges onto alert). Hash-dedup key for unanchored findings now includes title snippet to prevent bucket collisions across distinct launches.
+- [x] Bug #10 — `maxFindings: 5` hardcoded in [`StandardStrategy`](packages/thalamus/src/cortices/strategies/standard-strategy.ts) silently broke "one finding per DATA row" skill contracts. Now `clamp(authoritativeData.length, 5, 30)`.
+
+**Summariser visibility:**
+
+- [x] Bug #11 — [`repl-chat.service.ts`](apps/console-api/src/services/repl-chat.service.ts) sliced cycle findings at 8 by confidence DESC. Strategist self-rated ≥0.78 (sometimes 1.0) trumped `briefing_producer` findings (conf 0.74, the _actual_ per-query answer) — never reached summariser. Bumped to 25.
+
+**Anti-hallucination (domain config + payload structure):**
+
+- [x] Bug #12 — `StandardStrategy` merged SQL + web-search into single `rawData`; LLM cited J+10 web-search launches as fitting "next 7 days". Fix: two-tier payload, `## AUTHORITATIVE DATA` (SQL + structured sources, scoped by query params) + `## WEB CONTEXT` (advisory only), with explicit instruction to ground findings in AUTHORITATIVE and use WEB only for cross-reference.
+- [x] Bug #13 — LLM hallucinated mission names and swapped operator/customer (canonical example: DATA row `missionName="Kakushin Rising (JAXA Rideshare)"`, `operatorName="Rocket Lab"`, `operatorCountry="US"`, launch site Mahia NZ → LLM emitted "rideshare Kiwi, opérateur JAXA, pays Japon"). Added `MISSION NAME FIDELITY` + `OPERATOR VS CUSTOMER` clauses to [`SSA_SOURCING_RULES`](apps/console-api/src/agent/ssa/domain-config.ts) with the exact counter-examples.
+- [x] Bug #14 — `NUMERIC FIDELITY` rule covered country/regime ratios but not temporal projections. A post-restart cycle still fabricated _"densité ×200 du LEO 590-630 km"_ for Kuiper/Qianfan with no baseline/target pair in DATA (web-verified against eoPortal / Wikipedia / Deloitte TMT 2026 — no such factor exists). Rule extended to any multiplier/ratio/percentage including temporal projections, with qualitative-language fallback.
+
+**End-to-end validation.** Cycle 320 (post all fixes) for _"SpaceX vs non-SpaceX next 7 days"_: 6 per-row findings, all in horizon, all verbatim. Briefing counts: SpaceX 3 / Rocket Lab 2 / Blue Origin 1 — matches DB ground truth.
+
+**Known minor residuals** (non-blocking, skill-prompt level):
+
+- `HASTE | Bubbles` truncated to `Bubbles` (compound-name paraphrase).
+- `externalLaunchId` in evidence but not surfaced in summary text.
+- `entityRef` (e.g. `"external:<uuid>"`, `"US"` ISO-2) still unresolved to real `entityId` in [`finding-persister.service.ts`](packages/thalamus/src/services/finding-persister.service.ts) — resolver service deferred to next session. Current workaround: dedup simply skips unanchored findings (Bug #9), which keeps the system honest even without resolution.
+
+## Phase 1 — L2 skill rewrites (done)
+
+- [x] [launch-scout.md](apps/console-api/src/agent/ssa/skills/launch-scout.md) — one-per-row pattern, `kind=db` confidence 0.7, `kind=news` 0.4, empty-DATA sentinel 0.7
+- [x] [debris-forecaster.md](apps/console-api/src/agent/ssa/skills/debris-forecaster.md) — density rows 0.7, paper/news lower-tier, empty sentinel 0.7
+- [x] [apogee-tracker.md](apps/console-api/src/agent/ssa/skills/apogee-tracker.md) — satellite snapshot 0.7, news lower-tier, snapshot apogee/perigee derived from `meanMotion`/`eccentricity`
+- [x] Verified end-to-end: cycle 299 produced 15 findings vs 0 in cycle 298; all 3 silent cortices now contributing.
+
+## Phase 2 — L3 ingestion worker harness (done)
+
+Plan reference: `~/.claude/plans/ok-lets-go-planifie-sparkling-knuth.md` (Phase 2).
+
+- [x] Added `ingestionQueue` + `ingestionQueueEvents` to [packages/sweep/src/jobs/queues.ts](packages/sweep/src/jobs/queues.ts)
+- [x] [packages/sweep/src/jobs/workers/ingestion.worker.ts](packages/sweep/src/jobs/workers/ingestion.worker.ts) dispatcher created
+- [x] [packages/sweep/src/jobs/ingestion-registry.ts](packages/sweep/src/jobs/ingestion-registry.ts) — `IngestionRegistry` class + `createIngestionRegistry()` with baseline `noop` fetcher
+- [x] [schedulers.ts](packages/sweep/src/jobs/schedulers.ts) extended with `ingestion-noop` cron (hourly)
+- [x] Worker booted from [container.ts](apps/console-api/src/container.ts) via `createIngestionWorker(registry)`; `IngestionService` exposed in `AppServices`
+- [x] [routes/ingestion.routes.ts](apps/console-api/src/routes/ingestion.routes.ts) — `POST /api/ingestion/run/:jobName` + `GET /api/ingestion/jobs`
+- [x] Verified: `GET /api/ingestion/jobs` → `{"jobs":["noop"]}`; `POST /api/ingestion/run/noop` → enqueues job, worker processes in 2 ms, `bull:ingestion:completed` populated, hourly scheduler registered (`bull:ingestion:repeat:ingestion-noop`).
+
+## Phase 3 — L3 ingesters (todo, one PR per slice)
+
+- [x] **3a** TLE history time-series — [`tle_history`](packages/db-schema/src/schema/tle-history.ts) table (migration 0005), [`tle-history-fetcher.ts`](packages/sweep/src/jobs/ingesters/tle-history-fetcher.ts) hits 40 CelesTrak GP groups every 6 h (`0 */6 * * *`), [`TleHistoryRepository`](apps/console-api/src/repositories/tle-history.repository.ts), `queryApogeeHistory` extended to union `kind="tle_history"` rows from the new table, apogee-tracker.md tightened with slope-based rules (NOMINAL_DRIFT / ORBIT_RAISING / ORBIT_LOWERING / DECAYING / STATION_KEEPING) at confidence 0.85. Verified: 2369 TLEs ingested on first real run, matched 100% to catalog via top-level `satellite.norad_id`.
+- [x] **3b** Space weather — multi-source ([NOAA SWPC 🇺🇸](https://services.swpc.noaa.gov/text/27-day-outlook.txt) + [GFZ Potsdam 🇩🇪](https://kp.gfz.de/app/json/) + [SIDC/STCE 🇧🇪](https://www.sidc.be/SILSO/DATA/EISN/EISN_current.csv)) into [`space_weather_forecast`](packages/db-schema/src/schema/space-weather.ts) table (migration 0006), [`space-weather-fetcher.ts`](packages/sweep/src/jobs/ingesters/space-weather-fetcher.ts) daily cron (`30 4 * * *`), [`SpaceWeatherRepository`](apps/console-api/src/repositories/space-weather.repository.ts). Both `queryDebrisForecast` and `queryApogeeHistory` now union a `kind="weather"` branch exposing F10.7 / Ap / Kp / SSN per source. Skills updated: weather rows are context (drag regime / debris scrub), cited in evidence not standalone findings; cross-source divergence flagged. Verified: 59 rows across 3 sources on first fetch (NOAA 27 forecast days + GFZ 15 Kp samples + SIDC 17 sunspot days).
+- [x] **3c** Launch manifest enrichment — [`launch`](packages/db-schema/src/schema/launch.ts) table extended with 14 LL2 columns (externalLaunchId, operatorName, operatorCountry, padName, padLocation, plannedNet/Start/End, status, orbitName, missionName, missionDescription, rideshare, fetchedAt) via migration 0007. [`launch-manifest-fetcher.ts`](packages/sweep/src/jobs/ingesters/launch-manifest-fetcher.ts) hits Launch Library 2 (free worldwide aggregator covering US / CN / RU / IN / EU / JP) every 12 h (`0 */12 * * *`), upserts on `externalLaunchId`, marks dropped rows stale. `queryLaunchManifest` surfaces the enriched columns; [launch-scout.md](apps/console-api/src/agent/ssa/skills/launch-scout.md) emits findings tiered by field completeness (0.8 if vehicle+pad+net populated, 0.7 partial, 0.6 minimal, 0.4 news). Verified: 100 upcoming launches from 9 distinct countries on first fetch (Russia / China / US / Japan / India / France / etc.). `launch_payload` join deferred — LL2 detailed payload requires N+1 fetches; next revision.
+- [x] **3d** NOTAMs — [`notam`](packages/db-schema/src/schema/notam.ts) table + [notam-fetcher.ts](packages/sweep/src/jobs/ingesters/notam-fetcher.ts) against FAA TFR public JSON (`tfr.faa.gov/tfrapi/exportTfrList`, no auth). Every 6 h (`15 */6 * * *`). Narrative-regex parses `parsed_start_utc/end_utc`; `is_launch_related` flagged from `type='SPACE OPERATIONS'` + keyword fallback. `queryLaunchManifest` surfaces launch-related NOTAMs as `kind="notam"` rows; [launch-scout.md](apps/console-api/src/agent/ssa/skills/launch-scout.md) cross-references NOTAM state + window against LL2 `padLocation` + `plannedWindow` for +0.05 confidence bump (cap 0.9). Verified: 90 TFRs ingested on first run (3 `SPACE OPERATIONS` correctly flagged, parsed windows valid). Geometry bbox omitted — source only narrates "18NM NORTH OF DILLON, MT" without coordinates. FAA SAA KMZ blocked by session-ticket requirement; TFR API is the working path. Non-US NOTAMs (Eurocontrol / NAV CANADA) deferred — require auth.
+- [x] **3e** Fragmentation events — [`fragmentation_event`](packages/db-schema/src/schema/fragmentation-event.ts) table (migration 0009) + [fragmentation-events-fetcher.ts](packages/sweep/src/jobs/ingesters/fragmentation-events-fetcher.ts) — curated seeder (20 major events: Fengyun-1C, Cosmos 1408/2251, Iridium 33, NOAA-16, Long March 6A ×2, Briz-M ×2, Pegasus HAPS, DMSP F13, Kosmos 2421/2491, Ariane V16, Atlas V Centaur, Thor-Agena D, RESURS-O1, Cosmos 1375, NOAA-3, and one DMSP F14 non-event as analog contrast). `queryDebrisForecast` now unions `kind="fragmentation"` rows; [debris-forecaster.md](apps/console-api/src/agent/ssa/skills/debris-forecaster.md) cites Kessler analogs when flagging congested shells. No cron — manual re-run on event-list changes. Verified: 20 events across 4 operator countries (CN / RU / US / FR), split as asat_test (3 · 5361 fragments) / breakup (14 · 4932) / collision (2 · 2296) / anomaly (1 · 0). Future: scrape NASA ODPO Quarterly News PDFs for ongoing additions.
+- [x] **3f** ITU filings — [`itu_filing`](packages/db-schema/src/schema/itu-filing.ts) table (migration 0010) + [itu-filings-fetcher.ts](packages/sweep/src/jobs/ingesters/itu-filings-fetcher.ts). **Pivot**: ITU's public SNL/SRS endpoints are HTML-only ASP scrape (SRS web service shut down 2021, SNL list1149 is just suspensions). Curated seed of 15 mega-constellations instead: Starlink Gen2, Kuiper, OneWeb Phase 2, IRIS² (EU), Guowang, Qianfan/G60, Honghu (CN x3), Telesat Lightspeed (CA), Sfera (RU), KPS (KR), NavIC (IN), QZSS-2 (JP), AST SpaceMobile, Cinnamon-937 (RW placeholder), Swarm. `queryLaunchManifest` now unions `kind="itu"` rows; [launch-scout.md](apps/console-api/src/agent/ssa/skills/launch-scout.md) emits `"opportunity"` findings per constellation tiered by status (launching 0.75 / approved 0.65 / filed 0.5) and cross-references `operatorName` between `kind="db"` launches and `kind="itu"` filings to annotate which constellation a specific launch is feeding. Verified: 15 filings, 416,150 total planned sats across 10 countries (RW 337k / CN 37k / US 35k / GB 6k / CA 298 / FR 290 / RU 264 / KR, IN, JP ≤ 10). JSONB allow-list updated with `raw` column.
+
 ## Extraction (done)
 
 - [x] Init pnpm workspace + 4 packages (`shared`, `db-schema`, `thalamus`, `sweep`)
@@ -602,9 +671,9 @@ doesn't. Three root causes, ranked by ROI:
 - **Web-search fallback without payoff.** `debris_forecaster` ran with
   `webSearch: true`, fetched 10 015 chars in 15 s, emitted `findings: 0`.
   The fallback pulls generic debris doc, but the cortex prompt can't map
-  it onto *our* catalogue state, so nothing lands.
+  it onto _our_ catalogue state, so nothing lands.
 - **Budget exhausted mid-cycle.** `Stopping: cost budget exhausted
-  totalCost: 0.107778 maxCost: 0.1 iteration: 4`. The cycle aborts before
+totalCost: 0.107778 maxCost: 0.1 iteration: 4`. The cycle aborts before
   the next planner pass could consume the fresh strategist output, which
   is exactly where the named-satellite findings live (AQUA 5 090 kg, etc.).
   The summariser then falls back to listing finding IDs.

@@ -1,5 +1,4 @@
 import type { KgNode, KgEdge } from "@interview/shared";
-import { KgRepository } from "../repositories/kg.repository";
 import {
   toFindingNode,
   toKgEdge,
@@ -7,9 +6,27 @@ import {
   toRegimeNode,
   toSatelliteNode,
 } from "../transformers/kg-view.transformer";
+import type {
+  KgSatRow,
+  KgOpRow,
+  KgRegimeRow,
+  KgFindingRow,
+  KgEdgeRow,
+} from "../types/kg.types";
+
+// ── Port (structural — repo satisfies this by duck typing) ────────
+export interface KgReadPort {
+  loadNodeSources(): Promise<{
+    sats: KgSatRow[];
+    ops: KgOpRow[];
+    regimes: KgRegimeRow[];
+    findings: KgFindingRow[];
+  }>;
+  listRecentEdges(): Promise<KgEdgeRow[]>;
+}
 
 export class KgViewService {
-  constructor(private readonly repo: KgRepository) {}
+  constructor(private readonly repo: KgReadPort) {}
 
   async listNodes(): Promise<{ items: KgNode[] }> {
     const { sats, ops, regimes, findings } = await this.repo.loadNodeSources();

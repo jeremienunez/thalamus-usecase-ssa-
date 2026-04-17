@@ -109,7 +109,7 @@ export function buildVanishedTracks(
   vanishedNoradIds: readonly number[],
   ctx: { sourceId: bigint; observedAt: Date },
 ): NewAmateurTrack[] {
-  return vanishedNoradIds.map((norad) => ({
+  return vanishedNoradIds.map((norad): NewAmateurTrack => ({
     sourceId: ctx.sourceId,
     observedAt: ctx.observedAt,
     candidateNoradId: norad,

@@ -1,31 +1,15 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type {
+  EdgeRow,
+  EdgeInsertInput,
+} from "../types/finding.types";
 
-export type EdgeRow = {
-  finding_id: string;
-  entity_type: string;
-  entity_id: string;
-};
-
-export type EdgeInsertInput = {
-  findingId: bigint;
-  entityType:
-    | "satellite"
-    | "operator"
-    | "operator_country"
-    | "payload"
-    | "orbit_regime";
-  entityId: bigint;
-  relation:
-    | "about"
-    | "supports"
-    | "contradicts"
-    | "similar_to"
-    | "derived_from";
-  weight: number;
-  context: unknown;
-};
+export type {
+  EdgeRow,
+  EdgeInsertInput,
+} from "../types/finding.types";
 
 export class ResearchEdgeRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -56,6 +40,57 @@ export class ResearchEdgeRepository {
       LIMIT ${limit}
     `);
     return rows.rows;
+  }
+
+  // ── Cortex-consumed reads (absorbed from cortices/queries/repl-inspection) ──
+
+  async findEdgesByFindingId(
+    findingId: bigint,
+    limit = 10,
+  ): Promise<Array<{ from_name: string; relation: string; to_name: string }>> {
+    const rows = await this.db
+      .execute(sql`
+        SELECT from_name, relation, to_name
+        FROM research_edge WHERE finding_id = ${findingId}
+        LIMIT ${limit}
+      `)
+      .catch(() => ({ rows: [] as Array<unknown> }));
+    return rows.rows as Array<{
+      from_name: string;
+      relation: string;
+      to_name: string;
+    }>;
+  }
+
+  async findNeighbourhood(
+    entity: string,
+    limit = 20,
+  ): Promise<
+    Array<{
+      from_name: string;
+      from_type: string;
+      relation: string;
+      to_name: string;
+      to_type: string;
+      confidence: number;
+    }>
+  > {
+    const rows = await this.db.execute(sql`
+      SELECT from_name, from_type, relation, to_name, to_type,
+             confidence::real AS confidence
+      FROM research_edge
+      WHERE from_name ILIKE ${`%${entity}%`} OR to_name ILIKE ${`%${entity}%`}
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `);
+    return rows.rows as Array<{
+      from_name: string;
+      from_type: string;
+      relation: string;
+      to_name: string;
+      to_type: string;
+      confidence: number;
+    }>;
   }
 
   async insert(input: EdgeInsertInput): Promise<void> {

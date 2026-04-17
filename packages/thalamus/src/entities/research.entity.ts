@@ -1,6 +1,9 @@
 /**
- * Research Entity Types — Thalamus knowledge graph
- * Inferred from Drizzle schema
+ * Research Entity Types — Drizzle ORM inferred shapes.
+ *
+ * These are the raw row types used by the repository layer to talk to
+ * Postgres. Services and ports must NOT import from here — they use
+ * the public DTOs in `../types/research.types`.
  */
 
 import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
@@ -10,11 +13,11 @@ import type {
   researchEdge,
 } from "@interview/db-schema";
 
-export type ResearchCycle = InferSelectModel<typeof researchCycle>;
-export type NewResearchCycle = InferInsertModel<typeof researchCycle>;
+export type ResearchCycleEntity = InferSelectModel<typeof researchCycle>;
+export type NewResearchCycleEntity = InferInsertModel<typeof researchCycle>;
 
-export type ResearchFinding = InferSelectModel<typeof researchFinding>;
-export type NewResearchFinding = InferInsertModel<typeof researchFinding>;
+export type ResearchFindingEntity = InferSelectModel<typeof researchFinding>;
+export type NewResearchFindingEntity = InferInsertModel<typeof researchFinding>;
 
-export type ResearchEdge = InferSelectModel<typeof researchEdge>;
-export type NewResearchEdge = InferInsertModel<typeof researchEdge>;
+export type ResearchEdgeEntity = InferSelectModel<typeof researchEdge>;
+export type NewResearchEdgeEntity = InferInsertModel<typeof researchEdge>;

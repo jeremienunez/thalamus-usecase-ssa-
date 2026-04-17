@@ -50,3 +50,7 @@ design-system/
 
 # Git worktrees (superpowers isolation)
 .worktrees/
+
+# Local AI assistant working dirs
+.claude/
+.codex

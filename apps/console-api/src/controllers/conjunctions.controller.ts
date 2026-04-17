@@ -2,16 +2,41 @@ import type { FastifyRequest } from "fastify";
 import type { ConjunctionViewService } from "../services/conjunction-view.service";
 import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
-import { ConjunctionsQuerySchema } from "../schemas";
+import {
+  ConjunctionsQuerySchema,
+  ScreenQuerySchema,
+  KnnCandidatesQuerySchema,
+} from "../schemas";
 
 export function conjunctionsController(service: ConjunctionViewService) {
   return asyncHandler<FastifyRequest<{ Querystring: unknown }>>(
     async (req, reply) => {
       const q = parseOrReply(req.query, ConjunctionsQuerySchema, reply);
       if (q === null) return;
-      // Schema defaults minPc to 0, so at runtime it's always present; the
-      // `?? 0` keeps the static types aligned with the service signature.
       return service.list({ minPc: q.minPc ?? 0 });
+    },
+  );
+}
+
+export function screenController(service: ConjunctionViewService) {
+  return asyncHandler<FastifyRequest<{ Querystring: unknown }>>(
+    async (req, reply) => {
+      const q = parseOrReply(req.query, ScreenQuerySchema, reply);
+      if (q === null) return;
+      return service.screen(q);
+    },
+  );
+}
+
+export function knnCandidatesController(service: ConjunctionViewService) {
+  return asyncHandler<FastifyRequest<{ Querystring: unknown }>>(
+    async (req, reply) => {
+      const q = parseOrReply(req.query, KnnCandidatesQuerySchema, reply);
+      if (q === null) return;
+      if (typeof q.targetNoradId !== "number") {
+        return reply.code(400).send({ error: "targetNoradId is required" });
+      }
+      return service.knnCandidates({ ...q, targetNoradId: q.targetNoradId });
     },
   );
 }

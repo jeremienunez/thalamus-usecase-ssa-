@@ -157,7 +157,7 @@ async function main(): Promise<void> {
       : sql`WHERE satellite.embedding IS NULL`;
     const limitClause = LIMIT ? sql`LIMIT ${LIMIT}` : sql``;
 
-    const rows = await db.execute(sql`
+    const rows = await db.execute<Row & Record<string, unknown>>(sql`
       SELECT
         satellite.id::text AS id,
         satellite.name,
@@ -182,7 +182,7 @@ async function main(): Promise<void> {
       ${limitClause}
     `);
 
-    const candidates = rows.rows as unknown as Row[];
+    const candidates: Row[] = rows.rows;
     console.log(`▸ ${candidates.length} rows to embed (force=${FORCE})`);
     if (candidates.length === 0) {
       console.log("▸ nothing to do — all rows already embedded");

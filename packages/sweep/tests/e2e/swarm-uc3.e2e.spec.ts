@@ -83,12 +83,16 @@ beforeAll(async () => {
   redis = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
   setRedisClient(redis);
 
-  registry = new CortexRegistry();
+  const skillsDir = resolve(
+    __dirname,
+    "../../../../apps/console-api/src/agent/ssa/skills",
+  );
+  registry = new CortexRegistry(skillsDir);
   registry.discover();
   // Sanity: the sim cortex must be discoverable.
   if (!registry.get("sim_operator_agent")) {
     throw new Error(
-      "sim_operator_agent skill not found in registry — did you create packages/thalamus/src/cortices/skills/sim-operator-agent.md?",
+      `sim_operator_agent skill not found in registry at ${skillsDir}`,
     );
   }
 

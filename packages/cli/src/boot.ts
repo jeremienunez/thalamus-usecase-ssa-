@@ -1,7 +1,8 @@
 import React from "react";
 import { render } from "ink";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import pino from "pino";
 import { Pool } from "pg";
 import IORedis from "ioredis";
@@ -19,7 +20,6 @@ import {
   CortexRegistry,
   buildThalamusContainer,
   callNanoWithMode,
-  queryConjunctionCandidatesKnn,
 } from "@interview/thalamus";
 import { buildSweepContainer, startTelemetrySwarm } from "@interview/sweep";
 import {
@@ -81,7 +81,13 @@ export async function main(
     const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6380";
     ownedPool = new Pool({ connectionString: databaseUrl });
     ownedRedis = new IORedis(redisUrl, { maxRetriesPerRequest: null });
-    const registry = new CortexRegistry();
+    // SSA cortex skill pack lives in console-api. Until the CLI moves under
+    // apps/ssa-cli, walk up to the shared path.
+    const skillsDir = resolve(
+      fileURLToPath(new URL(".", import.meta.url)),
+      "../../../apps/console-api/src/agent/ssa/skills",
+    );
+    const registry = new CortexRegistry(skillsDir);
     registry.discover();
     wiring = { pool: ownedPool, redis: ownedRedis, registry };
   }
@@ -117,8 +123,8 @@ export async function main(
   // In prod, when we own the pool/redis, make sure they close on exit.
   if (ownedPool || ownedRedis) {
     app.waitUntilExit().finally(() => {
-      ownedPool?.end().catch(() => undefined);
-      ownedRedis?.quit().catch(() => undefined);
+      ownedPool?.end().catch((): void => undefined);
+      ownedRedis?.quit().catch((): void => undefined);
     });
   }
 }
@@ -147,7 +153,17 @@ export async function buildRealAdapters(
   const db: Database = drizzle(ctx.pool);
 
   // Thalamus DI — full container against the live DB.
-  const thalamusC = buildThalamusContainer({ db });
+  // CLI doesn't run cycles in-process (it routes via console-api HTTP),
+  // so domainConfig defaults to noopDomainConfig inside the kernel.
+  const skillsDir = resolve(
+    fileURLToPath(new URL(".", import.meta.url)),
+    "../../../apps/console-api/src/agent/ssa/skills",
+  );
+  const thalamusC = buildThalamusContainer({
+    db,
+    skillsDir,
+    dataProvider: {},
+  });
 
   // Sweep DI — for resolution + telemetry-swarm launch.
   const llmMode =
@@ -190,7 +206,7 @@ export async function buildRealAdapters(
             title: f.title,
             sourceClass: "KG",
             confidence: f.confidence,
-            evidenceRefs: [],
+            evidenceRefs: [] as string[],
           })),
           costUsd: cycle.totalCost ?? 0,
         };
@@ -308,18 +324,21 @@ export async function buildRealAdapters(
     },
 
     // --- 8. candidates.propose — KNN conjunction candidate proposer ----
-    // Runs the Voyage halfvec HNSW against the catalog with altitude-overlap
-    // filtering. Pre-narrow-phase: never computes Pc, only proposes.
+    // Routed through the console-api 5-layer (GET /api/conjunctions/knn-candidates).
+    // The CLI is an agent — it consumes the same HTTP route as the frontend.
     candidates: {
       propose: async ({ targetNoradId, objectClass, limit }) => {
-        return queryConjunctionCandidatesKnn(db, {
-          targetNoradId,
-          knnK: 300,
-          limit: limit ?? 25,
-          marginKm: 20,
-          objectClass: objectClass ?? null,
-          excludeSameFamily: true,
-        });
+        const base = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
+        const url = new URL(`${base}/api/conjunctions/knn-candidates`);
+        url.searchParams.set("targetNoradId", String(targetNoradId));
+        url.searchParams.set("knnK", "300");
+        url.searchParams.set("limit", String(limit ?? 25));
+        url.searchParams.set("marginKm", "20");
+        url.searchParams.set("excludeSameFamily", "true");
+        if (objectClass) url.searchParams.set("objectClass", objectClass);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`knn-candidates ${res.status}`);
+        return (await res.json()) as Array<Record<string, unknown>>;
       },
     },
   };
@@ -373,7 +392,7 @@ async function buildWhyTreeFromDb(
     .from(researchEdge)
     .where(eq(researchEdge.findingId, fid));
 
-  const children: WhyNode[] = edges.map((e) => ({
+  const children: WhyNode[] = edges.map((e): WhyNode => ({
     id: `edge:${e.id}`,
     label: `${e.relation} → ${e.entityType}:${e.entityId}`,
     kind: "edge",

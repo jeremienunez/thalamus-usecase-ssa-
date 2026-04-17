@@ -36,3 +36,16 @@ export type NanoResult = {
   unit: string;
   reason: string;
 };
+
+export type MissionStateView = {
+  running: boolean;
+  startedAt: string | null;
+  total: number;
+  completed: number;
+  filled: number;
+  unobtainable: number;
+  errors: number;
+  cursor: number;
+  currentTask: MissionTask | null;
+  recent: MissionTask[];
+};

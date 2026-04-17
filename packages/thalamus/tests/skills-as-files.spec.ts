@@ -26,9 +26,12 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { CortexRegistry } from "../src/cortices/registry";
 
+// SSA skills live in the console-api agent pack. The kernel registry just
+// reads whatever directory it's pointed at; this spec scans the SSA pack to
+// validate every shipped skill parses and tracks a spec.
 const SKILLS_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
-  "../src/cortices/skills",
+  "../../../apps/console-api/src/agent/ssa/skills",
 );
 
 function skillSha256(body: string): string {

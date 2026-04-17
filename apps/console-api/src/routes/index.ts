@@ -13,6 +13,12 @@ import type { CycleRunnerService } from "../services/cycle-runner.service";
 import type { ReplChatService } from "../services/repl-chat.service";
 import type { ReplTurnService } from "../services/repl-turn.service";
 import type { SweepSuggestionsService } from "../services/sweep-suggestions.service";
+import type { SourceDataService } from "../services/source-data.service";
+import type { SatelliteAuditService } from "../services/satellite-audit.service";
+import type { SatelliteEnrichmentService } from "../services/satellite-enrichment.service";
+import type { OrbitalAnalysisService } from "../services/orbital-analysis.service";
+import type { OpacityService } from "../services/opacity.service";
+import type { IngestionService } from "../services/ingestion.service";
 
 import { registerHealthRoutes } from "./health.routes";
 import { registerSatelliteRoutes } from "./satellites.routes";
@@ -26,8 +32,14 @@ import { registerKnnPropagationRoutes } from "./knn-propagation.routes";
 import { registerAutonomyRoutes } from "./autonomy.routes";
 import { registerCyclesRoutes } from "./cycles.routes";
 import { registerReplRoutes } from "./repl.routes";
+import { registerSourceRoutes } from "./sources.routes";
+import { registerSatelliteAuditRoutes } from "./satellite-audit.routes";
+import { registerSatelliteEnrichmentRoutes } from "./satellite-enrichment.routes";
+import { registerOrbitalRoutes } from "./orbital.routes";
+import { registerOpacityRoutes } from "./opacity.routes";
+import { registerIngestionRoutes } from "./ingestion.routes";
 
-export type { SweepDeps } from "../controllers/sweep-suggestions.controller";
+export type { SweepSuggestionsDeps } from "../services/sweep-suggestions.service";
 
 export type AppServices = {
   satelliteView: SatelliteViewService;
@@ -43,6 +55,12 @@ export type AppServices = {
   replChat: ReplChatService;
   replTurn: ReplTurnService;
   sweepSuggestions: SweepSuggestionsService;
+  sourceData: SourceDataService;
+  satelliteAudit: SatelliteAuditService;
+  satelliteEnrichment: SatelliteEnrichmentService;
+  orbitalAnalysis: OrbitalAnalysisService;
+  opacity: OpacityService;
+  ingestion: IngestionService;
 };
 
 export function registerAllRoutes(
@@ -61,4 +79,10 @@ export function registerAllRoutes(
   registerAutonomyRoutes(app, s.autonomy);
   registerCyclesRoutes(app, s.cycles);
   registerReplRoutes(app, s.replChat, s.replTurn);
+  registerSourceRoutes(app, s.sourceData);
+  registerSatelliteAuditRoutes(app, s.satelliteAudit);
+  registerSatelliteEnrichmentRoutes(app, s.satelliteEnrichment);
+  registerOrbitalRoutes(app, s.orbitalAnalysis);
+  registerOpacityRoutes(app, s.opacity);
+  registerIngestionRoutes(app, s.ingestion);
 }

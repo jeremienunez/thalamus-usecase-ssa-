@@ -8,8 +8,10 @@ import {
   jsonb,
   real,
   integer,
+  boolean,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { ResearchStatus } from "@interview/shared";
 import {
@@ -130,6 +132,45 @@ export const researchFinding = pgTable(
 );
 
 // -----------------------------------------------------------------------
+// Research cycle ↔ finding — M:N junction
+// -----------------------------------------------------------------------
+//
+// A finding can be surfaced by many cycles (when semantic / hash dedup
+// merges a re-discovered finding onto an existing record). Without this
+// junction, `findByCycleId` only returns findings whose ORIGIN cycle
+// matches — losing every dedup'd re-emission. The summariser then sees a
+// partial cycle output and can't construct an answer.
+//
+// The junction is the source of truth for "which findings did cycle N
+// surface". The legacy `research_finding.research_cycle_id` column stays
+// as the ORIGIN marker (first cycle that produced the finding).
+
+export const researchCycleFinding = pgTable(
+  "research_cycle_finding",
+  {
+    researchCycleId: bigint("research_cycle_id", { mode: "bigint" })
+      .notNull()
+      .references(() => researchCycle.id, { onDelete: "cascade" }),
+    researchFindingId: bigint("research_finding_id", { mode: "bigint" })
+      .notNull()
+      .references(() => researchFinding.id, { onDelete: "cascade" }),
+    iteration: integer("iteration").notNull().default(0),
+    isDedupHit: boolean("is_dedup_hit").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.researchCycleId, t.researchFindingId] }),
+    findingIdx: index("idx_rcf_finding").on(t.researchFindingId),
+    cycleCreatedIdx: index("idx_rcf_cycle_created").on(
+      t.researchCycleId,
+      t.createdAt,
+    ),
+  }),
+);
+
+// -----------------------------------------------------------------------
 // Research edge — finding → entity link (polymorphic, no FK on target)
 // -----------------------------------------------------------------------
 
@@ -165,6 +206,9 @@ export type NewResearchCycle = typeof researchCycle.$inferInsert;
 
 export type ResearchFinding = typeof researchFinding.$inferSelect;
 export type NewResearchFinding = typeof researchFinding.$inferInsert;
+
+export type ResearchCycleFinding = typeof researchCycleFinding.$inferSelect;
+export type NewResearchCycleFinding = typeof researchCycleFinding.$inferInsert;
 
 export type ResearchEdge = typeof researchEdge.$inferSelect;
 export type NewResearchEdge = typeof researchEdge.$inferInsert;

@@ -4,6 +4,56 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Thalamus reliability sweep #2 — 2026-04-17 (afternoon)
+
+Follow-up to the morning deep-audit. Adversarial queries on `launch_scout`
+(`"7 prochains jours SpaceX vs non-SpaceX"`, `"rideshare ≤100 kg"`, `"China vs
+USA posture this week"`) surfaced 8 structural bugs compounding into the same
+failure mode: the system had correct data in DB, emitted correct findings,
+but the summariser received a partial view and Kimi composed plausible-looking
+paraphrases instead of ground-truth answers.
+
+**Pipeline fixes (SQL → cortex → summariser):**
+
+- **`listLaunchManifest` horizon never applied.** [`traffic-forecast.repository.ts`](apps/console-api/src/repositories/traffic-forecast.repository.ts) declared `horizonDays` as a param but the `db`-branch WHERE clause had no temporal filter, and rows were ordered `planned_net DESC NULLS LAST`. A "next 14 days" query returned the 15 _furthest_ launches (all year-end TBD placeholders). Fixed: `AND planned_net BETWEEN now() AND now() + make_interval(days => ${horizonDays})`, ORDER ASC. Simulation post-fix: `Electron | Kakushin Rising (JAXA Rideshare)` (2026-04-23, rideshare=true) now surfaces at row 6 of the 14-day window.
+
+- **Same `listLaunchManifest` UNION column-count mismatch.** The `'db'` branch missed the 8 `itu*` columns added when the ITU ingester (Phase 3f) shipped — `queryLaunchManifest` crashed with `"each UNION query must have the same number of columns"` on every cycle. Padded the branch with `NULL::*` casts matching the ITU branch.
+
+- **Planner emits param names the helper doesn't recognise.** The LLM planner routinely sent `{window_days: 7, size_max: 100}` where the helper expected `{horizonDays, limit}` — params silently dropped, helper defaulted to 30 days. Added `pickNumber()` alias resolver at [`cortex-data-provider.ts`](apps/console-api/src/agent/ssa/cortex-data-provider.ts) accepting `horizonDays | horizon_days | window_days | windowDays | days | horizon`, plus `limit | size_max | sizeMax | max`. Default lowered to 14d as safety net.
+
+- **Summariser received only top-8 by confidence DESC.** [`repl-chat.service.ts`](apps/console-api/src/services/repl-chat.service.ts) sliced cycle findings at 8. With strategist findings self-rated ≥0.78 and sometimes 1.0, `briefing_producer` findings (conf 0.74, the _actual_ per-query answer) never reached the summariser. Bumped to 25 — sufficient for typical cycle output, summariser LLM handles relevance.
+
+**Schema + dedup fixes (cycle ↔ finding):**
+
+- **`research_cycle_finding` junction table** (migration 0011). Previously `findByCycleId(N)` returned only findings whose `research_cycle_id` origin matched N — a semantic or hash dedup hit kept the older origin cycleId, so re-emissions were invisible to the summariser. New M:N table is the source of truth for "what cycle N actually surfaced"; `research_finding.research_cycle_id` remains as origin marker. [`storeFinding`](packages/thalamus/src/services/research-graph.service.ts) calls `linkToCycle()` in all three branches (semantic merge, hash dedup hit, fresh insert) via `ON CONFLICT DO NOTHING`. Backfilled 639 historical finding rows from the origin column so past cycles still resolve correctly.
+
+- **Semantic dedup tightened.** Old rule (`cosine ≥ 0.92 AND same primary entity`) collapsed specific per-launch findings onto thematic aggregates: a finding about "Starlink 17-22 at SLC-4E 18/04 14:00" merged into a pre-existing "SpaceX multi-grappin LEO: 75 satellites Starlink" because embeddings cluster by operator/constellation and `entityId=0` (unresolved `external:<uuid>` ref) made the entity filter toothless. New rules: (1) skip semantic dedup entirely when `entityId=0` (unanchored), (2) require matching `findingType` — an `"opportunity"` rideshare never merges onto an `"alert"`. Hash-dedup key for unanchored findings now includes a title snippet to prevent same-bucket collisions across distinct launches.
+
+- **`maxFindings` dynamic cap.** Was hardcoded at 5 in [`StandardStrategy`](packages/thalamus/src/cortices/strategies/standard-strategy.ts), silently breaking skills whose contract is "one finding per DATA row" (launch_scout, debris_forecaster). Now `clamp(authoritativeData.length, 5, 30)` — a 6-launch manifest produces up to 6 findings, capped at 30 for cost safety.
+
+**Anti-hallucination fixes (skill + domain config):**
+
+- **`AUTHORITATIVE DATA` vs `WEB CONTEXT` tiered payload.** [`StandardStrategy`](packages/thalamus/src/cortices/strategies/standard-strategy.ts) now hands the LLM two distinct sections: (1) SQL + structured-source rows scoped by query params, (2) web-search snippets as advisory context only, with an explicit instruction: _"Ground every finding in AUTHORITATIVE DATA. Use WEB CONTEXT only to cross-reference — never cite a specific launch/event/number that appears ONLY in WEB CONTEXT as if it were in scope."_ Previously everything was merged into `rawData` and the LLM happily cited J+10 web-search launches as fitting a "next 7 days" window.
+
+- **`MISSION NAME FIDELITY` + `OPERATOR VS CUSTOMER` rules** in [`SSA_SOURCING_RULES`](apps/console-api/src/agent/ssa/domain-config.ts). The audit surfaced a canonical hallucination: DATA row `missionName='Kakushin Rising (JAXA Rideshare)'`, `operatorName='Rocket Lab'`, `operatorCountry='US'`, launch site Mahia NZ → LLM emitted _"rideshare Kiwi, opérateur JAXA, pays Japon"_. "Kiwi" was composed from the launch-site country nickname; JAXA (the rideshare customer) was swapped for the operator. New rules mandate verbatim mission/operator names with the exact counter-example, and explicitly separate OPERATOR (`operatorName`) from CUSTOMER (found in `missionName`/`missionDescription`).
+
+- **`NUMERIC FIDELITY` rule extended to temporal projections.** Original rule covered country/regime ratios (e.g. _"China vs USA debris ×2.3"_) but a post-restart cycle still fabricated _"densité ×200 du LEO 590-630 km"_ for the Kuiper/Qianfan convergence with no baseline/target pair in DATA. Web-verified against eoPortal, Wikipedia, Deloitte TMT 2026: no published source expresses that shell's density growth as a `×200` factor. Rule now covers any multiplier/ratio/percentage including temporal projections, with qualitative-language fallback when numerator+denominator aren't both in DATA.
+
+**Validation.** Cycle 320 (post all fixes) for query _"SpaceX vs non-SpaceX next 7 days, vehicle/NET/mission/operator/country, counts by operator"_: 6 per-row findings, all in horizon, all verbatim:
+
+| #   | Finding                                                                       |
+| --- | ----------------------------------------------------------------------------- |
+| 981 | Falcon 9 · Starlink Group 17-22 · SpaceX — 2026-04-18                         |
+| 982 | New Glenn · BlueBird Block 2 #2 · Blue Origin — 2026-04-19                    |
+| 983 | Falcon 9 · GPS III SV10 · SpaceX — 2026-04-20                                 |
+| 984 | Electron · Bubbles · Rocket Lab — 2026-04-22                                  |
+| 985 | Falcon 9 · Starlink Group 17-14 · SpaceX — 2026-04-22                         |
+| 986 | Electron · **Kakushin Rising (JAXA Rideshare)** · **Rocket Lab** — 2026-04-23 |
+
+Briefing counts: SpaceX 3, Rocket Lab 2, Blue Origin 1 — matches DB ground truth. No fabricated names, no J+8/J+10 launches leaking in as in-horizon, no thematic aggregates.
+
+**Residual minor issues** (non-blocking): `HASTE | Bubbles` truncated to `Bubbles` in the LLM's summary (compound-name paraphrase); `externalLaunchId` present in evidence but not surfaced in summary text. Both are skill-prompt tweaks, not structural bugs.
+
 ### console-api test pyramid + polish fixes — 2026-04-16
 
 **Test reorganization.** All console-api tests moved into a single pyramidal

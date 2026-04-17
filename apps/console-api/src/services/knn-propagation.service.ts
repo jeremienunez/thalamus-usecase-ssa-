@@ -1,7 +1,10 @@
 // apps/console-api/src/services/knn-propagation.service.ts
-import type { SatelliteRepository } from "../repositories/satellite.repository";
-import type { SweepAuditRepository } from "../repositories/sweep-audit.repository";
 import type { EnrichmentFindingService } from "./enrichment-finding.service";
+import { toKnnSampleFillView } from "../transformers/knn-propagation.transformer";
+import type {
+  AuditInsertInput,
+  KnnSampleFillView,
+} from "../types/sweep.types";
 import { MISSION_WRITABLE_COLUMNS, inRange } from "../utils/field-constraints";
 
 export type PropagateInput = {
@@ -21,19 +24,37 @@ export type PropagateStats = {
   disagree: number;
   tooFar: number;
   outOfRange: number;
-  sampleFills: Array<{
-    id: string;
-    name: string;
-    value: string | number;
-    neighbourIds: string[];
-    cosSim: number;
-  }>;
+  sampleFills: KnnSampleFillView[];
 };
+
+// ── Ports (structural — repos satisfy by duck typing) ────────────
+export interface SatellitesKnnPort {
+  listNullCandidatesForField(
+    field: string,
+    limit: number,
+  ): Promise<{ id: string; name: string }[]>;
+  knnNeighboursForField(
+    targetId: bigint,
+    field: string,
+    k: number,
+  ): Promise<
+    Array<{ id: string; value: string | number | null; cos_distance: number }>
+  >;
+  updateField(
+    satelliteId: bigint,
+    field: string,
+    value: string | number,
+  ): Promise<void>;
+}
+
+export interface SweepAuditWritePort {
+  insertEnrichmentSuccess(input: AuditInsertInput): Promise<void>;
+}
 
 export class KnnPropagationService {
   constructor(
-    private readonly satellites: SatelliteRepository,
-    private readonly audit: SweepAuditRepository,
+    private readonly satellites: SatellitesKnnPort,
+    private readonly audit: SweepAuditWritePort,
     private readonly enrichment: EnrichmentFindingService,
   ) {}
 
@@ -131,13 +152,15 @@ export class KnnPropagationService {
       }
       stats.filled++;
       if (stats.sampleFills.length < 10) {
-        stats.sampleFills.push({
-          id: t.id,
-          name: t.name,
-          value: consensus,
-          neighbourIds: neighbourIds.slice(0, 3),
-          cosSim: Number(cosSim.toFixed(3)),
-        });
+        stats.sampleFills.push(
+          toKnnSampleFillView({
+            id: t.id,
+            name: t.name,
+            value: consensus,
+            neighbourIds,
+            cosSim,
+          }),
+        );
       }
     }
 

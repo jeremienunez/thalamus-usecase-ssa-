@@ -1,5 +1,9 @@
 /**
- * Cortex Registry — Discovers cortex skills from server/src/agent/cortices/skills/
+ * Cortex Registry — Discovers cortex skills from a caller-provided directory.
+ *
+ * Port-style: the kernel has no default skill location. Callers (apps, CLIs,
+ * tests) inject the path to their domain's skill pack. SSA skills live in
+ * apps/console-api/src/agent/ssa/skills/; other domains provide their own.
  *
  * At startup, reads all .md files in the skills/ directory.
  * Parses YAML frontmatter for routing metadata (name, description, sqlHelper, params).
@@ -8,11 +12,8 @@
  */
 
 import { readFileSync, readdirSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { createLogger } from "@interview/shared/observability";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const logger = createLogger("cortex-registry");
 
@@ -104,11 +105,8 @@ function parseSkillFile(content: string, filePath: string): CortexSkill | null {
 
 export class CortexRegistry {
   private skills = new Map<string, CortexSkill>();
-  private skillsDir: string;
 
-  constructor(skillsDir?: string) {
-    this.skillsDir = skillsDir ?? join(__dirname, "skills");
-  }
+  constructor(private skillsDir: string) {}
 
   /**
    * Discover all .md skill files in the skills/ directory.

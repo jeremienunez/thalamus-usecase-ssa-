@@ -5,18 +5,77 @@
 
 import { createLogger } from "@interview/shared/observability";
 import { createHash } from "node:crypto";
-import type { ResearchFindingRepository } from "../repositories/research-finding.repository";
-import type { ResearchEdgeRepository } from "../repositories/research-edge.repository";
-import type { ResearchCycleRepository } from "../repositories/research-cycle.repository";
 import type { VoyageEmbedder } from "../utils/voyage-embedder";
 import type {
   ResearchFinding,
+  ResearchEdge,
   NewResearchFinding,
   NewResearchEdge,
-} from "../entities/research.entity";
+} from "../types/research.types";
 import { ResearchEntityType, ResearchRelation } from "@interview/shared/enum";
 import type { ResearchCortex, ResearchFindingType } from "@interview/shared/enum";
-import type { EntityNameResolver } from "../repositories/entity-name-resolver";
+
+// ── Ports (structural — repos satisfy these by duck typing) ────────
+export interface FindingsGraphPort {
+  upsertByDedupHash(
+    data: NewResearchFinding,
+  ): Promise<{ finding: ResearchFinding; inserted: boolean }>;
+  findSimilar(
+    embedding: number[],
+    threshold: number,
+    limit: number,
+    entityFilter?: { entityType: string; entityId: number | bigint },
+  ): Promise<Array<ResearchFinding & { similarity: number }>>;
+  mergeFinding(
+    id: bigint,
+    data: { confidence: number; evidence: unknown[] },
+  ): Promise<void>;
+  findById(id: bigint): Promise<ResearchFinding | null>;
+  findByEntity(
+    entityType: ResearchEntityType,
+    entityId: bigint,
+    opts?: { minConfidence?: number; limit?: number },
+  ): Promise<ResearchFinding[]>;
+  searchBySimilarity(
+    embedding: number[],
+    limit?: number,
+  ): Promise<Array<ResearchFinding & { similarity: number }>>;
+  findActive(opts?: {
+    cortex?: ResearchCortex;
+    findingType?: ResearchFindingType;
+    minConfidence?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<ResearchFinding[]>;
+  archive(id: bigint): Promise<void>;
+  expireOld(): Promise<number>;
+  countByCortexAndType(): Promise<
+    Array<{ cortex: string; finding_type: string; cnt: number }>
+  >;
+  countRecent24h(): Promise<number>;
+  linkToCycle(opts: {
+    cycleId: bigint;
+    findingId: bigint;
+    iteration: number;
+    isDedupHit: boolean;
+  }): Promise<void>;
+}
+
+export interface EdgesGraphPort {
+  createMany(edges: NewResearchEdge[]): Promise<ResearchEdge[]>;
+  findByFinding(findingId: bigint): Promise<ResearchEdge[]>;
+  findByFindings(findingIds: bigint[]): Promise<ResearchEdge[]>;
+  cleanOrphans(): Promise<number>;
+  countByEntityType(): Promise<Array<{ entity_type: string; cnt: number }>>;
+}
+
+export interface CyclesGraphPort {
+  incrementFindings(id: bigint): Promise<void>;
+}
+
+export interface EntityNamePort {
+  resolve(refs: Array<{ entityType: string; entityId: bigint }>): Promise<Map<string, string>>;
+}
 
 const logger = createLogger("research-graph");
 
@@ -39,11 +98,11 @@ export class ResearchGraphService {
   private onFindingStored: FindingCallback[] = [];
 
   constructor(
-    private findingRepo: ResearchFindingRepository,
-    private edgeRepo: ResearchEdgeRepository,
-    private cycleRepo: ResearchCycleRepository,
+    private findingRepo: FindingsGraphPort,
+    private edgeRepo: EdgesGraphPort,
+    private cycleRepo: CyclesGraphPort,
     private embedder: VoyageEmbedder,
-    private entityResolver?: EntityNameResolver,
+    private entityResolver?: EntityNamePort,
   ) {}
 
   /**
@@ -65,66 +124,116 @@ export class ResearchGraphService {
     const text = `${input.finding.title}\n${input.finding.summary}`;
     const embedding = await this.embedder.embedQuery(text);
 
-    // 2. Semantic dedup: cosine >= 0.92 AND same primary entity
-    //    Two findings about different entities never merge, regardless of structural similarity
+    // 2. Semantic dedup: cosine >= 0.92 AND same primary entity AND same
+    //    finding type. Two findings about different entities never merge —
+    //    and unanchored findings (entityId=0, skill emitted an entityRef
+    //    the kernel can't resolve yet) don't dedup semantically either, to
+    //    avoid collapsing every unresolved launch finding onto whichever
+    //    thematic finding happens to have the closest embedding.
+    //
+    //    Finding-type gate prevents a specific "opportunity" (e.g. rideshare
+    //    launch) from being merged onto a thematic "alert" just because the
+    //    embeddings cluster around the same operator/constellation.
     const primaryEdgeForDedup = input.edges[0];
-    if (embedding) {
+    const hasResolvedAnchor =
+      primaryEdgeForDedup !== undefined &&
+      primaryEdgeForDedup.entityId !== 0n &&
+      primaryEdgeForDedup.entityId !== BigInt(0);
+    if (embedding && hasResolvedAnchor) {
       const nearDuplicates = await this.findingRepo.findSimilar(
         embedding,
         0.92,
-        1,
-        primaryEdgeForDedup
-          ? {
-              entityType: primaryEdgeForDedup.entityType,
-              entityId: primaryEdgeForDedup.entityId,
-            }
-          : undefined,
+        3,
+        {
+          entityType: primaryEdgeForDedup!.entityType,
+          entityId: primaryEdgeForDedup!.entityId,
+        },
       );
-      if (nearDuplicates.length > 0) {
-        const existing = nearDuplicates[0];
+      const sameType = nearDuplicates.find(
+        (f) => f.findingType === input.finding.findingType,
+      );
+      if (sameType) {
         logger.info(
           {
-            existingId: String(existing.id),
-            similarity: nearDuplicates[0].similarity,
+            existingId: String(sameType.id),
+            similarity: sameType.similarity,
+            findingType: input.finding.findingType,
             newTitle: input.finding.title,
           },
           "Semantic dedup: merging into existing finding",
         );
-        await this.findingRepo.mergeFinding(existing.id, {
-          confidence: Math.max(existing.confidence, input.finding.confidence),
+        await this.findingRepo.mergeFinding(sameType.id, {
+          confidence: Math.max(sameType.confidence, input.finding.confidence),
           evidence: Array.isArray(input.finding.evidence)
             ? input.finding.evidence
             : [],
         });
-        // Still count it for the cycle
+        // Still count it for the cycle and link via junction so the
+        // summariser sees this re-emission when it queries the cycle.
         await this.cycleRepo.incrementFindings(input.finding.researchCycleId);
-        return existing;
+        await this.findingRepo.linkToCycle({
+          cycleId: input.finding.researchCycleId,
+          findingId: sameType.id,
+          iteration: input.finding.iteration ?? 0,
+          isDedupHit: true,
+        });
+        return sameType;
       }
     }
 
-    // 3. Hash dedup + insert (existing logic)
+    // 3. Hash dedup + insert. Hash key bucketises by (cortex, entity,
+    //    findingType) so same-entity same-type re-emissions collapse, but
+    //    falls back to a timestamped key for unanchored findings to avoid
+    //    every unresolved edge colliding onto the same bucket.
     const primaryEdge = input.edges[0];
-    const dedupKey = primaryEdge
-      ? `${input.finding.cortex}:${primaryEdge.entityType}:${primaryEdge.entityId}:${input.finding.findingType}`
-      : `${input.finding.cortex}:${input.finding.researchCycleId}:${Date.now()}`;
+    const hasHashAnchor =
+      primaryEdge !== undefined &&
+      primaryEdge.entityId !== 0n &&
+      primaryEdge.entityId !== BigInt(0);
+    const dedupKey = hasHashAnchor
+      ? `${input.finding.cortex}:${primaryEdge!.entityType}:${primaryEdge!.entityId}:${input.finding.findingType}`
+      : `${input.finding.cortex}:${input.finding.researchCycleId}:${Date.now()}:${input.finding.title.slice(0, 64)}`;
     const dedupHash = createHash("sha256")
       .update(dedupKey)
       .digest("hex")
       .slice(0, 32);
 
-    const finding = await this.findingRepo.upsertByDedupHash({
+    const { finding, inserted } = await this.findingRepo.upsertByDedupHash({
       ...input.finding,
       embedding,
       dedupHash,
     });
 
-    // 4. Create entity edges
-    if (input.edges.length > 0) {
-      const edges = input.edges.map((e) => ({
-        ...e,
+    if (!inserted) {
+      // Hit on dedup_hash — finding already exists with edges + cross-links.
+      // Skip steps 4–7 to avoid duplicate edges and inflated cycle counts,
+      // but still link to the current cycle so the summariser sees this
+      // re-emission instead of receiving a partial cycle view.
+      await this.findingRepo.linkToCycle({
+        cycleId: input.finding.researchCycleId,
         findingId: finding.id,
-      }));
-      await this.edgeRepo.createMany(edges);
+        iteration: input.finding.iteration ?? 0,
+        isDedupHit: true,
+      });
+      logger.debug(
+        {
+          findingId: String(finding.id),
+          dedupHash,
+          iteration: finding.iteration,
+        },
+        "Finding upserted (dedup hit, side effects skipped)",
+      );
+      return finding;
+    }
+
+    // 4. Create entity edges (skip unresolved entity_id=0 sentinels)
+    if (input.edges.length > 0) {
+      const edges = input.edges
+        .filter((e) => e.entityId !== 0n && e.entityId !== BigInt(0))
+        .map((e) => ({ ...e, findingId: finding.id }));
+      if (edges.length > 0) {
+        await this.edgeRepo.createMany(edges);
+      }
     }
 
     // 5. Cross-link: find related findings (cosine 0.7–0.92) → create finding→finding edges
@@ -136,13 +245,14 @@ export class ResearchGraphService {
           .slice(0, 3);
 
         if (crossLinks.length > 0) {
-          const linkEdges = crossLinks.map((r) => ({
+          const linkEdges: NewResearchEdge[] = crossLinks.map((r) => ({
             findingId: finding.id,
-            entityType: ResearchEntityType.Finding as string,
+            entityType: ResearchEntityType.Finding,
             entityId: r.id,
-            relation: (r.similarity > 0.85
-              ? ResearchRelation.Supports
-              : ResearchRelation.SimilarTo) as string,
+            relation:
+              r.similarity > 0.85
+                ? ResearchRelation.Supports
+                : ResearchRelation.SimilarTo,
             weight: r.similarity,
             context: {
               similarity: r.similarity,
@@ -167,8 +277,14 @@ export class ResearchGraphService {
       }
     }
 
-    // 6. Increment cycle finding count
+    // 6. Increment cycle finding count + link to junction
     await this.cycleRepo.incrementFindings(input.finding.researchCycleId);
+    await this.findingRepo.linkToCycle({
+      cycleId: input.finding.researchCycleId,
+      findingId: finding.id,
+      iteration: input.finding.iteration ?? 0,
+      isDedupHit: false,
+    });
 
     logger.info(
       {

@@ -5,7 +5,7 @@ import type {
   KgRegimeRow,
   KgFindingRow,
   KgEdgeRow,
-} from "../repositories/kg.repository";
+} from "../types/kg.types";
 
 export function toRegimeNode(r: KgRegimeRow): KgNode {
   return {

@@ -5,9 +5,14 @@
 import { eq, desc, sql } from "drizzle-orm";
 import { researchCycle, type Database } from "@interview/db-schema";
 import type {
+  ResearchCycleEntity,
+  NewResearchCycleEntity,
+} from "../entities/research.entity";
+import type {
   ResearchCycle,
   NewResearchCycle,
-} from "../entities/research.entity";
+} from "../types/research.types";
+import { toResearchCycle } from "../transformers/research.transformer";
 import type { ResearchCycleStatus } from "@interview/shared/enum";
 
 export class ResearchCycleRepository {
@@ -16,9 +21,9 @@ export class ResearchCycleRepository {
   async create(data: NewResearchCycle): Promise<ResearchCycle> {
     const [result] = await this.db
       .insert(researchCycle)
-      .values(data)
+      .values(data as NewResearchCycleEntity)
       .returning();
-    return result;
+    return toResearchCycle(result);
   }
 
   async findById(id: bigint): Promise<ResearchCycle | null> {
@@ -27,7 +32,7 @@ export class ResearchCycleRepository {
       .from(researchCycle)
       .where(eq(researchCycle.id, id))
       .limit(1);
-    return result ?? null;
+    return result ? toResearchCycle(result) : null;
   }
 
   async updateStatus(
@@ -56,10 +61,11 @@ export class ResearchCycleRepository {
   }
 
   async findRecent(limit = 20): Promise<ResearchCycle[]> {
-    return this.db
+    const rows = await this.db
       .select()
       .from(researchCycle)
       .orderBy(desc(researchCycle.startedAt))
       .limit(limit);
+    return rows.map(toResearchCycle);
   }
 }
