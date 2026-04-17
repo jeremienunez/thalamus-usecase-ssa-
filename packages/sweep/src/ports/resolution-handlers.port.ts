@@ -16,6 +16,11 @@ export interface ResolutionActionContext {
   reviewerNote: string | null;
   /** Selectors from the original .resolve(id, selections) 2-arg façade. */
   selectors?: Record<string, unknown>;
+  /**
+   * Domain-scoped suggestion metadata the engine extracts from the generic
+   * row's domainFields. SSA handlers read `operatorCountryId` here.
+   */
+  domainContext?: Record<string, unknown>;
 }
 
 export interface ResolutionSelectionOption {
