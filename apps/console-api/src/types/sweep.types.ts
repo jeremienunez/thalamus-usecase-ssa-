@@ -46,6 +46,39 @@ export type AuditInsertInput = {
   resolutionPayload: unknown;
 };
 
+/**
+ * Durable audit row written by SsaPromotionAdapter after a resolution
+ * succeeds. Mirrors the shape written today by sweep-resolution.service's
+ * writeAudit() private method — see packages/sweep/src/services/
+ * sweep-resolution.service.ts:210-257.
+ *
+ * Unlike AuditInsertInput (used by mission/knn enrichment flows and forces
+ * category='enrichment'/severity='info'), this shape carries the full
+ * reviewer-visible category/severity and the full resolution outcome.
+ */
+export type ResolutionAuditInsertInput = {
+  suggestionId: string;
+  operatorCountryId: string | null;
+  operatorCountryName: string;
+  /** One of the SweepCategory enum values; validated at drizzle insert. */
+  category: string;
+  /** One of the SweepSeverity enum values; validated at drizzle insert. */
+  severity: string;
+  title: string;
+  description: string;
+  suggestedAction: string;
+  affectedSatellites: number;
+  webEvidence: string | null;
+  accepted: boolean;
+  reviewerNote: string | null;
+  reviewedAt: string;
+  /** One of the SweepResolutionStatus enum values. */
+  resolutionStatus: "success" | "partial" | "failed" | "pending_selection";
+  resolutionPayload: unknown;
+  resolutionErrors: string[] | null;
+  resolvedAt: string;
+};
+
 // ── Suggestion list DTOs ────────────────────────────────────────────
 export type SweepSuggestionRow = {
   id: string;
