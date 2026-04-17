@@ -17,7 +17,14 @@ import {
 import type { NewSatellite as DrizzleNewSatellite } from "@interview/db-schema";
 import { toSlug } from "@interview/shared/utils";
 import type { TelemetryScalars } from "../types/satellite.types";
-import type { CorrectionEntry } from "../utils/doctrine-parser";
+// Inlined from utils/doctrine-parser (moved to apps/console-api/src/agent/ssa/sweep)
+// in Plan 1 Task 1.6. This repo is folded into SatelliteAuditService in Phase 4.
+interface CorrectionEntry {
+  from: string | null;
+  to: string;
+  date: string;
+  reason: string;
+}
 import { createLogger } from "@interview/shared/observability";
 import { escapeIlike } from "../utils/sql-helpers";
 
