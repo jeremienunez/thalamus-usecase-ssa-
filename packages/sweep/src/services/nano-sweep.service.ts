@@ -1,17 +1,34 @@
 /**
- * Nano Sweep Service — full DB audit via nano swarm (SSA satellite catalog).
+ * Nano Sweep Service — domain-agnostic façade + legacy SSA audit provider.
  *
- * Validates satellite data integrity by operator-country batches. Uses injected repos
- * for all SQL. Nano calls go through shared nano-caller.
+ * Plan 1 Task 2.2 split:
+ *   - `NanoSweepService` (façade): preserves the public `sweep(limit, mode)`
+ *     signature callers depend on (CycleRunnerService, AdminSweepController,
+ *     sweep.worker). Delegates candidate generation to an injected
+ *     DomainAuditProvider, persists via SweepRepository.insertGeneric,
+ *     fires completion callbacks. Zero domain knowledge.
  *
- * Flow: gather stats (SatelliteRepo) → batch → nano validate → store (SweepRepo)
+ *   - `LegacyNanoSweepAuditProvider`: wraps the original nano-sweep body
+ *     (the full SSA audit pipeline — nullScan / dataQuality / briefing)
+ *     behind the DomainAuditProvider port. Lives in sweep for now because
+ *     packages can't import from apps/console-api, and the sweep container
+ *     needs a default audit provider when opts.ports.audit isn't supplied.
+ *     Duplicated with apps/console-api/src/agent/ssa/sweep/audit-provider.ssa.ts;
+ *     Phase 4 removes this copy once the console-api container is the sole
+ *     wiring path.
  */
 
+import { randomUUID } from "node:crypto";
 import { createLogger } from "@interview/shared/observability";
 import {
   callNanoWaves,
   type NanoRequest,
 } from "@interview/thalamus/explorer/nano-caller";
+import type {
+  AuditCandidate,
+  AuditCycleContext,
+  DomainAuditProvider,
+} from "../ports";
 import type {
   SweepRepository,
   InsertSuggestion,
@@ -20,7 +37,6 @@ import type {
 import type { SatelliteRepository } from "../repositories/satellite.repository";
 import type {
   SweepCategory,
-  SweepMode,
   SweepSeverity,
 } from "../transformers/sweep.dto";
 import { resolutionPayloadSchema } from "../transformers/sweep.dto";
@@ -28,19 +44,8 @@ import { resolutionPayloadSchema } from "../transformers/sweep.dto";
 const logger = createLogger("nano-sweep");
 
 const BATCH_SIZE = 10; // operator-countries per nano call
-
-/**
- * Null-scan: bound the satellite IDs bundled in each suggestion's resolution
- * payload. Reviewer can accept/reject the lot; if more rows are affected than
- * the cap, another suggestion covers the residual (auto-surfaces on next sweep).
- */
 const NULL_SCAN_MAX_IDS_PER_SUGGESTION = 200;
 
-/**
- * Per-column backfill citation — tells the reviewer WHERE the missing value
- * should come from, not just that it's missing. Column keys match the
- * `satellite` Drizzle schema.
- */
 function backfillCitationFor(column: string): string {
   const mapping: Record<string, string> = {
     mass_kg:
@@ -49,15 +54,12 @@ function backfillCitationFor(column: string): string {
       "Back-fill from GCAT `Bus` field cross-referenced with `satellite_bus.name`.",
     platform_class_id:
       "Infer from CelesTrak GROUP (gps-ops → navigation, starlink → communications, weather → earth_observation, military → military, science → science).",
-    launch_year:
-      "Derive from GCAT `LDate` or CelesTrak TLE epoch.",
+    launch_year: "Derive from GCAT `LDate` or CelesTrak TLE epoch.",
     operator_country_id:
       "Infer from GCAT `State` field or operator home jurisdiction.",
-    operator_id:
-      "Infer from GCAT `Owner` field or operator master list.",
+    operator_id: "Infer from GCAT `Owner` field or operator master list.",
   };
   if (mapping[column]) return mapping[column]!;
-  // Operator-private 14D telemetry: no public source.
   const privateTelemetry = new Set([
     "power_draw",
     "thermal_margin",
@@ -77,8 +79,6 @@ function backfillCitationFor(column: string): string {
   }
   return `Back-fill "${column}" from operator ingest or operator datasheet.`;
 }
-
-// ─── Types ───────────────────────────────────────────────────────────
 
 interface OperatorCountryBatch {
   operatorCountries: Array<{
@@ -103,6 +103,27 @@ interface OperatorCountryBatch {
   }>;
 }
 
+const CATEGORIES = new Set([
+  "mass_anomaly",
+  "missing_data",
+  "doctrine_mismatch",
+  "relationship_error",
+  "enrichment",
+  "briefing_angle",
+]);
+function validCategory(c: string): SweepCategory {
+  return CATEGORIES.has(c) ? (c as SweepCategory) : "enrichment";
+}
+function validSeverity(s: string): SweepSeverity {
+  return s === "critical" || s === "warning" || s === "info" ? s : "info";
+}
+
+/**
+ * Reported by NanoSweepService.sweep for completion callbacks + the admin
+ * reporter. Post-refactor, fields sourced from the audit provider are
+ * filled at best-effort: suggestionsStored is authoritative, the rest
+ * are provider-specific and zero-filled when the port doesn't expose them.
+ */
 export interface SweepResult {
   totalOperatorCountries: number;
   totalCalls: number;
@@ -112,49 +133,35 @@ export interface SweepResult {
   estimatedCost: number;
 }
 
-// ─── Service ─────────────────────────────────────────────────────────
-
 export type SweepCompleteCallback = (result: SweepResult) => Promise<void>;
 
-export class NanoSweepService {
-  private onCompleteCallbacks: SweepCompleteCallback[] = [];
+// ─── Legacy SSA audit provider ───────────────────────────────────────
+//
+// Transitional — preserves the exact runtime behavior of the pre-refactor
+// NanoSweepService.sweep() body. Kept inside the sweep package so the
+// container's default path works without importing from apps/console-api.
+// Duplicated with apps/console-api/src/agent/ssa/sweep/audit-provider.ssa.ts;
+// Phase 4 collapses the duplication once console-api becomes the sole
+// wiring point.
 
+export class LegacyNanoSweepAuditProvider implements DomainAuditProvider {
   constructor(
-    private satelliteRepo: SatelliteRepository,
-    private sweepRepo: SweepRepository,
+    private readonly satelliteRepo: SatelliteRepository,
+    private readonly sweepRepo: Pick<SweepRepository, "loadPastFeedback">,
   ) {}
 
-  onComplete(cb: SweepCompleteCallback): void {
-    this.onCompleteCallbacks.push(cb);
-  }
-
-  async sweep(
-    maxOperatorCountries?: number,
-    mode: SweepMode = "dataQuality",
-  ): Promise<SweepResult> {
-    // Deterministic null-scan path: no LLM, no nano waves. One suggestion
-    // per (operator_country × nullable scalar column) where null_fraction
-    // crosses threshold. Covers every scalar column on satellite today and
-    // auto-adapts when new columns land (information_schema introspection).
-    if (mode === "nullScan") {
-      return this.nullScanSweep({ maxOperatorCountries });
+  async runAudit(ctx: AuditCycleContext): Promise<AuditCandidate[]> {
+    if (ctx.mode === "nullScan") {
+      return this.nullScan(ctx.limit);
     }
-
-    const start = Date.now();
-
-    // 1. Gather operator-country data via existing repos
-    const operatorCountries = await this.gatherOperatorCountryData(
-      maxOperatorCountries,
-    );
+    const operatorCountries = await this.gatherOperatorCountryData(ctx.limit);
     logger.info(
-      { count: operatorCountries.length, mode },
-      "OperatorCountries gathered for sweep",
+      { cycleId: ctx.cycleId, count: operatorCountries.length, mode: ctx.mode },
+      "legacy audit provider: operator-countries gathered",
     );
 
-    // 2. Load past reviewer feedback for self-improvement
     const feedback = await this.sweepRepo.loadPastFeedback();
 
-    // 3. Build batches
     const batches: OperatorCountryBatch[] = [];
     for (let i = 0; i < operatorCountries.length; i += BATCH_SIZE) {
       batches.push({
@@ -162,97 +169,39 @@ export class NanoSweepService {
       });
     }
 
-    // 4. Execute nano waves — each batch = 1 nano call
     const results = await callNanoWaves(batches, (batch) =>
-      mode === "briefing"
+      ctx.mode === "briefing"
         ? this.buildBriefingRequest(batch)
         : this.buildNanoRequest(batch, feedback),
     );
 
-    // 5. Parse + store suggestions
-    const allSuggestions: InsertSuggestion[] = [];
-    let successCalls = 0;
-
+    const candidates: AuditCandidate[] = [];
     for (const r of results) {
       if (!r.ok) continue;
-      successCalls++;
-
-      const batch = batches[r.index];
+      const batch = batches[r.index]!;
       const parsed = this.parseSuggestions(r.text, batch);
-      if (mode === "briefing") {
+      if (ctx.mode === "briefing") {
         for (const s of parsed) {
-          s.category = "briefing_angle";
-          s.severity = "info";
-          s.affectedSatellites = 0;
+          (s.domainFields as Record<string, unknown>).category =
+            "briefing_angle";
+          (s.domainFields as Record<string, unknown>).severity = "info";
+          (s.domainFields as Record<string, unknown>).affectedSatellites = 0;
         }
       }
-      allSuggestions.push(...parsed);
+      candidates.push(...parsed);
     }
-
-    const stored = await this.sweepRepo.insertMany(allSuggestions);
-
-    const result: SweepResult = {
-      totalOperatorCountries: operatorCountries.length,
-      totalCalls: results.length,
-      successCalls,
-      suggestionsStored: stored,
-      wallTimeMs: Date.now() - start,
-      estimatedCost:
-        (results.length * 2000 * 0.2 + results.length * 1000 * 1.25) /
-        1_000_000,
-    };
-
-    logger.info(
-      {
-        operatorCountries: result.totalOperatorCountries,
-        suggestions: result.suggestionsStored,
-        cost: `$${result.estimatedCost.toFixed(3)}`,
-        wallTime: `${(result.wallTimeMs / 1000).toFixed(0)}s`,
-      },
-      "Nano sweep complete",
-    );
-
-    // Fire completion callbacks (messaging notifications)
-    for (const cb of this.onCompleteCallbacks) {
-      try {
-        await cb(result);
-      } catch (err) {
-        logger.error({ err }, "Sweep onComplete callback failed");
-      }
-    }
-
-    return result;
+    return candidates;
   }
 
-  /**
-   * Null-scan mode — deterministic, LLM-free, cheap data-quality audit.
-   *
-   * Pipeline per (operator_country × nullable scalar column):
-   *   1. `satelliteRepo.nullScanByColumn` aggregates null_fraction per column
-   *      per operator country from information_schema introspection.
-   *   2. Suggestions above the configured threshold get their actual
-   *      satellite IDs via `findSatelliteIdsWithNullColumn` so the resolution
-   *      payload can be executed against a concrete row set.
-   *   3. Severity is graduated: ≥50% → critical, ≥25% → warning, else info.
-   *   4. `suggestedAction` carries a column-specific backfill citation
-   *      (GCAT for mass/bus/launch_year, CelesTrak GROUPs for platform_class,
-   *      sim-fish for operator-private 14D telemetry). Reviewer sees where
-   *      the data should come from, not just that it's missing.
-   *   5. Resolution payload ships the real satelliteIds so accept =
-   *      immediate update once the reviewer supplies a value.
-   */
-  private async nullScanSweep(opts: {
-    maxOperatorCountries?: number;
-  }): Promise<SweepResult> {
-    const start = Date.now();
+  private async nullScan(
+    maxOperatorCountries: number,
+  ): Promise<AuditCandidate[]> {
     const rows = await this.satelliteRepo.nullScanByColumn({
-      maxOperatorCountries: opts.maxOperatorCountries,
+      maxOperatorCountries:
+        maxOperatorCountries > 0 ? maxOperatorCountries : undefined,
     });
-
-    const suggestions: InsertSuggestion[] = [];
+    const out: AuditCandidate[] = [];
     for (const r of rows) {
-      // Pull a bounded sample of satellite IDs so the resolution payload
-      // can actually execute when a reviewer accepts.
       const satelliteIds = await this.satelliteRepo
         .findSatelliteIdsWithNullColumn({
           column: r.column,
@@ -260,7 +209,6 @@ export class NanoSweepService {
           limit: NULL_SCAN_MAX_IDS_PER_SUGGESTION,
         })
         .catch((): bigint[] => []);
-
       const pct = Math.round(r.nullFraction * 100);
       const severity: "critical" | "warning" | "info" =
         r.nullFraction >= 0.5
@@ -268,70 +216,45 @@ export class NanoSweepService {
           : r.nullFraction >= 0.25
             ? "warning"
             : "info";
-
-      suggestions.push({
-        operatorCountryId: r.operatorCountryId,
-        operatorCountryName: r.operatorCountryName,
-        category: "missing_data",
-        severity,
-        title: `${r.operatorCountryName}: ${pct}% of ${r.totalSatellites} satellites missing ${r.column}`,
-        description:
-          `${r.nullCount}/${r.totalSatellites} rows have a null value on ` +
-          `"${r.column}" for operator country "${r.operatorCountryName}". ` +
-          `Detected by deterministic null-scan (no LLM, information_schema introspection).`,
-        affectedSatellites: r.nullCount,
-        suggestedAction: backfillCitationFor(r.column),
-        webEvidence: null,
+      out.push({
+        domainFields: {
+          operatorCountryId: r.operatorCountryId,
+          operatorCountryName: r.operatorCountryName,
+          category: "missing_data",
+          severity,
+          title: `${r.operatorCountryName}: ${pct}% of ${r.totalSatellites} satellites missing ${r.column}`,
+          description:
+            `${r.nullCount}/${r.totalSatellites} rows have a null value on ` +
+            `"${r.column}" for operator country "${r.operatorCountryName}". ` +
+            `Detected by deterministic null-scan (no LLM, information_schema introspection).`,
+          affectedSatellites: r.nullCount,
+          suggestedAction: backfillCitationFor(r.column),
+          webEvidence: null,
+        },
         resolutionPayload: JSON.stringify({
           actions: [
             {
               kind: "update_field",
               field: r.column,
-              value: null, // reviewer supplies the value at accept-time
+              value: null,
               satelliteIds: satelliteIds.map((id: bigint) => id.toString()),
             },
           ],
         }),
       });
     }
-
-    const stored = await this.sweepRepo.insertMany(suggestions);
-    const result: SweepResult = {
-      totalOperatorCountries: rows.length,
-      totalCalls: 0, // no LLM calls — this is the whole point of the mode
-      successCalls: 0,
-      suggestionsStored: stored,
-      wallTimeMs: Date.now() - start,
-      estimatedCost: 0,
-    };
-    logger.info(
-      {
-        rows: rows.length,
-        stored,
-        wallTime: `${result.wallTimeMs}ms`,
-      },
-      "Null-scan sweep complete",
-    );
-    for (const cb of this.onCompleteCallbacks) {
-      try {
-        await cb(result);
-      } catch (err) {
-        logger.error({ err }, "Sweep complete callback failed");
-      }
-    }
-    return result;
+    return out;
   }
 
-  // ─── Data gathering (delegates to repos) ───────────────────────────
-
   private async gatherOperatorCountryData(
-    maxOperatorCountries?: number,
+    maxOperatorCountries: number,
   ): Promise<OperatorCountryBatch["operatorCountries"]> {
-    const allStats = await this.satelliteRepo.getOperatorCountrySweepStats();
-    const limited = maxOperatorCountries
-      ? allStats.slice(0, maxOperatorCountries)
-      : allStats;
-
+    const allStats =
+      await this.satelliteRepo.getOperatorCountrySweepStats();
+    const limited =
+      maxOperatorCountries > 0
+        ? allStats.slice(0, maxOperatorCountries)
+        : allStats;
     return limited.map((a) => ({
       id: a.operatorCountryId,
       name: a.operatorCountryName,
@@ -350,8 +273,6 @@ export class NanoSweepService {
     }));
   }
 
-  // ─── Prompt building ───────────────────────────────────────────────
-
   private buildNanoRequest(
     batch: OperatorCountryBatch,
     feedback: PastFeedback[],
@@ -367,7 +288,6 @@ export class NanoSweepService {
         (f) =>
           `- ${f.operatorCountryName}: ${f.category} → ${f.wasAccepted ? "ACCEPTED" : "REJECTED"}${f.reviewerNote ? ` (${f.reviewerNote})` : ""}`,
       );
-
     const feedbackBlock =
       feedbackLines.length > 0
         ? `\n\nPast reviewer feedback (learn from this):\n${feedbackLines.join("\n")}`
@@ -421,12 +341,6 @@ Return [] if no issues. satelliteIds can be empty — resolution will target all
     };
   }
 
-  // ─── Briefing mode — same operator-country data, different ask ────
-  //
-  // Asks nano to surface mission-operator-facing story angles (fleet trends,
-  // doctrine changes, launch campaigns, regime-level shifts). Stored with
-  // category "briefing_angle" — filtered out of admin data-quality views,
-  // picked up by the briefing copilot.
   private buildBriefingRequest(batch: OperatorCountryBatch): NanoRequest {
     return {
       instructions: `You are a mission-operator briefing editor for an SSA catalog.
@@ -464,15 +378,12 @@ Return [] if no operator-country inspires. One angle per operator-country maximu
     };
   }
 
-  // ─── Response parsing ──────────────────────────────────────────────
-
   private parseSuggestions(
     text: string,
     batch: OperatorCountryBatch,
-  ): InsertSuggestion[] {
+  ): AuditCandidate[] {
     const match = text.match(/\[[\s\S]*\]/);
     if (!match) return [];
-
     let items: Record<string, unknown>[];
     try {
       const parsed = JSON.parse(match[0]);
@@ -480,7 +391,6 @@ Return [] if no operator-country inspires. One angle per operator-country maximu
     } catch {
       return [];
     }
-
     return items
       .filter((item) => item.operatorCountry && item.category && item.title)
       .map((item) => {
@@ -489,7 +399,6 @@ Return [] if no operator-country inspires. One angle per operator-country maximu
             a.name.toLowerCase() ===
             (item.operatorCountry as string).toLowerCase(),
         );
-        // Validate resolution payload if present
         let resolutionPayload: string | null = null;
         if (item.resolutionPayload) {
           const parsed = resolutionPayloadSchema.safeParse(
@@ -499,39 +408,101 @@ Return [] if no operator-country inspires. One angle per operator-country maximu
             resolutionPayload = JSON.stringify(parsed.data);
           }
         }
-
         return {
-          operatorCountryId: oc?.id ?? null,
-          operatorCountryName: (item.operatorCountry as string) ?? "",
-          category: validCategory(item.category as string),
-          severity: validSeverity(item.severity as string),
-          title: (item.title as string).slice(0, 200),
-          description: ((item.description as string) ?? "").slice(0, 1000),
-          affectedSatellites: Number(item.affectedSatellites) || 0,
-          suggestedAction: ((item.suggestedAction as string) ?? "").slice(
-            0,
-            500,
-          ),
-          webEvidence: (item.webEvidence as string) ?? null,
+          domainFields: {
+            operatorCountryId: oc?.id ?? null,
+            operatorCountryName: (item.operatorCountry as string) ?? "",
+            category: validCategory(item.category as string),
+            severity: validSeverity(item.severity as string),
+            title: (item.title as string).slice(0, 200),
+            description: ((item.description as string) ?? "").slice(0, 1000),
+            affectedSatellites: Number(item.affectedSatellites) || 0,
+            suggestedAction: ((item.suggestedAction as string) ?? "").slice(
+              0,
+              500,
+            ),
+            webEvidence: (item.webEvidence as string) ?? null,
+          } satisfies Partial<InsertSuggestion> &
+            Record<string, unknown>,
           resolutionPayload,
         };
       });
   }
 }
 
-// ─── Validators ──────────────────────────────────────────────────────
+// ─── NanoSweepService façade ─────────────────────────────────────────
 
-const CATEGORIES = new Set([
-  "mass_anomaly",
-  "missing_data",
-  "doctrine_mismatch",
-  "relationship_error",
-  "enrichment",
-  "briefing_angle",
-]);
-function validCategory(c: string): SweepCategory {
-  return CATEGORIES.has(c) ? (c as SweepCategory) : "enrichment";
+export interface NanoSweepDeps {
+  audit: DomainAuditProvider;
+  sweepRepo: SweepRepository;
+  /** Domain discriminator forwarded to SweepRepository.insertGeneric (e.g., "ssa"). */
+  domain: string;
 }
-function validSeverity(s: string): SweepSeverity {
-  return s === "critical" || s === "warning" || s === "info" ? s : "info";
+
+export class NanoSweepService {
+  private onCompleteCallbacks: SweepCompleteCallback[] = [];
+
+  constructor(private readonly deps: NanoSweepDeps) {}
+
+  onComplete(cb: SweepCompleteCallback): void {
+    this.onCompleteCallbacks.push(cb);
+  }
+
+  /**
+   * Façade preserved for CycleRunnerService + AdminSweepController +
+   * sweep.worker. Runs one audit wave via DomainAuditProvider and
+   * persists each candidate through SweepRepository.insertGeneric.
+   *
+   * @param maxOperatorCountries forwarded as AuditCycleContext.limit
+   *                              (0 = let the provider decide; preserves the
+   *                              pre-refactor optional-param behavior)
+   * @param mode passed through to the provider ("dataQuality" | "nullScan" |
+   *             "briefing" for SSA; other domains can mint their own strings).
+   */
+  async sweep(
+    maxOperatorCountries = 0,
+    mode = "dataQuality",
+  ): Promise<SweepResult> {
+    const cycleId = randomUUID();
+    const start = Date.now();
+    const candidates = await this.deps.audit.runAudit({
+      cycleId,
+      mode,
+      limit: maxOperatorCountries,
+    });
+
+    let stored = 0;
+    for (const c of candidates) {
+      await this.deps.sweepRepo.insertGeneric({
+        domain: this.deps.domain,
+        domainFields: c.domainFields,
+        resolutionPayload: c.resolutionPayload,
+      });
+      stored++;
+    }
+
+    const result: SweepResult = {
+      totalOperatorCountries: 0, // provider-specific; no longer engine-visible
+      totalCalls: 0,
+      successCalls: 0,
+      suggestionsStored: stored,
+      wallTimeMs: Date.now() - start,
+      estimatedCost: 0,
+    };
+
+    for (const cb of this.onCompleteCallbacks) {
+      try {
+        await cb(result);
+      } catch (err) {
+        logger.error({ err }, "sweep onComplete callback failed");
+      }
+    }
+
+    logger.info(
+      { cycleId, mode, stored, ms: result.wallTimeMs },
+      "nano sweep complete",
+    );
+
+    return result;
+  }
 }

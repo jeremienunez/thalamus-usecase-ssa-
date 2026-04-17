@@ -1,33 +1,26 @@
 /**
  * Nano Sweep Worker — weekly DB audit via nano swarm.
+ *
+ * Plan 1 Task 2.2: takes an injected NanoSweepService instead of
+ * constructing one in-process. The container wires it with the right
+ * DomainAuditProvider (injected port or legacy fallback).
  */
 
 import type { Worker } from "bullmq";
-import type { SatelliteRepository } from "../../repositories/satellite.repository";
-import type { SweepRepository } from "../../repositories/sweep.repository";
+import type { NanoSweepService } from "../../services/nano-sweep.service";
 import { createWorker } from "./helpers";
 import { createLogger } from "@interview/shared/observability";
 
 const logger = createLogger("worker:sweep");
 
 export function createSweepWorker(
-  satelliteRepo: SatelliteRepository,
-  sweepRepo: SweepRepository,
+  nanoSweepService: NanoSweepService,
 ): Worker {
-  let service:
-    | import("../../services/nano-sweep.service").NanoSweepService
-    | null = null;
-
   return createWorker({
     name: "sweep",
     processor: async () => {
-      if (!service) {
-        const { NanoSweepService } =
-          await import("../../services/nano-sweep.service");
-        service = new NanoSweepService(satelliteRepo, sweepRepo);
-        logger.info("Nano sweep service initialized");
-      }
-      return service.sweep();
+      logger.info("Nano sweep starting");
+      return nanoSweepService.sweep();
     },
   });
 }

@@ -23,7 +23,10 @@ import type {
 } from "../ports";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
-import { NanoSweepService } from "../services/nano-sweep.service";
+import {
+  NanoSweepService,
+  LegacyNanoSweepAuditProvider,
+} from "../services/nano-sweep.service";
 import { SweepResolutionService } from "../services/sweep-resolution.service";
 import { MessagingService } from "../services/messaging.service";
 import { AdminSweepController } from "../controllers/admin-sweep.controller";
@@ -104,10 +107,22 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
   const { db, redis } = opts;
 
   const satelliteRepo = new SatelliteRepository(db);
-  const sweepRepo = new SweepRepository(redis);
+  const sweepRepo = opts.ports?.findingSchema
+    ? new SweepRepository({ redis, schema: opts.ports.findingSchema })
+    : new SweepRepository(redis);
   const messagingService = new MessagingService();
 
-  const nanoSweepService = new NanoSweepService(satelliteRepo, sweepRepo);
+  // Audit provider: prefer injected port; otherwise fall back to the
+  // legacy SSA pipeline preserved inside the sweep package. Remove the
+  // fallback in Phase 4 once console-api is the sole wiring path.
+  const auditProvider =
+    opts.ports?.audit ??
+    new LegacyNanoSweepAuditProvider(satelliteRepo, sweepRepo);
+  const nanoSweepService = new NanoSweepService({
+    audit: auditProvider,
+    sweepRepo,
+    domain: "ssa",
+  });
   const resolutionService = new SweepResolutionService(
     satelliteRepo,
     sweepRepo,
