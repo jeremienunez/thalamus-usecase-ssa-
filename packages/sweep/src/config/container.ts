@@ -13,6 +13,14 @@ import type IORedis from "ioredis";
 import type { Database } from "@interview/db-schema";
 import type { CortexRegistry } from "@interview/thalamus";
 import type { ResearchGraphService } from "@interview/thalamus/services/research-graph.service";
+import type {
+  FindingDomainSchema,
+  DomainAuditProvider,
+  SweepPromotionAdapter,
+  FindingRoutingPolicy,
+  ResolutionHandlerRegistry,
+  IngestionSourceProvider,
+} from "../ports";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import { NanoSweepService } from "../services/nano-sweep.service";
@@ -75,6 +83,20 @@ export interface BuildSweepOpts {
     cortexRegistry: CortexRegistry;
     embed: EmbedFn;
     llmMode: "cloud" | "fixtures" | "record";
+  };
+  /**
+   * Optional port overrides. When a field is supplied, the container skips
+   * its legacy SSA-inlined construction and uses the injected port.
+   * Wired incrementally across Plan 1 Phases 2-3; unused here but typed so
+   * callers can start passing them without waiting for the full cutover.
+   */
+  ports?: {
+    findingSchema?: FindingDomainSchema;
+    audit?: DomainAuditProvider;
+    promotion?: SweepPromotionAdapter;
+    findingRouting?: FindingRoutingPolicy;
+    resolutionHandlers?: ResolutionHandlerRegistry;
+    ingestion?: IngestionSourceProvider[];
   };
 }
 
