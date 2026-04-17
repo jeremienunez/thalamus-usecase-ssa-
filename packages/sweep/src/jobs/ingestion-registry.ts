@@ -81,8 +81,16 @@ export class IngestionRegistry {
 
 /**
  * Build the registry and install the baseline `noop` fetcher used by the
- * harness e2e test (`POST /api/ingestion/run/noop`). Phase 3 fetchers are
- * appended here as they're written.
+ * harness e2e test (`POST /api/ingestion/run/noop`).
+ *
+ * Plan 1 Task 1.7 moved the 6 SSA fetchers (tle-history, space-weather,
+ * launch-manifest, notams, fragmentation-events, itu-filings) to
+ * `apps/console-api/src/agent/ssa/sweep/ingesters/`. Task 2.4 will add a
+ * `providers[]` field on this registry's deps so that pack can register
+ * them via `IngestionSourceProvider`. Between Task 1.7 and Task 3.1
+ * (console-api wiring), scheduled SSA ingestion jobs fail with "no
+ * fetcher registered" — live ingestion is temporarily paused during the
+ * refactor window.
  */
 export function createIngestionRegistry(
   deps: IngestionRegistryDeps,
@@ -92,65 +100,6 @@ export function createIngestionRegistry(
   registry.register("noop", async (ctx) => {
     ctx.logger.info("noop ingestion job ran");
     return { inserted: 0, skipped: 0, notes: "noop harness probe" };
-  });
-
-  // Phase 3a — TLE history time-series (CelesTrak every 6 h).
-  // Dynamic import keeps the registry module free of heavy fetcher deps
-  // at import time (HTTP timers, potentially schema-dependent imports).
-  registry.register("tle-history", async (ctx) => {
-    const { tleHistoryFetcher } = await import(
-      "./ingesters/tle-history-fetcher"
-    );
-    return tleHistoryFetcher(ctx);
-  });
-
-  // Phase 3b — Space weather forecast / nowcast (daily).
-  // Three sources: NOAA SWPC (US), GFZ Potsdam (DE), SIDC/STCE (BE).
-  registry.register("space-weather", async (ctx) => {
-    const { spaceWeatherFetcher } = await import(
-      "./ingesters/space-weather-fetcher"
-    );
-    return spaceWeatherFetcher(ctx);
-  });
-
-  // Phase 3c — Launch manifest enrichment (every 12 h).
-  // Pulls upcoming launches from Launch Library 2 (worldwide aggregator).
-  registry.register("launch-manifest", async (ctx) => {
-    const { launchManifestFetcher } = await import(
-      "./ingesters/launch-manifest-fetcher"
-    );
-    return launchManifestFetcher(ctx);
-  });
-
-  // Phase 3d — NOTAM / TFR (every 6 h).
-  // FAA Temporary Flight Restrictions — `SPACE OPERATIONS` type flags
-  // launch hazard areas that `launch_scout` uses to confirm pad+vehicle
-  // pairings.
-  registry.register("notams", async (ctx) => {
-    const { notamFetcher } = await import("./ingesters/notam-fetcher");
-    return notamFetcher(ctx);
-  });
-
-  // Phase 3e — Fragmentation events curated seed.
-  // Not on a cron; triggered manually when the event list changes (~1-2
-  // new breakups/year). Idempotent upsert by (parent_name, date_utc).
-  registry.register("fragmentation-events", async (ctx) => {
-    const { fragmentationEventsFetcher } = await import(
-      "./ingesters/fragmentation-events-fetcher"
-    );
-    return fragmentationEventsFetcher(ctx);
-  });
-
-  // Phase 3f — ITU filings curated seed.
-  // No live scrape: ITU's public SNL/SRS endpoints are HTML-only ASP
-  // pages with no JSON API; SRS web service was shut down in 2021.
-  // Curated seed focuses on mega-constellation filings that matter
-  // for launch_scout — rare additions, manual refresh.
-  registry.register("itu-filings", async (ctx) => {
-    const { ituFilingsFetcher } = await import(
-      "./ingesters/itu-filings-fetcher"
-    );
-    return ituFilingsFetcher(ctx);
   });
 
   return registry;
