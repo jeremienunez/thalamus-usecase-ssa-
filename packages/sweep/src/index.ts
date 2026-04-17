@@ -14,6 +14,11 @@ export {
 
 // Repositories
 export { SweepRepository } from "./repositories/sweep.repository";
+export type {
+  InsertSuggestion,
+  PastFeedback,
+  SweepSuggestionRow,
+} from "./repositories/sweep.repository";
 export { SatelliteSweepChatRepository } from "./repositories/satellite-sweep-chat.repository";
 export { SatelliteRepository } from "./repositories/satellite.repository";
 
