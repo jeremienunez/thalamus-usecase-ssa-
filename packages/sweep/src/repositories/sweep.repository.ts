@@ -11,6 +11,11 @@
 
 import type IORedis from "ioredis";
 import type { SweepCategory, SweepSeverity } from "../transformers/sweep.dto";
+import type {
+  FindingDomainSchema,
+  GenericInsertSuggestion,
+  GenericSuggestionRow,
+} from "../ports";
 
 const PREFIX = "sweep:suggestions";
 const IDX_ALL = "sweep:index:all";
@@ -72,8 +77,35 @@ export interface PastFeedback {
 
 // ─── Repository ──────────────────────────────────────────────────────
 
+export interface SweepRepositoryOpts {
+  redis: IORedis;
+  /**
+   * Domain-scoped schema supplied by the pack. When set, the generic
+   * API (insertGeneric / listGeneric / getGeneric) is active. Old flat
+   * API (insertOne / insertMany / list / getById) keeps working in both
+   * modes — no caller change.
+   */
+  schema?: FindingDomainSchema;
+}
+
 export class SweepRepository {
-  constructor(private redis: IORedis) {}
+  private readonly redis: IORedis;
+  private readonly schema: FindingDomainSchema | undefined;
+
+  /**
+   * Accepts either the legacy `new SweepRepository(redis)` or the new
+   * `new SweepRepository({ redis, schema? })`. Both preserved so in-flight
+   * callers (sim/promote, sweep container) land without churn.
+   */
+  constructor(arg: IORedis | SweepRepositoryOpts) {
+    if (arg && typeof arg === "object" && "redis" in arg) {
+      this.redis = arg.redis;
+      this.schema = arg.schema;
+    } else {
+      this.redis = arg as IORedis;
+      this.schema = undefined;
+    }
+  }
 
   /** Insert a batch of suggestions. */
   async insertMany(suggestions: InsertSuggestion[]): Promise<number> {
@@ -398,6 +430,119 @@ export class SweepRepository {
       rejected,
       bySeverity,
       byCategory,
+    };
+  }
+
+  // ─── Generic API (domain-agnostic, schema-driven) ──────────────────
+
+  /**
+   * Insert a single generic suggestion. Requires FindingDomainSchema via
+   * the `schema` constructor opt. Serializes domainFields via the schema
+   * and forwards to `insertOne` so the Redis layout is unchanged — no
+   * data migration.
+   */
+  async insertGeneric(input: GenericInsertSuggestion): Promise<string> {
+    if (!this.schema) {
+      throw new Error(
+        "SweepRepository.insertGeneric requires a FindingDomainSchema opt",
+      );
+    }
+    const { flatFields } = this.schema.serialize(input.domainFields);
+
+    // SSA layout matches InsertSuggestion 1:1 today. When future domains
+    // need different flat fields, insertOne's direct mapping will be
+    // adapted or replaced by a schema-driven Redis write.
+    return this.insertOne({
+      operatorCountryId:
+        flatFields.operatorCountryId == null
+          ? null
+          : typeof flatFields.operatorCountryId === "bigint"
+            ? flatFields.operatorCountryId
+            : BigInt(String(flatFields.operatorCountryId)),
+      operatorCountryName: String(flatFields.operatorCountryName ?? ""),
+      category: flatFields.category as SweepCategory,
+      severity: flatFields.severity as SweepSeverity,
+      title: String(flatFields.title ?? ""),
+      description: String(flatFields.description ?? ""),
+      affectedSatellites: Number(flatFields.affectedSatellites ?? 0),
+      suggestedAction: String(flatFields.suggestedAction ?? ""),
+      webEvidence:
+        flatFields.webEvidence == null ? null : String(flatFields.webEvidence),
+      resolutionPayload: input.resolutionPayload,
+      simSwarmId: input.simSwarmId ?? null,
+      simDistribution: input.simDistribution ?? null,
+    });
+  }
+
+  /**
+   * Like `list`, but returns domain-agnostic rows with `domainFields`
+   * reconstructed by the schema.
+   */
+  async listGeneric(opts: {
+    page?: number;
+    limit?: number;
+    category?: SweepCategory;
+    severity?: SweepSeverity;
+    reviewed?: boolean;
+  }): Promise<{ rows: GenericSuggestionRow[]; total: number }> {
+    if (!this.schema) {
+      throw new Error(
+        "SweepRepository.listGeneric requires a FindingDomainSchema opt",
+      );
+    }
+    const { rows, total } = await this.list(opts);
+    return {
+      total,
+      rows: rows.map((r) => this.toGenericRow(r)),
+    };
+  }
+
+  /**
+   * Like `getById`, but returns domain-agnostic row with `domainFields`
+   * reconstructed by the schema.
+   */
+  async getGeneric(id: string): Promise<GenericSuggestionRow | null> {
+    if (!this.schema) {
+      throw new Error(
+        "SweepRepository.getGeneric requires a FindingDomainSchema opt",
+      );
+    }
+    const row = await this.getById(id);
+    if (!row) return null;
+    return this.toGenericRow(row);
+  }
+
+  private toGenericRow(row: SweepSuggestionRow): GenericSuggestionRow {
+    const domainFields = this.schema!.deserialize({
+      flatFields: {
+        operatorCountryId: row.operatorCountryId,
+        operatorCountryName: row.operatorCountryName,
+        category: row.category,
+        severity: row.severity,
+        title: row.title,
+        description: row.description,
+        affectedSatellites: String(row.affectedSatellites),
+        suggestedAction: row.suggestedAction,
+        webEvidence: row.webEvidence,
+      },
+      blob: {},
+    });
+    return {
+      id: row.id,
+      // Domain discriminator — SSA-only for Plan 1; multi-domain support
+      // later (Plan 4+) will pull this from schema metadata.
+      domain: "ssa",
+      createdAt: row.createdAt,
+      accepted: row.accepted,
+      reviewedAt: row.reviewedAt,
+      reviewerNote: row.reviewerNote,
+      resolutionStatus: row.resolutionStatus ?? "pending",
+      resolvedAt: row.resolvedAt,
+      resolutionErrors: row.resolutionErrors,
+      simSwarmId: row.simSwarmId ?? null,
+      simDistribution: row.simDistribution ?? null,
+      domainFields,
+      resolutionPayload: row.resolutionPayload,
     };
   }
 }
