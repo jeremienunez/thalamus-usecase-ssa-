@@ -1,3 +1,6 @@
+// Ports — kernel ↔ pack contracts (consumed by apps/console-api/src/agent/ssa/)
+export * from "./ports";
+
 // Services
 export { NanoSweepService } from "./services/nano-sweep.service";
 export { SweepResolutionService } from "./services/sweep-resolution.service";
