@@ -2,6 +2,59 @@
 
 Interview-readiness checklist for Thalamus + Sweep — **target interview: CortAIx (Thales AI division)**.
 
+## Sweep agnostic refactor — Plan 1 — 2026-04-18 (done)
+
+23 tasks / 7 phases shipped on `refactor/sim-agnostic`. `packages/sweep/`
+is now a generic sweep/finding engine; all SSA business logic lives in
+`apps/console-api/src/agent/ssa/sweep/` + console-api's 5-layer stack.
+
+- [x] **Phase 0** — 6 ports in `packages/sweep/src/ports/`, arch-guard
+      skeleton, `BuildSweepOpts.ports?` widened.
+- [x] **Phase 1** — SSA pack impls in `apps/console-api/src/agent/ssa/sweep/`
+      (finding-schema, promotion, 5 resolution handlers, audit provider,
+      finding-routing, doctrine-parser, 6 ingesters + provider).
+- [x] **Phase 2** — kernel façades: SweepRepository dual API,
+      NanoSweepService.sweep delegates to DomainAuditProvider,
+      SweepResolutionService.resolve delegates to ResolutionHandlerRegistry + SweepPromotionAdapter, IngestionRegistry accepts providers[],
+      FindingRouterService.
+- [x] **Phase 3** — console-api wires all 6 ports through buildSweepContainer.
+- [x] **Phase 4** — folded 4 audit queries from sweep's SatelliteRepository
+      into console-api's SatelliteRepository; SSA pack rewired.
+- [x] **Phase 5** — moved satellite-sweep-chat stack (5 files) + viz stub + satellite-ephemeris.service to console-api.
+- [x] **Phase 6** — deleted dead AdminSweepController + admin.routes +
+      stripped sweep index.ts.
+- [x] **Phase 7** — arch-guard green (with Plan 2 allowlist), CHANGELOG +
+      TODO updated.
+
+**Full test count**: 652 passing · 23 todo · 0 skipped · 0 failing.
+UC3 E2E still runs on the sweep-side legacy fallback (Plan 2 moves it).
+
+### Follow-up — Plan 2 (sim kernel agnostic)
+
+- [ ] Move `packages/sweep/src/sim/` internals behind 10 ports
+      (SimActionSchemaProvider, SimFleetProvider, SimTurnTargetProvider,
+      SimAgentPersonaComposer, SimPromptComposer, SimCortexSelector,
+      SimPerturbationPack, SimAggregationStrategy, SimKindGuard,
+      SimPromotionAdapter).
+- [ ] Move UC3 E2E fixture to `apps/console-api/tests/e2e/`.
+- [ ] Delete `packages/sweep/src/repositories/satellite.repository.ts` + `packages/sweep/src/types/satellite.types.ts` + `packages/sweep/src/services/legacy-ssa-resolution.ts` + `packages/sweep/src/services/legacy-ssa-promotion.ts` + `LegacyNanoSweepAuditProvider` from `nano-sweep.service.ts`.
+- [ ] Consolidate sim source-class promotion through SsaPromotionAdapter
+      (remove the mutable `simHook.cb` bridge in sweep container).
+- [ ] Drop the 5 entries from `PLAN2_DEFERRED_ALLOWLIST` in the arch-guard.
+
+### Follow-up — Plan 3 (CLI → HTTP)
+
+- [ ] Add 4 new routes on console-api: `POST /api/sim/telemetry/start`,
+      `POST /api/sim/pc/start`, `GET /api/kg/graph/:id`, `GET /api/why/:findingId`.
+- [ ] Rewrite `packages/cli/src/adapters/*.ts` as fetch clients.
+- [ ] Slim `packages/cli/src/boot.ts` (486 → ~80 lines), drop
+      @interview/sweep + @interview/thalamus + @interview/db-schema +
+      drizzle + pg + ioredis from CLI package.json.
+- [ ] Add `packages/cli/tests/arch-guard.spec.ts` enforcing the HTTP-client
+      boundary.
+
+---
+
 ## Thalamus deep audit — 2026-04-17 (done)
 
 - [x] Bug #1 — all findings attributed to `plan.nodes[0]`. Fix: `sourceCortex` field stamped in [normalizeFinding](packages/thalamus/src/cortices/strategies/helpers.ts), read by [findingCortex()](packages/thalamus/src/services/finding-persister.service.ts). Migration re-tagged 286 historical rows; backup in `research_finding_cortex_backup_20260417`.
@@ -248,7 +301,7 @@ Targeted coverage, not exhaustive — tests picked to demonstrate design intent 
 
 ## Interview prep — CortAIx / Thales
 
-### Narrative (Olivier)
+### Narrative
 
 - [ ] Write first-person pitch (5–7 min): problem → system shape → why cortex pattern → why nano swarm → guardrails → transposition to threat intel → tradeoffs
 - [ ] Open with the honest framing: "built on a commercial domain, pattern is domain-agnostic, here's the mapping"
@@ -273,14 +326,6 @@ Targeted coverage, not exhaustive — tests picked to demonstrate design intent 
 - [ ] **Observability**: prove a cortex was cost-effective last week (Prometheus counters per cortex/source/skill, query → histogram)
 - [ ] **Testability**: how do you test an LLM-in-the-loop system? (mock at the `nano-caller` / `SourceFetcher` boundary, unit-test cortices and services, integration-test executor with fakes)
 - [ ] **Failure modes**: what breaks at scale? (Redis memory growth on findings, rate-limit contention on nano swarm, audit-row volume — each has an answer)
-
-### Panel identified (see memory/project_cortaix_panel.md)
-
-- **Olivier Albiez** — Software Architect CortAIx Factory, DDD / hexagonal / Strasbourg. **Primary tech interviewer.**
-- **Fleur Saillofest** — Engineering Delivery Manager, ex-OCTO, ex-beNext coach. **Craftsmanship / agile / delivery posture.**
-- **Mélanie Grondin** — Head of Operations CortAIx Factory. **Low panel probability — budget/authority.**
-- Chain: Olivier (technical) → Fleur (delivery) → Mélanie (authority).
-- Mission context: CortAIx Factory SAS, 11 Bd Gallieni Issy-les-Moulineaux, freelance 8 mois (31/04 → 31/12/2026), tech lead + craftsmanship + CI/CD + mentoring.
 
 ### Use cases — Factory framing
 
@@ -320,7 +365,7 @@ Primary build pitched as **Space Situational Awareness** (orbital collision avoi
 - [ ] Sweep rule: `ConjunctionEvent` with P ≥ 10⁻⁴ and no field corroboration > N hours → priority finding
 - [ ] One end-to-end demo script: synthetic TLE + synthetic radar track → conjunction detected → operator accept in Playwright → `Maneuver` row + audit
 
-### The 4 Olivier axes to hit explicitly
+### The 4 interview axes to hit explicitly
 
 - [ ] **Souveraineté** — multi-provider, per-step model selection, nothing tied to a vendor
 - [ ] **Contrôle** — bounded agents, guardrails in code not in prompts, cost/depth caps, rogue-agent story as contrast
