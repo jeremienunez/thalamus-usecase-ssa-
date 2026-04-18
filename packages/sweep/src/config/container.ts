@@ -27,7 +27,12 @@ import {
   NanoSweepService,
   LegacyNanoSweepAuditProvider,
 } from "../services/nano-sweep.service";
-import { SweepResolutionService } from "../services/sweep-resolution.service";
+import {
+  SweepResolutionService,
+  type OnSimUpdateAccepted,
+} from "../services/sweep-resolution.service";
+import { createLegacySsaResolutionRegistry } from "../services/legacy-ssa-resolution";
+import { LegacySsaPromotionAdapter } from "../services/legacy-ssa-promotion";
 import { MessagingService } from "../services/messaging.service";
 import { AdminSweepController } from "../controllers/admin-sweep.controller";
 import { MemoryService, type EmbedFn } from "../sim/memory.service";
@@ -123,12 +128,34 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
     sweepRepo,
     domain: "ssa",
   });
-  const resolutionService = new SweepResolutionService(
-    satelliteRepo,
+
+  // Resolution: prefer injected ports; otherwise fall back to the legacy
+  // SSA registry + promotion adapter preserved inside the sweep package.
+  // The sim-provenance hook (onSimUpdateAccepted) is wired via the legacy
+  // registry's deps lazily — the cb is supplied after confidenceService
+  // exists, in the opts.sim block below. We use a mutable holder so the
+  // container can fill it after construction.
+  const simHook: { cb: OnSimUpdateAccepted | null } = { cb: null };
+  const legacyResolutionRegistry =
+    opts.ports?.resolutionHandlers ??
+    createLegacySsaResolutionRegistry({
+      db,
+      satelliteRepo,
+      // Defer to the mutable holder so the sim block below can inject
+      // after confidenceService is built.
+      onSimUpdateAccepted: (event) => simHook.cb?.(event) ?? Promise.resolve(),
+    });
+  const legacyPromotion =
+    opts.ports?.promotion ??
+    new LegacySsaPromotionAdapter({
+      db,
+      graphService: opts.graphService ?? null,
+    });
+  const resolutionService = new SweepResolutionService({
+    registry: legacyResolutionRegistry,
+    promotion: legacyPromotion,
     sweepRepo,
-    opts.graphService ?? null,
-    db,
-  );
+  });
 
   const adminControllers: AdminControllers = {
     sweep: new AdminSweepController(
@@ -170,7 +197,11 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
     // field) pair as the edge id (stable int fingerprint). On first accept
     // the edge is initialised in SIM_UNCORROBORATED, then promoted via
     // reviewer-accept evidence to OSINT_CORROBORATED.
-    resolutionService.setOnSimUpdateAccepted(async (event) => {
+    //
+    // Plan 1 Task 2.3: the cb flows into the legacy resolution registry's
+    // update_field handler via the simHook mutable holder. Plan 2 will move
+    // this into a dedicated sim promotion path on the port.
+    simHook.cb = async (event) => {
       const edgeId = telemetryEdgeId(event.satelliteId, event.field);
       try {
         await confidenceService.read(edgeId);
@@ -187,7 +218,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
           citation: `sim_swarm:${event.swarmId ?? "?"} field=${event.field}`,
         },
       });
-    });
+    };
 
     sim = {
       memoryService,
