@@ -23,8 +23,22 @@ import {
   createIngestionWorker,
   ingestionQueue,
   registerSchedulers,
+  // Sweep-side SatelliteRepository aliased to disambiguate from console-api's
+  // local one (different surface — audit queries vs lookup/insert).
+  // Plan 1 Task 4 folds its methods into SatelliteAuditService.
+  SatelliteRepository as SweepSideSatelliteRepo,
 } from "@interview/sweep";
 import { IngestionService } from "./services/ingestion.service";
+
+// SSA sweep pack — port implementations consumed by buildSweepContainer.
+import {
+  ssaFindingSchema,
+  SsaPromotionAdapter,
+  createSsaResolutionRegistry,
+  SsaAuditProvider,
+  SsaFindingRoutingPolicy,
+  ssaIngestionProvider,
+} from "./agent/ssa/sweep";
 
 export const SSA_SKILLS_DIR = resolve(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -147,10 +161,65 @@ export async function buildContainer(
     domainConfig: buildSsaDomainConfig(),
     webSearch,
   });
-  const sweep = buildSweepContainer({ db, redis });
+
+  // ─── Sweep SSA port wiring (Plan 1 Task 3.1) ─────────────────────
+  //
+  // Six port impls flow into buildSweepContainer via opts.ports. When
+  // supplied they override the sweep-side legacy fallbacks (which remain
+  // as defaults so unit tests and the UC3 E2E fixture can omit ports).
+  //
+  // Phase 4 will swap SsaAuditProvider + createSsaResolutionRegistry from
+  // the sweep-side SatelliteRepository to console-api's SatelliteAuditService
+  // once the 8 audit query methods fold in; for now the sweep-side repo is
+  // used to preserve byte-identical behaviour vs pre-refactor.
+  const sweepFeedbackRepo = new SweepFeedbackRepository(redis);
+  const sweepSideSatRepo = new SweepSideSatelliteRepo(db);
+
+  const ssaPromotion = new SsaPromotionAdapter({
+    sweepAuditRepo: auditRepo,
+    // Plan 1 scope: no ConfidenceService wired here — avoids a build-order
+    // cycle with the legacy sweep/sim wiring, which still owns its own
+    // ConfidenceService inside buildSweepContainer when opts.sim is set.
+    // Plan 2 consolidates sim source-class promotion through this adapter.
+    confidence: null,
+  });
+  const ssaResolutionRegistry = createSsaResolutionRegistry({
+    db,
+    satelliteRepo: sweepSideSatRepo,
+  });
+  const ssaAuditProvider = new SsaAuditProvider({
+    satelliteRepo: sweepSideSatRepo,
+    sweepRepo: {
+      // loadPastFeedback is the only sweepRepo surface the provider uses;
+      // we forward to the one built inside the sweep container below via
+      // a post-build patch (see below).
+      loadPastFeedback: async () => [],
+    },
+    feedbackRepo: sweepFeedbackRepo,
+  });
+  const ssaFindingRouting = new SsaFindingRoutingPolicy();
+
+  const sweep = buildSweepContainer({
+    db,
+    redis,
+    ports: {
+      findingSchema: ssaFindingSchema,
+      audit: ssaAuditProvider,
+      promotion: ssaPromotion,
+      findingRouting: ssaFindingRouting,
+      resolutionHandlers: ssaResolutionRegistry,
+      ingestion: [ssaIngestionProvider],
+    },
+  });
+
+  // Post-build patch: the audit provider needs a real loadPastFeedback
+  // reader. The sweep container owns the SweepRepository, so we bind it
+  // here now that sweep is constructed.
+  (ssaAuditProvider as unknown as {
+    deps: { sweepRepo: { loadPastFeedback: () => Promise<unknown[]> } };
+  }).deps.sweepRepo.loadPastFeedback = () => sweep.sweepRepo.loadPastFeedback();
 
   // services
-  const sweepFeedbackRepo = new SweepFeedbackRepository(redis);
   const enrichmentFinding = new EnrichmentFindingService(
     cycleRepo,
     findingRepo,
@@ -178,9 +247,15 @@ export async function buildContainer(
   const cycleRunner = new CycleRunnerService(thalamus, sweep, logger);
   const autonomyService = new AutonomyService(cycleRunner, logger);
 
-  // Ingestion harness (Phase 2): registry → worker → service.
-  // Phase 3 fetchers register into `ingestionRegistry` as they're added.
-  const ingestionRegistry = createIngestionRegistry({ db });
+  // Ingestion harness: registry → worker → service.
+  // Plan 1 Task 3.1 threads the SSA fetchers via the ssaIngestionProvider
+  // (see Tasks 1.7 + 2.4). Live SSA ingestion resumed after the pause
+  // introduced in Task 1.7.
+  const ingestionRegistry = createIngestionRegistry({
+    db,
+    redis,
+    providers: [ssaIngestionProvider],
+  });
   const ingestionWorker = createIngestionWorker(ingestionRegistry);
   const ingestionService = new IngestionService(
     ingestionQueue,
