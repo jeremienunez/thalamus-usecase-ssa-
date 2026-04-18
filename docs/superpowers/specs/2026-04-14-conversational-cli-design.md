@@ -2,7 +2,7 @@
 
 **Status:** DRAFT
 **Date:** 2026-04-14
-**Target:** CortAIx interview demo (Olivier / Fleur / Mélanie)
+**Target:** technical interview demo
 **Scope:** Priority 1 of the TODO "Next up" section — foundation for subsequent fish quick-wins (Pc estimator, maneuver Pareto, Why button).
 
 ## 1. Goal

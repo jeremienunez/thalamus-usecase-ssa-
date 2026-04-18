@@ -3,7 +3,7 @@
 **Status:** Draft
 **Date:** 2026-04-16
 **Owner:** Jeremie Nunez
-**Target audience of the artifact:** a senior technical reviewer (Olivier) running `make` for the first time after `git clone`.
+**Target audience of the artifact:** a senior technical reviewer running `make` for the first time after `git clone`.
 
 ## 1. Intent
 

@@ -85,7 +85,7 @@ beforeAll(async () => {
 
   const skillsDir = resolve(
     __dirname,
-    "../../../../apps/console-api/src/agent/ssa/skills",
+    "../../src/agent/ssa/skills",
   );
   registry = new CortexRegistry(skillsDir);
   registry.discover();
