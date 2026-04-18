@@ -29,18 +29,49 @@ is now a generic sweep/finding engine; all SSA business logic lives in
 **Full test count**: 652 passing · 23 todo · 0 skipped · 0 failing.
 UC3 E2E still runs on the sweep-side legacy fallback (Plan 2 moves it).
 
-### Follow-up — Plan 2 (sim kernel agnostic)
+## Sim agnostic refactor — Plan 2 — 2026-04-18 (mostly done · checkpoint)
 
-- [ ] Move `packages/sweep/src/sim/` internals behind 10 ports
-      (SimActionSchemaProvider, SimFleetProvider, SimTurnTargetProvider,
-      SimAgentPersonaComposer, SimPromptComposer, SimCortexSelector,
-      SimPerturbationPack, SimAggregationStrategy, SimKindGuard,
-      SimPromotionAdapter).
-- [ ] Move UC3 E2E fixture to `apps/console-api/tests/e2e/`.
-- [ ] Delete `packages/sweep/src/repositories/satellite.repository.ts` + `packages/sweep/src/types/satellite.types.ts` + `packages/sweep/src/services/legacy-ssa-resolution.ts` + `packages/sweep/src/services/legacy-ssa-promotion.ts` + `LegacyNanoSweepAuditProvider` from `nano-sweep.service.ts`.
+Ran on `refactor/sim-agnostic` on top of Plan 1. B.1 → B.11 landed; 7 sim
+legacy adapters deleted. UC3 E2E injects the 10 SSA sim ports. Sweep kernel
+still hosts `promote.ts` (592 L) + `aggregator-telemetry.ts` +
+`god-channel.service.ts` + their 2 supporting legacy files — the SRP-heavy
+sim↔sweep glue. Plan 6 addresses these.
+
+- [x] **Scaffolding** — 10 port stubs + SSA sim pack dirs + sim arch-guard
+      (describe.skip until C.1).
+- [x] **B.1** SimFleetProvider (narrow `satellite-fleet.repository.ts` +
+      `SsaFleetProvider`).
+- [x] **B.2** SimTurnTargetProvider (fuse telemetry + pc target loaders).
+- [x] **B.3** SimAgentPersonaComposer (lift persona/goals/constraints).
+- [x] **B.4** SimPromptComposer + SimCortexSelector.
+- [x] **B.5** SimActionSchemaProvider (lift turnActionSchema + all SSA Zod).
+- [x] **B.6** SimPerturbationPack (uc1/uc3 generators + GOD_EVENT_TEMPLATES + extractGodEvents).
+- [x] **B.8** SimAggregationStrategy (labelAction + clusterFallback).
+- [x] **B.9** SimKindGuard (validateLaunch + defaultMaxTurns). Promotion
+      half deferred to Plan 6 (tied to promote.ts migration).
+- [x] **B.10** Moved telemetry-swarm + pc-swarm + pc-aggregator +
+      bus-datasheets to `apps/console-api/src/agent/ssa/sim/`. CLI
+      telemetry.start throws Plan-3-TODO until HTTP rewire.
+- [x] **B.11** Sim ports required; 7 legacy adapters deleted.
+
+### Remaining debt (handled by Plan 5 + Plan 6)
+
+- [ ] Delete `packages/sweep/src/sim/promote.ts` (move the 7 mixed
+      responsibilities to repos/services/transformers/utils). See
+      **Plan 6** Phase B + C + D.
+- [ ] Move `aggregator-telemetry.ts` to the SSA pack (blocked on promote.ts
+      migration).
+- [ ] Move `god-channel.service.ts` + delete `legacy-ssa-schema.ts` +
+      `legacy-ssa-perturbation-pack.ts` (their consumers).
+- [ ] Drop the 5 entries from `PLAN2_DEFERRED_ALLOWLIST` in the arch-guard
+      (Plan 6 Phase D).
+- [ ] Unskip the sim arch-guard (Plan 2 Task C.1) — currently
+      `describe.skip` because promote.ts + aggregator-telemetry + god-channel
+      still live in kernel.
+- [ ] Clean `packages/sweep/src/sim/types.ts` — remove SSA type references
+      (Plan 5 Phase D.5).
 - [ ] Consolidate sim source-class promotion through SsaPromotionAdapter
-      (remove the mutable `simHook.cb` bridge in sweep container).
-- [ ] Drop the 5 entries from `PLAN2_DEFERRED_ALLOWLIST` in the arch-guard.
+      (Plan 6 Phase C — removes the `simHook.cb` bridge).
 
 ### Follow-up — Repository split (post-Plan-2)
 
@@ -63,6 +94,26 @@ small. Split after Plan 2 merges:
 
 Rationale: one SQL responsibility per file; sim (and future domains) can
 compose narrow repos without dragging the whole 575-line surface.
+
+### Follow-up — Plan 5 + Plan 6 (5-layer integration; SOLID audit)
+
+Two planning agents drafted detailed migration plans for folding sim + sweep
+into console-api's existing 5-layer architecture (routes → controllers →
+services → repositories → types/transformers/utils). Current state: sim +
+sweep mix responsibilities (promote.ts owns SQL + Redis + KG + embeddings +
+formatting; sim-orchestrator mixes service + repo + queue; god-channel
+leaks SSA Zod into kernel). Plans audit violations by `file:line` and
+propose phased migrations.
+
+- [ ] **Plan 5** — Sim five-layer integration. 6 phases (A: repos; B:
+      controllers/routes; C: services; D: kernel slim-down; E: worker
+      placement; F: cleanup). Draft:
+      [docs/superpowers/plans/2026-04-18-plan5-sim-five-layer.md](docs/superpowers/plans/2026-04-18-plan5-sim-five-layer.md).
+- [ ] **Plan 6** — Sweep five-layer + sim↔sweep boundary. 4 phases (A:
+      formalize SimPromotionAdapter port; B: ResearchKgRepository +
+      SatelliteTelemetryRepository + SimRunRepository; C: SimPromotionService + ConfidencePromotionService; D: delete promote.ts + legacy fallbacks).
+      Draft:
+      [docs/superpowers/plans/2026-04-18-plan6-sweep-five-layer.md](docs/superpowers/plans/2026-04-18-plan6-sweep-five-layer.md).
 
 ### Follow-up — Plan 3 (CLI → HTTP)
 
