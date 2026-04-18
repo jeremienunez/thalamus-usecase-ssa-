@@ -7,10 +7,8 @@ export { SweepResolutionService } from "./services/sweep-resolution.service";
 export type { OnSimUpdateAccepted } from "./services/sweep-resolution.service";
 export { SatelliteSweepChatService } from "./services/satellite-sweep-chat.service";
 export { MessagingService } from "./services/messaging.service";
-export {
-  getTiersForCortex,
-  wireSweepNotifications,
-} from "./services/finding-routing";
+export { FindingRouterService } from "./services/finding-router.service";
+export type { FindingRouterDeps } from "./services/finding-router.service";
 
 // Repositories
 export { SweepRepository } from "./repositories/sweep.repository";
