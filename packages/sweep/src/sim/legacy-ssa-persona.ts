@@ -1,21 +1,16 @@
 /**
- * SsaPersonaComposer — SSA persona / goals / constraints derivation.
+ * LegacySsaPersonaComposer — fallback SimAgentPersonaComposer.
  *
- * Plan 2 · B.3. Lifted verbatim from packages/sweep/src/sim/agent-builder.ts
- * (inferRiskProfile + composePersona + composeGoals + composeConstraints +
- * riskProfileDescription). Consumes AgentSubjectSnapshot.attributes built by
- * SsaFleetProvider.
- *
- * Determinism is load-bearing: same subject + same hints → same persona.
- * The fixture-mode prompt cache keys on sha256(system+user); any
- * nondeterminism breaks replay.
+ * Same bodies as apps/console-api/src/agent/ssa/sim/persona-composer.ts —
+ * kept in-tree so buildSweepContainer works without the console-api pack
+ * injection. Deleted at Plan 2 Étape 4.
  */
 
 import type {
   AgentSubjectSnapshot,
   ComposedPersona,
   SimAgentPersonaComposer,
-} from "@interview/sweep";
+} from "./ports";
 
 type RiskProfile = "conservative" | "balanced" | "aggressive";
 
@@ -27,7 +22,7 @@ interface SsaAttributes {
   avgLaunchYear: number | null;
 }
 
-export class SsaPersonaComposer implements SimAgentPersonaComposer {
+export class LegacySsaPersonaComposer implements SimAgentPersonaComposer {
   compose(
     subject: AgentSubjectSnapshot,
     hints: Record<string, unknown>,

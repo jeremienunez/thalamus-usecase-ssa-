@@ -48,6 +48,7 @@ import {
 import { SatelliteFleetRepository } from "../../src/repositories/satellite-fleet.repository";
 import { SsaFleetProvider } from "../../src/agent/ssa/sim/fleet-provider";
 import { SsaTurnTargetProvider } from "../../src/agent/ssa/sim/targets";
+import { SsaPersonaComposer } from "../../src/agent/ssa/sim/persona-composer";
 
 // -----------------------------------------------------------------------
 // Test config
@@ -104,11 +105,12 @@ beforeAll(async () => {
   await drainQueues().catch(() => undefined);
   seededOperatorIds = await seedOperators();
 
-  // Plan 2 · B.1 / B.2 — inject the SSA sim ports so the E2E exercises the
-  // console-api path (not the sweep-internal legacy fallback adapters).
+  // Plan 2 · B.1 / B.2 / B.3 — inject the SSA sim ports so the E2E exercises
+  // the console-api path (not the sweep-internal legacy fallback adapters).
   const fleetRepo = new SatelliteFleetRepository(db);
   const ssaFleet = new SsaFleetProvider({ fleetRepo });
   const ssaTargets = new SsaTurnTargetProvider({ db });
+  const ssaPersona = new SsaPersonaComposer();
 
   container = buildSweepContainer({
     db,
@@ -122,6 +124,7 @@ beforeAll(async () => {
       llmMode: "fixtures",
       fleet: ssaFleet,
       targets: ssaTargets,
+      persona: ssaPersona,
     },
   });
 

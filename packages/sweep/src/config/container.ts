@@ -21,9 +21,14 @@ import type {
   ResolutionHandlerRegistry,
   IngestionSourceProvider,
 } from "../ports";
-import type { SimFleetProvider, SimTurnTargetProvider } from "../sim/ports";
+import type {
+  SimFleetProvider,
+  SimTurnTargetProvider,
+  SimAgentPersonaComposer,
+} from "../sim/ports";
 import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
 import { LegacySsaTurnTargetProvider } from "../sim/legacy-ssa-targets";
+import { LegacySsaPersonaComposer } from "../sim/legacy-ssa-persona";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -99,6 +104,11 @@ export interface BuildSweepOpts {
      * to LegacySsaTurnTargetProvider.
      */
     targets?: SimTurnTargetProvider;
+    /**
+     * Plan 2 · B.3 — SimAgentPersonaComposer port. When omitted, falls
+     * back to LegacySsaPersonaComposer.
+     */
+    persona?: SimAgentPersonaComposer;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -167,12 +177,14 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
 
   let sim: SimServices | undefined;
   if (opts.sim) {
-    // Plan 2 · B.1 / B.2 — sim ports: use the injected SSA providers or
-    // fall back to the legacy SQL adapters (allowlisted until Étape 4).
+    // Plan 2 · B.1 / B.2 / B.3 — sim ports: use the injected SSA providers or
+    // fall back to the legacy adapters (allowlisted until Étape 4).
     const fleet: SimFleetProvider =
       opts.sim.fleet ?? new LegacySsaFleetProvider(db);
     const targets: SimTurnTargetProvider =
       opts.sim.targets ?? new LegacySsaTurnTargetProvider(db);
+    const persona: SimAgentPersonaComposer =
+      opts.sim.persona ?? new LegacySsaPersonaComposer();
     const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,
@@ -188,7 +200,12 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       llmMode: opts.sim.llmMode,
       targets,
     });
-    const orchestrator = new SimOrchestrator({ db, simTurnQueue, fleet });
+    const orchestrator = new SimOrchestrator({
+      db,
+      simTurnQueue,
+      fleet,
+      persona,
+    });
     const godChannel = new GodChannelService(orchestrator);
     const aggregator = new AggregatorService({ db, embed: opts.sim.embed });
     const telemetryAggregator = new TelemetryAggregatorService({ db });

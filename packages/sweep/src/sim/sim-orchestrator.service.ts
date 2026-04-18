@@ -31,7 +31,7 @@ import type {
   PerturbationSpec,
 } from "./types";
 import { buildOperatorAgent } from "./agent-builder";
-import type { SimFleetProvider } from "./ports";
+import type { SimFleetProvider, SimAgentPersonaComposer } from "./ports";
 import type { SimTurnJobPayload } from "../jobs/queues";
 
 const logger = createLogger("sim-orchestrator");
@@ -44,6 +44,8 @@ export interface OrchestratorDeps {
   simTurnQueue: Queue<SimTurnJobPayload>;
   /** Plan 2 · B.1 — fleet port, consumed by buildOperatorAgent. */
   fleet: SimFleetProvider;
+  /** Plan 2 · B.3 — persona composer port. */
+  persona: SimAgentPersonaComposer;
 }
 
 export interface CreateFishOpts {
@@ -227,7 +229,11 @@ export class SimOrchestrator {
     for (let i = 0; i < operatorIds.length; i++) {
       const operatorId = operatorIds[i];
       const built = await buildOperatorAgent(
-        { db: this.deps.db, fleet: this.deps.fleet },
+        {
+          db: this.deps.db,
+          fleet: this.deps.fleet,
+          persona: this.deps.persona,
+        },
         {
           simRunId,
           operatorId,
