@@ -2,6 +2,7 @@ import { createLlmTransport } from "../transports/llm-chat";
 import { createLogger } from "@interview/shared/observability";
 import { extractJsonArray } from "../utils/llm-json-parser";
 import type { CrawledArticle } from "./crawler";
+import { DEFAULT_CURATOR_PROMPT } from "../prompts";
 
 const logger = createLogger("explorer-curator");
 
@@ -12,28 +13,18 @@ export interface CuratedItem {
   relevanceScore: number;
   noveltyScore: number;
   action: "inject" | "promote" | "discard";
-  category: "MARKET" | "REVIEWS" | "DROPS" | "DISCOVERY";
+  category: string;
   reason: string;
   entities: CrawledArticle["entities"];
 }
 
-const CURATOR_PROMPT = `You are a content curator for a Space Situational Awareness (SSA) research system.
+// Domain-specific rubric injected by console-api at container boot.
+// Default is agnostic so the package is runnable + testable standalone.
+let curatorPrompt: string = DEFAULT_CURATOR_PROMPT;
 
-Score each article for RELEVANCE (SSA operational value — satellites, operators, orbital regimes, conjunctions, maneuvers, launches, debris, telemetry) and NOVELTY (new information vs what we already track).
-
-For each article, respond with:
-- relevanceScore: 0-1
-- noveltyScore: 0-1
-- action: "inject" (add to feed), "promote" (high quality, add permanently), or "discard"
-- category: "MARKET", "REVIEWS", "DROPS", or "DISCOVERY"
-- reason: 1 sentence
-
-Decision logic:
-- relevance > 0.7 AND novelty > 0.5 -> inject
-- relevance > 0.8 AND consistently good source -> promote
-- otherwise -> discard
-
-Respond with ONLY a JSON array matching the input order.`;
+export function setCuratorPrompt(prompt: string): void {
+  curatorPrompt = prompt;
+}
 
 export class ExplorerCurator {
   async curate(articles: CrawledArticle[]): Promise<CuratedItem[]> {
@@ -72,7 +63,7 @@ export class ExplorerCurator {
   }
 
   private async scoreBatch(articles: CrawledArticle[]): Promise<CuratedItem[]> {
-    const transport = createLlmTransport(CURATOR_PROMPT);
+    const transport = createLlmTransport(curatorPrompt);
 
     const payload = articles.map((a, i) => ({
       index: i,

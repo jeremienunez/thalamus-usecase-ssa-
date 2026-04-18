@@ -1,0 +1,47 @@
+% SPEC-ARCH-12 — Consoles (SSA CLI + Operator UI)
+
+\input{./preamble-arch.tex}
+
+\specID{SPEC-ARCH-12}
+\specTitle{Consoles --- SSA CLI (Ink REPL) and Operator console (R3F + sigma.js)}
+\specStatus{OVERVIEW}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{SSA console --- \texttt{pnpm run ssa}}
+
+Interactive terminal REPL (\texttt{@interview/cli}) with two-lane routing: explicit slash commands bypass the LLM (\texttt{parseExplicitCommand}), free-text goes through the \texttt{interpreter} cortex which emits a Zod-validated \texttt{RouterPlan \{ steps[1..8], confidence \}}. Ambiguous input triggers a \texttt{clarify} step instead of guessing.
+
+\subsection{Commands}
+
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{/query <text>} --- run a Thalamus cycle, render briefing
+  \item \texttt{/telemetry <satId>} --- spawn telemetry swarm, render 14-scalar distribution
+  \item \texttt{/logs [level=info] [service=*]} --- tail in-process pino ring buffer
+  \item \texttt{/graph <entity>} --- BFS neighbourhood in \texttt{research\_edge}
+  \item \texttt{/accept <suggestionId>} --- resolve a sweep suggestion (audited)
+  \item \texttt{/explain <findingId>} --- ASCII provenance tree (finding $\to$ edges $\to$ source\_item + skill sha256)
+\end{itemize}
+
+Rendering: editorial tight layout (pretext-flavored quote bubbles, confidence sparklines, source-class colors FIELD=green / OSINT=yellow / SIM=gray), animated emoji lifecycle logs at 6 fps, ASCII satellite loader with rolling p50/p95 ETA per \texttt{\{kind, subject\}} persisted to \texttt{\~{}/.cache/ssa-cli/eta.json}, persistent status footer (\texttt{session \textperiodcentered{} tokens k/400k \textperiodcentered{} cost \$X \textperiodcentered{} last: \dots}).
+
+Current boot is stub mode (\texttt{buildRealAdapters} throws for thalamus / telemetry / graph / resolution / why --- real infra wiring pending). The \texttt{logs} adapter is real (pino ring buffer). Injectable adapters via \texttt{BootDeps} power the e2e test.
+
+\section{Operator console --- \texttt{apps/console/}}
+
+Vite + React + TypeScript --- three modes on a shared Palantir-calibrated shell:
+
+\begin{itemize}[leftmargin=1.2em]
+  \item \textbf{OPS} --- wireframe globe (react-three-fiber + drei) with satellites propagated from Keplerian elements and conjunction arcs colored by $P_c$ band. Click a satellite $\to$ drawer with orbital elements and active conjunctions.
+  \item \textbf{THALAMUS} --- Knowledge graph (sigma.js + ForceAtlas2 via webworker). Nodes by entity class (Satellite / Operator / Payload / OrbitRegime / ConjunctionEvent / Maneuver), edges colored by provenance (OSINT / Field / derived), widths weighted by confidence.
+  \item \textbf{SWEEP} --- dense findings graph with \texttt{Overview | Map | Stats} tabs. Nodes colored by decision status (pending / accepted / rejected / in-review), edges by co-citation. Accept / reject / review with reason, optimistic update, audit written.
+\end{itemize}
+
+Design system locked in \texttt{design-system/MASTER.md}; per-mode overrides in \texttt{design-system/pages/}. Palette, typography, spacing, anti-patterns calibrated to Palantir Gotham --- not a SaaS product.
+
+Fixtures in \texttt{apps/console-api/src/fixtures.ts} seed 600 satellites, 180 conjunctions, 226 KG nodes, 420 edges, 1200 findings deterministically --- demo boots without Postgres. Swap the fixture module for real Drizzle queries when wiring to production data.
+
+\end{document}

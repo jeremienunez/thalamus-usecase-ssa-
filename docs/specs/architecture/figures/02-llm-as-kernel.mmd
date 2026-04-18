@@ -1,0 +1,21 @@
+flowchart LR
+    subgraph ANALOGY["LLM-as-Kernel analogy"]
+        direction TB
+        OS["Orchestrator = OS"]
+        Proc["Cortex = Process"]
+        Sys["Tool = Syscall"]
+        Bin["Skill prompt = Binary on disk"]
+        Mem["Knowledge graph = Filesystem"]
+        Guard["Guardrails = Kernel enforced limits"]
+    end
+
+    subgraph PRINCIPLES["Non-negotiable constraints"]
+        direction TB
+        P1["Guardrails live in CODE,<br/>never in prompts"]
+        P2["LLM output = untrusted input<br/>(Willison principle)"]
+        P3["Human reviewer = first-class<br/>system component"]
+        P4["No ad-hoc SQL from agents.<br/>Drizzle-typed repos only."]
+        P5["Every mutation audited,<br/>every mutation reversible"]
+    end
+
+    ANALOGY --- PRINCIPLES

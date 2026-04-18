@@ -1,246 +1,29 @@
 /**
- * SsaTurnTargetProvider — loads SSA turn targets (telemetry / pc) per sim_run.
+ * SsaTurnTargetProvider — SSA adapter over console-api's SimTargetService.
  *
- * Plan 2 · B.2. Fuses load-telemetry-target.ts + load-pc-target.ts bodies
- * verbatim from packages/sweep/src/sim/. Dispatch is data-driven: seed_applied
- * is read from the DB; both fields (telemetryTargetSatelliteId + pcEstimatorTarget)
- * are optional and may coexist depending on swarm kind.
- *
- * Returns a bag keyed by `telemetryTarget` + `pcEstimatorTarget`, both
- * nullable. The kernel turn-runners read the appropriate entry.
- *
- * SQL lives here (SSA pack), not in a repository — the query shape is tightly
- * coupled to `sim_run.seed_applied` JSONB layout and won't be reused outside
- * sim. If a second consumer appears, extract into a SimTargetRepository.
+ * The SSA pack should not own SQL. Route/service-owned target composition
+ * lives in `src/services/sim-target.service.ts`; this adapter only bridges
+ * that service into the kernel port expected by `@interview/sweep`.
  */
 
-import { sql } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type * as schema from "@interview/db-schema";
-import type { SeedRefs } from "@interview/db-schema";
-import type { SimTurnTargetProvider } from "@interview/sweep";
-
-// Types duplicated here from sweep's sim/types.ts for a clean boundary; Plan 2
-// B.7 deletes the sweep-side compat block and these remain the canonical shape.
-interface TelemetryTarget {
-  satelliteId: number;
-  satelliteName: string;
-  noradId: number | null;
-  regime: string | null;
-  launchYear: number | null;
-  busArchetype: string | null;
-  busDatasheetPrior: Record<
-    string,
-    { typical: number; min: number; max: number; unit: string }
-  > | null;
-  sources: string[];
-}
-
-interface PcEstimatorTarget {
-  conjunctionId: number;
-  tca: Date | null;
-  missDistanceKm: number | null;
-  relativeVelocityKmps: number | null;
-  currentPc: number | null;
-  hardBodyRadiusMeters: number | null;
-  combinedSigmaKm: number | null;
-  primary: {
-    id: number;
-    name: string;
-    noradId: number | null;
-    bus: string | null;
-  };
-  secondary: {
-    id: number;
-    name: string;
-    noradId: number | null;
-    bus: string | null;
-  };
-  assumptions: {
-    hardBodyRadiusMeters: number;
-    covarianceScale: "tight" | "nominal" | "loose";
-  } | null;
-}
+import type { SimScenarioContextProvider } from "@interview/sweep";
+import type { SimTargetService } from "../../../services/sim-target.service";
 
 export interface SsaTurnTargetDeps {
-  db: NodePgDatabase<typeof schema>;
+  targetService: Pick<SimTargetService, "loadTargets">;
 }
 
-export class SsaTurnTargetProvider implements SimTurnTargetProvider {
+export class SsaTurnTargetProvider implements SimScenarioContextProvider {
   constructor(private readonly deps: SsaTurnTargetDeps) {}
 
-  async loadTargets(args: {
+  async loadContext(args: {
     simRunId: number;
     seedHints: Record<string, unknown>;
-  }): Promise<Record<string, unknown>> {
-    const [telemetryTarget, pcEstimatorTarget] = await Promise.all([
-      loadTelemetryTarget(this.deps.db, args.simRunId),
-      loadPcTarget(this.deps.db, args.simRunId),
-    ]);
-    return { telemetryTarget, pcEstimatorTarget };
-  }
-}
-
-async function loadTelemetryTarget(
-  db: NodePgDatabase<typeof schema>,
-  simRunId: number,
-): Promise<TelemetryTarget | null> {
-  const runRows = await db.execute(sql`
-    SELECT seed_applied
-    FROM sim_run
-    WHERE id = ${BigInt(simRunId)}
-    LIMIT 1
-  `);
-  const row = runRows.rows[0] as { seed_applied: SeedRefs } | undefined;
-  if (!row) return null;
-  const seed = row.seed_applied ?? {};
-  const satelliteId = seed.telemetryTargetSatelliteId;
-  if (satelliteId == null) return null;
-
-  const satRows = await db.execute(sql`
-    SELECT
-      s.id::int                                       AS id,
-      s.name                                          AS name,
-      NULLIF(s.telemetry_summary->>'noradId','')::int AS norad_id,
-      s.launch_year                                   AS launch_year,
-      orr.name                                        AS regime,
-      sb.name                                         AS bus_name
-    FROM satellite s
-    LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
-    LEFT JOIN orbit_regime orr    ON orr.id = oc.orbit_regime_id
-    LEFT JOIN satellite_bus sb    ON sb.id = s.satellite_bus_id
-    WHERE s.id = ${BigInt(satelliteId)}
-    LIMIT 1
-  `);
-  const sat = satRows.rows[0] as
-    | {
-        id: number;
-        name: string;
-        norad_id: number | null;
-        launch_year: number | null;
-        regime: string | null;
-        bus_name: string | null;
-      }
-    | undefined;
-  if (!sat) {
+  }): Promise<Record<string, unknown> | null> {
+    const bag = await this.deps.targetService.loadTargets(BigInt(args.simRunId));
     return {
-      satelliteId,
-      satelliteName: `(unknown sat id=${satelliteId})`,
-      noradId: null,
-      regime: null,
-      launchYear: null,
-      busArchetype: seed.busDatasheetPrior?.busArchetype ?? null,
-      busDatasheetPrior: seed.busDatasheetPrior?.scalars ?? null,
-      sources: [],
+      telemetryTarget: bag.telemetryTarget,
+      pcEstimatorTarget: bag.pcEstimatorTarget,
     };
   }
-
-  return {
-    satelliteId: sat.id,
-    satelliteName: sat.name,
-    noradId: sat.norad_id,
-    regime: sat.regime,
-    launchYear: sat.launch_year,
-    busArchetype: seed.busDatasheetPrior?.busArchetype ?? sat.bus_name,
-    busDatasheetPrior: seed.busDatasheetPrior?.scalars ?? null,
-    sources: [],
-  };
-}
-
-async function loadPcTarget(
-  db: NodePgDatabase<typeof schema>,
-  simRunId: number,
-): Promise<PcEstimatorTarget | null> {
-  const runRows = await db.execute(sql`
-    SELECT seed_applied
-    FROM sim_run
-    WHERE id = ${BigInt(simRunId)}
-    LIMIT 1
-  `);
-  const row = runRows.rows[0] as { seed_applied: SeedRefs } | undefined;
-  if (!row) return null;
-  const seed = row.seed_applied ?? {};
-  const conjId = seed.pcEstimatorTarget;
-  if (conjId == null) return null;
-
-  const rows = await db.execute(sql`
-    SELECT
-      ce.id::int                                         AS id,
-      ce.epoch                                           AS tca,
-      ce.min_range_km                                    AS miss_km,
-      ce.relative_velocity_kmps                          AS rel_v,
-      ce.probability_of_collision                        AS current_pc,
-      ce.hard_body_radius_m                              AS hbr,
-      ce.combined_sigma_km                               AS combined_sigma,
-      ce.primary_satellite_id::int                       AS p_id,
-      ce.secondary_satellite_id::int                     AS s_id,
-      sp.name                                            AS p_name,
-      ss.name                                            AS s_name,
-      NULLIF(sp.telemetry_summary->>'noradId','')::int   AS p_norad,
-      NULLIF(ss.telemetry_summary->>'noradId','')::int   AS s_norad,
-      spb.name                                           AS p_bus,
-      ssb.name                                           AS s_bus
-    FROM conjunction_event ce
-    LEFT JOIN satellite sp      ON sp.id = ce.primary_satellite_id
-    LEFT JOIN satellite ss      ON ss.id = ce.secondary_satellite_id
-    LEFT JOIN satellite_bus spb ON spb.id = sp.satellite_bus_id
-    LEFT JOIN satellite_bus ssb ON ssb.id = ss.satellite_bus_id
-    WHERE ce.id = ${BigInt(conjId)}
-    LIMIT 1
-  `);
-  const r = rows.rows[0] as
-    | {
-        id: number;
-        tca: Date | string | null;
-        miss_km: number | null;
-        rel_v: number | null;
-        current_pc: number | null;
-        hbr: number | null;
-        combined_sigma: number | null;
-        p_id: number;
-        s_id: number;
-        p_name: string | null;
-        s_name: string | null;
-        p_norad: number | null;
-        s_norad: number | null;
-        p_bus: string | null;
-        s_bus: string | null;
-      }
-    | undefined;
-  if (!r) {
-    return {
-      conjunctionId: conjId,
-      tca: null,
-      missDistanceKm: null,
-      relativeVelocityKmps: null,
-      currentPc: null,
-      hardBodyRadiusMeters: null,
-      combinedSigmaKm: null,
-      primary: { id: 0, name: `(unknown conj=${conjId})`, noradId: null, bus: null },
-      secondary: { id: 0, name: "(unknown)", noradId: null, bus: null },
-      assumptions: seed.pcAssumptions ?? null,
-    };
-  }
-  return {
-    conjunctionId: r.id,
-    tca: r.tca ? new Date(r.tca as string | Date) : null,
-    missDistanceKm: r.miss_km,
-    relativeVelocityKmps: r.rel_v,
-    currentPc: r.current_pc,
-    hardBodyRadiusMeters: r.hbr,
-    combinedSigmaKm: r.combined_sigma,
-    primary: {
-      id: r.p_id,
-      name: r.p_name ?? `sat#${r.p_id}`,
-      noradId: r.p_norad,
-      bus: r.p_bus,
-    },
-    secondary: {
-      id: r.s_id,
-      name: r.s_name ?? `sat#${r.s_id}`,
-      noradId: r.s_norad,
-      bus: r.s_bus,
-    },
-    assumptions: seed.pcAssumptions ?? null,
-  };
 }

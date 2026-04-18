@@ -163,6 +163,7 @@ const COMPOSITE_METHOD_ALLOWLIST = new Set<string>([
   "insertOne",                  // Redis SET + ZADD in the review queue
   "findSatelliteIdsWithNullColumn", // list + count for paging
   "getStats",                  // dashboard aggregate: 4 CTE queries
+  "insertGeneric",            // Redis INCR + payload/index write sequence
 ]);
 
 // Redis-only or in-memory helpers — not Postgres repos per SPEC-DB-002, so

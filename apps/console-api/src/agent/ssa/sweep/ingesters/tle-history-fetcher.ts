@@ -9,7 +9,11 @@
  */
 
 import { sql } from "drizzle-orm";
-import { tleHistory, type NewTleHistory } from "@interview/db-schema";
+import {
+  tleHistory,
+  type Database,
+  type NewTleHistory,
+} from "@interview/db-schema";
 import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
 
 interface IngestionResult {
@@ -129,12 +133,16 @@ async function fetchGroup(group: string): Promise<ParsedTle[]> {
 }
 
 /**
- * Ingester entry point — registered under jobName `tle-history`.
+ * Factory — builds the `tle-history` ingestion source with a closed-over
+ * Database handle so the kernel-side IngestionRegistry never sees Drizzle.
  * Pulls every CelesTrak group, deduplicates by NORAD, resolves to catalog
  * satelliteIds, and upserts into `tle_history`.
  */
-async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
-  const { db, logger } = ctx;
+export function createTleHistorySource(
+  db: Database,
+): IngestionSource<IngestionResult> {
+  async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+    const { logger } = ctx;
   const byNorad = new Map<number, ParsedTle>();
   let fetchedGroups = 0;
   let failedGroups = 0;
@@ -248,9 +256,10 @@ async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
   };
 }
 
-export const tleHistorySource: IngestionSource<IngestionResult> = {
-  id: "tle-history",
-  description: "CelesTrak TLE history backfill",
-  cron: "0 */6 * * *",
-  run,
-};
+  return {
+    id: "tle-history",
+    description: "CelesTrak TLE history backfill",
+    cron: "0 */6 * * *",
+    run,
+  };
+}

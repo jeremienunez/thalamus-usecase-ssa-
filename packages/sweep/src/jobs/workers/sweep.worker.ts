@@ -3,7 +3,7 @@
  *
  * Plan 1 Task 2.2: takes an injected NanoSweepService instead of
  * constructing one in-process. The container wires it with the right
- * DomainAuditProvider (injected port or legacy fallback).
+ * DomainAuditProvider port.
  */
 
 import type { Worker } from "bullmq";

@@ -1,0 +1,13 @@
+flowchart LR
+    OSINT_Edge["OSINT edge<br/>conf: 0.2 – 0.5<br/>(TLEs stale, amateurs<br/>miss small debris)"]
+
+    FieldCorr{"Field<br/>corroboration?"}
+
+    OSINT_Edge --> FieldCorr
+
+    FieldCorr -->|"YES — radar confirms"| Promoted["conf: 0.85 – 1.0<br/>→ actionable"]
+    FieldCorr -->|"NO — no field signal"| Flagged["conf: stays low<br/>→ operator sees<br/>provenance breakdown"]
+
+    Guard["GUARDRAIL (in code):<br/>A hypothesis conjunction<br/>can NEVER self-promote<br/>to actionable without<br/>field corroboration"]
+
+    FieldCorr ~~~ Guard

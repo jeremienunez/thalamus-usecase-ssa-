@@ -1,18 +1,18 @@
 /**
- * Sweep DI container — wires Redis-backed sweep repos with the SatelliteRepository
- * and Thalamus's ResearchGraphService for cross-domain KG logging.
+ * Sweep DI container — wires Redis-backed sweep repos and the sim-engine
+ * services (SPEC-SW-006: MemoryService, two turn runners, orchestrator,
+ * god channel). The sim-turn BullMQ worker is built separately via
+ * createSimTurnWorker(container) — workers are process-scoped, not
+ * container-scoped.
  *
- * Also wires the sim-engine services (SPEC-SW-006): MemoryService, the two
- * turn runners (DAG for UC1, Sequential for UC3), the orchestrator, and the
- * god channel. The sim-turn BullMQ worker must be constructed separately
- * via createSimTurnWorker(container) — workers are process-scoped, not
- * container-scoped, so we don't spin them up eagerly here.
+ * Domain-owned data access is the caller's responsibility through the
+ * injected ports (DomainAuditProvider, SweepPromotionAdapter,
+ * ResolutionHandlerRegistry, IngestionSourceProvider). The package holds
+ * zero app-owned DB code.
  */
 
 import type IORedis from "ioredis";
-import type { Database } from "@interview/db-schema";
 import type { CortexRegistry } from "@interview/thalamus";
-import type { ResearchGraphService } from "@interview/thalamus/services/research-graph.service";
 import type {
   FindingDomainSchema,
   DomainAuditProvider,
@@ -22,8 +22,11 @@ import type {
   IngestionSourceProvider,
 } from "../ports";
 import type {
-  SimFleetProvider,
-  SimTurnTargetProvider,
+  SimSubjectProvider,
+  SimQueuePort,
+  SimRuntimeStore,
+  SimScenarioContextProvider,
+  SimSwarmStore,
   SimAgentPersonaComposer,
   SimPromptComposer,
   SimCortexSelector,
@@ -32,44 +35,24 @@ import type {
   SimAggregationStrategy,
   SimKindGuard,
 } from "../sim/ports";
-// Plan 2 · B.11: Legacy* fallback adapters deleted — sim ports are now
-// required in BuildSweepOpts.sim and injected by console-api.
-import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
-import {
-  NanoSweepService,
-  LegacyNanoSweepAuditProvider,
-} from "../services/nano-sweep.service";
-import {
-  SweepResolutionService,
-  type OnSimUpdateAccepted,
-} from "../services/sweep-resolution.service";
-import { createLegacySsaResolutionRegistry } from "../services/legacy-ssa-resolution";
-import { LegacySsaPromotionAdapter } from "../services/legacy-ssa-promotion";
+import { NanoSweepService } from "../services/nano-sweep.service";
+import { SweepResolutionService } from "../services/sweep-resolution.service";
 import { MessagingService } from "../services/messaging.service";
 import { MemoryService, type EmbedFn } from "../sim/memory.service";
 import { SequentialTurnRunner } from "../sim/turn-runner-sequential";
 import { DagTurnRunner } from "../sim/turn-runner-dag";
 import { SimOrchestrator } from "../sim/sim-orchestrator.service";
-import { GodChannelService } from "../sim/god-channel.service";
 import { AggregatorService } from "../sim/aggregator.service";
-import { TelemetryAggregatorService } from "../sim/aggregator-telemetry";
 import { SwarmService } from "../sim/swarm.service";
 import { ConfidenceService } from "@interview/thalamus";
-import {
-  simTurnQueue,
-  swarmFishQueue,
-  swarmAggregateQueue,
-} from "../jobs/queues";
 
 export interface SimServices {
   memoryService: MemoryService;
   sequentialRunner: SequentialTurnRunner;
   dagRunner: DagTurnRunner;
   orchestrator: SimOrchestrator;
-  godChannel: GodChannelService;
   aggregator: AggregatorService;
-  telemetryAggregator: TelemetryAggregatorService;
   swarmService: SwarmService;
   /**
    * Shared ConfidenceService instance — in-memory for now (SPEC-TH-040
@@ -80,7 +63,6 @@ export interface SimServices {
 }
 
 export interface SweepContainer {
-  satelliteRepo: SatelliteRepository;
   sweepRepo: SweepRepository;
   nanoSweepService: NanoSweepService;
   resolutionService: SweepResolutionService;
@@ -89,22 +71,21 @@ export interface SweepContainer {
 }
 
 export interface BuildSweepOpts {
-  db: Database;
   redis: IORedis;
-  /** Optional graph service injected so resolutions can log to the KG */
-  graphService?: ResearchGraphService;
   /**
    * Optional sim-engine deps. When supplied, container.sim is wired.
    * Plan 2 · B.11: every sim port is REQUIRED. Callers must inject a
-   * concrete implementation — no sweep-internal fallback. Console-api
-   * supplies them from apps/console-api/src/agent/ssa/sim/*.
+   * concrete implementation — no sweep-internal fallback.
    */
   sim?: {
     cortexRegistry: CortexRegistry;
     embed: EmbedFn;
     llmMode: "cloud" | "fixtures" | "record";
-    fleet: SimFleetProvider;
-    targets: SimTurnTargetProvider;
+    queue: SimQueuePort;
+    runtimeStore: SimRuntimeStore;
+    swarmStore: SimSwarmStore;
+    subjects: SimSubjectProvider;
+    scenarioContext: SimScenarioContextProvider;
     persona: SimAgentPersonaComposer;
     prompt: SimPromptComposer;
     cortexSelector: SimCortexSelector;
@@ -114,67 +95,45 @@ export interface BuildSweepOpts {
     kindGuard: SimKindGuard;
   };
   /**
-   * Optional port overrides. When a field is supplied, the container skips
-   * its legacy SSA-inlined construction and uses the injected port.
-   * Wired incrementally across Plan 1 Phases 2-3; unused here but typed so
-   * callers can start passing them without waiting for the full cutover.
+   * App-owned sweep ports.
+   *
+   * The package no longer carries fallback implementations: every
+   * boundary-crossing concern (audit, promotion, resolution handlers) is
+   * injected by the caller. The app supplies the adapters; the CLI and E2E
+   * supply disabled stubs because they don't run those paths in-process.
    */
-  ports?: {
+  ports: {
     findingSchema?: FindingDomainSchema;
-    audit?: DomainAuditProvider;
-    promotion?: SweepPromotionAdapter;
+    findingDomain?: string;
+    audit: DomainAuditProvider;
+    promotion: SweepPromotionAdapter;
     findingRouting?: FindingRoutingPolicy;
-    resolutionHandlers?: ResolutionHandlerRegistry;
+    resolutionHandlers: ResolutionHandlerRegistry;
     ingestion?: IngestionSourceProvider[];
   };
 }
 
 export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
-  const { db, redis } = opts;
+  const { redis } = opts;
 
-  const satelliteRepo = new SatelliteRepository(db);
-  const sweepRepo = opts.ports?.findingSchema
-    ? new SweepRepository({ redis, schema: opts.ports.findingSchema })
+  const sweepRepo = opts.ports.findingSchema
+    ? new SweepRepository({
+        redis,
+        schema: opts.ports.findingSchema,
+        domain: opts.ports.findingDomain,
+      })
     : new SweepRepository(redis);
   const messagingService = new MessagingService();
 
-  // Audit provider: prefer injected port; otherwise fall back to the
-  // legacy SSA pipeline preserved inside the sweep package. Remove the
-  // fallback in Phase 4 once console-api is the sole wiring path.
-  const auditProvider =
-    opts.ports?.audit ??
-    new LegacyNanoSweepAuditProvider(satelliteRepo, sweepRepo);
   const nanoSweepService = new NanoSweepService({
-    audit: auditProvider,
+    audit: opts.ports.audit,
     sweepRepo,
-    domain: "ssa",
+    domain: opts.ports.findingDomain ?? "generic",
   });
 
-  // Resolution: prefer injected ports; otherwise fall back to the legacy
-  // SSA registry + promotion adapter preserved inside the sweep package.
-  // The sim-provenance hook (onSimUpdateAccepted) is wired via the legacy
-  // registry's deps lazily — the cb is supplied after confidenceService
-  // exists, in the opts.sim block below. We use a mutable holder so the
-  // container can fill it after construction.
-  const simHook: { cb: OnSimUpdateAccepted | null } = { cb: null };
-  const legacyResolutionRegistry =
-    opts.ports?.resolutionHandlers ??
-    createLegacySsaResolutionRegistry({
-      db,
-      satelliteRepo,
-      // Defer to the mutable holder so the sim block below can inject
-      // after confidenceService is built.
-      onSimUpdateAccepted: (event) => simHook.cb?.(event) ?? Promise.resolve(),
-    });
-  const legacyPromotion =
-    opts.ports?.promotion ??
-    new LegacySsaPromotionAdapter({
-      db,
-      graphService: opts.graphService ?? null,
-    });
   const resolutionService = new SweepResolutionService({
-    registry: legacyResolutionRegistry,
-    promotion: legacyPromotion,
+    registry: opts.ports.resolutionHandlers,
+    promotion: opts.ports.promotion,
     sweepRepo,
   });
 
@@ -183,8 +142,11 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
     // Plan 2 · B.11: sim ports are required — caller injects every
     // concrete implementation. Sweep-internal fallbacks deleted.
     const {
-      fleet,
-      targets,
+      queue,
+      subjects,
+      runtimeStore,
+      swarmStore,
+      scenarioContext,
       persona,
       prompt,
       cortexSelector,
@@ -193,118 +155,69 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       aggStrategy,
       kindGuard,
     } = opts.sim;
-    const memoryService = new MemoryService(db, opts.sim.embed, fleet);
+    const memoryService = new MemoryService(runtimeStore, opts.sim.embed, subjects);
     const sequentialRunner = new SequentialTurnRunner({
-      db,
+      store: runtimeStore,
       memory: memoryService,
       cortexRegistry: opts.sim.cortexRegistry,
       llmMode: opts.sim.llmMode,
-      targets,
+      targets: scenarioContext,
       prompt,
       cortexSelector,
       schemaProvider,
     });
     const dagRunner = new DagTurnRunner({
-      db,
+      store: runtimeStore,
       memory: memoryService,
       cortexRegistry: opts.sim.cortexRegistry,
       llmMode: opts.sim.llmMode,
-      targets,
+      targets: scenarioContext,
       prompt,
       cortexSelector,
       schemaProvider,
     });
     const orchestrator = new SimOrchestrator({
-      db,
-      simTurnQueue,
-      fleet,
+      store: runtimeStore,
+      queue,
+      subjects,
       persona,
       perturbationPack,
     });
-    const godChannel = new GodChannelService(orchestrator);
     const aggregator = new AggregatorService({
-      db,
+      swarmStore,
       embed: opts.sim.embed,
       strategy: aggStrategy,
     });
-    const telemetryAggregator = new TelemetryAggregatorService({ db });
     const swarmService = new SwarmService({
-      db,
+      store: runtimeStore,
+      swarmStore,
       orchestrator,
-      swarmFishQueue,
-      swarmAggregateQueue,
+      queue,
       kindGuard,
+      perturbationPack,
     });
+    // Sim source-class promotion is now owned by the injected promotion
+    // adapter. The legacy in-package simHook → registry chain
+    // was removed when ports.promotion + ports.resolutionHandlers became
+    // required (CLAUDE.md §3.2 — no second contract).
     const confidenceService = new ConfidenceService();
-
-    // Wire reviewer-accept of a sim-swarm-telemetry suggestion to a
-    // ConfidenceService promotion. We treat the suggestion's (satelliteId,
-    // field) pair as the edge id (stable int fingerprint). On first accept
-    // the edge is initialised in SIM_UNCORROBORATED, then promoted via
-    // reviewer-accept evidence to OSINT_CORROBORATED.
-    //
-    // Plan 1 Task 2.3: the cb flows into the legacy resolution registry's
-    // update_field handler via the simHook mutable holder. Plan 2 will move
-    // this into a dedicated sim promotion path on the port.
-    simHook.cb = async (event) => {
-      const edgeId = telemetryEdgeId(event.satelliteId, event.field);
-      try {
-        await confidenceService.read(edgeId);
-      } catch {
-        // First-time accept — seed the edge in SIM_UNCORROBORATED so the
-        // promotion below is a legitimate transition, not a bare insert.
-        confidenceService.initialWrite(edgeId);
-      }
-      await confidenceService.promote({
-        edgeId,
-        evidence: {
-          kind: "reviewer-accept",
-          analystId: 0, // no analyst-user model yet; 0 = system accept
-          citation: `sim_swarm:${event.swarmId ?? "?"} field=${event.field}`,
-        },
-      });
-    };
 
     sim = {
       memoryService,
       sequentialRunner,
       dagRunner,
       orchestrator,
-      godChannel,
       aggregator,
-      telemetryAggregator,
       swarmService,
       confidenceService,
     };
   }
 
   return {
-    satelliteRepo,
     sweepRepo,
     nanoSweepService,
     resolutionService,
     messagingService,
     sim,
   };
-}
-
-/**
- * Deterministic edge id derived from (satelliteId, field).
- *
- * ConfidenceService.edges is keyed by a numeric edgeId — for telemetry we
- * don't have a real research_edge row; we synthesise one so promotions are
- * idempotent across (sat, field) pairs.
- *
- * FNV-1a 32-bit over `"${satelliteId}:${field}"` bit-shifted into positive
- * range. Collision probability across our ~1500 sats × 8 fields = 12k pairs
- * is negligible on a 2^31 space.
- */
-function telemetryEdgeId(satelliteId: bigint, field: string): number {
-  const s = `${satelliteId.toString()}:${field}`;
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 1; // clear the sign bit — stay in the positive 31-bit range
 }

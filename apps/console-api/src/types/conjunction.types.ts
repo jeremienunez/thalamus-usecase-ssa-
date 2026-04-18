@@ -60,3 +60,36 @@ export type KnnCandidateRow = {
 
 export type ScreenedConjunctionView = ScreenedConjunctionRow & { id: string };
 export type KnnCandidateView = KnnCandidateRow & { id: string };
+
+/**
+ * Full conjunction profile by id — event row + both satellites (incl.
+ * bus + operator). Returned by
+ * `ConjunctionRepository.findByIdWithSatellites`. Consumed by
+ * `SimTargetService` (Pc swarm target composition) and
+ * `SimLaunchService` (operator seed resolution).
+ *
+ * Introduced: Plan 5 · 1.A.8 (moved to this file by the 1.B DIP cleanup).
+ */
+export interface ConjunctionWithSatellitesRow {
+  id: bigint;
+  epoch: Date | null;
+  minRangeKm: number | null;
+  relativeVelocityKmps: number | null;
+  probabilityOfCollision: number | null;
+  hardBodyRadiusM: number | null;
+  combinedSigmaKm: number | null;
+  primary: {
+    id: bigint;
+    name: string | null;
+    noradId: number | null;
+    busName: string | null;
+    operatorId: bigint | null;
+  };
+  secondary: {
+    id: bigint;
+    name: string | null;
+    noradId: number | null;
+    busName: string | null;
+    operatorId: bigint | null;
+  };
+}

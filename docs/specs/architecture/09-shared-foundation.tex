@@ -1,0 +1,34 @@
+% SPEC-ARCH-09 — Shared foundation
+
+\input{./preamble-arch.tex}
+
+\specID{SPEC-ARCH-09}
+\specTitle{Shared foundation --- @interview/shared + db-schema + 5-layer arch}
+\specStatus{OVERVIEW}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Cross-cutting packages}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/09-shared-schema.pdf}
+  \caption{\texttt{@interview/shared} and \texttt{@interview/db-schema} feed both feature packages --- no duplicated entity shapes, no duplicated error handling.}
+  \label{fig:arch-09-shared}
+\end{figure}
+
+\section{5-layer architecture (per feature package)}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/09-five-layer.pdf}
+  \caption{Routes $\to$ Controllers $\to$ Services $\to$ Repositories $\to$ Entities. Strict separation.}
+  \label{fig:arch-09-layers}
+\end{figure}
+
+\textbf{Invariants:} no business logic in controllers or repositories. No \texttt{any}/\texttt{unknown} in repo signatures. Drizzle-inferred types end-to-end. Zod validation at the LLM I/O boundary.
+
+\end{document}

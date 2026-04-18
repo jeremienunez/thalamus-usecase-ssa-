@@ -257,16 +257,43 @@ export class StandardStrategy implements CortexExecutionStrategy {
       return [];
     }
 
+    // Planner LLMs sometimes emit param keys with leading/trailing whitespace
+    // (e.g. ` rideshare_flag`) which makes the helper silently miss the value.
+    // Trim keys defensively. Deeper divergence from the skill's declared
+    // `params:` frontmatter is a planner-contract concern — logged at DEBUG
+    // because helpers often accept keys outside the declaration (the
+    // frontmatter is a planner hint, not the helper's real signature).
+    const cleanParams: Record<string, unknown> = {};
+    const declared = new Set(Object.keys(skill.header.params));
+    const unknown: string[] = [];
+    for (const [rawKey, value] of Object.entries(params)) {
+      const key = rawKey.trim();
+      if (!key) continue;
+      cleanParams[key] = value;
+      if (declared.size > 0 && !declared.has(key)) unknown.push(key);
+    }
+    if (unknown.length > 0) {
+      logger.debug(
+        {
+          cortex: skill.header.name,
+          sqlHelper: helperName,
+          declared: [...declared],
+          unknown,
+        },
+        "Planner params diverge from skill frontmatter",
+      );
+    }
+
     try {
       logger.debug(
         {
           cortex: skill.header.name,
           sqlHelper: helperName,
-          params,
+          params: cleanParams,
         },
         "Calling data provider",
       );
-      const result = await helperFn(params);
+      const result = await helperFn(cleanParams);
       if (Array.isArray(result)) return result;
       return result == null ? [] : [result as unknown];
     } catch (err) {

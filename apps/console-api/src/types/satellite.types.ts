@@ -36,6 +36,8 @@ export type FindByIdFullRow = {
   platformClassId: bigint | null;
   orbitRegimeName: string | null;
   orbitRegimeId: bigint | null;
+  /** satellite_bus.name — added Plan 5 · 1.A.7 for sim target composition. */
+  busName: string | null;
   telemetrySummary: Record<string, unknown> | null;
 };
 

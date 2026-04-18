@@ -1,5 +1,5 @@
 /**
- * Sweep Repository — Redis-backed storage for nano-sweep suggestions.
+ * Sweep Repository — Redis-backed storage for reviewable suggestions.
  *
  * Keys:
  *   sweep:suggestions:{id}  → Hash (suggestion data)
@@ -10,7 +10,6 @@
  */
 
 import type IORedis from "ioredis";
-import type { SweepCategory, SweepSeverity } from "../transformers/sweep.dto";
 import type {
   FindingDomainSchema,
   GenericInsertSuggestion,
@@ -24,158 +23,94 @@ const COUNTER = "sweep:counter";
 const FEEDBACK = "sweep:feedback";
 const TTL_DAYS = 90;
 const TTL_SECS = TTL_DAYS * 86400;
+const DOMAIN_BLOB = "domainBlob";
 
-// ─── Types ───────────────────────────────────────────────────────────
+const RESERVED_HASH_KEYS = new Set([
+  "id",
+  "domain",
+  "accepted",
+  "reviewerNote",
+  "reviewedAt",
+  "createdAt",
+  "resolutionPayload",
+  "resolutionStatus",
+  "resolvedAt",
+  "resolutionErrors",
+  "pendingSelections",
+  "simSwarmId",
+  "simDistribution",
+  DOMAIN_BLOB,
+]);
 
-export interface InsertSuggestion {
-  operatorCountryId: bigint | null;
-  operatorCountryName: string;
-  category: SweepCategory;
-  severity: SweepSeverity;
-  title: string;
-  description: string;
-  affectedSatellites: number;
-  suggestedAction: string;
-  webEvidence: string | null;
-  resolutionPayload: string | null;
-  /** Provenance tag when a suggestion is emitted from a sim-swarm aggregate. */
-  simSwarmId?: string | null;
-  /** JSON-stringified swarm distribution payload (clusters + modal + divergence). */
-  simDistribution?: string | null;
-}
-
-export interface SweepSuggestionRow {
-  id: string;
-  operatorCountryId: string | null;
-  operatorCountryName: string;
-  category: SweepCategory;
-  severity: SweepSeverity;
-  title: string;
-  description: string;
-  affectedSatellites: number;
-  suggestedAction: string;
-  webEvidence: string | null;
-  accepted: boolean | null;
-  reviewerNote: string | null;
-  reviewedAt: string | null;
-  createdAt: string;
-  resolutionPayload: string | null;
-  resolutionStatus: string | null;
-  resolvedAt: string | null;
-  resolutionErrors: string | null;
-  pendingSelections: string | null;
-  simSwarmId: string | null;
-  simDistribution: string | null;
-}
-
-export interface PastFeedback {
-  category: string;
+export interface SuggestionFeedbackRow {
   wasAccepted: boolean;
   reviewerNote: string | null;
-  operatorCountryName: string;
+  domainFields: Record<string, unknown>;
 }
-
-// ─── Repository ──────────────────────────────────────────────────────
 
 export interface SweepRepositoryOpts {
   redis: IORedis;
-  /**
-   * Domain-scoped schema supplied by the pack. When set, the generic
-   * API (insertGeneric / listGeneric / getGeneric) is active. Old flat
-   * API (insertOne / insertMany / list / getById) keeps working in both
-   * modes — no caller change.
-   */
   schema?: FindingDomainSchema;
+  domain?: string;
 }
 
 export class SweepRepository {
   private readonly redis: IORedis;
   private readonly schema: FindingDomainSchema | undefined;
+  private readonly domain: string;
 
-  /**
-   * Accepts either the legacy `new SweepRepository(redis)` or the new
-   * `new SweepRepository({ redis, schema? })`. Both preserved so in-flight
-   * callers (sim/promote, sweep container) land without churn.
-   */
   constructor(arg: IORedis | SweepRepositoryOpts) {
     if (arg && typeof arg === "object" && "redis" in arg) {
       this.redis = arg.redis;
       this.schema = arg.schema;
+      this.domain = arg.domain ?? "generic";
     } else {
       this.redis = arg as IORedis;
       this.schema = undefined;
+      this.domain = "generic";
     }
   }
 
-  /** Insert a batch of suggestions. */
-  async insertMany(suggestions: InsertSuggestion[]): Promise<number> {
-    const pipe = this.redis.pipeline();
-    const now = Date.now();
-    let inserted = 0;
+  private serializeDomainFields(input: Record<string, unknown>): {
+    flatFields: Record<string, string | null>;
+    blob: Record<string, unknown>;
+  } {
+    const serialized = this.schema
+      ? this.schema.serialize(input)
+      : fallbackSerializeDomainFields(input);
 
-    for (const s of suggestions) {
-      const id = await this.redis.incr(COUNTER);
-      const key = `${PREFIX}:${id}`;
-      const createdAt = new Date(now).toISOString();
-
-      pipe.hset(key, {
-        id: String(id),
-        operatorCountryId:
-          s.operatorCountryId != null ? String(s.operatorCountryId) : "",
-        operatorCountryName: s.operatorCountryName,
-        category: s.category,
-        severity: s.severity,
-        title: s.title,
-        description: s.description,
-        affectedSatellites: String(s.affectedSatellites),
-        suggestedAction: s.suggestedAction,
-        webEvidence: s.webEvidence ?? "",
-        accepted: "",
-        reviewerNote: "",
-        reviewedAt: "",
-        createdAt,
-        resolutionPayload: s.resolutionPayload ?? "",
-        resolutionStatus: "",
-        resolvedAt: "",
-        resolutionErrors: "",
-        pendingSelections: "",
-        simSwarmId: s.simSwarmId ?? "",
-        simDistribution: s.simDistribution ?? "",
-      });
-      pipe.expire(key, TTL_SECS);
-      pipe.zadd(IDX_ALL, now, String(id));
-      pipe.sadd(IDX_PENDING, String(id));
-      inserted++;
-    }
-
-    await pipe.exec();
-    return inserted;
+    return {
+      flatFields: Object.fromEntries(
+        Object.entries(serialized.flatFields).map(([key, value]) => [
+          key,
+          value == null ? null : String(value),
+        ]),
+      ),
+      blob: serialized.blob,
+    };
   }
 
-  /**
-   * Insert a single suggestion and return its id.
-   * Used by the sim-swarm aggregate worker to surface a modal outcome.
-   */
-  async insertOne(suggestion: InsertSuggestion): Promise<string> {
-    const id = await this.redis.incr(COUNTER);
-    const key = `${PREFIX}:${id}`;
-    const now = Date.now();
-    const createdAt = new Date(now).toISOString();
-    const pipe = this.redis.pipeline();
-    pipe.hset(key, {
+  private deserializeDomainFields(d: Record<string, string>): Record<string, unknown> {
+    const flatFields = extractFlatFields(d);
+    const blob = parseBlob(d[DOMAIN_BLOB]);
+    if (this.schema) {
+      return this.schema.deserialize({ flatFields, blob });
+    }
+    return {
+      ...flatFields,
+      ...blob,
+    };
+  }
+
+  private toHash(
+    suggestion: GenericInsertSuggestion,
+    id: number,
+    createdAt: string,
+  ): Record<string, string> {
+    const { flatFields, blob } = this.serializeDomainFields(suggestion.domainFields);
+    return {
       id: String(id),
-      operatorCountryId:
-        suggestion.operatorCountryId != null
-          ? String(suggestion.operatorCountryId)
-          : "",
-      operatorCountryName: suggestion.operatorCountryName,
-      category: suggestion.category,
-      severity: suggestion.severity,
-      title: suggestion.title,
-      description: suggestion.description,
-      affectedSatellites: String(suggestion.affectedSatellites),
-      suggestedAction: suggestion.suggestedAction,
-      webEvidence: suggestion.webEvidence ?? "",
+      domain: suggestion.domain || this.domain,
       accepted: "",
       reviewerNote: "",
       reviewedAt: "",
@@ -187,24 +122,56 @@ export class SweepRepository {
       pendingSelections: "",
       simSwarmId: suggestion.simSwarmId ?? "",
       simDistribution: suggestion.simDistribution ?? "",
-    });
+      [DOMAIN_BLOB]: isEmptyRecord(blob) ? "" : JSON.stringify(blob),
+      ...Object.fromEntries(
+        Object.entries(flatFields).map(([key, value]) => [key, value ?? ""]),
+      ),
+    };
+  }
+
+  private async enqueueWrite(
+    pipe: ReturnType<IORedis["pipeline"]>,
+    suggestion: GenericInsertSuggestion,
+    now: number,
+  ): Promise<number> {
+    const id = await this.redis.incr(COUNTER);
+    const key = `${PREFIX}:${id}`;
+    const createdAt = new Date(now).toISOString();
+    pipe.hset(key, this.toHash(suggestion, id, createdAt));
     pipe.expire(key, TTL_SECS);
     pipe.zadd(IDX_ALL, now, String(id));
     pipe.sadd(IDX_PENDING, String(id));
+    return id;
+  }
+
+  async insertMany(suggestions: GenericInsertSuggestion[]): Promise<number> {
+    const pipe = this.redis.pipeline();
+    const now = Date.now();
+    for (const suggestion of suggestions) {
+      await this.enqueueWrite(pipe, suggestion, now);
+    }
+    await pipe.exec();
+    return suggestions.length;
+  }
+
+  async insertOne(suggestion: GenericInsertSuggestion): Promise<string> {
+    return this.insertGeneric(suggestion);
+  }
+
+  async insertGeneric(input: GenericInsertSuggestion): Promise<string> {
+    const pipe = this.redis.pipeline();
+    const id = await this.enqueueWrite(pipe, input, Date.now());
     await pipe.exec();
     return String(id);
   }
 
-
-  /** List suggestions with filters + pagination. */
   async list(opts: {
     page?: number;
     limit?: number;
-    category?: SweepCategory;
-    severity?: SweepSeverity;
+    category?: string;
+    severity?: string;
     reviewed?: boolean;
-  }): Promise<{ rows: SweepSuggestionRow[]; total: number }> {
-    // Get IDs from the right index
+  }): Promise<{ rows: GenericSuggestionRow[]; total: number }> {
     let ids: string[];
     if (opts.reviewed === false) {
       ids = await this.redis.smembers(IDX_PENDING);
@@ -212,160 +179,155 @@ export class SweepRepository {
       ids = await this.redis.zrevrange(IDX_ALL, 0, -1);
     }
 
-    // Fetch all hashes
     const pipe = this.redis.pipeline();
     for (const id of ids) pipe.hgetall(`${PREFIX}:${id}`);
     const results = await pipe.exec();
 
-    let rows: SweepSuggestionRow[] = (results ?? [])
+    let rows: GenericSuggestionRow[] = (results ?? [])
       .map(([err, data]) => {
         if (err || !data || typeof data !== "object") return null;
-        const d = data as Record<string, string>;
-        if (!d.id) return null;
-        return {
-          id: d.id,
-          operatorCountryId: d.operatorCountryId || null,
-          operatorCountryName: d.operatorCountryName ?? "",
-          category: d.category as SweepCategory,
-          severity: d.severity as SweepSeverity,
-          title: d.title ?? "",
-          description: d.description ?? "",
-          affectedSatellites: Number(d.affectedSatellites) || 0,
-          suggestedAction: d.suggestedAction ?? "",
-          webEvidence: d.webEvidence || null,
-          accepted:
-            d.accepted === "true"
-              ? true
-              : d.accepted === "false"
-                ? false
-                : null,
-          reviewerNote: d.reviewerNote || null,
-          reviewedAt: d.reviewedAt || null,
-          createdAt: d.createdAt ?? "",
-          resolutionPayload: d.resolutionPayload || null,
-          resolutionStatus: d.resolutionStatus || null,
-          resolvedAt: d.resolvedAt || null,
-          resolutionErrors: d.resolutionErrors || null,
-          pendingSelections: d.pendingSelections || null,
-          simSwarmId: d.simSwarmId || null,
-          simDistribution: d.simDistribution || null,
-        };
+        return this.toRow(data as Record<string, string>);
       })
-      .filter((r): r is SweepSuggestionRow => r !== null);
+      .filter((row): row is GenericSuggestionRow => row !== null);
 
-    // Apply filters
-    if (opts.category) rows = rows.filter((r) => r.category === opts.category);
-    if (opts.severity) rows = rows.filter((r) => r.severity === opts.severity);
-    if (opts.reviewed === true)
-      rows = rows.filter((r) => r.reviewedAt !== null);
+    if (opts.category) {
+      rows = rows.filter(
+        (row) => String(row.domainFields.category ?? "") === opts.category,
+      );
+    }
+    if (opts.severity) {
+      rows = rows.filter(
+        (row) => String(row.domainFields.severity ?? "") === opts.severity,
+      );
+    }
+    if (opts.reviewed === true) {
+      rows = rows.filter((row) => row.reviewedAt !== null);
+    }
 
-    // Sort: critical first, then by creation date desc
-    const sevOrder: Record<string, number> = {
+    const severityRank: Record<string, number> = {
       critical: 0,
       warning: 1,
       info: 2,
     };
-    rows.sort(
-      (a, b) => (sevOrder[a.severity] ?? 2) - (sevOrder[b.severity] ?? 2),
-    );
+    rows.sort((a, b) => {
+      const left = severityRank[String(a.domainFields.severity ?? "")] ?? 99;
+      const right = severityRank[String(b.domainFields.severity ?? "")] ?? 99;
+      if (left !== right) return left - right;
+      return b.createdAt.localeCompare(a.createdAt);
+    });
 
-    // Paginate
     const total = rows.length;
     const page = opts.page ?? 1;
     const limit = opts.limit ?? 20;
     const offset = (page - 1) * limit;
-    rows = rows.slice(offset, offset + limit);
 
-    return { rows, total };
+    return {
+      rows: rows.slice(offset, offset + limit),
+      total,
+    };
   }
 
-  /** Review a suggestion (accept/reject). */
+  async listGeneric(opts: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    severity?: string;
+    reviewed?: boolean;
+  }): Promise<{ rows: GenericSuggestionRow[]; total: number }> {
+    return this.list(opts);
+  }
+
   async review(
     id: string,
     accepted: boolean,
     reviewerNote?: string,
   ): Promise<boolean> {
     const key = `${PREFIX}:${id}`;
-    const exists = await this.redis.exists(key);
-    if (!exists) return false;
+    const current = await this.redis.hgetall(key);
+    if (!current.id) return false;
 
     const reviewedAt = new Date().toISOString();
-    const ocName = await this.redis.hget(key, "operatorCountryName");
-    const category = await this.redis.hget(key, "category");
-
-    await this.redis.hset(key, {
+    const patched = {
+      ...current,
       accepted: String(accepted),
       reviewerNote: reviewerNote ?? "",
       reviewedAt,
-    });
+    };
 
-    // Remove from pending
+    await this.redis.hset(key, {
+      accepted: patched.accepted,
+      reviewerNote: patched.reviewerNote,
+      reviewedAt: patched.reviewedAt,
+    });
     await this.redis.srem(IDX_PENDING, id);
 
-    // Store in feedback list for self-improvement
+    const row = this.toRow(patched);
     await this.redis.lpush(
       FEEDBACK,
       JSON.stringify({
-        category,
         wasAccepted: accepted,
         reviewerNote: reviewerNote ?? null,
-        operatorCountryName: ocName ?? "",
-      }),
+        domainFields: row?.domainFields ?? {},
+      } satisfies SuggestionFeedbackRow),
     );
-    await this.redis.ltrim(FEEDBACK, 0, 199); // keep last 200
+    await this.redis.ltrim(FEEDBACK, 0, 199);
 
     return true;
   }
 
-  /** Load past feedback for self-improvement. */
-  async loadPastFeedback(limit = 100): Promise<PastFeedback[]> {
+  async loadPastFeedback(limit = 100): Promise<SuggestionFeedbackRow[]> {
     const raw = await this.redis.lrange(FEEDBACK, 0, limit - 1);
-    return raw.map((r) => {
+    return raw.map((entry) => {
       try {
-        return JSON.parse(r) as PastFeedback;
+        const parsed = JSON.parse(entry) as Partial<SuggestionFeedbackRow>;
+        return {
+          wasAccepted: parsed.wasAccepted === true,
+          reviewerNote:
+            parsed.reviewerNote == null ? null : String(parsed.reviewerNote),
+          domainFields:
+            parsed.domainFields && typeof parsed.domainFields === "object"
+              ? (parsed.domainFields as Record<string, unknown>)
+              : {},
+        };
       } catch {
         return {
-          category: "",
           wasAccepted: false,
           reviewerNote: null,
-          operatorCountryName: "",
+          domainFields: {},
         };
       }
     });
   }
 
-  /** Get a single suggestion by ID. */
-  async getById(id: string): Promise<SweepSuggestionRow | null> {
-    const key = `${PREFIX}:${id}`;
-    const d = await this.redis.hgetall(key);
+  async getById(id: string): Promise<GenericSuggestionRow | null> {
+    const data = await this.redis.hgetall(`${PREFIX}:${id}`);
+    return this.toRow(data);
+  }
+
+  async getGeneric(id: string): Promise<GenericSuggestionRow | null> {
+    return this.getById(id);
+  }
+
+  private toRow(d: Record<string, string>): GenericSuggestionRow | null {
     if (!d.id) return null;
     return {
       id: d.id,
-      operatorCountryId: d.operatorCountryId || null,
-      operatorCountryName: d.operatorCountryName ?? "",
-      category: d.category as SweepCategory,
-      severity: d.severity as SweepSeverity,
-      title: d.title ?? "",
-      description: d.description ?? "",
-      affectedSatellites: Number(d.affectedSatellites) || 0,
-      suggestedAction: d.suggestedAction ?? "",
-      webEvidence: d.webEvidence || null,
+      domain: d.domain || this.domain,
+      createdAt: d.createdAt ?? "",
       accepted:
         d.accepted === "true" ? true : d.accepted === "false" ? false : null,
-      reviewerNote: d.reviewerNote || null,
       reviewedAt: d.reviewedAt || null,
-      createdAt: d.createdAt ?? "",
-      resolutionPayload: d.resolutionPayload || null,
-      resolutionStatus: d.resolutionStatus || null,
+      reviewerNote: d.reviewerNote || null,
+      resolutionStatus: d.resolutionStatus || "pending",
       resolvedAt: d.resolvedAt || null,
       resolutionErrors: d.resolutionErrors || null,
-      pendingSelections: d.pendingSelections || null,
       simSwarmId: d.simSwarmId || null,
       simDistribution: d.simDistribution || null,
+      domainFields: this.deserializeDomainFields(d),
+      resolutionPayload: d.resolutionPayload || null,
     };
   }
 
-  /** Update resolution result fields on a suggestion. */
   async updateResolution(
     id: string,
     result: {
@@ -386,7 +348,6 @@ export class SweepRepository {
     });
   }
 
-  /** Aggregate stats. */
   async getStats(): Promise<{
     totalSuggestions: number;
     pending: number;
@@ -395,154 +356,83 @@ export class SweepRepository {
     bySeverity: Record<string, number>;
     byCategory: Record<string, number>;
   }> {
-    const allIds = await this.redis.zcard(IDX_ALL);
-    const pendingCount = await this.redis.scard(IDX_PENDING);
+    const totalSuggestions = await this.redis.zcard(IDX_ALL);
+    const pending = await this.redis.scard(IDX_PENDING);
 
-    // Need to scan all to count accepted/rejected/severity/category
     const ids = await this.redis.zrevrange(IDX_ALL, 0, -1);
     const pipe = this.redis.pipeline();
-    for (const id of ids)
+    for (const id of ids) {
       pipe.hmget(`${PREFIX}:${id}`, "accepted", "severity", "category");
+    }
     const results = await pipe.exec();
 
     let accepted = 0;
     let rejected = 0;
-    const bySeverity: Record<string, number> = {
-      critical: 0,
-      warning: 0,
-      info: 0,
-    };
+    const bySeverity: Record<string, number> = {};
     const byCategory: Record<string, number> = {};
 
     for (const [err, data] of results ?? []) {
       if (err || !data) continue;
-      const [acc, sev, cat] = data as string[];
-      if (acc === "true") accepted++;
-      if (acc === "false") rejected++;
-      if (sev) bySeverity[sev] = (bySeverity[sev] ?? 0) + 1;
-      if (cat) byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+      const [flag, severity, category] = data as string[];
+      if (flag === "true") accepted++;
+      if (flag === "false") rejected++;
+      if (severity) bySeverity[severity] = (bySeverity[severity] ?? 0) + 1;
+      if (category) byCategory[category] = (byCategory[category] ?? 0) + 1;
     }
 
     return {
-      totalSuggestions: allIds,
-      pending: pendingCount,
+      totalSuggestions,
+      pending,
       accepted,
       rejected,
       bySeverity,
       byCategory,
     };
   }
+}
 
-  // ─── Generic API (domain-agnostic, schema-driven) ──────────────────
+function fallbackSerializeDomainFields(input: Record<string, unknown>): {
+  flatFields: Record<string, string | number | null>;
+  blob: Record<string, unknown>;
+} {
+  const flatFields: Record<string, string | number | null> = {};
+  const blob: Record<string, unknown> = {};
 
-  /**
-   * Insert a single generic suggestion. Requires FindingDomainSchema via
-   * the `schema` constructor opt. Serializes domainFields via the schema
-   * and forwards to `insertOne` so the Redis layout is unchanged — no
-   * data migration.
-   */
-  async insertGeneric(input: GenericInsertSuggestion): Promise<string> {
-    if (!this.schema) {
-      throw new Error(
-        "SweepRepository.insertGeneric requires a FindingDomainSchema opt",
-      );
+  for (const [key, value] of Object.entries(input)) {
+    if (value == null) {
+      flatFields[key] = null;
+    } else if (typeof value === "string" || typeof value === "number") {
+      flatFields[key] = value;
+    } else if (typeof value === "boolean" || typeof value === "bigint") {
+      flatFields[key] = String(value);
+    } else {
+      blob[key] = value;
     }
-    const { flatFields } = this.schema.serialize(input.domainFields);
-
-    // SSA layout matches InsertSuggestion 1:1 today. When future domains
-    // need different flat fields, insertOne's direct mapping will be
-    // adapted or replaced by a schema-driven Redis write.
-    return this.insertOne({
-      operatorCountryId:
-        flatFields.operatorCountryId == null
-          ? null
-          : typeof flatFields.operatorCountryId === "bigint"
-            ? flatFields.operatorCountryId
-            : BigInt(String(flatFields.operatorCountryId)),
-      operatorCountryName: String(flatFields.operatorCountryName ?? ""),
-      category: flatFields.category as SweepCategory,
-      severity: flatFields.severity as SweepSeverity,
-      title: String(flatFields.title ?? ""),
-      description: String(flatFields.description ?? ""),
-      affectedSatellites: Number(flatFields.affectedSatellites ?? 0),
-      suggestedAction: String(flatFields.suggestedAction ?? ""),
-      webEvidence:
-        flatFields.webEvidence == null ? null : String(flatFields.webEvidence),
-      resolutionPayload: input.resolutionPayload,
-      simSwarmId: input.simSwarmId ?? null,
-      simDistribution: input.simDistribution ?? null,
-    });
   }
 
-  /**
-   * Like `list`, but returns domain-agnostic rows with `domainFields`
-   * reconstructed by the schema.
-   */
-  async listGeneric(opts: {
-    page?: number;
-    limit?: number;
-    category?: SweepCategory;
-    severity?: SweepSeverity;
-    reviewed?: boolean;
-  }): Promise<{ rows: GenericSuggestionRow[]; total: number }> {
-    if (!this.schema) {
-      throw new Error(
-        "SweepRepository.listGeneric requires a FindingDomainSchema opt",
-      );
-    }
-    const { rows, total } = await this.list(opts);
-    return {
-      total,
-      rows: rows.map((r) => this.toGenericRow(r)),
-    };
-  }
+  return { flatFields, blob };
+}
 
-  /**
-   * Like `getById`, but returns domain-agnostic row with `domainFields`
-   * reconstructed by the schema.
-   */
-  async getGeneric(id: string): Promise<GenericSuggestionRow | null> {
-    if (!this.schema) {
-      throw new Error(
-        "SweepRepository.getGeneric requires a FindingDomainSchema opt",
-      );
-    }
-    const row = await this.getById(id);
-    if (!row) return null;
-    return this.toGenericRow(row);
-  }
+function extractFlatFields(d: Record<string, string>): Record<string, string | null> {
+  return Object.fromEntries(
+    Object.entries(d)
+      .filter(([key]) => !RESERVED_HASH_KEYS.has(key))
+      .map(([key, value]) => [key, value === "" ? null : value]),
+  );
+}
 
-  private toGenericRow(row: SweepSuggestionRow): GenericSuggestionRow {
-    const domainFields = this.schema!.deserialize({
-      flatFields: {
-        operatorCountryId: row.operatorCountryId,
-        operatorCountryName: row.operatorCountryName,
-        category: row.category,
-        severity: row.severity,
-        title: row.title,
-        description: row.description,
-        affectedSatellites: String(row.affectedSatellites),
-        suggestedAction: row.suggestedAction,
-        webEvidence: row.webEvidence,
-      },
-      blob: {},
-    });
-    return {
-      id: row.id,
-      // Domain discriminator — SSA-only for Plan 1; multi-domain support
-      // later (Plan 4+) will pull this from schema metadata.
-      domain: "ssa",
-      createdAt: row.createdAt,
-      accepted: row.accepted,
-      reviewedAt: row.reviewedAt,
-      reviewerNote: row.reviewerNote,
-      resolutionStatus: row.resolutionStatus ?? "pending",
-      resolvedAt: row.resolvedAt,
-      resolutionErrors: row.resolutionErrors,
-      simSwarmId: row.simSwarmId ?? null,
-      simDistribution: row.simDistribution ?? null,
-      domainFields,
-      resolutionPayload: row.resolutionPayload,
-    };
+function parseBlob(raw: string | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
   }
+}
+
+function isEmptyRecord(input: Record<string, unknown>): boolean {
+  return Object.keys(input).length === 0;
 }

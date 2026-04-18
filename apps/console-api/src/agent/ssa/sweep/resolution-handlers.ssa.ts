@@ -28,7 +28,7 @@ import type {
   UnlinkPayloadAction,
   ReassignOperatorCountryAction,
   EnrichAction,
-} from "@interview/sweep";
+} from "./resolution-schema.ssa";
 
 /** Avoid "unused import" TS6133 on the helper surface. */
 void _ignoreUnused;
@@ -181,77 +181,108 @@ async function resolveAndUpdate(
   valueName: string,
   operatorCountryId: string | null,
   explicitSatelliteIds: string[],
-): Promise<{
-  affectedRows: number;
-  errors?: string[];
-  pending?: ResolutionPendingSelection[];
-}> {
-  if (field === "operator_country_id") {
-    const ocs = await findOperatorCountriesByName(deps.db, valueName);
-    if (ocs.length === 0) {
-      return {
-        affectedRows: 0,
-        errors: [`Operator-country not found: ${valueName}`],
-      };
-    }
-    if (ocs.length > 1) {
-      return {
-        affectedRows: 0,
-        pending: [
-          {
-            key: "operator_country_id",
-            label: `Select operator-country: ${valueName}`,
-            options: ocs.map((o) => ({
-              value: o.id.toString(),
-              label: o.name,
-              detail: o.orbitRegime ?? undefined,
-            })),
+): Promise<ResolutionHandlerResult> {
+  const table =
+    field === "operator_country_id"
+      ? "operator-country"
+      : field === "orbit_regime_id"
+        ? "orbit_regime"
+        : "platform_class";
+
+  const disambig = await resolveOrPrompt({
+    selectedId: undefined, // this path is always unselected (selections handled by caller)
+    selectorKey: field,
+    findByName:
+      field === "operator_country_id"
+        ? async () => {
+            const rows = await findOperatorCountriesByName(deps.db, valueName);
+            return rows.map((r) => ({
+              id: r.id,
+              name: r.name,
+              detail: r.orbitRegime,
+            }));
+          }
+        : async () => {
+            const tbl =
+              field === "orbit_regime_id" ? "orbit_regime" : "platform_class";
+            const res = await deps.db.execute<{ id: bigint; name: string }>(
+              sql`SELECT id, name FROM ${sql.identifier(tbl)}
+                  WHERE lower(unaccent(name)) = lower(unaccent(${valueName}))
+                  LIMIT 5`,
+            );
+            return res.rows ?? [];
           },
-        ],
-      };
-    }
-    return updateSatellitesFk(
+    notFoundMsg: `${table} not found: ${valueName}`,
+    promptLabel:
+      field === "operator_country_id"
+        ? `Select operator-country: ${valueName}`
+        : `Select: ${valueName}`,
+  });
+  if (disambig.kind === "result") return disambig.result;
+
+  return asResolutionResult(
+    await updateSatellitesFk(
       deps,
       operatorCountryId,
       explicitSatelliteIds,
       field,
-      ocs[0]!.id,
-    );
-  }
-
-  const table =
-    field === "orbit_regime_id" ? "orbit_regime" : "platform_class";
-  const result = await deps.db.execute<{ id: bigint; name: string }>(
-    sql`SELECT id, name FROM ${sql.identifier(table)}
-        WHERE lower(unaccent(name)) = lower(unaccent(${valueName}))
-        LIMIT 5`,
+      disambig.id,
+    ),
   );
-  const matches = result.rows ?? [];
+}
+
+// ─── Shared resolution-flow helper ───────────────────────────────
+//
+// Collapses the "selection? → name lookup → 0 / 1 / >1 matches" flow that
+// was duplicated across 4 sites (link payload, unlink payload, reassign
+// operator-country, update_field FK branch). Returns either a resolved
+// bigint id or a ready-to-return ResolutionHandlerResult (error/pending).
+
+type MatchRow = { id: bigint; name: string; detail?: string | null };
+type Disambig =
+  | { kind: "resolved"; id: bigint }
+  | { kind: "result"; result: ResolutionHandlerResult };
+
+async function resolveOrPrompt(opts: {
+  selectedId: string | number | undefined;
+  selectorKey: string;
+  findByName: () => Promise<MatchRow[]>;
+  notFoundMsg: string;
+  promptLabel: string;
+}): Promise<Disambig> {
+  if (opts.selectedId != null) {
+    return { kind: "resolved", id: BigInt(String(opts.selectedId)) };
+  }
+  const matches = await opts.findByName();
   if (matches.length === 0) {
-    return { affectedRows: 0, errors: [`${table} not found: ${valueName}`] };
+    return {
+      kind: "result",
+      result: asResolutionResult({
+        affectedRows: 0,
+        errors: [opts.notFoundMsg],
+      }),
+    };
   }
   if (matches.length > 1) {
     return {
-      affectedRows: 0,
-      pending: [
-        {
-          key: field,
-          label: `Select: ${valueName}`,
-          options: matches.map((m) => ({
-            value: m.id.toString(),
-            label: m.name,
-          })),
-        },
-      ],
+      kind: "result",
+      result: asResolutionResult({
+        affectedRows: 0,
+        pending: [
+          {
+            key: opts.selectorKey,
+            label: opts.promptLabel,
+            options: matches.map((m) => ({
+              value: m.id.toString(),
+              label: m.name,
+              ...(m.detail ? { detail: m.detail } : {}),
+            })),
+          },
+        ],
+      }),
     };
   }
-  return updateSatellitesFk(
-    deps,
-    operatorCountryId,
-    explicitSatelliteIds,
-    field,
-    matches[0]!.id,
-  );
+  return { kind: "resolved", id: matches[0]!.id };
 }
 
 // ─── Handlers ────────────────────────────────────────────────────
@@ -322,14 +353,13 @@ export function createUpdateFieldHandler(
           );
           return asResolutionResult(r);
         }
-        const r = await resolveAndUpdate(
+        return resolveAndUpdate(
           deps,
           field,
           String(value),
           operatorCountryId,
           a.satelliteIds,
         );
-        return asResolutionResult(r);
       }
 
       // Direct value fields: scalar + telemetry scalars (sim-swarm inference).
@@ -406,35 +436,22 @@ export function createLinkPayloadHandler(
       const operatorCountryId = operatorCountryIdFrom(ctx);
       const selections = selectorsFrom(ctx);
 
-      let payloadId: bigint | null = null;
-      if (selections?.payload) {
-        payloadId = BigInt(selections.payload);
-      } else {
-        const payloads = await findPayloadsByName(deps.db, a.payloadName);
-        if (payloads.length === 0) {
-          return asResolutionResult({
-            affectedRows: 0,
-            errors: [`Payload not found: ${a.payloadName}`],
-          });
-        }
-        if (payloads.length > 1) {
-          return asResolutionResult({
-            affectedRows: 0,
-            pending: [
-              {
-                key: "payload",
-                label: `Select payload: ${a.payloadName}`,
-                options: payloads.map((p) => ({
-                  value: p.id.toString(),
-                  label: p.name,
-                  detail: `ID ${p.id}`,
-                })),
-              },
-            ],
-          });
-        }
-        payloadId = payloads[0]!.id;
-      }
+      const disambig = await resolveOrPrompt({
+        selectedId: selections?.payload,
+        selectorKey: "payload",
+        findByName: async () => {
+          const rows = await findPayloadsByName(deps.db, a.payloadName);
+          return rows.map((p) => ({
+            id: p.id,
+            name: p.name,
+            detail: `ID ${p.id}`,
+          }));
+        },
+        notFoundMsg: `Payload not found: ${a.payloadName}`,
+        promptLabel: `Select payload: ${a.payloadName}`,
+      });
+      if (disambig.kind === "result") return disambig.result;
+      const payloadId = disambig.id;
 
       const satelliteIds = await resolveSatelliteIds(
         deps.db,
@@ -520,35 +537,22 @@ export function createReassignOperatorCountryHandler(
       const operatorCountryId = operatorCountryIdFrom(ctx);
       const selections = selectorsFrom(ctx);
 
-      let targetOcId: bigint | null = null;
-      if (selections?.operator_country) {
-        targetOcId = BigInt(selections.operator_country);
-      } else {
-        const ocs = await findOperatorCountriesByName(deps.db, a.toName);
-        if (ocs.length === 0) {
-          return asResolutionResult({
-            affectedRows: 0,
-            errors: [`Operator-country not found: ${a.toName}`],
-          });
-        }
-        if (ocs.length > 1) {
-          return asResolutionResult({
-            affectedRows: 0,
-            pending: [
-              {
-                key: "operator_country",
-                label: `Select operator-country: ${a.toName}`,
-                options: ocs.map((o) => ({
-                  value: o.id.toString(),
-                  label: o.name,
-                  detail: o.orbitRegime ?? undefined,
-                })),
-              },
-            ],
-          });
-        }
-        targetOcId = ocs[0]!.id;
-      }
+      const disambig = await resolveOrPrompt({
+        selectedId: selections?.operator_country,
+        selectorKey: "operator_country",
+        findByName: async () => {
+          const rows = await findOperatorCountriesByName(deps.db, a.toName);
+          return rows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            detail: r.orbitRegime,
+          }));
+        },
+        notFoundMsg: `Operator-country not found: ${a.toName}`,
+        promptLabel: `Select operator-country: ${a.toName}`,
+      });
+      if (disambig.kind === "result") return disambig.result;
+      const targetOcId = disambig.id;
 
       const satelliteIds = await resolveSatelliteIds(
         deps.db,

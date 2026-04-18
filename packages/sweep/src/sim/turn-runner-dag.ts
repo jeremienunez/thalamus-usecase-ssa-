@@ -1,5 +1,5 @@
 /**
- * DAG turn runner — UC1 parallel operator-behavior driver.
+ * DAG turn runner for kinds that advance every actor in parallel.
  *
  * Semantics: every agent decides simultaneously per turn. Each agent's call
  * is independent (no cross-agent dependsOn edges within a turn), so we
@@ -10,34 +10,27 @@
  * Why not ThalamusDAGExecutor.execute(): the executor expects CortexFinding[]
  * output and wraps everything in a research_cycle. We only need the turn
  * response JSON, not findings. Keeping the skill output shape identical to
- * the Sequential driver means one skill serves both paths (fixture cache
- * keys match across drivers, zero duplication).
+ * the sequential driver means one skill serves both paths.
  *
  * Failure mode: if K of N agents fail JSON validation after retries, the
  * turn is retried as a whole. The orchestrator decides how many whole-turn
  * retries to tolerate before failing the fish.
  */
 
-import { asc, eq, sql } from "drizzle-orm";
-import type { Database, NewSimTurn, TurnAction } from "@interview/db-schema";
-import { simAgent, simRun, simTurn } from "@interview/db-schema";
+import type { TurnAction } from "./types";
 import type { CortexRegistry } from "@interview/thalamus";
 import { callNanoWithMode, extractJsonObject } from "@interview/thalamus";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import type {
-  AgentContext,
-  FleetSnapshot,
-  PcEstimatorTarget,
-  TelemetryTarget,
-  TurnResponse,
-} from "./types";
+import type { AgentContext, TurnResponse } from "./types";
 import { buildTurnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
 import type {
   SimActionSchemaProvider,
   SimCortexSelector,
   SimPromptComposer,
-  SimTurnTargetProvider,
+  SimRuntimeStore,
+  SimScenarioContextProvider,
+  SimSubjectSnapshot,
 } from "./ports";
 
 const logger = createLogger("sim-dag");
@@ -45,13 +38,12 @@ const logger = createLogger("sim-dag");
 const MAX_JSON_RETRIES = 2;
 
 export interface DagRunnerDeps {
-  db: Database;
+  store: SimRuntimeStore;
   memory: MemoryService;
   /** Cortex registry — used to resolve skill bodies as nano instructions. */
   cortexRegistry: CortexRegistry;
   llmMode: "cloud" | "fixtures" | "record";
-  /** Plan 2 · B.2 — pack-provided turn target loader (telemetry / pc). */
-  targets: SimTurnTargetProvider;
+  targets: SimScenarioContextProvider;
   /** Plan 2 · B.4 — pack-provided prompt renderer. */
   prompt: SimPromptComposer;
   /** Plan 2 · B.4 — pack-provided cortex skill selector. */
@@ -63,8 +55,7 @@ export interface DagRunnerDeps {
 export interface DagRunTurnOpts {
   simRunId: number;
   turnIndex: number;
-  /** Optional pre-computed fleet snapshots keyed by agentId. */
-  fleetSnapshots?: Map<number, FleetSnapshot>;
+  subjectSnapshots?: Map<number, SimSubjectSnapshot>;
 }
 
 export interface DagRunTurnResult {
@@ -107,7 +98,7 @@ export class DagTurnRunner {
           simRunId: opts.simRunId,
           agent,
           turnIndex: opts.turnIndex,
-          fleetSnapshot: opts.fleetSnapshots?.get(agent.id) ?? null,
+          subjectSnapshot: opts.subjectSnapshots?.get(agent.id) ?? null,
         }),
       ),
     );
@@ -148,64 +139,55 @@ export class DagTurnRunner {
     }
 
     // Atomic persist of all successful agent turns + cross-agent memories.
-    const persisted = await this.deps.db.transaction(async (tx) => {
-      const simTurnIdByAgent = new Map<number, number>();
-      for (const s of successes) {
-        const insertRow: NewSimTurn = {
-          simRunId: BigInt(opts.simRunId),
+    const agentTurns: Parameters<SimRuntimeStore["persistTurnBatch"]>[0]["agentTurns"] =
+      successes.map<Parameters<SimRuntimeStore["persistTurnBatch"]>[0]["agentTurns"][number]>(
+        (s) => ({
+          simRunId: opts.simRunId,
           turnIndex: opts.turnIndex,
-          actorKind: "agent",
-          agentId: BigInt(s.agent.id),
+          agentId: s.agent.id,
           action: s.response.action,
           rationale: s.response.rationale,
           observableSummary: s.response.observableSummary,
-          llmCostUsd: null,
-        };
-        const [turnRow] = await tx
-          .insert(simTurn)
-          .values(insertRow)
-          .returning({ id: simTurn.id });
-        if (!turnRow) throw new Error("insert sim_turn returned no row");
-        simTurnIdByAgent.set(s.agent.id, Number(turnRow.id));
-      }
-
-      // Memory writes: for each success, write one self_action + one
-      // observation row for every OTHER agent in the fish (including agents
-      // whose own turn failed — they still observe what happened).
-      const memoryRows: Array<{
-        simRunId: number;
-        agentId: number;
-        turnIndex: number;
-        kind: "self_action" | "observation";
-        content: string;
-      }> = [];
-      for (const s of successes) {
+          llmCostUsd: null as number | null,
+        }),
+      );
+    const memoryRows: Parameters<SimRuntimeStore["persistTurnBatch"]>[0]["memoryRows"] = [];
+    for (const s of successes) {
+      memoryRows.push({
+        simRunId: opts.simRunId,
+        agentId: s.agent.id,
+        turnIndex: opts.turnIndex,
+        kind: "self_action",
+        content: `${s.response.action.kind} - ${s.response.rationale}`,
+        embedding: null,
+      });
+      for (const other of agents) {
+        if (other.id === s.agent.id) continue;
         memoryRows.push({
           simRunId: opts.simRunId,
-          agentId: s.agent.id,
+          agentId: other.id,
           turnIndex: opts.turnIndex,
-          kind: "self_action",
-          content: `${s.response.action.kind} — ${s.response.rationale}`,
+          kind: "observation",
+          content: s.response.observableSummary,
+          embedding: null,
         });
-        for (const other of agents) {
-          if (other.id === s.agent.id) continue;
-          memoryRows.push({
-            simRunId: opts.simRunId,
-            agentId: other.id,
-            turnIndex: opts.turnIndex,
-            kind: "observation",
-            content: s.response.observableSummary,
-          });
-        }
       }
-      await this.deps.memory.writeMany(memoryRows);
-      stepLog(logger, "fish.memory.write", "done", {
-        simRunId: opts.simRunId,
-        turn: opts.turnIndex,
-        rows: memoryRows.length,
-      });
-
-      return simTurnIdByAgent;
+    }
+    const persistedIds = await this.deps.store.persistTurnBatch({
+      agentTurns,
+      memoryRows,
+    });
+    if (persistedIds.length !== agentTurns.length) {
+      throw new Error("persistTurnBatch returned an unexpected sim_turn id count");
+    }
+    const persisted = new Map<number, number>();
+    for (let i = 0; i < agentTurns.length; i++) {
+      persisted.set(agentTurns[i]!.agentId, persistedIds[i]!);
+    }
+    stepLog(logger, "fish.memory.write", "done", {
+      simRunId: opts.simRunId,
+      turn: opts.turnIndex,
+      rows: memoryRows.length,
     });
 
     const agentResults = agents.map((agent) => {
@@ -270,9 +252,8 @@ export class DagTurnRunner {
         constraints: ctx.constraints,
       },
       domain: {
-        fleetSnapshot: ctx.fleetSnapshot,
-        telemetryTarget: ctx.telemetryTarget,
-        pcEstimatorTarget: ctx.pcEstimatorTarget,
+        subjectSnapshot: ctx.subjectSnapshot,
+        scenarioContext: ctx.scenarioContext,
       },
       observable: ctx.observable,
       godEvents: ctx.godEvents,
@@ -282,8 +263,7 @@ export class DagTurnRunner {
       simKind: "",
       turnIndex: ctx.turnIndex,
       hints: {
-        hasTelemetryTarget: ctx.telemetryTarget !== null,
-        hasPcEstimatorTarget: ctx.pcEstimatorTarget !== null,
+        hasScenarioContext: ctx.scenarioContext !== null,
       },
     });
     const skill = this.deps.cortexRegistry.get(cortexName);
@@ -344,7 +324,7 @@ export class DagTurnRunner {
     simRunId: number;
     agent: LoadedAgent;
     turnIndex: number;
-    fleetSnapshot: FleetSnapshot | null;
+    subjectSnapshot: SimSubjectSnapshot | null;
   }): Promise<AgentContext> {
     const [topMemories, observable] = await Promise.all([
       this.deps.memory.topK({
@@ -362,13 +342,10 @@ export class DagTurnRunner {
     ]);
 
     const godEvents = await this.loadGodEvents(args.simRunId, args.turnIndex);
-    const targets = await this.deps.targets.loadTargets({
+    const scenarioContext = await this.deps.targets.loadContext({
       simRunId: args.simRunId,
       seedHints: {},
     });
-    const telemetryTarget = (targets.telemetryTarget as TelemetryTarget | null) ?? null;
-    const pcEstimatorTarget =
-      (targets.pcEstimatorTarget as PcEstimatorTarget | null) ?? null;
 
     return {
       simRunId: args.simRunId,
@@ -386,13 +363,12 @@ export class DagTurnRunner {
       observable: observable.map((o) => ({
         turnIndex: o.turnIndex,
         actorKind: o.actorKind,
-        authorLabel: o.operatorName ?? (o.actorKind === "god" ? "GOD" : "SYSTEM"),
+        authorLabel: o.authorLabel ?? (o.actorKind === "god" ? "GOD" : "SYSTEM"),
         observableSummary: o.observableSummary,
       })),
       godEvents,
-      fleetSnapshot: args.fleetSnapshot,
-      telemetryTarget,
-      pcEstimatorTarget,
+      subjectSnapshot: args.subjectSnapshot,
+      scenarioContext,
     };
   }
 
@@ -400,45 +376,20 @@ export class DagTurnRunner {
     simRunId: number,
     turnIndex: number,
   ): Promise<AgentContext["godEvents"]> {
-    const rows = await this.deps.db.execute(sql`
-      SELECT turn_index, observable_summary, action
-      FROM sim_turn
-      WHERE sim_run_id = ${BigInt(simRunId)}
-        AND actor_kind = 'god'
-        AND turn_index <= ${turnIndex}
-      ORDER BY turn_index ASC
-      LIMIT 10
-    `);
-    return (rows.rows as Array<{
-      turn_index: number;
-      observable_summary: string;
-      action: { detail?: string } | null;
-    }>).map((r) => ({
-      turnIndex: r.turn_index,
-      summary: r.observable_summary,
-      detail: r.action?.detail,
+    const rows = await this.deps.store.listGodEventsAtOrBefore(
+      simRunId,
+      turnIndex,
+      10,
+    );
+    return rows.map((r) => ({
+      turnIndex: r.turnIndex,
+      summary: r.observableSummary,
+      detail: r.detail,
     }));
   }
 
   private async loadAgents(simRunId: number): Promise<LoadedAgent[]> {
-    const rows = await this.deps.db
-      .select({
-        id: simAgent.id,
-        agentIndex: simAgent.agentIndex,
-        persona: simAgent.persona,
-        goals: simAgent.goals,
-        constraints: simAgent.constraints,
-      })
-      .from(simAgent)
-      .where(eq(simAgent.simRunId, BigInt(simRunId)))
-      .orderBy(asc(simAgent.agentIndex));
-    return rows.map((r) => ({
-      id: Number(r.id),
-      agentIndex: r.agentIndex,
-      persona: r.persona,
-      goals: r.goals as string[],
-      constraints: r.constraints as Record<string, unknown>,
-    }));
+    return this.deps.store.listAgents(simRunId);
   }
 
   /**
@@ -452,10 +403,7 @@ export class DagTurnRunner {
     maxTurns: number;
   }): Promise<{ closed: boolean }> {
     if (opts.turnIndex + 1 < opts.maxTurns) return { closed: false };
-    await this.deps.db
-      .update(simRun)
-      .set({ status: "done", completedAt: new Date() })
-      .where(eq(simRun.id, BigInt(opts.simRunId)));
+    await this.deps.store.updateRunStatus(opts.simRunId, "done", new Date());
     return { closed: true };
   }
 }

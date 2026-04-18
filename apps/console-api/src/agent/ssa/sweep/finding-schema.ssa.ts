@@ -40,6 +40,12 @@ const ssaInsert = z.object({
 
 export type SsaFindingPayload = z.infer<typeof ssaInsert>;
 
+export function parseSsaFindingPayload(
+  input: Record<string, unknown>,
+): SsaFindingPayload {
+  return ssaInsert.parse(input);
+}
+
 export const ssaFindingSchema: FindingDomainSchema = {
   /**
    * Fields the SSA pack wants queryable via indexed filters. `accepted` is a

@@ -19,6 +19,7 @@
 
 import {
   ituFiling,
+  type Database,
   type NewItuFiling,
 } from "@interview/db-schema";
 import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
@@ -292,8 +293,11 @@ const FILINGS: Seed[] = [
   },
 ];
 
-async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
-  const { db, logger } = ctx;
+export function createItuFilingsSource(
+  db: Database,
+): IngestionSource<IngestionResult> {
+  async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+    const { logger } = ctx;
   const fetchedAt = new Date();
   const rows: NewItuFiling[] = FILINGS.map((f) => ({
     ...f,
@@ -353,8 +357,9 @@ async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
   };
 }
 
-export const ituFilingsSource: IngestionSource<IngestionResult> = {
-  id: "itu-filings",
-  description: "Curated ITU filings seed (manual trigger)",
-  run,
-};
+  return {
+    id: "itu-filings",
+    description: "Curated ITU filings seed (manual trigger)",
+    run,
+  };
+}

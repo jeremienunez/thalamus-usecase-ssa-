@@ -2,9 +2,7 @@
  * SimCortexSelector — kernel ↔ pack contract for per-turn skill selection.
  *
  * The pack decides which cortex/skill name to load per turn based on the swarm
- * kind (SSA: sim_operator_agent / telemetry_infer / pc_estimator). Replaces
- * the hard-coded DEFAULT_CORTEX_NAME + TELEMETRY_CORTEX_NAME + PC_ESTIMATOR_CORTEX_NAME
- * constants from turn-runner-dag.ts.
+ * kind. The kernel just asks for a skill name.
  *
  * Introduced: Plan 2 Task A.1 (scaffold) / B.4 (impl).
  */

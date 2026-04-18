@@ -1,10 +1,9 @@
-// Ports — kernel ↔ pack contracts (consumed by apps/console-api/src/agent/ssa/)
+// Ports — kernel ↔ pack contracts
 export * from "./ports";
 
 // Services
 export { NanoSweepService } from "./services/nano-sweep.service";
 export { SweepResolutionService } from "./services/sweep-resolution.service";
-export type { OnSimUpdateAccepted } from "./services/sweep-resolution.service";
 export { MessagingService } from "./services/messaging.service";
 export { FindingRouterService } from "./services/finding-router.service";
 export type { FindingRouterDeps } from "./services/finding-router.service";
@@ -12,11 +11,8 @@ export type { FindingRouterDeps } from "./services/finding-router.service";
 // Repositories
 export { SweepRepository } from "./repositories/sweep.repository";
 export type {
-  InsertSuggestion,
-  PastFeedback,
-  SweepSuggestionRow,
+  SuggestionFeedbackRow,
 } from "./repositories/sweep.repository";
-export { SatelliteRepository } from "./repositories/satellite.repository";
 
 // (AdminSweepController + admin.routes.ts deleted in Plan 1 Task 6.1 —
 // dead code superseded by console-api's sweep-suggestions.controller +
@@ -37,7 +33,7 @@ export type {
 } from "./jobs/ingestion-registry";
 export {
   sweepQueue,
-  satelliteQueue,
+  auditTargetQueue,
   ingestionQueue,
   sweepQueueEvents,
   ingestionQueueEvents,
@@ -65,9 +61,9 @@ export type {
 // Sim engine (SPEC-SW-006)
 export * from "./sim/types";
 export * from "./sim/schema";
-// Plan 2 — 10 sim kernel ports (scaffold, impls in apps/console-api/src/agent/ssa/sim/).
 export * from "./sim/ports";
-export { buildOperatorAgent } from "./sim/agent-builder";
+export * from "./sim/http";
+export { buildSimAgent } from "./sim/agent-builder";
 export type {
   BuildAgentOpts,
   BuildAgentResult,
@@ -82,26 +78,10 @@ export type {
   TopKOpts,
   RecentObservableOpts,
 } from "./sim/memory.service";
-// renderTurnPrompt removed in Plan 2 · B.4 — prompts now flow through the
-// SimPromptComposer port (apps/console-api/src/agent/ssa/sim/prompt-renderer.ts).
 export {
   isKgPromotable,
   isTerminal,
-  loadSimTurn,
-  emitSuggestionFromModal,
-  emitTelemetrySuggestions,
 } from "./sim/promote";
-export type { EmitSuggestionDeps, EmitTelemetrySuggestionsDeps } from "./sim/promote";
-export { TelemetryAggregatorService } from "./sim/aggregator-telemetry";
-export type {
-  TelemetryAggregate,
-  TelemetryAggregatorDeps,
-  TelemetryScalarStats,
-} from "./sim/aggregator-telemetry";
-// Plan 2 · B.10: swarm launchers + bus-datasheets relocated to
-//   apps/console-api/src/agent/ssa/sim/swarms/telemetry.ts, /pc.ts
-//   apps/console-api/src/agent/ssa/sim/bus-datasheets/loader.ts
-// CLI is broken until Plan 3 rewires via HTTP routes.
 export { SequentialTurnRunner } from "./sim/turn-runner-sequential";
 export type {
   SequentialRunnerDeps,
@@ -124,7 +104,6 @@ export type {
   GodEventInput,
   SimStatus,
 } from "./sim/sim-orchestrator.service";
-export { GodChannelService, GOD_EVENT_TEMPLATES } from "./sim/god-channel.service";
 export { createSimTurnWorker } from "./jobs/workers/sim-turn.worker";
 export type { SimTurnWorkerDeps } from "./jobs/workers/sim-turn.worker";
 export { createSwarmFishWorker } from "./jobs/workers/swarm-fish.worker";
@@ -160,5 +139,3 @@ export type {
 } from "./sim/swarm.service";
 export { rngFromSeed, applyPerturbation } from "./sim/perturbation";
 export type { Rng } from "./sim/perturbation";
-// generateDefaultPerturbations removed in Plan 2 · B.6 — callers should use
-// SimPerturbationPack.generateSet (apps/console-api/src/agent/ssa/sim/perturbation-pack.ts).

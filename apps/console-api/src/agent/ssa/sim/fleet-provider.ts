@@ -12,9 +12,9 @@
  */
 
 import type {
-  SimFleetProvider,
-  AgentSubjectRef,
-  AgentSubjectSnapshot,
+  SimSubjectProvider,
+  SimSubjectRef,
+  SimSubjectSnapshot,
 } from "@interview/sweep";
 import type { SatelliteFleetRepository } from "../../../repositories/satellite-fleet.repository";
 
@@ -22,11 +22,11 @@ export interface SsaFleetDeps {
   fleetRepo: SatelliteFleetRepository;
 }
 
-export class SsaFleetProvider implements SimFleetProvider {
+export class SsaFleetProvider implements SimSubjectProvider {
   constructor(private readonly deps: SsaFleetDeps) {}
 
-  async getAgentSubject(ref: AgentSubjectRef): Promise<AgentSubjectSnapshot> {
-    if (ref.kind !== "operator") {
+  async getSubject(ref: SimSubjectRef): Promise<SimSubjectSnapshot> {
+    if (ref.kind !== "operator" && ref.kind !== "subject") {
       throw new Error(
         `SsaFleetProvider: only supports kind="operator", got "${ref.kind}"`,
       );

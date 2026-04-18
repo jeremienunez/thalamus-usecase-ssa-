@@ -1,37 +1,46 @@
-/**
- * SsaSimPromotionAdapter — sim modal → SSA suggestion.
- *
- * Delegates to Plan 1's SsaPromotionAdapter (apps/console-api/src/agent/ssa/sweep/promotion.ssa.ts).
- * Sim-sourced suggestions flow through the SAME promotion path as
- * sweep-sourced ones — zero duplicate KG-write logic.
- *
- * TODO(Plan 2 · B.9): implement promote() by mapping SimPromoteInput
- *   (swarmId, action, distribution, label, evidence) into
- *   AcceptedSuggestionInput and calling sweepPromotion.promote().
- *
- * Source body: packages/sweep/src/sim/promote.ts (emitSuggestionFromModal +
- * emitTelemetrySuggestions + isKgPromotable + isTerminal + loadSimTurn).
- * Split: the kernel keeps the "am I terminal?" helpers; this adapter owns
- * the KG-write + Redis-write + audit-trail path.
- */
-
 import type {
-  SimPromotionAdapter,
   SimPromoteInput,
   SimPromoteResult,
+  SimPromotionAdapter,
+  SwarmAggregate,
 } from "@interview/sweep";
-import type { SsaPromotionAdapter } from "../sweep/promotion.ssa";
+import type { SimPromotionService } from "../../../services/sim-promotion.service";
+import type { TelemetryAggregate } from "./aggregators/telemetry";
 
 export interface SsaSimPromotionDeps {
-  sweepPromotion: SsaPromotionAdapter;
+  promotionService: Pick<SimPromotionService, "promote">;
+}
+
+export interface EmitSuggestionDeps {
+  promotionService: Pick<SimPromotionService, "emitSuggestionFromModal">;
+}
+
+export interface EmitTelemetrySuggestionsDeps {
+  promotionService: Pick<SimPromotionService, "emitTelemetrySuggestions">;
 }
 
 export class SsaSimPromotionAdapter implements SimPromotionAdapter {
-  constructor(private readonly _deps: SsaSimPromotionDeps) {}
+  constructor(private readonly deps: SsaSimPromotionDeps) {}
 
-  async promote(_input: SimPromoteInput): Promise<SimPromoteResult> {
-    // TODO(B.9): map sim modal → AcceptedSuggestionInput; delegate to
-    //   this._deps.sweepPromotion.promote(mapped); return { suggestionId, findingId }.
-    throw new Error("SsaSimPromotionAdapter.promote: TODO Plan 2 · B.9");
+  async promote(input: SimPromoteInput): Promise<SimPromoteResult> {
+    return await this.deps.promotionService.promote(input);
   }
+}
+
+export async function emitSuggestionFromModal(
+  deps: EmitSuggestionDeps,
+  swarmId: number,
+  aggregate: SwarmAggregate,
+): Promise<number | null> {
+  return await deps.promotionService.emitSuggestionFromModal(
+    swarmId,
+    aggregate,
+  );
+}
+
+export async function emitTelemetrySuggestions(
+  deps: EmitTelemetrySuggestionsDeps,
+  aggregate: TelemetryAggregate,
+): Promise<number[]> {
+  return await deps.promotionService.emitTelemetrySuggestions(aggregate);
 }

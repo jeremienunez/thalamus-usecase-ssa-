@@ -2,8 +2,7 @@
  * FindingRoutingPolicy — engine → pack.
  *
  * Decides which tiers receive a finding produced by a given source
- * (cortex name, sweep, research-cycle). Tiers are domain-defined strings
- * (e.g. "investment" | "franchise" | "enthusiast" | "admin" for SSA).
+ * (cortex name, sweep, research-cycle). Tiers are domain-defined strings.
  */
 
 export type FindingTier = string;

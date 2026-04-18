@@ -26,7 +26,7 @@ async function schedule(
 export async function registerSchedulers(): Promise<void> {
   await schedule(sweepQueue, "weekly-sweep", "0 4 * * 0", "sweep");
 
-  // Ingestion harness probe — runs hourly so an operator can confirm the
+  // Ingestion harness probe — runs hourly so a human can confirm the
   // worker + queue + scheduler are all live without waiting for a real
   // Phase 3 fetcher's natural cadence. Real fetchers register alongside.
   await schedule(ingestionQueue, "ingestion-noop", "0 * * * *", "noop");

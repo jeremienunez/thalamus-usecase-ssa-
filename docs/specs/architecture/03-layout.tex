@@ -1,0 +1,32 @@
+% SPEC-ARCH-03 — Layout
+
+\input{./preamble-arch.tex}
+
+\specID{SPEC-ARCH-03}
+\specTitle{Layout --- monorepo arborescence and 5-layer backend convention}
+\specStatus{OVERVIEW}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Monorepo layout}
+
+\begin{lstlisting}
+apps/
+  console/      Operator UI (React + r3f + sigma.js) — OPS / THALAMUS / SWEEP modes
+  console-api/  Fastify API, SSA domain pack (skills, domain-config, cortex-data-provider)
+packages/
+  shared/       Cross-cutting: tryAsync, AppError, enums, observability, normalizers
+  db-schema/    Drizzle ORM schema + typed query helpers (one source of truth)
+  thalamus/     Research agent: cortices, orchestrator, explorer/swarm, planner
+  sweep/        Auditor: nano-swarm, resolution service, admin routes, BullMQ jobs
+  cli/          Conversational SSA console (Ink REPL)
+\end{lstlisting}
+
+\section{Convention}
+
+Conventional 5-layer backend inside each feature package: \texttt{routes $\to$ controllers $\to$ services $\to$ repositories $\to$ entities}. No business logic in controllers or repositories. No \texttt{any}/\texttt{unknown} in repo signatures --- Drizzle-inferred types all the way up. SSA skills and domain config live in \texttt{apps/console-api/src/agent/ssa/} so the Thalamus kernel stays domain-agnostic.
+
+\end{document}

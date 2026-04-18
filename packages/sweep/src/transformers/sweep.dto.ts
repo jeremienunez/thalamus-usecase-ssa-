@@ -1,34 +1,21 @@
 /**
- * Sweep DTOs — Zod schemas for nano-sweep admin endpoints (SSA).
+ * Sweep DTOs — package-owned generic schemas for the review loop.
+ *
+ * Domain packs own the concrete suggestion vocabulary, payload unions, and
+ * route-level shapes. The engine only keeps the generic contract it needs to
+ * parse resolution payloads, surface pending selections, and persist review
+ * metadata.
  */
 
 import { z } from "zod";
 import { paginationSchema } from "./shared.dto";
 
-// ─── Suggestion categories & severities ──────────────────────────────
-
-export const sweepCategoryEnum = z.enum([
-  "mass_anomaly",
-  "missing_data",
-  "doctrine_mismatch",
-  "relationship_error",
-  "enrichment",
-  "briefing_angle",
-]);
-export type SweepCategory = z.infer<typeof sweepCategoryEnum>;
-
-export const sweepModeEnum = z.enum(["dataQuality", "briefing", "nullScan"]);
-export type SweepMode = z.infer<typeof sweepModeEnum>;
-
-export const sweepSeverityEnum = z.enum(["critical", "warning", "info"]);
-export type SweepSeverity = z.infer<typeof sweepSeverityEnum>;
-
-// ─── List suggestions (GET /admin/sweep/suggestions) ─────────────────
+// ─── Generic list / review DTOs ─────────────────────────────────────
 
 export const listSuggestionsSchema = z.object({
   ...paginationSchema,
-  category: sweepCategoryEnum.optional(),
-  severity: sweepSeverityEnum.optional(),
+  category: z.string().min(1).optional(),
+  severity: z.string().min(1).optional(),
   reviewed: z
     .enum(["true", "false", "all"])
     .default("all")
@@ -36,39 +23,34 @@ export const listSuggestionsSchema = z.object({
 });
 export type ListSuggestionsQuery = z.infer<typeof listSuggestionsSchema>;
 
-// ─── Review suggestion (PATCH /admin/sweep/suggestions/:id) ──────────
-
 export const reviewSuggestionSchema = z.object({
   accepted: z.boolean(),
   reviewerNote: z.string().max(500).optional(),
 });
 export type ReviewSuggestionBody = z.infer<typeof reviewSuggestionSchema>;
 
-// ─── Trigger sweep (POST /admin/sweep/trigger) ──────────────────────
-
 export const triggerSweepSchema = z.object({
-  maxOperatorCountries: z.coerce.number().int().min(1).max(2000).optional(),
-  mode: sweepModeEnum.optional(),
+  limit: z.coerce.number().int().min(1).max(2000).optional(),
+  mode: z.string().min(1).optional(),
 });
 export type TriggerSweepBody = z.infer<typeof triggerSweepSchema>;
 
-// ─── Response DTOs ───────────────────────────────────────────────────
+// ─── Generic suggestion / stats DTOs ────────────────────────────────
 
 export const sweepSuggestionDto = z.object({
   id: z.string(),
-  operatorCountryId: z.string().nullable(),
-  operatorCountryName: z.string(),
-  category: sweepCategoryEnum,
-  severity: sweepSeverityEnum,
-  title: z.string(),
-  description: z.string(),
-  affectedSatellites: z.number(),
-  suggestedAction: z.string(),
-  webEvidence: z.string().nullable(),
+  domain: z.string(),
+  createdAt: z.string(),
   accepted: z.boolean().nullable(),
   reviewerNote: z.string().nullable(),
   reviewedAt: z.string().nullable(),
-  createdAt: z.string(),
+  resolutionStatus: z.string(),
+  resolvedAt: z.string().nullable(),
+  resolutionErrors: z.string().nullable(),
+  simSwarmId: z.string().nullable(),
+  simDistribution: z.string().nullable(),
+  domainFields: z.record(z.string(), z.unknown()),
+  resolutionPayload: z.string().nullable(),
 });
 export type SweepSuggestionDto = z.infer<typeof sweepSuggestionDto>;
 
@@ -77,94 +59,25 @@ export const sweepStatsDto = z.object({
   pending: z.number(),
   accepted: z.number(),
   rejected: z.number(),
-  bySeverity: z.object({
-    critical: z.number(),
-    warning: z.number(),
-    info: z.number(),
-  }),
+  bySeverity: z.record(z.string(), z.number()),
   byCategory: z.record(z.string(), z.number()),
 });
 export type SweepStatsDto = z.infer<typeof sweepStatsDto>;
 
-// ─── Resolution Payload (structured fix from nano) ──────────
+// ─── Generic resolution payload / result DTOs ───────────────────────
 
-export const updateFieldActionSchema = z.object({
-  kind: z.literal("update_field"),
-  satelliteIds: z.array(z.string()).optional(),
-  // Widened from a fixed enum to any snake_case column name. The handler
-  // whitelists against information_schema at execution time.
-  field: z.string().regex(/^[a-z_][a-z0-9_]*$/),
-  // Accepts any scalar column value the catalog might carry:
-  //   - string (text columns: name, g_orbit_regime_description, …)
-  //   - number (mass_kg, launch_year, telemetry scalars, …)
-  //   - boolean (is_experimental, is_active, …)
-  //   - number[] (embeddings, e.g. halfvec 2048-d for vector search)
-  //   - jsonb object (telemetry_summary, metadata, …)
-  //   - null (nullScan gap-acknowledgement — no source value yet)
-  value: z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.array(z.number()),
-    z.record(z.string(), z.unknown()),
-    z.null(),
-  ]),
-});
-
-export const linkPayloadActionSchema = z.object({
-  kind: z.literal("link_payload"),
-  satelliteIds: z.array(z.string()).optional(),
-  payloadName: z.string(),
-  role: z.enum(["primary", "secondary", "auxiliary"]).optional(),
-});
-
-export const unlinkPayloadActionSchema = z.object({
-  kind: z.literal("unlink_payload"),
-  satelliteIds: z.array(z.string()).optional(),
-  payloadName: z.string(),
-});
-
-export const reassignOperatorCountryActionSchema = z.object({
-  kind: z.literal("reassign_operator_country"),
-  satelliteIds: z.array(z.string()).optional(),
-  fromName: z.string(),
-  toName: z.string(),
-});
-
-export const enrichActionSchema = z.object({
-  kind: z.literal("enrich"),
-  satelliteIds: z.array(z.string()).optional(),
-});
-
-export const resolutionActionSchema = z.discriminatedUnion("kind", [
-  updateFieldActionSchema,
-  linkPayloadActionSchema,
-  unlinkPayloadActionSchema,
-  reassignOperatorCountryActionSchema,
-  enrichActionSchema,
-]);
-export type UpdateFieldAction = z.infer<typeof updateFieldActionSchema>;
-export type LinkPayloadAction = z.infer<typeof linkPayloadActionSchema>;
-export type UnlinkPayloadAction = z.infer<typeof unlinkPayloadActionSchema>;
-export type ReassignOperatorCountryAction = z.infer<
-  typeof reassignOperatorCountryActionSchema
->;
-export type EnrichAction = z.infer<typeof enrichActionSchema>;
-export type ResolutionAction =
-  | UpdateFieldAction
-  | LinkPayloadAction
-  | UnlinkPayloadAction
-  | ReassignOperatorCountryAction
-  | EnrichAction;
+export const resolutionActionSchema = z
+  .object({
+    kind: z.string().min(1),
+  })
+  .catchall(z.unknown());
+export type ResolutionAction = z.infer<typeof resolutionActionSchema>;
 
 export const resolutionPayloadSchema = z.object({
-  // nullScan-generated payloads don't carry a `type` — default to missing_data.
-  type: sweepCategoryEnum.optional().default("missing_data"),
+  type: z.string().min(1).optional(),
   actions: z.array(resolutionActionSchema).min(1),
 });
 export type ResolutionPayload = z.infer<typeof resolutionPayloadSchema>;
-
-// ─── Resolution Result ──────────────────────────────────────
 
 export const selectionOptionSchema = z.object({
   value: z.union([z.string(), z.number()]),
@@ -189,8 +102,6 @@ export const resolutionResultSchema = z.object({
   pendingSelections: z.array(pendingSelectionSchema).optional(),
 });
 export type ResolutionResult = z.infer<typeof resolutionResultSchema>;
-
-// ─── Resolve endpoint (POST /admin/sweep/suggestions/:id/resolve) ───
 
 export const resolveSuggestionSchema = z.object({
   selections: z

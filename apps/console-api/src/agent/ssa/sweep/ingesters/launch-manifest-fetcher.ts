@@ -11,7 +11,7 @@
  */
 
 import { and, isNotNull, notIlike, notInArray, or, sql } from "drizzle-orm";
-import { launch, type NewLaunch } from "@interview/db-schema";
+import { launch, type Database, type NewLaunch } from "@interview/db-schema";
 import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
 
 interface IngestionResult {
@@ -150,8 +150,11 @@ function mapLaunch(r: Ll2Launch, fetchedAt: Date): NewLaunch | null {
 // Ingester
 // ---------------------------------------------------------------------------
 
-async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
-  const { db, logger } = ctx;
+export function createLaunchManifestSource(
+  db: Database,
+): IngestionSource<IngestionResult> {
+  async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+    const { logger } = ctx;
   let payload: Ll2Response | null = null;
   try {
     const res = await fetch(LL2_UPCOMING_URL, {
@@ -260,9 +263,10 @@ async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
   };
 }
 
-export const launchManifestSource: IngestionSource<IngestionResult> = {
-  id: "launch-manifest",
-  description: "Launch Library 2 upcoming launches",
-  cron: "0 */12 * * *",
-  run,
-};
+  return {
+    id: "launch-manifest",
+    description: "Launch Library 2 upcoming launches",
+    cron: "0 */12 * * *",
+    run,
+  };
+}

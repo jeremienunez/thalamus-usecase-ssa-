@@ -10,7 +10,7 @@
  * packages/sweep/src/sim/agent-builder.ts into apps/console-api).
  */
 
-import type { AgentSubjectSnapshot } from "./fleet.port";
+import type { SimSubjectSnapshot } from "./subject.port";
 
 export interface ComposedPersona {
   persona: string;
@@ -20,7 +20,7 @@ export interface ComposedPersona {
 
 export interface SimAgentPersonaComposer {
   compose(
-    subject: AgentSubjectSnapshot,
+    subject: SimSubjectSnapshot,
     hints: Record<string, unknown>,
   ): ComposedPersona;
 }

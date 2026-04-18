@@ -13,9 +13,9 @@
  * computePcAggregate(actions).
  */
 
-import { sql } from "drizzle-orm";
-import type { Database, TurnAction } from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
+import type { SimSwarmStore } from "@interview/sweep";
+import type { SsaTurnAction } from "../action-schema";
 
 const logger = createLogger("sim-pc-aggregator");
 
@@ -55,6 +55,14 @@ export interface PcSweepSuggestion {
   severity: PcSeverity;
 }
 
+interface PcEstimateAction {
+  kind: "estimate_pc";
+  conjunctionId: number;
+  pcEstimate: number;
+  dominantMode: string;
+  flags: string[];
+}
+
 export function severityFromMedian(median: number): PcSeverity {
   if (median >= 1e-3) return "high";
   if (median >= 1e-4) return "medium";
@@ -66,13 +74,14 @@ export function severityFromMedian(median: number): PcSeverity {
  * skipped; if zero valid samples remain, returns null.
  */
 export function computePcAggregate(
-  actions: TurnAction[],
+  actions: SsaTurnAction[],
   fallbackConjunctionId?: number,
 ): PcAggregate | null {
-  const estimates = actions.filter(
-    (a): a is Extract<TurnAction, { kind: "estimate_pc" }> =>
-      a?.kind === "estimate_pc",
-  );
+  const estimates = actions
+    .filter((action): action is SsaTurnAction & { kind: "estimate_pc" } => {
+      return action?.kind === "estimate_pc";
+    })
+    .map((action) => action as unknown as PcEstimateAction);
   if (estimates.length === 0) return null;
 
   const samples = estimates.map((e) => e.pcEstimate).sort((a, b) => a - b);
@@ -89,11 +98,12 @@ export function computePcAggregate(
   for (const e of estimates) {
     const flags = [...e.flags].sort();
     const key = `${e.dominantMode}|${flags.join(",")}`;
-    const cur = clusterMap.get(key) ?? {
+    const cur: { mode: string; flags: string[]; pcs: number[] } =
+      clusterMap.get(key) ?? {
       mode: e.dominantMode,
       flags,
       pcs: [],
-    };
+      };
     cur.pcs.push(e.pcEstimate);
     clusterMap.set(key, cur);
   }
@@ -143,11 +153,14 @@ export function aggregateToSuggestion(agg: PcAggregate): PcSweepSuggestion {
 }
 
 // -----------------------------------------------------------------------
-// DB-backed orchestrator: read terminal sim_turn rows, aggregate, emit.
+// App-backed orchestrator: read terminal turn rows via the sim store and aggregate.
 // -----------------------------------------------------------------------
 
 export interface PcAggregatorDeps {
-  db: Database;
+  swarmStore: Pick<
+    SimSwarmStore,
+    "getSwarm" | "listTerminalActionsForSwarm"
+  >;
 }
 
 export class PcAggregatorService {
@@ -156,33 +169,21 @@ export class PcAggregatorService {
   async aggregate(opts: {
     swarmId: number;
   }): Promise<{ aggregate: PcAggregate | null; suggestion: PcSweepSuggestion | null }> {
-    const conjRow = await this.deps.db.execute(sql`
-      SELECT base_seed FROM sim_swarm WHERE id = ${BigInt(opts.swarmId)} LIMIT 1
-    `);
-    const seed = (conjRow.rows[0] as { base_seed: { pcEstimatorTarget?: number } } | undefined)
-      ?.base_seed;
-    const conjunctionId = seed?.pcEstimatorTarget;
+    const swarm = await this.deps.swarmStore.getSwarm(opts.swarmId);
+    const conjunctionId =
+      typeof (swarm?.baseSeed as Record<string, unknown> | undefined)
+        ?.pcEstimatorTarget === "number"
+        ? ((swarm!.baseSeed as Record<string, unknown>).pcEstimatorTarget as number)
+        : undefined;
+    const rows = await this.deps.swarmStore.listTerminalActionsForSwarm(
+      opts.swarmId,
+    );
 
-    const rows = await this.deps.db.execute(sql`
-      WITH latest AS (
-        SELECT DISTINCT ON (r.id)
-          r.id AS sim_run_id, r.status AS run_status, t.action AS action
-        FROM sim_run r
-        LEFT JOIN sim_turn t
-          ON t.sim_run_id = r.id AND t.actor_kind = 'agent'
-        WHERE r.swarm_id = ${BigInt(opts.swarmId)}
-        ORDER BY r.id, t.turn_index DESC NULLS LAST
-      )
-      SELECT * FROM latest
-    `);
-
-    const actions: TurnAction[] = [];
-    for (const r of rows.rows as Array<{
-      sim_run_id: string | number;
-      run_status: string;
-      action: TurnAction | null;
-    }>) {
-      if (r.run_status === "done" && r.action) actions.push(r.action);
+    const actions: SsaTurnAction[] = [];
+    for (const row of rows) {
+      if (row.runStatus === "done" && row.action) {
+        actions.push(row.action as SsaTurnAction);
+      }
     }
 
     const aggregate = computePcAggregate(actions, conjunctionId);

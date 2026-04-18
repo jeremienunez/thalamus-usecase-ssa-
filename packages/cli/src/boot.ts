@@ -10,9 +10,9 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, sql } from "drizzle-orm";
 
 import { App } from "./app";
+import { LogsAdapter } from "./adapters";
 import { EtaStore } from "./util/etaStore";
 import { PinoRingBuffer } from "./util/pinoRingBuffer";
-import { LogsAdapter } from "./adapters/logs";
 import { interpret } from "./router/interpreter";
 import type { Adapters } from "./router/dispatch";
 
@@ -21,7 +21,12 @@ import {
   buildThalamusContainer,
   callNanoWithMode,
 } from "@interview/thalamus";
-import { buildSweepContainer } from "@interview/sweep";
+import {
+  buildSweepContainer,
+  type DomainAuditProvider,
+  type SweepPromotionAdapter,
+  type ResolutionHandlerRegistry,
+} from "@interview/sweep";
 // Plan 2 · B.10: startTelemetrySwarm moved to console-api SSA pack. Plan 3
 // will rewire this CLI path via POST /api/sim/telemetry/start. Until then
 // CLI telemetry.start throws at runtime (see telemetry adapter below).
@@ -57,6 +62,27 @@ export interface BootWiring {
   redis: IORedis;
   registry: CortexRegistry;
 }
+
+const disabledAuditProvider: DomainAuditProvider = {
+  async runAudit(): Promise<never> {
+    throw new Error(
+      "CLI nano-sweep audit is disabled here. Use console-api sweep wiring.",
+    );
+  },
+};
+
+const disabledPromotionAdapter: SweepPromotionAdapter = {
+  async promote(): Promise<never> {
+    throw new Error(
+      "CLI sweep promotion is disabled here. Use console-api sweep wiring.",
+    );
+  },
+};
+
+const disabledResolutionHandlers: ResolutionHandlerRegistry = {
+  get: () => undefined,
+  list: () => [],
+};
 
 export async function main(
   deps?: Partial<BootDeps> & { wiring?: BootWiring },
@@ -172,9 +198,12 @@ export async function buildRealAdapters(
   // required; CLI drops the sim block entirely until Plan 3 rewires
   // telemetry/pc via HTTP routes (console-api will own the SSA pack).
   const sweepC = buildSweepContainer({
-    db,
     redis: ctx.redis,
-    graphService: thalamusC.graphService,
+    ports: {
+      audit: disabledAuditProvider,
+      promotion: disabledPromotionAdapter,
+      resolutionHandlers: disabledResolutionHandlers,
+    },
   });
 
   return {

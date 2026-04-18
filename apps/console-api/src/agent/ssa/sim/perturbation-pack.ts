@@ -117,6 +117,42 @@ export class SsaPerturbationPack implements SimPerturbationPack {
     return out as GenericPerturbationSpec[];
   }
 
+  applyToSeed(args: {
+    baseSeed: Record<string, unknown>;
+    spec: GenericPerturbationSpec;
+  }): Record<string, unknown> {
+    const spec = args.spec as SsaPerturbationSpec;
+    if (spec.kind === "pc_assumptions") {
+      return {
+        ...args.baseSeed,
+        pcAssumptions: {
+          hardBodyRadiusMeters: spec.hardBodyRadiusMeters,
+          covarianceScale: spec.covarianceScale,
+        },
+      };
+    }
+    return { ...args.baseSeed };
+  }
+
+  agentHints(spec: GenericPerturbationSpec): {
+    subjectHintsByIndex: Map<number, Record<string, unknown>>;
+  } {
+    const p = spec as SsaPerturbationSpec;
+    const subjectHintsByIndex = new Map<number, Record<string, unknown>>();
+    if (p.kind === "persona_tweak") {
+      subjectHintsByIndex.set(p.agentIndex, { riskProfile: p.riskProfile });
+    } else if (p.kind === "constraint_override") {
+      subjectHintsByIndex.set(p.agentIndex, {
+        constraintOverrides: p.overrides,
+      });
+    } else if (p.kind === "delta_v_budget") {
+      subjectHintsByIndex.set(p.agentIndex, {
+        constraintOverrides: { maxDeltaVMpsPerSat: p.maxPerSat },
+      });
+    }
+    return { subjectHintsByIndex };
+  }
+
   extractGodEvents(spec: GenericPerturbationSpec): GenericGodEvent[] {
     const p = spec as SsaPerturbationSpec;
     if (p.kind === "god_event") {

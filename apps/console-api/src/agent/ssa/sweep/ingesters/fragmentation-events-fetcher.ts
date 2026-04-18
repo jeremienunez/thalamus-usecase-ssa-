@@ -15,6 +15,7 @@
 
 import {
   fragmentationEvent,
+  type Database,
   type NewFragmentationEvent,
 } from "@interview/db-schema";
 import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
@@ -273,8 +274,11 @@ const EVENTS: Seed[] = [
   },
 ];
 
-async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
-  const { db, logger } = ctx;
+export function createFragmentationEventsSource(
+  db: Database,
+): IngestionSource<IngestionResult> {
+  async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+    const { logger } = ctx;
   const fetchedAt = new Date();
   const rows: NewFragmentationEvent[] = EVENTS.map((e) => ({
     ...e,
@@ -316,8 +320,9 @@ async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
   };
 }
 
-export const fragmentationEventsSource: IngestionSource<IngestionResult> = {
-  id: "fragmentation-events",
-  description: "Curated fragmentation-event seed (manual trigger)",
-  run,
-};
+  return {
+    id: "fragmentation-events",
+    description: "Curated fragmentation-event seed (manual trigger)",
+    run,
+  };
+}

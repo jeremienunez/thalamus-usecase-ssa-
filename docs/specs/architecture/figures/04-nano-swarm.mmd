@@ -1,0 +1,19 @@
+flowchart LR
+    subgraph SWARM["50× gpt-5.4-nano workers"]
+        direction TB
+        W1["Worker 1<br/>source A"]
+        W2["Worker 2<br/>source B"]
+        W3["Worker 3<br/>source C"]
+        Wn["Worker N<br/>source …"]
+    end
+
+    subgraph CURATOR["Curator (strong model)"]
+        direction TB
+        Dedup["Deduplicate"]
+        Rank["Rank by confidence"]
+        Tag["Source-class tagging"]
+    end
+
+    SWARM -->|"raw summaries<br/>(parallel, rate-limited)"| CURATOR
+    CURATOR -->|"curated set"| KG["Knowledge Graph"]
+

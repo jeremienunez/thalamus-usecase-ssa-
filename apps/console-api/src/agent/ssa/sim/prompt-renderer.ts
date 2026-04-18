@@ -3,9 +3,7 @@
  *
  * Plan 2 · B.4. Lifted verbatim from packages/sweep/src/sim/prompt.ts.
  *
- * The pack reads ctx.frame (turn / persona / goals / constraints) and
- * ctx.domain.{fleetSnapshot, telemetryTarget, pcEstimatorTarget}. Kernel
- * turn-runners build the context from AgentContext and call this port.
+ * The pack reads ctx.frame plus ctx.domain.{subjectSnapshot, scenarioContext}.
  *
  * Structure is stable across DAG and Sequential drivers so fixture cache
  * keys match between modes.
@@ -19,7 +17,7 @@ import type {
 const MAX_MEMORIES = 8;
 const MAX_OBSERVABLE = 15;
 
-interface FleetSnapshot {
+interface SubjectSnapshot {
   operatorName: string;
   operatorCountry: string | null;
   satelliteCount: number;
@@ -67,10 +65,17 @@ export class SsaPromptRenderer implements SimPromptComposer {
       constraints: Record<string, unknown>;
     };
     const domain = ctx.domain as {
-      fleetSnapshot: FleetSnapshot | null;
-      telemetryTarget: TelemetryTarget | null;
-      pcEstimatorTarget: PcEstimatorTarget | null;
+      subjectSnapshot: {
+        displayName: string;
+        attributes: Record<string, unknown>;
+      } | null;
+      scenarioContext: {
+        telemetryTarget: TelemetryTarget | null;
+        pcEstimatorTarget: PcEstimatorTarget | null;
+      } | null;
     };
+    const subjectSnapshot = toSubjectSnapshot(domain.subjectSnapshot);
+    const scenario = domain.scenarioContext;
 
     return [
       `TURN ${frame.turnIndex}`,
@@ -87,7 +92,7 @@ export class SsaPromptRenderer implements SimPromptComposer {
       "```",
       "",
       "## Fleet snapshot",
-      renderFleetSnapshot(domain.fleetSnapshot),
+      renderFleetSnapshot(subjectSnapshot),
       "",
       "## Top relevant memories (private)",
       renderMemories(ctx.topMemories),
@@ -98,15 +103,15 @@ export class SsaPromptRenderer implements SimPromptComposer {
       "## God-view injections active this turn",
       renderGodEvents(ctx.godEvents),
       "",
-      ...(domain.telemetryTarget
+      ...(scenario?.telemetryTarget
         ? [
             "## Telemetry inference target",
-            renderTelemetryTarget(domain.telemetryTarget),
+            renderTelemetryTarget(scenario.telemetryTarget),
             "",
           ]
         : []),
-      ...(domain.pcEstimatorTarget
-        ? [renderPcEstimatorTarget(domain.pcEstimatorTarget), ""]
+      ...(scenario?.pcEstimatorTarget
+        ? [renderPcEstimatorTarget(scenario.pcEstimatorTarget), ""]
         : []),
       "## Task",
       "Decide what you do this turn. Respond with a single JSON object matching the schema in your instructions. No prose before or after.",
@@ -197,7 +202,7 @@ function renderTelemetryTarget(t: TelemetryTarget): string {
   return header.join("\n");
 }
 
-function renderFleetSnapshot(s: FleetSnapshot | null): string {
+function renderFleetSnapshot(s: SubjectSnapshot | null): string {
   if (!s) return "- (no snapshot available)";
   const regimes = s.regimeMix.length
     ? s.regimeMix.map((r) => `${r.regime}: ${r.count}`).join(", ")
@@ -213,6 +218,24 @@ function renderFleetSnapshot(s: FleetSnapshot | null): string {
     `- Platform mix: ${platforms}`,
     `- Avg launch year: ${launch}`,
   ].join("\n");
+}
+
+function toSubjectSnapshot(input: {
+  displayName: string;
+  attributes: Record<string, unknown>;
+} | null): SubjectSnapshot | null {
+  if (!input) return null;
+  const attrs = input.attributes;
+  return {
+    operatorName: input.displayName,
+    operatorCountry: (attrs.operatorCountry as string | null) ?? null,
+    satelliteCount: (attrs.satelliteCount as number | undefined) ?? 0,
+    regimeMix:
+      (attrs.regimeMix as Array<{ regime: string; count: number }> | undefined) ?? [],
+    platformMix:
+      (attrs.platformMix as Array<{ platform: string; count: number }> | undefined) ?? [],
+    avgLaunchYear: (attrs.avgLaunchYear as number | null) ?? null,
+  };
 }
 
 function renderMemories(

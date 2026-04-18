@@ -17,7 +17,6 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { sql, eq } from "drizzle-orm";
 import IORedis from "ioredis";
 import { resolve } from "node:path";
-import type { Worker } from "bullmq";
 
 import {
   simAgent,
@@ -35,19 +34,25 @@ import { CortexRegistry } from "@interview/thalamus";
 
 import {
   buildSweepContainer,
+  SimSubjectHttpAdapter,
+  SimHttpClient,
+  SimQueueHttpAdapter,
+  SimRuntimeStoreHttpAdapter,
+  SimPromotionHttpClient,
+  SimScenarioContextHttpAdapter,
+  SimSwarmStoreHttpAdapter,
   createSwarmFishWorker,
   createSwarmAggregateWorker,
-  emitSuggestionFromModal,
   setRedisClient,
   simTurnQueue,
   swarmFishQueue,
   swarmAggregateQueue,
   closeQueues,
   type SwarmAggregate,
+  type DomainAuditProvider,
+  type SweepPromotionAdapter,
+  type ResolutionHandlerRegistry,
 } from "@interview/sweep";
-import { SatelliteFleetRepository } from "../../src/repositories/satellite-fleet.repository";
-import { SsaFleetProvider } from "../../src/agent/ssa/sim/fleet-provider";
-import { SsaTurnTargetProvider } from "../../src/agent/ssa/sim/targets";
 import { SsaPersonaComposer } from "../../src/agent/ssa/sim/persona-composer";
 import { SsaPromptRenderer } from "../../src/agent/ssa/sim/prompt-renderer";
 import { SsaCortexSelector } from "../../src/agent/ssa/sim/cortex-selector";
@@ -55,6 +60,11 @@ import { SsaActionSchemaProvider } from "../../src/agent/ssa/sim/action-schema";
 import { SsaPerturbationPack } from "../../src/agent/ssa/sim/perturbation-pack";
 import { SsaAggregationStrategy } from "../../src/agent/ssa/sim/aggregation-strategy";
 import { SsaKindGuard } from "../../src/agent/ssa/sim/kind-guard";
+import { PcAggregatorService } from "../../src/agent/ssa/sim/aggregators/pc";
+import { TelemetryAggregatorService } from "../../src/agent/ssa/sim/aggregators/telemetry";
+import { createSimRouteTransport } from "../../src/infra/sim-route-transport";
+import { createApp, type AppHandle } from "../../src/server";
+import { SsaSimOutcomeResolverService } from "../../src/services/ssa-sim-outcome-resolver.service";
 
 // -----------------------------------------------------------------------
 // Test config
@@ -66,6 +76,25 @@ const DB_URL =
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6380";
 
 const FIXTURES_DIR = resolve(__dirname, "..", "fixtures");
+
+const disabledAuditProvider: DomainAuditProvider = {
+  async runAudit(): Promise<never> {
+    throw new Error(
+      "UC3 E2E does not wire nano-sweep audit. Inject an app-owned audit port if needed.",
+    );
+  },
+};
+const disabledPromotionAdapter: SweepPromotionAdapter = {
+  async promote(): Promise<never> {
+    throw new Error(
+      "UC3 E2E does not exercise sweep promotion. Inject SsaPromotionAdapter if needed.",
+    );
+  },
+};
+const disabledResolutionHandlers: ResolutionHandlerRegistry = {
+  get: () => undefined,
+  list: () => [],
+};
 const FALLBACK = "_swarm_fallback";
 const SEED_TAG = "e2e-swarm-uc3";
 
@@ -73,9 +102,10 @@ let pool: Pool;
 let redis: IORedis;
 let db: ReturnType<typeof drizzle>;
 let registry: CortexRegistry;
-let fishWorker: Worker;
-let aggregateWorker: Worker;
+let fishWorker: ReturnType<typeof createSwarmFishWorker>;
+let aggregateWorker: ReturnType<typeof createSwarmAggregateWorker>;
 let container: ReturnType<typeof buildSweepContainer>;
+let appHandle: AppHandle;
 let seededOperatorIds: number[] = [];
 
 // -----------------------------------------------------------------------
@@ -110,12 +140,8 @@ beforeAll(async () => {
   await cleanE2E();
   await drainQueues().catch(() => undefined);
   seededOperatorIds = await seedOperators();
+  appHandle = await createApp();
 
-  // Plan 2 · B.1 / B.2 / B.3 / B.4 — inject the SSA sim ports so the E2E
-  // exercises the console-api path (not the sweep-internal legacy fallbacks).
-  const fleetRepo = new SatelliteFleetRepository(db);
-  const ssaFleet = new SsaFleetProvider({ fleetRepo });
-  const ssaTargets = new SsaTurnTargetProvider({ db });
   const ssaPersona = new SsaPersonaComposer();
   const ssaPrompt = new SsaPromptRenderer();
   const ssaCortexSelector = new SsaCortexSelector();
@@ -123,10 +149,27 @@ beforeAll(async () => {
   const ssaPerturbationPack = new SsaPerturbationPack();
   const ssaAggStrategy = new SsaAggregationStrategy();
   const ssaKindGuard = new SsaKindGuard();
+  const simHttp = new SimHttpClient(createSimRouteTransport(appHandle.app));
+  const queue = new SimQueueHttpAdapter(simHttp, {
+    kernelSecret: process.env.SIM_KERNEL_SHARED_SECRET,
+  });
+  const runtimeStore = new SimRuntimeStoreHttpAdapter(simHttp);
+  const swarmStore = new SimSwarmStoreHttpAdapter(simHttp);
+  const subjects = new SimSubjectHttpAdapter(simHttp);
+  const scenarioContext = new SimScenarioContextHttpAdapter(simHttp);
+  const promotion = new SimPromotionHttpClient(simHttp, {
+    kernelSecret: process.env.SIM_KERNEL_SHARED_SECRET,
+  });
+  const telemetryAggregator = new TelemetryAggregatorService({ swarmStore });
+  const pcAggregator = new PcAggregatorService({ swarmStore });
 
   container = buildSweepContainer({
-    db,
     redis,
+    ports: {
+      audit: disabledAuditProvider,
+      promotion: disabledPromotionAdapter,
+      resolutionHandlers: disabledResolutionHandlers,
+    },
     sim: {
       cortexRegistry: registry,
       // Embed stub: return null so memory falls back to recency (deterministic
@@ -134,8 +177,11 @@ beforeAll(async () => {
       // bucketing when fewer than 2 vectors, which works for size=3 swarms.
       embed: async () => null,
       llmMode: "fixtures",
-      fleet: ssaFleet,
-      targets: ssaTargets,
+      queue,
+      runtimeStore,
+      swarmStore,
+      subjects,
+      scenarioContext,
       persona: ssaPersona,
       prompt: ssaPrompt,
       cortexSelector: ssaCortexSelector,
@@ -145,25 +191,37 @@ beforeAll(async () => {
       kindGuard: ssaKindGuard,
     },
   });
-
   // Spin up workers.
   fishWorker = createSwarmFishWorker({
-    db,
+    store: runtimeStore,
     swarmService: container.sim!.swarmService,
     sequentialRunner: container.sim!.sequentialRunner,
     dagRunner: container.sim!.dagRunner,
+    kindGuard: ssaKindGuard,
     concurrency: 4,
   });
-  aggregateWorker = createSwarmAggregateWorker({
-    db,
+  const outcomeResolver = new SsaSimOutcomeResolverService({
     aggregator: container.sim!.aggregator,
+    telemetryAggregator,
+    pcAggregator,
+    promotionService: {
+      emitSuggestionFromModal: async (swarmId, aggregate) => {
+        await promotion.emitSuggestionFromModal({ swarmId, aggregate });
+        return null;
+      },
+      emitTelemetrySuggestions: async (aggregate) => {
+        await promotion.emitScalarSuggestions({
+          swarmId: aggregate.swarmId,
+          aggregate: aggregate as Record<string, unknown>,
+        });
+        return [];
+      },
+    },
+  });
+  aggregateWorker = createSwarmAggregateWorker({
+    swarmStore,
+    resolver: outcomeResolver,
     concurrency: 1,
-    emitSuggestion: async (swarmId, aggregate) =>
-      emitSuggestionFromModal(
-        { db, sweepRepo: container.sweepRepo },
-        swarmId,
-        aggregate,
-      ),
   });
 
   // Wait for workers to be ready (BullMQ emits 'ready' on connect).
@@ -176,6 +234,7 @@ afterAll(async () => {
     await fishWorker?.close().catch(() => undefined);
     await aggregateWorker?.close().catch(() => undefined);
     await closeQueues().catch(() => undefined);
+    await appHandle?.close().catch(() => undefined);
   } finally {
     await redis?.quit().catch(() => undefined);
     await pool?.end().catch(() => undefined);
@@ -196,7 +255,8 @@ describe("UC3 swarm — E2E", () => {
         kind: "uc3_conjunction",
         title: `${SEED_TAG} swarm`,
         baseSeed: {
-          operatorIds: seededOperatorIds.slice(0, 2),
+          subjectIds: seededOperatorIds.slice(0, 2),
+          subjectKind: "operator",
           horizonDays: 2,
           turnsPerDay: 1,
         },
@@ -344,7 +404,9 @@ describe("UC3 swarm — E2E", () => {
       // would push the freshly-emitted suggestion past any list() pagination.
       const found = await container.sweepRepo.getById(suggestionId);
       expect(found).not.toBeNull();
-      expect(found!.severity === "critical" || found!.severity === "warning").toBe(true);
+      expect(["critical", "warning"]).toContain(
+        String(found!.domainFields.severity ?? ""),
+      );
       expect(found!.reviewedAt).toBeNull();
 
       // ---------------------------------------------------------------

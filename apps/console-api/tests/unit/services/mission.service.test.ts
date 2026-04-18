@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { GenericSuggestionRow } from "@interview/sweep";
 import type { FastifyBaseLogger } from "fastify";
 import { MissionService, type SweepListProvider } from "../../../src/services/mission.service";
 import { SweepTaskPlanner } from "../../../src/services/sweep-task-planner.service";
@@ -81,6 +82,44 @@ function mockSweepRepo(): SweepListProvider {
   };
 }
 
+function sweepRow(
+  overrides: Partial<GenericSuggestionRow> & {
+    domainFields?: Record<string, unknown>;
+  } = {},
+): GenericSuggestionRow {
+  const {
+    domainFields: domainFieldOverrides,
+    ...rowOverrides
+  } = overrides;
+  return {
+    id: "s:1",
+    domain: "ssa",
+    createdAt: "2026-04-16T12:00:00.000Z",
+    accepted: null,
+    reviewedAt: null,
+    reviewerNote: null,
+    resolutionStatus: "pending",
+    resolvedAt: null,
+    resolutionErrors: null,
+    simSwarmId: null,
+    simDistribution: null,
+    domainFields: {
+      operatorCountryId: null,
+      operatorCountryName: "France",
+      category: "missing_data",
+      severity: "warning",
+      title: "Mission seed",
+      description: "",
+      affectedSatellites: 1,
+      suggestedAction: "research",
+      webEvidence: null,
+      ...domainFieldOverrides,
+    },
+    resolutionPayload: null,
+    ...rowOverrides,
+  };
+}
+
 function mockLogger(): FastifyBaseLogger {
   const l = {
     error: vi.fn(),
@@ -128,36 +167,35 @@ describe("MissionService", () => {
   it("builds tasks only from valid pending suggestions and respects the per-suggestion cap", async () => {
     (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       rows: [
-        { id: "skip-no-payload", operatorCountryName: "France", resolutionPayload: null },
-        {
+        sweepRow({
+          id: "skip-no-payload",
+          resolutionPayload: null,
+        }),
+        sweepRow({
           id: "skip-unknown-country",
-          operatorCountryName: "Other / Unknown",
+          domainFields: { operatorCountryName: "Other / Unknown" },
           resolutionPayload: JSON.stringify({
             actions: [{ kind: "update_field", field: "lifetime", value: null, satelliteIds: ["1"] }],
           }),
-        },
-        {
+        }),
+        sweepRow({
           id: "skip-non-writable",
-          operatorCountryName: "France",
           resolutionPayload: JSON.stringify({
             actions: [{ kind: "update_field", field: "thermal_margin", value: null, satelliteIds: ["1"] }],
           }),
-        },
-        {
+        }),
+        sweepRow({
           id: "skip-already-filled",
-          operatorCountryName: "France",
           resolutionPayload: JSON.stringify({
             actions: [{ kind: "update_field", field: "lifetime", value: 12, satelliteIds: ["1"] }],
           }),
-        },
-        {
+        }),
+        sweepRow({
           id: "skip-malformed",
-          operatorCountryName: "France",
           resolutionPayload: "{",
-        },
-        {
+        }),
+        sweepRow({
           id: "keep",
-          operatorCountryName: "France",
           resolutionPayload: JSON.stringify({
             actions: [
               {
@@ -168,7 +206,7 @@ describe("MissionService", () => {
               },
             ],
           }),
-        },
+        }),
       ],
     });
     (satellites.findPayloadNamesByIds as ReturnType<typeof vi.fn>).mockResolvedValue([
@@ -192,13 +230,12 @@ describe("MissionService", () => {
     const never = new Promise<NanoResult>(() => undefined);
     (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       rows: [
-        {
+        sweepRow({
           id: "keep",
-          operatorCountryName: "France",
           resolutionPayload: JSON.stringify({
             actions: [{ kind: "update_field", field: "lifetime", value: null, satelliteIds: ["10"] }],
           }),
-        },
+        }),
       ],
     });
     (satellites.findPayloadNamesByIds as ReturnType<typeof vi.fn>).mockResolvedValue([
@@ -217,13 +254,12 @@ describe("MissionService", () => {
   it("marks a task filled on agreeing votes and writes the enrichment side effects", async () => {
     (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       rows: [
-        {
+        sweepRow({
           id: "keep",
-          operatorCountryName: "France",
           resolutionPayload: JSON.stringify({
             actions: [{ kind: "update_field", field: "lifetime", value: null, satelliteIds: ["42"] }],
           }),
-        },
+        }),
       ],
     });
     (satellites.findPayloadNamesByIds as ReturnType<typeof vi.fn>).mockResolvedValue([
@@ -272,13 +308,12 @@ describe("MissionService", () => {
   it("marks a task unobtainable when the two votes disagree", async () => {
     (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       rows: [
-        {
+        sweepRow({
           id: "keep",
-          operatorCountryName: "France",
           resolutionPayload: JSON.stringify({
             actions: [{ kind: "update_field", field: "variant", value: null, satelliteIds: ["42"] }],
           }),
-        },
+        }),
       ],
     });
     (satellites.findPayloadNamesByIds as ReturnType<typeof vi.fn>).mockResolvedValue([
@@ -311,13 +346,12 @@ describe("MissionService", () => {
   it("marks a task error and logs when a write throws", async () => {
     (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       rows: [
-        {
+        sweepRow({
           id: "keep",
-          operatorCountryName: "France",
           resolutionPayload: JSON.stringify({
             actions: [{ kind: "update_field", field: "variant", value: null, satelliteIds: ["42"] }],
           }),
-        },
+        }),
       ],
     });
     (satellites.findPayloadNamesByIds as ReturnType<typeof vi.fn>).mockResolvedValue([
@@ -355,13 +389,12 @@ describe("MissionService", () => {
   it("keeps the task filled but skips writes when the numeric value is out of range", async () => {
     (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       rows: [
-        {
+        sweepRow({
           id: "keep",
-          operatorCountryName: "France",
           resolutionPayload: JSON.stringify({
             actions: [{ kind: "update_field", field: "lifetime", value: null, satelliteIds: ["42"] }],
           }),
-        },
+        }),
       ],
     });
     (satellites.findPayloadNamesByIds as ReturnType<typeof vi.fn>).mockResolvedValue([

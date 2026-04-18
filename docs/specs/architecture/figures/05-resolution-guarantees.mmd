@@ -1,0 +1,12 @@
+flowchart TD
+    Accept["Reviewer: ACCEPT"]
+    Reject["Reviewer: REJECT"]
+
+    Accept --> TX["BEGIN TRANSACTION"]
+    TX --> Write["Apply resolution to DB"]
+    Write --> Audit["Write audit row<br/>(who, when, what, why)"]
+    Audit --> Commit["COMMIT"]
+    Commit --> Signal["Emit accept signal<br/>→ prompt tuning"]
+
+    Reject --> Log["Log rejection<br/>+ reviewer rationale"]
+    Log --> SignalR["Emit reject signal<br/>→ prompt tuning"]

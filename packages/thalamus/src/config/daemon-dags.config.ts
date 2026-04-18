@@ -8,7 +8,7 @@
  * default wiring.
  */
 
-import type { DAGPlan } from "../services/thalamus-planner.service";
+import type { DAGPlan } from "../cortices/types";
 
 export const DAEMON_DAGS: Record<string, DAGPlan> = {
   "daily-scan": {

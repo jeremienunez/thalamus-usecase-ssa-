@@ -1,37 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { GenericSuggestionRow } from "@interview/sweep";
 import {
   SweepSuggestionsService,
   type SweepSuggestionsDeps,
 } from "../../../src/services/sweep-suggestions.service";
 
-function row(overrides: Partial<{
-  id: string;
-  title: string;
-  description: string;
-  suggestedAction: string;
-  category: string;
-  severity: string;
-  operatorCountryName: string | null;
-  affectedSatellites: number;
-  createdAt: string;
-  accepted: boolean;
-  resolutionStatus: string;
-  resolutionPayload: string | null;
-}> = {}) {
+function row(
+  overrides: Partial<GenericSuggestionRow> & {
+    domainFields?: Record<string, unknown>;
+  } = {},
+): GenericSuggestionRow {
+  const {
+    domainFields: domainFieldOverrides,
+    ...rowOverrides
+  } = overrides;
   return {
     id: "s:1",
-    title: "Example suggestion",
-    description: "desc",
-    suggestedAction: "review",
-    category: "catalog",
-    severity: "low",
-    operatorCountryName: "US",
-    affectedSatellites: 3,
+    domain: "ssa",
     createdAt: "2026-04-16T00:00:00.000Z",
     accepted: false,
+    reviewedAt: null,
+    reviewerNote: null,
     resolutionStatus: "pending",
+    resolvedAt: null,
+    resolutionErrors: null,
+    simSwarmId: null,
+    simDistribution: null,
+    domainFields: {
+      operatorCountryId: null,
+      operatorCountryName: "US",
+      category: "missing_data",
+      severity: "warning",
+      title: "Example suggestion",
+      description: "desc",
+      suggestedAction: "review",
+      affectedSatellites: 3,
+      webEvidence: null,
+      ...domainFieldOverrides,
+    },
     resolutionPayload: null as string | null,
-    ...overrides,
+    ...rowOverrides,
   };
 }
 

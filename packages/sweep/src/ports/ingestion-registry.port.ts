@@ -5,19 +5,13 @@
  * Each fetcher becomes a BullMQ job kind; the IngestionRegistry (engine)
  * dispatches by name.
  *
- * Fetchers receive a context assembled by the engine: db + structured logger
- * (+ optional redis, + optional abort signal). Matches what the current
- * SSA fetchers (tle-history, itu-filings, launch-manifest, fragmentation-events,
- * notam, space-weather) consume; redis is reserved for future sources.
+ * The engine is DB-agnostic: `IngestionRunContext` carries only a logger
+ * and optional abort signal. Fetchers that need a database handle or Redis
+ * client capture them via closure at construction (factory pattern) —
+ * console-api wires its ingesters with its own Drizzle instance.
  */
 
-import type { Database } from "@interview/db-schema";
-import type IORedis from "ioredis";
-
 export interface IngestionRunContext {
-  db: Database;
-  /** Optional for future sources; current fetchers only require db + logger. */
-  redis?: IORedis;
   logger: {
     info: (obj: unknown, msg?: string) => void;
     warn: (obj: unknown, msg?: string) => void;
@@ -34,8 +28,8 @@ export interface IngestionSource<TResult = unknown> {
   id: string;
   description?: string;
   /**
-   * Optional cron expression. When present, schedulers.ts auto-registers
-   * a BullMQ repeat job for this source.
+   * Optional cron expression. Informational — schedulers.ts owns the
+   * authoritative cron configuration.
    */
   cron?: string;
   run(ctx: IngestionRunContext): Promise<TResult>;

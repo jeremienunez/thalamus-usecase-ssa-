@@ -6,6 +6,13 @@
  * - Average cycle: ~$0.003, ~45s, ~3 findings
  * - Full constellation/regime sweep: ~$0.14, ~27min
  * - Monthly budget (daemon): ~$0.25
+ *
+ * TODO (SPEC-TH-025) — these constants must become runtime-tunable via the
+ * existing `PATCH /api/config/runtime/:domain` surface, same pattern as
+ * `thalamus.nano` and `thalamus.nanoSwarm`. Until then, budget tweaks require
+ * a redeploy. Tracked in:
+ *   docs/specs/2026-04-18-thalamus-cortex-config-runtime.md
+ *   apps/console-api/tests/e2e/runtime-config-cortex.stub.spec.ts
  */
 
 // ─── Iteration Budgets by Complexity ──────────────────────

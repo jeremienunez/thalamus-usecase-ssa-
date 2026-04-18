@@ -1,0 +1,20 @@
+flowchart TB
+    subgraph SHARED["@interview/shared"]
+        direction LR
+        tryAsync["tryAsync<br/>Go-style [error, result] tuples"]
+        AppError["AppError<br/>structured cause chain<br/>typed error codes"]
+        Obs["Observability<br/>createLogger<br/>MetricsCollector<br/>Prometheus counters"]
+        Norm["Normalizers<br/>domain-agnostic<br/>completeness scoring<br/>adaptive weight normalization"]
+    end
+
+    subgraph SCHEMA["@interview/db-schema"]
+        direction LR
+        Drizzle["Drizzle ORM schema<br/>single source of truth<br/>for entity shapes"]
+        QueryHelpers["Typed query helpers<br/>Drizzle-inferred types<br/>all the way up"]
+        PgVector["pgvector integration<br/>semantic retrieval<br/>across findings"]
+    end
+
+    SHARED --> THALAMUS_PKG["packages/thalamus/"]
+    SHARED --> SWEEP_PKG["packages/sweep/"]
+    SCHEMA --> THALAMUS_PKG
+    SCHEMA --> SWEEP_PKG

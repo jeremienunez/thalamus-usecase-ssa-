@@ -23,11 +23,19 @@ const aliases = {
     __dirname,
     "packages/shared/src/schemas",
   ),
+  "@interview/shared/config": resolve(
+    __dirname,
+    "packages/shared/src/config/index.ts",
+  ),
   "@interview/shared": resolve(__dirname, "packages/shared/src/index.ts"),
   // Thalamus subpath imports used at runtime by sweep services.
   "@interview/thalamus/explorer/nano-caller": resolve(
     __dirname,
     "packages/thalamus/src/explorer/nano-caller.ts",
+  ),
+  "@interview/thalamus/explorer/nano-swarm": resolve(
+    __dirname,
+    "packages/thalamus/src/explorer/nano-swarm.ts",
   ),
   "@interview/thalamus/services/research-graph.service": resolve(
     __dirname,

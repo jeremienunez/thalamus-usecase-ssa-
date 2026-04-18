@@ -15,7 +15,7 @@
  * remain out of reach without auth / scraping; track as future work.
  */
 
-import { notam, type NewNotam } from "@interview/db-schema";
+import { notam, type Database, type NewNotam } from "@interview/db-schema";
 import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
 
 interface IngestionResult {
@@ -105,8 +105,11 @@ function mapRow(row: FaaTfrRow, fetchedAt: Date): NewNotam | null {
   };
 }
 
-async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
-  const { db, logger } = ctx;
+export function createNotamSource(
+  db: Database,
+): IngestionSource<IngestionResult> {
+  async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+    const { logger } = ctx;
   let payload: FaaTfrRow[] | null = null;
   try {
     const res = await fetch(FAA_TFR_LIST_URL, {
@@ -183,9 +186,10 @@ async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
   };
 }
 
-export const notamSource: IngestionSource<IngestionResult> = {
-  id: "notams",
-  description: "FAA TFR (Temporary Flight Restrictions) — SPACE OPERATIONS",
-  cron: "15 */6 * * *",
-  run,
-};
+  return {
+    id: "notams",
+    description: "FAA TFR (Temporary Flight Restrictions) — SPACE OPERATIONS",
+    cron: "15 */6 * * *",
+    run,
+  };
+}

@@ -11,8 +11,12 @@
  */
 
 import { z } from "zod";
-import { TELEMETRY_SCALAR_KEYS } from "@interview/db-schema";
 import type { SimActionSchemaProvider } from "@interview/sweep";
+import {
+  TELEMETRY_SCALAR_KEYS,
+  TELEMETRY_SCALAR_COLUMN,
+  type TelemetryScalarKey,
+} from "../../../types/sim-telemetry.types";
 
 /** Per-scalar inference shape produced by the telemetry_inference_agent. */
 const scalarValueSchema = z.object({
@@ -194,6 +198,11 @@ export const launchSwarmSchema = z.object({
   config: z.any(),
 });
 
+export type SsaTurnAction = z.infer<typeof turnActionSchema>;
+export type SsaGodEvent = z.infer<typeof godEventSchema>;
+export type SsaPerturbationSpec = z.infer<typeof perturbationSchema>;
+export type SsaBusDatasheetPrior = z.infer<typeof busDatasheetPriorSchema>;
+export type SsaSeedRefs = z.infer<typeof seedRefsSchema>;
 export type LaunchSwarmInput = z.infer<typeof launchSwarmSchema>;
 
 export class SsaActionSchemaProvider implements SimActionSchemaProvider {

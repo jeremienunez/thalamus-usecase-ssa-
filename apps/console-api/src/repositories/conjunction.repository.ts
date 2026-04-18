@@ -3,12 +3,14 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
 import type {
   ConjunctionRow,
+  ConjunctionWithSatellitesRow,
   ScreenedConjunctionRow,
   KnnCandidateRow,
 } from "../types/conjunction.types";
 
 export type {
   ConjunctionRow,
+  ConjunctionWithSatellitesRow,
   ScreenedConjunctionRow,
   KnnCandidateRow,
 } from "../types/conjunction.types";
@@ -174,5 +176,93 @@ export class ConjunctionRepository {
     `);
 
     return rows.rows;
+  }
+
+  /**
+   * Full conjunction profile by id: event row + both satellites + both
+   * buses + both operator ids. One query, one round-trip. Null when the
+   * id doesn't exist.
+   *
+   * Consumers:
+   *   - sim target composition (`services/sim-target.service.ts`)
+   *   - sim pc-estimator swarm launcher (`services/sim-launch.service.ts`)
+   *
+   * Introduced: Plan 5 · 1.A.8 (absorbs the ad-hoc SQL previously in
+   * `packages/sweep/src/sim/agent/ssa/sim/targets.ts::loadPcTarget` and
+   * `packages/sweep/src/sim/agent/ssa/sim/swarms/pc.ts::loadConjunctionMeta`).
+   */
+  async findByIdWithSatellites(
+    conjunctionId: bigint,
+  ): Promise<ConjunctionWithSatellitesRow | null> {
+    const rows = await this.db.execute<{
+      id: string;
+      tca: Date | string | null;
+      miss_km: number | null;
+      rel_v: number | null;
+      current_pc: number | null;
+      hbr: number | null;
+      combined_sigma: number | null;
+      p_id: string;
+      s_id: string;
+      p_name: string | null;
+      s_name: string | null;
+      p_norad: number | null;
+      s_norad: number | null;
+      p_bus: string | null;
+      s_bus: string | null;
+      p_op: string | null;
+      s_op: string | null;
+    }>(sql`
+      SELECT
+        ce.id::text                                         AS id,
+        ce.epoch                                            AS tca,
+        ce.min_range_km                                     AS miss_km,
+        ce.relative_velocity_kmps                           AS rel_v,
+        ce.probability_of_collision                         AS current_pc,
+        ce.hard_body_radius_m                               AS hbr,
+        ce.combined_sigma_km                                AS combined_sigma,
+        ce.primary_satellite_id::text                       AS p_id,
+        ce.secondary_satellite_id::text                     AS s_id,
+        sp.name                                             AS p_name,
+        ss.name                                             AS s_name,
+        NULLIF(sp.telemetry_summary->>'noradId','')::int    AS p_norad,
+        NULLIF(ss.telemetry_summary->>'noradId','')::int    AS s_norad,
+        spb.name                                            AS p_bus,
+        ssb.name                                            AS s_bus,
+        sp.operator_id::text                                AS p_op,
+        ss.operator_id::text                                AS s_op
+      FROM conjunction_event ce
+      LEFT JOIN satellite sp      ON sp.id = ce.primary_satellite_id
+      LEFT JOIN satellite ss      ON ss.id = ce.secondary_satellite_id
+      LEFT JOIN satellite_bus spb ON spb.id = sp.satellite_bus_id
+      LEFT JOIN satellite_bus ssb ON ssb.id = ss.satellite_bus_id
+      WHERE ce.id = ${conjunctionId}
+      LIMIT 1
+    `);
+    const r = rows.rows[0];
+    if (!r) return null;
+    return {
+      id: BigInt(r.id),
+      epoch: r.tca ? new Date(r.tca as string | Date) : null,
+      minRangeKm: r.miss_km,
+      relativeVelocityKmps: r.rel_v,
+      probabilityOfCollision: r.current_pc,
+      hardBodyRadiusM: r.hbr,
+      combinedSigmaKm: r.combined_sigma,
+      primary: {
+        id: BigInt(r.p_id),
+        name: r.p_name,
+        noradId: r.p_norad,
+        busName: r.p_bus,
+        operatorId: r.p_op ? BigInt(r.p_op) : null,
+      },
+      secondary: {
+        id: BigInt(r.s_id),
+        name: r.s_name,
+        noradId: r.s_norad,
+        busName: r.s_bus,
+        operatorId: r.s_op ? BigInt(r.s_op) : null,
+      },
+    };
   }
 }

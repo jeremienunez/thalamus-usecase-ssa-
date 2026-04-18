@@ -1,0 +1,40 @@
+sequenceDiagram
+    autonumber
+    participant U as Upstream Query
+    participant O as Orchestrator
+    participant R as Cortex Registry
+    participant C as Cortex
+    participant S as Skill Prompt (.md)
+    participant E as Explorer (×50 nano)
+    participant Cu as Curator (strong model)
+    participant KG as Knowledge Graph
+    participant G as Guardrails
+
+    U->>O: structured query
+    O->>G: check budget + depth cap
+    G-->>O: within bounds
+
+    O->>R: select cortex (by query shape)
+    R-->>O: cortex ref + declared skills
+
+    O->>C: execute(query, skills)
+    C->>S: load skill prompt from disk
+    S-->>C: prompt template
+
+    C->>E: dispatch parallel retrieval
+
+    par Nano Swarm (up to 50 workers)
+        E->>E: worker₁ — crawl source A
+        E->>E: worker₂ — crawl source B
+        E->>E: worker_n — crawl source N
+    end
+
+    E-->>Cu: raw summaries + source metadata
+    Cu->>Cu: deduplicate + rank + confidence-tag
+    Cu-->>C: curated findings
+
+    C->>KG: write structured entities (Drizzle ORM)
+    KG-->>O: entity IDs + vector embeddings
+
+    O->>G: post-check (cost, hallucination, depth)
+    G-->>O: run complete

@@ -6,7 +6,10 @@
  * sweep resolution service. Controllers delegate to this class so route
  * handlers stay boring (just request/reply glue).
  */
+import type { GenericSuggestionRow } from "@interview/sweep";
+import { parseSsaFindingPayload } from "../agent/ssa/sweep";
 import { toSuggestionListItem } from "../transformers/sweep-suggestions.transformer";
+import type { SweepSuggestionRow } from "../types/sweep.types";
 import type { SuggestionListItem } from "../types/sweep.types";
 
 export type { SuggestionListItem } from "../types/sweep.types";
@@ -19,20 +22,7 @@ export type { SuggestionListItem } from "../types/sweep.types";
 export interface SweepSuggestionsDeps {
   sweepRepo: {
     list(opts: { reviewed: boolean; limit: number }): Promise<{
-      rows: Array<{
-        id: string;
-        title: string;
-        description: string;
-        suggestedAction: string;
-        category: string;
-        severity: string;
-        operatorCountryName: string | null;
-        affectedSatellites: number;
-        createdAt: string;
-        accepted: boolean;
-        resolutionStatus: string;
-        resolutionPayload: string | null;
-      }>;
+      rows: GenericSuggestionRow[];
     }>;
     review(id: string, accept: boolean, reason?: string): Promise<boolean>;
   };
@@ -48,7 +38,10 @@ export class SweepSuggestionsService {
 
   async list(): Promise<{ items: SuggestionListItem[]; count: number }> {
     const res = await this.deps.sweepRepo.list({ reviewed: false, limit: 100 });
-    const items = res.rows.map(toSuggestionListItem);
+    const items = res.rows
+      .map(toSweepSuggestionRow)
+      .filter((row): row is SweepSuggestionRow => row !== null)
+      .map(toSuggestionListItem);
     return { items, count: items.length };
   }
 
@@ -64,5 +57,29 @@ export class SweepSuggestionsService {
       return { ok: true, reviewed: true, resolution };
     }
     return { ok: true, reviewed: true, resolution: null };
+  }
+}
+
+function toSweepSuggestionRow(
+  row: GenericSuggestionRow,
+): SweepSuggestionRow | null {
+  try {
+    const finding = parseSsaFindingPayload(row.domainFields);
+    return {
+      id: row.id,
+      title: finding.title,
+      description: finding.description,
+      suggestedAction: finding.suggestedAction,
+      category: finding.category,
+      severity: finding.severity,
+      operatorCountryName: finding.operatorCountryName,
+      affectedSatellites: finding.affectedSatellites,
+      createdAt: row.createdAt,
+      accepted: row.accepted === true,
+      resolutionStatus: row.resolutionStatus,
+      resolutionPayload: row.resolutionPayload,
+    };
+  } catch {
+    return null;
   }
 }

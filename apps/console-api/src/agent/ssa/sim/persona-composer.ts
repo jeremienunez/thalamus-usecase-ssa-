@@ -12,9 +12,9 @@
  */
 
 import type {
-  AgentSubjectSnapshot,
   ComposedPersona,
   SimAgentPersonaComposer,
+  SimSubjectSnapshot,
 } from "@interview/sweep";
 
 type RiskProfile = "conservative" | "balanced" | "aggressive";
@@ -29,7 +29,7 @@ interface SsaAttributes {
 
 export class SsaPersonaComposer implements SimAgentPersonaComposer {
   compose(
-    subject: AgentSubjectSnapshot,
+    subject: SimSubjectSnapshot,
     hints: Record<string, unknown>,
   ): ComposedPersona {
     const attrs = readAttrs(subject);
@@ -53,7 +53,7 @@ export class SsaPersonaComposer implements SimAgentPersonaComposer {
   }
 }
 
-function readAttrs(subject: AgentSubjectSnapshot): SsaAttributes {
+function readAttrs(subject: SimSubjectSnapshot): SsaAttributes {
   const a = subject.attributes;
   return {
     operatorCountry: (a.operatorCountry as string | null) ?? null,

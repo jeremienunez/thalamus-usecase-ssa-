@@ -2,8 +2,7 @@
  * SimPromptComposer — kernel ↔ pack contract for turn prompt assembly.
  *
  * Given the kernel-assembled AgentContext (generic, domain-opaque) the pack
- * renders the final LLM prompt — choosing which sections to include (fleet
- * snapshot, telemetry target, pc target), field names, ordering, etc.
+ * renders the final LLM prompt.
  *
  * Introduced: Plan 2 Task A.1 (scaffold) / B.4 (impl moves renderTurnPrompt
  * body from packages/sweep/src/sim/prompt.ts to apps/console-api).
@@ -12,7 +11,7 @@
 export interface PromptRenderContext {
   /** Kernel metadata — turn number, agent index, persona, goals, etc. */
   frame: Record<string, unknown>;
-  /** Pack-defined bag: fleet, telemetryTarget, pcEstimatorTarget, ... */
+  /** Pack-defined bag: subject snapshot, scenario payload, and any extras. */
   domain: Record<string, unknown>;
   /** Observable log (compacted) — author label + summary per entry. */
   observable: Array<{

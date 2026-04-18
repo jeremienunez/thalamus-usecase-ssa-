@@ -12,3 +12,13 @@ export {
   buildOpacityScoutSystemPrompt,
   type OpacityScoutPromptInput,
 } from "./opacity-scout.prompt";
+export {
+  buildReflexionSystemPrompt,
+  type ReflexionPromptInput,
+} from "./reflexion.prompt";
+export {
+  DEFAULT_NANO_SWARM_PROFILE,
+  type NanoSwarmProfile,
+  type Lens,
+} from "./nano-swarm.prompt";
+export { DEFAULT_CURATOR_PROMPT } from "./curator.prompt";

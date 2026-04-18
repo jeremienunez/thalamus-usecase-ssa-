@@ -1,0 +1,36 @@
+stateDiagram-v2
+    [*] --> Scan: cron / admin trigger
+
+    Scan --> FindingCreated: nano swarm detects inconsistency
+    Scan --> Scan: no issues found (continue)
+
+    FindingCreated --> Deduplicated: dedup + rate-limit check
+    Deduplicated --> Pending: persisted to Redis
+
+    Pending --> UnderReview: reviewer opens finding
+
+    UnderReview --> Accepted: reviewer accepts
+    UnderReview --> Rejected: reviewer rejects
+    UnderReview --> Edited: reviewer edits resolution
+
+    Edited --> Accepted: confirm edit
+
+    Accepted --> Resolved: Resolution.service<br/>(transactional write + audit row)
+    Rejected --> Dismissed: logged + feedback captured
+
+    Resolved --> FeedbackLoop: accept signal → prompt tuning
+    Dismissed --> FeedbackLoop: reject signal → prompt tuning
+
+    FeedbackLoop --> [*]: calibration applied to next run
+
+    note right of Pending
+        Findings are deduped in Redis
+        before reaching the reviewer.
+        No duplicate noise.
+    end note
+
+    note right of Resolved
+        Every write is transactional.
+        Every mutation has an audit row.
+        Every mutation is reversible.
+    end note

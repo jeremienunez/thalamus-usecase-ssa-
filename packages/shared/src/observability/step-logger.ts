@@ -1,19 +1,10 @@
 import type { Logger } from "pino";
 import { STEP_REGISTRY, type StepName } from "./steps";
+import type { StepEvent, StepPhase } from "./step-events";
 import { stepContextStore } from "./step-context";
 
 export { STEP_REGISTRY } from "./steps";
 export type { StepName, StepEntry } from "./steps";
-
-export type StepPhase = "start" | "done" | "error";
-
-export interface StepEvent {
-  step: StepName | "unknown";
-  phase: StepPhase;
-  frames: string[];
-  terminal: string;
-  [extra: string]: unknown;
-}
 
 /**
  * Emit a structured step lifecycle event.

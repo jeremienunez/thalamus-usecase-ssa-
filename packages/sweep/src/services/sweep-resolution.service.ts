@@ -1,22 +1,18 @@
 /**
  * SweepResolutionService — domain-agnostic façade.
  *
- * Plan 1 Task 2.3: refactored from an 825-line SSA service into a ~150-line
- * façade that delegates:
- *
+ * Delegates:
  *   - per-action execution → ResolutionHandlerRegistry port
- *     (default: LegacySsaResolutionRegistry — mirrors legacy behaviour)
- *   - post-resolution side-effects (sweep_audit row, KG logging,
+ *   - post-resolution side-effects (audit row, KG logging,
  *     sim source-class promotion) → SweepPromotionAdapter port
- *     (default: LegacySsaPromotionAdapter)
+ *
+ * Both ports are required by BuildSweepOpts: the app pack supplies the
+ * implementations; CLI/E2E supply disabled stubs when they don't run the
+ * resolution path in-process.
  *
  * Public API preserved for CLI + console-api + AdminSweepController:
  *   - resolve(id)                            1-arg form
  *   - resolve(id, selections)                2-arg form (disambiguation)
- *
- * The legacy `setOnSimUpdateAccepted` / `setGraphService` setters are
- * gone — the container wires them at construction time through the
- * legacy adapter deps. One caller (sweep/src/config/container.ts) updated.
  */
 
 import { createLogger } from "@interview/shared/observability";
@@ -33,20 +29,6 @@ import {
 } from "../transformers/sweep.dto";
 
 const logger = createLogger("sweep-resolution");
-
-/**
- * Hook fired after a sim-swarm-sourced update_field is successfully applied.
- * Kept as an exported alias so the container and the legacy registry can
- * share one type until Plan 2 consolidates sim source-class promotion.
- */
-export type OnSimUpdateAccepted = (event: {
-  satelliteId: bigint;
-  field: string;
-  value: number;
-  swarmId: number | null;
-  priorSourceClass: string;
-  nextSourceClass: string;
-}) => Promise<void>;
 
 export interface SweepResolutionDeps {
   registry: ResolutionHandlerRegistry;

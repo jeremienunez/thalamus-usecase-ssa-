@@ -19,6 +19,7 @@ import {
   type WebSearchPort,
 } from "@interview/thalamus";
 import { buildContainer, type ContainerConfig } from "./container";
+import { createSimRouteTransport } from "./infra/sim-route-transport";
 import { registerAllRoutes } from "./routes";
 import type { HealthSnapshot } from "./infra/health-snapshot";
 
@@ -26,15 +27,28 @@ export interface ServerEnv {
   databaseUrl: string;
   redisUrl: string;
   openaiApiKey?: string;
+  simLlmMode?: "cloud" | "fixtures" | "record";
+  simKernelSharedSecret?: string;
+}
+
+function readSimLlmMode(
+  value: string | undefined,
+): "cloud" | "fixtures" | "record" | undefined {
+  return value === "cloud" || value === "fixtures" || value === "record"
+    ? value
+    : undefined;
 }
 
 export function readServerEnv(): ServerEnv {
+  process.env.SIM_KERNEL_SHARED_SECRET ??= "interview-local-kernel-secret";
   return {
     databaseUrl:
       process.env.DATABASE_URL ??
       "postgres://thalamus:thalamus@localhost:5433/thalamus",
     redisUrl: process.env.REDIS_URL ?? "redis://localhost:6380",
     openaiApiKey: process.env.OPENAI_API_KEY,
+    simLlmMode: readSimLlmMode(process.env.SIM_LLM_MODE),
+    simKernelSharedSecret: process.env.SIM_KERNEL_SHARED_SECRET,
   };
 }
 
@@ -52,7 +66,13 @@ function buildInfra(env: ServerEnv): {
     ? new OpenAIWebSearchAdapter(env.openaiApiKey, "gpt-5.4-mini")
     : new NullWebSearchAdapter();
   return {
-    config: { db, redis, webSearch },
+    config: {
+      db,
+      redis,
+      webSearch,
+      simLlmMode: env.simLlmMode,
+      simKernelSharedSecret: env.simKernelSharedSecret,
+    },
     close: async () => {
       await pool.end();
       redis.disconnect();
@@ -211,7 +231,8 @@ export async function createApp(
   });
 
   const infra = buildInfra(env);
-  const container = await buildContainer(infra.config, app.log);
+  const simTransport = createSimRouteTransport(app);
+  const container = await buildContainer(infra.config, app.log, simTransport);
   registerAllRoutes(app, container.services);
   return {
     app,

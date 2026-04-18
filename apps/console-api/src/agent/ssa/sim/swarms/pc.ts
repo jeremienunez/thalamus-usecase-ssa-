@@ -2,16 +2,24 @@
  * Pc estimator swarm launcher — public entry point for UC_PC_ESTIMATOR.
  *
  * Given a conjunction_event.id + fish count, resolves the event + its two
- * satellites, builds a perturbation plan that varies (hard-body radius ×
- * covariance envelope) across the K fish, and delegates to SwarmService.
+ * satellites through console-api's repository/service layer, builds a
+ * perturbation plan that varies (hard-body radius × covariance envelope)
+ * across the K fish, and delegates to SwarmService.
  *
  * Mirrors telemetry-swarm.service.ts — same fan-out shape, different payload.
  */
 
-import { sql } from "drizzle-orm";
-import type { Database, SeedRefs, PerturbationSpec, SwarmConfig } from "@interview/db-schema";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import type { SwarmService, LaunchSwarmResult } from "@interview/sweep";
+import type {
+  ConjunctionWithSatellitesRow,
+} from "../../../../types/conjunction.types";
+import type {
+  LaunchSwarmResult,
+  PerturbationSpec,
+  SeedRefs,
+  SwarmConfig,
+  SwarmService,
+} from "@interview/sweep";
 
 const logger = createLogger("pc-swarm");
 
@@ -28,20 +36,22 @@ export interface PcEstimatorSwarmOpts {
   createdBy?: number;
 }
 
+export interface PcSwarmConjunctionReadPort {
+  findByIdWithSatellites(
+    conjunctionId: bigint,
+  ): Promise<ConjunctionWithSatellitesRow | null>;
+}
+
 async function loadConjunctionMeta(
-  db: Database,
+  conjunctionRepo: PcSwarmConjunctionReadPort,
   conjunctionId: number,
 ): Promise<{ primaryOperatorId: number | null } | null> {
-  const rows = await db.execute(sql`
-    SELECT sp.operator_id::int AS p_op
-    FROM conjunction_event ce
-    LEFT JOIN satellite sp ON sp.id = ce.primary_satellite_id
-    WHERE ce.id = ${BigInt(conjunctionId)}
-    LIMIT 1
-  `);
-  const r = rows.rows[0] as { p_op: number | null } | undefined;
-  if (!r) return null;
-  return { primaryOperatorId: r.p_op };
+  const row = await conjunctionRepo.findByIdWithSatellites(BigInt(conjunctionId));
+  if (!row) return null;
+  return {
+    primaryOperatorId:
+      row.primary.operatorId === null ? null : Number(row.primary.operatorId),
+  };
 }
 
 /** Build K perturbations cycling through radius × covariance pairs. */
@@ -60,7 +70,10 @@ function buildPerturbations(fishCount: number): PerturbationSpec[] {
 }
 
 export async function startPcEstimatorSwarm(
-  deps: { db: Database; swarmService: SwarmService },
+  deps: {
+    conjunctionRepo: PcSwarmConjunctionReadPort;
+    swarmService: SwarmService;
+  },
   opts: PcEstimatorSwarmOpts,
 ): Promise<LaunchSwarmResult & { conjunctionId: number }> {
   const fishCount = opts.fishCount ?? DEFAULT_FISH_COUNT;
@@ -72,7 +85,10 @@ export async function startPcEstimatorSwarm(
   });
 
   try {
-    const meta = await loadConjunctionMeta(deps.db, opts.conjunctionId);
+    const meta = await loadConjunctionMeta(
+      deps.conjunctionRepo,
+      opts.conjunctionId,
+    );
     if (!meta) {
       throw new Error(
         `Conjunction ${opts.conjunctionId} not found — cannot launch Pc estimator swarm`,
@@ -80,7 +96,8 @@ export async function startPcEstimatorSwarm(
     }
 
     const baseSeed: SeedRefs = {
-      operatorIds: meta.primaryOperatorId != null ? [meta.primaryOperatorId] : [],
+      subjectIds: meta.primaryOperatorId != null ? [meta.primaryOperatorId] : [],
+      subjectKind: "operator",
       pcEstimatorTarget: opts.conjunctionId,
     };
 

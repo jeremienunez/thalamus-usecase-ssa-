@@ -1,4 +1,6 @@
 // apps/console-api/src/services/mission.service.ts
+import type { GenericSuggestionRow } from "@interview/sweep";
+import { parseSsaFindingPayload } from "../agent/ssa/sweep";
 import type { FastifyBaseLogger } from "fastify";
 import type { MissionState, MissionTask } from "../types";
 import { toMissionStateView } from "../transformers/mission.transformer";
@@ -12,7 +14,7 @@ export interface SweepListProvider {
   list(opts: {
     reviewed: boolean;
     limit: number;
-  }): Promise<{ rows: SweepListRow[] }>;
+  }): Promise<{ rows: GenericSuggestionRow[] }>;
 }
 
 /**
@@ -58,7 +60,12 @@ export class MissionService {
     // still allow `undefined` for programmatic callers without a schema.
     const cap = opts.maxSatsPerSuggestion ?? MAX_SATS_PER_SUGGESTION;
     const listing = await this.sweepRepo.list({ reviewed: false, limit: 300 });
-    const tasks = await this.planner.buildTasks(listing.rows, cap);
+    const tasks = await this.planner.buildTasks(
+      listing.rows
+        .map(toSweepListRow)
+        .filter((row): row is SweepListRow => row !== null),
+      cap,
+    );
 
     this.state = {
       running: true,
@@ -105,5 +112,18 @@ export class MissionService {
     } finally {
       this.state.busy = false;
     }
+  }
+}
+
+function toSweepListRow(row: GenericSuggestionRow): SweepListRow | null {
+  try {
+    const finding = parseSsaFindingPayload(row.domainFields);
+    return {
+      id: row.id,
+      operatorCountryName: finding.operatorCountryName,
+      resolutionPayload: row.resolutionPayload,
+    };
+  } catch {
+    return null;
   }
 }

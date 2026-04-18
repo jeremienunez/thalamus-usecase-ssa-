@@ -6,15 +6,29 @@
  *   - createSsaResolutionRegistry (resolution-handlers.ssa.ts, Task 1.3)
  *   - SsaAuditProvider            (audit-provider.ssa.ts, Task 1.4)
  *   - SsaFindingRoutingPolicy     (finding-routing.ssa.ts, Task 1.5)
- *   - doctrine-parser assets      (doctrine-parser.ssa.ts, Task 1.6)
- *   - ssaIngestionProvider        (ingesters/, Task 1.7)
+ *   - createSsaIngestionProvider  (ingesters/, factory)
  *
  * Consumed by apps/console-api/src/container.ts (Task 3.1) to supply the
  * 6 ports to buildSweepContainer.
  */
 
 export { ssaFindingSchema } from "./finding-schema.ssa";
+export {
+  parseSsaFindingPayload,
+} from "./finding-schema.ssa";
 export type { SsaFindingPayload } from "./finding-schema.ssa";
+
+export {
+  ssaResolutionPayloadSchema,
+} from "./resolution-schema.ssa";
+export type {
+  UpdateFieldAction,
+  LinkPayloadAction,
+  UnlinkPayloadAction,
+  ReassignOperatorCountryAction,
+  EnrichAction,
+  SsaResolutionPayload,
+} from "./resolution-schema.ssa";
 
 export { SsaPromotionAdapter } from "./promotion.ssa";
 export type { SsaPromotionDeps } from "./promotion.ssa";
@@ -34,4 +48,4 @@ export type { SsaAuditDeps } from "./audit-provider.ssa";
 
 export { SsaFindingRoutingPolicy } from "./finding-routing.ssa";
 
-export { ssaIngestionProvider } from "./ingesters";
+export { createSsaIngestionProvider } from "./ingesters";

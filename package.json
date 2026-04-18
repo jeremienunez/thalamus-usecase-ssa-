@@ -5,6 +5,7 @@
   "description": "Standalone extraction of Thalamus (multi-cortex research agent) and Sweep (nano swarm DB audit) for technical interview",
   "scripts": {
     "arch:check": "pnpm exec depcruise --config .dependency-cruiser.js apps/console-api/src --output-type err-long",
+    "arch:check:repo": "pnpm exec depcruise --config .dependency-cruiser.js apps packages --output-type err-long",
     "typecheck": "pnpm -r typecheck",
     "ssa": "pnpm --filter @interview/cli start",
     "test": "vitest run",
@@ -17,6 +18,7 @@
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || echo '  (skipped hooks install — not a git repo yet)'"
   },
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.12.0",
     "@types/node": "^20.19.39",
     "@vitest/coverage-v8": "^1.6.1",
     "dependency-cruiser": "^17.3.10",

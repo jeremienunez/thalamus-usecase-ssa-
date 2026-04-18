@@ -1,25 +1,11 @@
-/**
- * SsaAuditProvider — lifts packages/sweep/src/services/nano-sweep.service.ts
- * behind the DomainAuditProvider port.
- *
- * Three audit modes (the pack owns the vocabulary):
- *   - "nullScan":     deterministic null-fraction audit, no LLM.
- *   - "dataQuality":  nano waves over operator-country batches, validates
- *                      payload/regime coherence. Default.
- *   - "briefing":     nano waves that surface mission-operator angles.
- *
- * The provider returns AuditCandidate[]; the engine's façade
- * (NanoSweepService.sweep in Phase 2) persists them via
- * SweepRepository.insertGeneric.
- *
- * Plan 1 Task 4.2: satelliteRepo is now console-api's own SatelliteRepository
- * (the audit methods getOperatorCountrySweepStats + nullScanByColumn +
- * findSatelliteIdsWithNullColumn were folded in by Task 4.1). sweepRepo is
- * still the sweep-side interface — only `loadPastFeedback` is consumed, and
- * the sweep container owns it.
- */
 
 import { createLogger } from "@interview/shared/observability";
+import {
+  type ConfigProvider,
+  type NanoSweepConfig,
+  DEFAULT_NANO_SWEEP_CONFIG,
+  StaticConfigProvider,
+} from "@interview/shared/config";
 import {
   callNanoWaves,
   type NanoRequest,
@@ -29,21 +15,17 @@ import type {
   AuditCandidate,
   DomainAuditProvider,
 } from "@interview/sweep";
-import type { SweepRepository, PastFeedback } from "@interview/sweep";
-import { resolutionPayloadSchema } from "@interview/sweep";
+import type { SuggestionFeedbackRow, SweepRepository } from "@interview/sweep";
 import type { SatelliteRepository } from "../../../repositories/satellite.repository";
 import type { SweepFeedbackRepository } from "../../../repositories/sweep-feedback.repository";
+import {
+  buildSsaAuditInstructions,
+  SSA_BRIEFING_INSTRUCTIONS,
+} from "../../../prompts";
+import { parseSsaFindingPayload } from "./finding-schema.ssa";
+import { ssaResolutionPayloadSchema } from "./resolution-schema.ssa";
 
 const logger = createLogger("ssa-audit-provider");
-
-const BATCH_SIZE = 10; // operator-countries per nano call
-
-/**
- * Null-scan: bound the satellite IDs bundled in each suggestion's resolution
- * payload. Reviewer can accept/reject the lot; if more rows are affected than
- * the cap, another suggestion covers the residual (auto-surfaces on next run).
- */
-const NULL_SCAN_MAX_IDS_PER_SUGGESTION = 200;
 
 /**
  * Per-column backfill citation — tells the reviewer WHERE the missing value
@@ -106,6 +88,13 @@ interface OperatorCountryBatch {
   }>;
 }
 
+interface PastFeedback {
+  category: string;
+  wasAccepted: boolean;
+  reviewerNote: string | null;
+  operatorCountryName: string;
+}
+
 const CATEGORIES = new Set([
   "mass_anomaly",
   "missing_data",
@@ -127,14 +116,23 @@ export interface SsaAuditDeps {
   sweepRepo: Pick<SweepRepository, "loadPastFeedback">;
   /** Feedback recording (recordFeedback port method). */
   feedbackRepo?: SweepFeedbackRepository;
+  /** Optional — runtime-tunable batch size + null-scan caps. Defaults when unset. */
+  config?: ConfigProvider<NanoSweepConfig>;
 }
 
 export class SsaAuditProvider implements DomainAuditProvider {
-  constructor(private readonly deps: SsaAuditDeps) {}
+  private readonly config: ConfigProvider<NanoSweepConfig>;
+
+  constructor(private readonly deps: SsaAuditDeps) {
+    this.config =
+      deps.config ?? new StaticConfigProvider(DEFAULT_NANO_SWEEP_CONFIG);
+  }
 
   async runAudit(ctx: AuditCycleContext): Promise<AuditCandidate[]> {
+    const cfg = await this.config.get();
+
     if (ctx.mode === "nullScan") {
-      return this.nullScan(ctx.limit);
+      return this.nullScan(ctx.limit, cfg.nullScanMaxIdsPerSuggestion);
     }
 
     const operatorCountries = await this.gatherOperatorCountryData(ctx.limit);
@@ -143,12 +141,14 @@ export class SsaAuditProvider implements DomainAuditProvider {
       "ssa audit: operator-countries gathered",
     );
 
-    const feedback = await this.deps.sweepRepo.loadPastFeedback();
+    const feedback = (await this.deps.sweepRepo.loadPastFeedback()).map(
+      toPastFeedback,
+    );
 
     const batches: OperatorCountryBatch[] = [];
-    for (let i = 0; i < operatorCountries.length; i += BATCH_SIZE) {
+    for (let i = 0; i < operatorCountries.length; i += cfg.batchSize) {
       batches.push({
-        operatorCountries: operatorCountries.slice(i, i + BATCH_SIZE),
+        operatorCountries: operatorCountries.slice(i, i + cfg.batchSize),
       });
     }
 
@@ -192,7 +192,10 @@ export class SsaAuditProvider implements DomainAuditProvider {
 
   // ─── Null-scan ────────────────────────────────────────────────────
 
-  private async nullScan(maxOperatorCountries?: number): Promise<AuditCandidate[]> {
+  private async nullScan(
+    maxOperatorCountries: number | undefined,
+    maxIdsPerSuggestion: number,
+  ): Promise<AuditCandidate[]> {
     const rows = await this.deps.satelliteRepo.nullScanByColumn({
       maxOperatorCountries,
     });
@@ -202,7 +205,7 @@ export class SsaAuditProvider implements DomainAuditProvider {
         .findSatelliteIdsWithNullColumn({
           column: r.column,
           operatorCountryId: r.operatorCountryId,
-          limit: NULL_SCAN_MAX_IDS_PER_SUGGESTION,
+          limit: maxIdsPerSuggestion,
         })
         .catch((): bigint[] => []);
 
@@ -296,37 +299,7 @@ export class SsaAuditProvider implements DomainAuditProvider {
         : "";
 
     return {
-      instructions: `You are a satellite data quality auditor for an SSA (Space Situational Awareness) catalog.
-Analyze operator-country data and identify issues.
-
-Categories: mass_anomaly, missing_data, doctrine_mismatch, relationship_error, enrichment
-Severity: critical (>50% affected or mass off >5x), warning (10-50%), info (<10%)
-
-Validate payload / operator-country coherence (NASA → EO/science/navigation, ROSCOSMOS → Cosmos/Soyuz platforms, ESA → Sentinel/Galileo, etc.)
-Search the web to verify sample satellite masses and launch years against public catalogs (CelesTrak, NORAD).${feedbackBlock}
-
-Respond ONLY with a JSON array:
-[{
-  "operatorCountry": "...",
-  "category": "...",
-  "severity": "...",
-  "title": "...",
-  "description": "...",
-  "affectedSatellites": N,
-  "suggestedAction": "human-readable description of the fix",
-  "webEvidence": "optional URL",
-  "resolutionPayload": {
-    "type": "<category>",
-    "actions": [
-      { "kind": "update_field", "satelliteIds": [], "field": "mass_kg|launch_year|orbit_regime_id|operator_country_id|platform_class_id", "value": "<corrected value>" }
-      OR { "kind": "link_payload", "satelliteIds": [], "payloadName": "<payload>", "role": "primary|secondary|auxiliary" }
-      OR { "kind": "unlink_payload", "satelliteIds": [], "payloadName": "<payload>" }
-      OR { "kind": "reassign_operator_country", "satelliteIds": [], "fromName": "<current>", "toName": "<correct>" }
-      OR { "kind": "enrich", "satelliteIds": [] }
-    ]
-  }
-}]
-Return [] if no issues. satelliteIds can be empty — resolution will target all affected satellites in the operator-country.`,
+      instructions: buildSsaAuditInstructions(feedbackBlock),
       input: JSON.stringify(
         batch.operatorCountries.map((a) => ({
           operatorCountry: a.name,
@@ -345,27 +318,7 @@ Return [] if no issues. satelliteIds can be empty — resolution will target all
 
   private buildBriefingRequest(batch: OperatorCountryBatch): NanoRequest {
     return {
-      instructions: `You are a mission-operator briefing editor for an SSA catalog.
-For each operator-country in the batch, propose ONE short-form briefing angle relevant to a fleet analyst or mission operator.
-Base it on the dominant payloads, average mass, orbit regime, recent news, operational trends.
-
-Good angles: platform-class trend (constellation build-out, debris cleanup), new payload class, launch campaign, debris risk profile, fleet age, doctrine shift, regime saturation, notable operator re-entry.
-
-DO NOT propose: data-quality problems (missing fields, mass inconsistencies). This is NOT an audit.
-
-Use web search to validate current events (launches, deorbits, alerts).
-
-Respond ONLY with a JSON array:
-[{
-  "operatorCountry": "exact operator-country name",
-  "category": "briefing_angle",
-  "severity": "info",
-  "title": "punchy 50-70 character briefing title",
-  "description": "the briefing angle in 2 sentences — why it matters",
-  "affectedSatellites": 0,
-  "suggestedAction": "quick outline: intro → 2-3 sections → conclusion"
-}]
-Return [] if no operator-country inspires. One angle per operator-country maximum.`,
+      instructions: SSA_BRIEFING_INSTRUCTIONS,
       input: JSON.stringify(
         batch.operatorCountries.map((a) => ({
           operatorCountry: a.name,
@@ -405,7 +358,7 @@ Return [] if no operator-country inspires. One angle per operator-country maximu
         );
         let resolutionPayload: string | null = null;
         if (item.resolutionPayload) {
-          const parsed = resolutionPayloadSchema.safeParse(
+          const parsed = ssaResolutionPayloadSchema.safeParse(
             item.resolutionPayload,
           );
           if (parsed.success) {
@@ -430,5 +383,24 @@ Return [] if no operator-country inspires. One angle per operator-country maximu
           resolutionPayload,
         };
       });
+  }
+}
+
+function toPastFeedback(entry: SuggestionFeedbackRow): PastFeedback {
+  try {
+    const parsed = parseSsaFindingPayload(entry.domainFields);
+    return {
+      category: parsed.category,
+      wasAccepted: entry.wasAccepted,
+      reviewerNote: entry.reviewerNote,
+      operatorCountryName: parsed.operatorCountryName,
+    };
+  } catch {
+    return {
+      category: "",
+      wasAccepted: entry.wasAccepted,
+      reviewerNote: entry.reviewerNote,
+      operatorCountryName: "",
+    };
   }
 }

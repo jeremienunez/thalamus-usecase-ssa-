@@ -45,10 +45,9 @@ export interface GenericInsertSuggestion {
  * The pack supplies this to the container at wiring time. It decides how
  * domain payloads map into and out of the Redis storage format.
  *
- * Today the SSA implementation maps to the existing flat schema
- * (operatorCountryName, category, severity, title, description, ...) so no
- * Redis data migration is needed. Future domains can supply a different
- * field layout through the same port.
+ * The current app pack still maps to the existing flat Redis layout, so no
+ * storage migration is needed. Future domains can supply a different field
+ * layout through the same port.
  */
 export interface FindingDomainSchema {
   /**
@@ -56,7 +55,7 @@ export interface FindingDomainSchema {
    *   - flatFields: hash fields stored at the top level of `sweep:suggestions:{id}`
    *     (used for filtering / listing)
    *   - blob: any JSON-shaped extras that don't need to be filterable;
-   *     stored in a companion key (empty object today for SSA)
+   *     stored in a companion key (empty object today)
    */
   serialize(input: Record<string, unknown>): {
     flatFields: Record<string, string | number | null>;

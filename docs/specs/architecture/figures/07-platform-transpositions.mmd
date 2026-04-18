@@ -1,0 +1,8 @@
+flowchart TB
+    Platform["Platform core<br/>(orchestrator + swarm + HITL + audit)"]
+
+    Platform --> SSA["Space Situational Awareness<br/>OSINT: TLE, amateur obs<br/>Field: radars, telemetry<br/>Reviewer: mission operator"]
+    Platform --> TI["Threat Intelligence<br/>OSINT: NVD, STIX/TAXII, CERT-FR<br/>Field: tactical data, C2 feeds<br/>Reviewer: threat analyst"]
+    Platform --> Pharma["Pharmacovigilance<br/>OSINT: PubMed, social<br/>Field: FAERS, EudraVigilance<br/>Reviewer: PV officer"]
+    Platform --> Maritime["IUU Maritime Surveillance<br/>OSINT: press, NGO reports<br/>Field: AIS, SAR imagery<br/>Reviewer: coast-guard analyst"]
+    Platform --> Regulatory["Regulatory Monitoring<br/>OSINT: filings, press<br/>Field: customs, sanctions<br/>Reviewer: compliance officer"]

@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./apps/console/src/*"],
+      "@interview/shared": ["./packages/shared/src/index.ts"],
+      "@interview/shared/*": ["./packages/shared/src/*"],
+      "@interview/db-schema": ["./packages/db-schema/src/index.ts"],
+      "@interview/db-schema/*": ["./packages/db-schema/src/*"],
+      "@interview/thalamus": ["./packages/thalamus/src/index.ts"],
+      "@interview/thalamus/*": ["./packages/thalamus/src/*"],
+      "@interview/sweep": ["./packages/sweep/src/index.ts"],
+      "@interview/sweep/*": ["./packages/sweep/src/*"]
+    }
+  },
+  "include": ["apps", "packages"]
+}

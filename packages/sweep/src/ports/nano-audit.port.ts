@@ -16,7 +16,6 @@ export interface AuditCycleContext {
   /**
    * Mode passed by the caller, preserved from the original
    * NanoSweepService.sweep(limit, mode) signature. Pack decides meaning.
-   * Today SSA uses "nullScan" | "briefing".
    */
   mode: string;
 

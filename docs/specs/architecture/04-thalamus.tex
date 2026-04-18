@@ -1,0 +1,53 @@
+% SPEC-ARCH-04 — Thalamus
+
+\input{./preamble-arch.tex}
+
+\specID{SPEC-ARCH-04}
+\specTitle{Thalamus --- multi-cortex research agent}
+\specStatus{OVERVIEW}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section*{Entry point}
+
+\texttt{packages/thalamus/src/orchestrators/executor.ts}
+
+\section{Orchestration sequence}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{figures/04-orchestration-sequence.pdf}
+  \caption{Orchestrator dispatch --- guardrails, cortex selection, explorer fan-out, curator collapse, knowledge-graph write.}
+  \label{fig:arch-04-orchestration}
+\end{figure}
+
+\section{Cortex anatomy}
+
+Each cortex is a self-contained folder. Adding a capability means adding a folder, not editing a god-function.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figures/04-cortex-anatomy.pdf}
+  \caption{Cortex folder layout --- versioned skills, Drizzle-typed SQL helpers, source fetchers, executor.}
+  \label{fig:arch-04-cortex}
+\end{figure}
+
+\section{Explorer --- nano swarm economics}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{figures/04-nano-swarm.pdf}
+  \caption{50 nano workers fan out in parallel; a single curator call deduplicates, ranks and tags by source class.}
+  \label{fig:arch-04-swarm}
+\end{figure}
+
+\textbf{Why this beats a single strong model:} $\sim$10$\times$ cheaper per source. Bounded latency (parallel, not sequential). Each worker is individually cappable. Failure of one worker doesn't block the run. The strong model is reserved for the high-judgment task: ranking and deduplication.
+
+\section{Reflexion loop}
+
+After each iteration the system self-evaluates. Eagerness checks complexity, average confidence, coverage ratio and novelty; a gap list feeds back into the planner for the next round. A circuit-breaker (two identical gap rounds $\to$ force-stop) prevents runaway loops. Knowledge graph writes land in Postgres (Drizzle + pgvector --- HNSW \texttt{halfvec\_cosine\_ops} at 2048 dims) through typed repositories, never ad-hoc SQL from the agent.
+
+\end{document}

@@ -9,23 +9,41 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { startTelemetrySwarm } from "../../../../../src/agent/ssa/sim/swarms/telemetry";
 import { __resetBusDatasheetCache } from "../../../../../src/agent/ssa/sim/bus-datasheets/loader";
 import type { SwarmService, LaunchSwarmResult } from "@interview/sweep";
-import type { Database } from "@interview/db-schema";
+import type { FindByIdFullRow } from "../../../../../src/types/satellite.types";
 
 beforeEach(() => {
   __resetBusDatasheetCache();
 });
 
-function mockDb(sat: {
+function mockSatelliteRepo(sat: {
   id: number;
   name: string;
-  operator_id: number | null;
-  bus_name: string | null;
-}): Database {
+  operatorId: number | null;
+  busName: string | null;
+}) {
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    execute: vi.fn(async () => ({ rows: sat ? [sat] : [] })) as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+    findByIdFull: vi.fn(async (): Promise<FindByIdFullRow | null> =>
+      sat
+        ? ({
+            id: BigInt(sat.id),
+            name: sat.name,
+            slug: null,
+            noradId: null,
+            launchYear: null,
+            operatorName: null,
+            operatorId: sat.operatorId === null ? null : BigInt(sat.operatorId),
+            operatorCountryName: null,
+            operatorCountryId: null,
+            platformClassName: null,
+            platformClassId: null,
+            orbitRegimeName: null,
+            orbitRegimeId: null,
+            busName: sat.busName,
+            telemetrySummary: null,
+          } satisfies FindByIdFullRow)
+        : null,
+    ),
+  };
 }
 
 function mockSwarmService() {
@@ -42,16 +60,16 @@ function mockSwarmService() {
 
 describe("startTelemetrySwarm", () => {
   it("resolves sat → operator → SSL-1300 datasheet → launches swarm", async () => {
-    const db = mockDb({
+    const satelliteRepo = mockSatelliteRepo({
       id: 1,
       name: "Intelsat 23",
-      operator_id: 77,
-      bus_name: "SSL-1300",
+      operatorId: 77,
+      busName: "SSL-1300",
     });
     const { svc, launch } = mockSwarmService();
 
     const result = await startTelemetrySwarm(
-      { db, swarmService: svc },
+      { satelliteRepo, swarmService: svc },
       { satelliteId: 1, fishCount: 5 },
     );
     expect(result.swarmId).toBe(42);
@@ -61,7 +79,8 @@ describe("startTelemetrySwarm", () => {
       kind: string;
       title: string;
       baseSeed: {
-        operatorIds?: number[];
+        subjectIds?: number[];
+        subjectKind?: string;
         telemetryTargetSatelliteId?: number;
         busDatasheetPrior?: { busArchetype: string; scalars: Record<string, unknown> };
       };
@@ -70,7 +89,8 @@ describe("startTelemetrySwarm", () => {
 
     expect(arg.kind).toBe("uc_telemetry_inference");
     expect(arg.title).toContain("Intelsat 23");
-    expect(arg.baseSeed.operatorIds).toEqual([77]);
+    expect(arg.baseSeed.subjectIds).toEqual([77]);
+    expect(arg.baseSeed.subjectKind).toBe("operator");
     expect(arg.baseSeed.telemetryTargetSatelliteId).toBe(1);
     expect(arg.baseSeed.busDatasheetPrior?.busArchetype).toBe("SSL-1300");
     expect(Object.keys(arg.baseSeed.busDatasheetPrior?.scalars ?? {})).toContain("powerDraw");
@@ -78,16 +98,16 @@ describe("startTelemetrySwarm", () => {
   });
 
   it("launches with null busDatasheetPrior when bus is unknown", async () => {
-    const db = mockDb({
+    const satelliteRepo = mockSatelliteRepo({
       id: 2,
       name: "MysterySat-9000",
-      operator_id: 99,
-      bus_name: "TotallyUnknownBus",
+      operatorId: 99,
+      busName: "TotallyUnknownBus",
     });
     const { svc, launch } = mockSwarmService();
 
     await startTelemetrySwarm(
-      { db, swarmService: svc },
+      { satelliteRepo, swarmService: svc },
       { satelliteId: 2, fishCount: 3 },
     );
 
@@ -98,44 +118,48 @@ describe("startTelemetrySwarm", () => {
   });
 
   it("throws when the satellite is not found", async () => {
-    const db = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      execute: vi.fn(async () => ({ rows: [] })) as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
+    const satelliteRepo = {
+      findByIdFull: vi.fn(async () => null),
+    };
     const { svc } = mockSwarmService();
 
     await expect(
       startTelemetrySwarm(
-        { db, swarmService: svc },
+        { satelliteRepo, swarmService: svc },
         { satelliteId: 999_999 },
       ),
     ).rejects.toThrow(/Satellite 999999 not found/);
   });
 
   it("throws when the satellite has no operator", async () => {
-    const db = mockDb({
+    const satelliteRepo = mockSatelliteRepo({
       id: 3,
       name: "Orphan-1",
-      operator_id: null,
-      bus_name: "A2100",
+      operatorId: null,
+      busName: "A2100",
     });
     const { svc } = mockSwarmService();
 
     await expect(
-      startTelemetrySwarm({ db, swarmService: svc }, { satelliteId: 3 }),
+      startTelemetrySwarm(
+        { satelliteRepo, swarmService: svc },
+        { satelliteId: 3 },
+      ),
     ).rejects.toThrow(/not found \(or missing operator\)/);
   });
 
   it("personas span {conservative, balanced, aggressive} for K=5", async () => {
-    const db = mockDb({
+    const satelliteRepo = mockSatelliteRepo({
       id: 4,
       name: "Sentinel-2A",
-      operator_id: 10,
-      bus_name: "SSL-1300",
+      operatorId: 10,
+      busName: "SSL-1300",
     });
     const { svc, launch } = mockSwarmService();
-    await startTelemetrySwarm({ db, swarmService: svc }, { satelliteId: 4, fishCount: 5 });
+    await startTelemetrySwarm(
+      { satelliteRepo, swarmService: svc },
+      { satelliteId: 4, fishCount: 5 },
+    );
 
     const arg = launch.mock.calls[0]![0] as {
       perturbations: Array<{ kind: string; riskProfile?: string }>;

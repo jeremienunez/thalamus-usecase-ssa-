@@ -8,11 +8,32 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLogger } from "@interview/shared/observability";
+import {
+  type ConfigProvider,
+  type NanoConfig,
+  DEFAULT_NANO_CONFIG,
+  StaticConfigProvider,
+} from "@interview/shared/config";
 
 const logger = createLogger("nano-caller");
 
-export const NANO_MODEL = "gpt-5.4-nano";
-const CALL_TIMEOUT_MS = 45_000;
+/**
+ * Runtime-tunable nano config (model name + call timeout). Defaults to
+ * the legacy hardcoded constants; console-api overrides via
+ * `setNanoConfigProvider(redisBackedProvider)` at container boot so ops
+ * can tune via HTTP (PATCH /api/config/runtime/thalamus.nano).
+ */
+let nanoConfigProvider: ConfigProvider<NanoConfig> =
+  new StaticConfigProvider(DEFAULT_NANO_CONFIG);
+
+export function setNanoConfigProvider(
+  provider: ConfigProvider<NanoConfig>,
+): void {
+  nanoConfigProvider = provider;
+}
+
+/** Back-compat re-export: a few tests + log lines reference NANO_MODEL. */
+export const NANO_MODEL = DEFAULT_NANO_CONFIG.model;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -184,6 +205,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
     };
   }
 
+  const cfg = await nanoConfigProvider.get();
   const start = Date.now();
   try {
     const res = await fetch("https://api.openai.com/v1/responses", {
@@ -193,7 +215,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: NANO_MODEL,
+        model: cfg.model,
         instructions: req.instructions,
         input: req.input,
         reasoning: { effort: "low" },
@@ -207,7 +229,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
           ? { tools: [{ type: "web_search_preview" }] }
           : {}),
       }),
-      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      signal: AbortSignal.timeout(cfg.callTimeoutMs),
     });
 
     const latencyMs = Date.now() - start;
@@ -253,7 +275,8 @@ export async function callNanoWithMode(req: NanoRequest): Promise<NanoResponse> 
   const mode = (process.env.THALAMUS_MODE ?? "cloud").toLowerCase();
   if (mode === "cloud") return callNano(req);
 
-  const hash = hashNano(req, NANO_MODEL);
+  const cfg = await nanoConfigProvider.get();
+  const hash = hashNano(req, cfg.model);
   const dir = fixturesDir();
   const path = join(dir, `${hash}.json`);
 
@@ -289,7 +312,7 @@ export async function callNanoWithMode(req: NanoRequest): Promise<NanoResponse> 
     mkdirSync(dir, { recursive: true });
     const file: NanoFixtureFile = {
       text: live.text,
-      model: NANO_MODEL,
+      model: cfg.model,
       recordedAt: new Date().toISOString(),
     };
     writeFileSync(path, JSON.stringify(file, null, 2), "utf-8");
@@ -366,6 +389,7 @@ export async function* callNanoStream(
   const openaiKey = process.env.OPENAI_API_KEY;
   if (!openaiKey) throw new Error("OPENAI_API_KEY not set");
 
+  const cfg = await nanoConfigProvider.get();
   const tools: Array<Record<string, unknown>> = [];
   if (req.enableWebSearch !== false) tools.push({ type: "web_search_preview" });
   if (req.enableCodeInterpreter)
@@ -378,7 +402,7 @@ export async function* callNanoStream(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: NANO_MODEL,
+      model: cfg.model,
       instructions: req.instructions,
       input: req.input,
       reasoning: { effort: "low" },

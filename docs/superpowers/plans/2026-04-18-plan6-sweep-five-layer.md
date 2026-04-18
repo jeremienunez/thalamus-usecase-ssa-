@@ -6,21 +6,23 @@
 - **Plan 1** made `packages/sweep/` a generic kernel with 6 ports (`FindingDomainSchema`, `DomainAuditProvider`, `SweepPromotionAdapter`, `FindingRoutingPolicy`, `ResolutionHandlerRegistry`, `IngestionSourceProvider`) — impls in `apps/console-api/src/agent/ssa/sweep/`.
 - **Plan 2** moved the SSA sim pack alongside (10 sim ports), but the sim↔sweep promotion glue still sits in `packages/sweep/src/sim/promote.ts` (592 LOC; SRP-violating god file) and in `packages/sweep/src/config/container.ts` (the `simHook.cb` closure at [container.ts:159-267](/home/jerem/interview-thalamus-sweep/packages/sweep/src/config/container.ts#L159)).
 - **Console-api** already uses the canonical 5-layer stack (`routes/ → controllers/ → services/ → repositories/ → types/` with `transformers/` + `schemas/` + `utils/`). The sweep kernel has **no** such layering — it mixes services/repos/jobs/sim freely.
+- `apps/console-api/src/agent/ssa/{sweep,sim}/` are **adapter packs**, not first-class horizontal layers. Plan 6 must keep that distinction clear: domain-specific SSA rules stay in the pack, while storage / HTTP / queue concerns live in the 5-layer app or in kernel ports.
 
-**Goal of Plan 6:** Extend the console-api 5-layer contract across the sweep kernel + the sim↔sweep boundary, so responsibilities stop leaking. Result: each file answers one question ("who owns sweep_audit writes?", "who owns KG writes?", "who decides sim→sweep promotion?") with exactly one name.
+**Goal of Plan 6:** Extend the console-api 5-layer contract across the sweep kernel + the sim↔sweep boundary, so responsibilities stop leaking without introducing reverse `packages/* -> apps/*` dependencies. The refactor is only considered complete once **application consumers** reach thalamus / sweep / sim through the console-api HTTP boundary instead of in-process package imports. Result: each file answers one question ("who owns sweep_audit writes?", "who owns KG writes?", "who decides sim→sweep promotion?") with exactly one name.
 
 ---
 
 ## 1. Layer definitions (recap + sweep examples)
 
-| Layer                  | Purpose                                                              | Sweep example today                                                                                                                | Sweep example after Plan 6                                                                                                                        |
-| ---------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `types/`               | Pure types / DTO interfaces; no runtime deps                         | `transformers/sweep.dto.ts` (zod schemas + `SweepCategory/Severity`)                                                               | Same + extracted sim-promotion DTO types                                                                                                          |
-| `repositories/`        | Storage I/O only (Redis, Postgres, BullMQ queues). No business rules | `SweepRepository` (Redis)                                                                                                          | `SweepRepository` + a **`ResearchKgRepository`** (Postgres `research_cycle/finding/edge` writes lifted out of `promote.ts`)                       |
-| `services/`            | Business logic, orchestration, pure functions                        | `NanoSweepService`, `SweepResolutionService`, `FindingRouterService`, `MessagingService` (kernel); `SweepSuggestionsService` (app) | `SweepResolutionService` (orchestration), **`SweepPromotionService`** (audit+KG+confidence compose), **`SimPromotionService`** (modal→suggestion) |
+| Layer                  | Purpose                                                                     | Sweep example today                                                                                                                | Sweep example after Plan 6                                                                                                                        |
+| ---------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types/`               | Pure TS contracts / DTO interfaces; no runtime deps                        | No dedicated folder today; types are still mixed into `transformers/sweep.dto.ts`                                                 | Add extracted sim-promotion DTO types where needed                                                                                                |
+| `repositories/`        | Storage I/O only (Redis, Postgres). No business rules                       | `SweepRepository` (Redis)                                                                                                          | `SweepRepository` + `ResearchKgRepository` + `SatelliteTelemetryRepository` + sim repositories                                                   |
+| `services/`            | Business logic and orchestration over repos / ports / adapter-pack helpers  | `NanoSweepService`, `SweepResolutionService`, `FindingRouterService`, `MessagingService` (kernel); `SweepSuggestionsService` (app) | `SweepResolutionService` (orchestration), `ConfidencePromotionService`, `SimPromotionService`                                                    |
 | `controllers/`         | HTTP request/reply adapters only                                     | `sweep-suggestions.controller`, `sweep-mission.controller` (in console-api)                                                        | Same (zero kernel-side controllers — `admin-sweep.controller` was deleted in Plan 1 task 6.1)                                                     |
 | `routes/`              | Fastify URL binding                                                  | `apps/console-api/src/routes/sweep.routes.ts`                                                                                      | Same                                                                                                                                              |
-| `workers/` (auxiliary) | BullMQ job entrypoints; thin, delegate to services                   | `sweep.worker`, `sim-turn.worker`, `swarm-fish.worker`, `swarm-aggregate.worker`                                                   | Same, but aggregate worker delegates via the new **`SimPromotionService`** port instead of an inline closure                                      |
+| `workers/` (auxiliary) | BullMQ job entrypoints; thin, delegate to services or ports          | `sweep.worker`, `sim-turn.worker`, `swarm-fish.worker`, `swarm-aggregate.worker`                                                   | Same, but aggregate worker delegates via the `SimPromotionAdapter` port instead of two inline callbacks                                           |
+| `infra/` / `jobs/`     | Queue handles, schedulers, process wiring                              | `jobs/queues.ts`, `jobs/schedulers.ts`                                                                                              | Same; queue handles stay infra, not repositories                                                                                                  |
 
 **Supporting layers** (same status as console-api):
 
@@ -29,7 +31,7 @@
 - `config/` → DI container composition root
 - `utils/` → pure helpers (already exists: `llm-json-parser`, `sql-helpers`, `controller-error-handler`)
 
-**The load-bearing rule for Plan 6:** the kernel must not contain SSA-shaped code, and the SSA pack must not contain BullMQ or Postgres writes except through repositories. `promote.ts` breaks both.
+**The load-bearing rule for Plan 6:** the kernel must not contain SSA-shaped code, and the SSA adapter packs must not own raw SQL, Redis writes, or BullMQ wiring. They may depend on injected repository/service interfaces, but persistence and queue mechanics remain outside the pack. `promote.ts` breaks both.
 
 ---
 
@@ -39,13 +41,13 @@
 
 | Resp. | LOC                                                                                                                                                                        | What it does                                                                                                                                                                                  | Layer it belongs in                                                                                                                    |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| A     | [promote.ts:38-60](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L38) (`isKgPromotable`, `isTerminal`, `loadSimTurn`)                             | Pure predicates + a trivial Postgres read                                                                                                                                                     | Split: predicates → `utils/` (kernel), `loadSimTurn` → `SimRunRepository`                                                              |
-| B     | [promote.ts:82-294](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L82) (`emitSuggestionFromModal`)                                                | UC3 end-to-end: resolve operator context, **open `research_cycle`**, **insert `research_finding`**, **insert `research_edge`**, **update `sim_swarm`**, **insert `sweep_suggestion`** (Redis) | Services in the SSA **sim pack** (`SimPromotionService`), composing `ResearchKgRepository` + `SweepRepository` + `SsaPromotionAdapter` |
-| C     | [promote.ts:301-367](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L301) (`actionTarget`, `composeTitle`, `composeDescription`, `describeAction`) | Pure formatting / mapping                                                                                                                                                                     | `transformers/` in SSA sim pack                                                                                                        |
-| D     | [promote.ts:369-379](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L369) (`safeEmbed`)                                                            | Optional embedder wrapper                                                                                                                                                                     | `utils/` in SSA sim pack                                                                                                               |
-| E     | [promote.ts:406-543](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L406) (`emitTelemetrySuggestions`)                                             | UC_TELEMETRY: read 8 NULL columns, compute severity, build per-scalar suggestions, Redis insert                                                                                               | Services in SSA sim pack (second `SimPromotionService` method or sister service)                                                       |
+| A     | [promote.ts:38-60](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L38) (`isKgPromotable`, `isTerminal`, `loadSimTurn`)                             | Pure predicates + a trivial Postgres read                                                                                                                                                     | Split: predicates → `agent/ssa/sim/promotion-policy.ts`, `loadSimTurn` → `SimTurnRepository`                                          |
+| B     | [promote.ts:82-294](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L82) (`emitSuggestionFromModal`)                                                | UC3 end-to-end: resolve operator context, **open `research_cycle`**, **insert `research_finding`**, **insert `research_edge`**, **update `sim_swarm`**, **insert `sweep_suggestion`** (Redis) | `SimPromotionService` in console-api + sim/sweep repos + thin SSA adapter wrapper                                                        |
+| C     | [promote.ts:301-367](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L301) (`actionTarget`, `composeTitle`, `composeDescription`, `describeAction`) | Pure formatting / mapping                                                                                                                                                                     | `agent/ssa/sim/promotion-policy.ts` (adapter-pack pure helper)                                                                           |
+| D     | [promote.ts:369-379](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L369) (`safeEmbed`)                                                            | Optional embedder wrapper                                                                                                                                                                     | `SimPromotionService` local helper or adapter-pack util                                                                                  |
+| E     | [promote.ts:406-543](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L406) (`emitTelemetrySuggestions`)                                             | UC_TELEMETRY: read 8 NULL columns, compute severity, build per-scalar suggestions, Redis insert                                                                                               | `SimPromotionService` in console-api + telemetry repo + thin SSA adapter wrapper                                                         |
 | F     | [promote.ts:545-561](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L545) (`findNullTelemetryColumns`)                                             | Raw SQL                                                                                                                                                                                       | `SatelliteTelemetryRepository` in console-api (new)                                                                                    |
-| G     | [promote.ts:568-587](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L568) (`scoreScalar`)                                                          | Pure scoring                                                                                                                                                                                  | `utils/` in SSA sim pack                                                                                                               |
+| G     | [promote.ts:568-587](/home/jerem/interview-thalamus-sweep/packages/sweep/src/sim/promote.ts#L568) (`scoreScalar`)                                                          | Pure scoring                                                                                                                                                                                  | `agent/ssa/sim/promotion-policy.ts`                                                                                                    |
 
 **SRP verdict:** this file owns _domain rules_ (what is promotable), _DB writes_ across two domains (Redis + KG), _formatting_, _embedding_, _persistence scoring_. It is the single worst violation in the refactor branch.
 
@@ -70,7 +72,7 @@ Since Plan 1 task 2.2, split into:
 
 ### 2.6 `packages/sweep/src/config/container.ts` ([container.ts:159-267](/home/jerem/interview-thalamus-sweep/packages/sweep/src/config/container.ts#L159))
 
-**SRP violation:** the container holds a `simHook` mutable closure that reaches into `ConfidenceService`. This is business logic (confidence promotion rule), **not wiring**. After Plan 6 the closure moves into `SimPromotionService.onUpdateFieldAccepted`, and the container passes only dependencies.
+**SRP violation:** the container holds a `simHook` mutable closure that reaches into `ConfidenceService`. This is business logic (confidence promotion rule), **not wiring**. After Plan 6 the closure moves into `ConfidencePromotionService`, and the container passes only dependencies.
 
 ### 2.7 `packages/sweep/src/jobs/workers/swarm-aggregate.worker.ts` ([swarm-aggregate.worker.ts:107-123](/home/jerem/interview-thalamus-sweep/packages/sweep/src/jobs/workers/swarm-aggregate.worker.ts#L107) + [:204-213](/home/jerem/interview-thalamus-sweep/packages/sweep/src/jobs/workers/swarm-aggregate.worker.ts#L204))
 
@@ -117,44 +119,45 @@ Post-build patch (`(ssaAuditProvider as unknown as ...).deps.sweepRepo.loadPastF
 
 ### 3.2 SSA sweep pack (`apps/console-api/src/agent/ssa/sweep/`)
 
-All files below are already service-shaped. They implement kernel ports.
+This folder is an **app-side adapter pack**. It implements kernel ports and contains SSA-specific parsing/policy, but it is not a horizontal layer like `services/` or `repositories/`.
 
 | File                         | Layer role                                     |
 | ---------------------------- | ---------------------------------------------- |
-| `finding-schema.ssa.ts`      | Transformer (implements `FindingDomainSchema`) |
-| `audit-provider.ssa.ts`      | Service (implements `DomainAuditProvider`)     |
-| `promotion.ssa.ts`           | Service (implements `SweepPromotionAdapter`)   |
-| `finding-routing.ssa.ts`     | Service (implements `FindingRoutingPolicy`)    |
-| `resolution-handlers.ssa.ts` | Service registry (5 handlers)                  |
-| `doctrine-parser.ssa.ts`     | Util                                           |
-| `ingesters/*`                | Services (implement `IngestionSource`)         |
+| `finding-schema.ssa.ts`      | Adapter / transformer (implements `FindingDomainSchema`) |
+| `audit-provider.ssa.ts`      | Adapter (implements `DomainAuditProvider`)              |
+| `promotion.ssa.ts`           | Adapter (implements `SweepPromotionAdapter`)            |
+| `finding-routing.ssa.ts`     | Adapter (implements `FindingRoutingPolicy`)             |
+| `resolution-handlers.ssa.ts` | Adapter registry (5 handlers)                           |
+| `doctrine-parser.ssa.ts`     | Pack util                                               |
+| `ingesters/*`                | Adapter implementations of `IngestionSource`            |
 
 ### 3.3 SSA sim pack (`apps/console-api/src/agent/ssa/sim/`) — **the sim→sweep boundary lives here**
 
+Like the sweep pack, this is an adapter pack, not a second service layer. Plan 5 owns the launcher cleanup (`swarms/*`, SQL-in-pack, etc.); Plan 6 only touches the sim↔sweep promotion boundary and the pieces that still violate it.
+
 | File                                                                                                | Role post-Plan 6                                                                                                                                                                                                                                                  |
 | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `promotion.ts`                                                                                      | **Service: `SsaSimPromotionAdapter`** — implement `promote()` (today = throw TODO B.9). Receives `SimPromoteInput` (from swarm-aggregate worker), composes `ResearchKgRepository.insertCycle/Finding/Edge` + `SweepRepository.insertOne` + `SsaPromotionAdapter`. |
-| `swarms/telemetry.ts`, `swarms/pc.ts`                                                               | Services — swarm launchers                                                                                                                                                                                                                                        |
-| `aggregators/pc.ts`                                                                                 | Service (PC aggregation + suggestion shape)                                                                                                                                                                                                                       |
-| `bus-datasheets/loader.ts`                                                                          | Repository-like (reads a JSON asset)                                                                                                                                                                                                                              |
-| `action-schema.ts`, `persona-composer.ts`, `prompt-renderer.ts`, `perturbation-pack.ts`, etc.       | Services / transformers                                                                                                                                                                                                                                           |
-| `kind-guard.ts`, `aggregation-strategy.ts`, `cortex-selector.ts`, `fleet-provider.ts`, `targets.ts` | Services (port implementations)                                                                                                                                                                                                                                   |
+| `promotion.ts`                                                                                      | **Adapter: `SsaSimPromotionAdapter`** — implement `SimPromotionAdapter`; delegate inward to `SimPromotionService`                                                                                                                                                |
+| `swarms/telemetry.ts`, `swarms/pc.ts`                                                               | Out of Plan 6 scope; Plan 5 moves these launchers into `services/sim/*`                                                                                                                                                                                           |
+| `aggregators/pc.ts`                                                                                 | Keep only pure pack helpers / policy; DB-backed orchestration belongs in app services                                                                                                                                                                              |
+| `bus-datasheets/loader.ts`                                                                          | Static asset loader / catalogue, not a repository                                                                                                                                                                                                                 |
+| `action-schema.ts`, `persona-composer.ts`, `prompt-renderer.ts`, `perturbation-pack.ts`, etc.     | Pack helpers and port implementations                                                                                                                                                                                                                              |
+| `kind-guard.ts`, `aggregation-strategy.ts`, `cortex-selector.ts`, `fleet-provider.ts`, `targets.ts` | Adapter implementations of kernel ports; `targets.ts` must delegate SQL to a repo if Plan 5 has landed                                                                                                                                                           |
 
 ### 3.4 New files to create in console-api (Plan 6 scope)
 
 ```
 apps/console-api/src/
   repositories/
-    research-kg.repository.ts       # research_cycle/finding/edge writes (lifted from promote.ts)
+    research-kg.repository.ts         # research_cycle/finding/edge writes (lifted from promote.ts)
     satellite-telemetry.repository.ts # findNullTelemetryColumns (lifted from promote.ts:545)
-    sim-run.repository.ts           # loadSimTurn (lifted from promote.ts:51)
+    sim-turn.repository.ts            # loadSimTurn (lifted from promote.ts:51)
+    sim-swarm.repository.ts           # outcomeReportFindingId update
   services/
-    sim-promotion.service.ts        # UC3 modal → suggestion + UC_TELEMETRY scalar → suggestions
-    confidence-promotion.service.ts # SIM_UNCORROBORATED → OSINT_CORROBORATED rule (from container.ts simHook)
-  transformers/
-    sim-suggestion.transformer.ts   # composeTitle/Description/describeAction/actionTarget
-  utils/
-    sim-predicates.ts               # isKgPromotable, isTerminal, scoreScalar
+    sim-promotion.service.ts          # UC3 modal → suggestion + UC_TELEMETRY scalar → suggestions
+    confidence-promotion.service.ts   # SIM_UNCORROBORATED → OSINT_CORROBORATED rule (from container.ts simHook)
+  agent/ssa/sim/
+    promotion-policy.ts               # isKgPromotable, isTerminal, scoreScalar, composeTitle, describeAction, actionTarget
 ```
 
 ### 3.5 End-to-end flow: UC3 sim → reviewer accept → KG write
@@ -165,15 +168,15 @@ Expressed in 5-layer terms (post-Plan 6):
 2. **Controller** `sweepReviewController` parses params + body → calls `SweepSuggestionsService.review(id, accept, reason)`.
 3. **Service** `SweepSuggestionsService.review` calls `SweepRepository.review(id, accept, reason)` (Redis flag). If `accept`, calls `SweepResolutionService.resolve(id)`.
 4. **Service** `SweepResolutionService.resolve` → loads row via `SweepRepository.getGeneric`, parses payload, dispatches each action to `ResolutionHandlerRegistry` (SSA handlers, e.g., `update_field` → `SatelliteRepository.updateField`). On success: calls `SweepPromotionAdapter.promote(...)`.
-5. **Service** (SSA) `SsaPromotionAdapter.promote` → `SweepAuditRepository.insertResolutionAudit` + (optional) `ConfidencePromotionService.onUpdateFieldAccepted`.
+5. **Adapter** (SSA) `SsaPromotionAdapter.promote` → `SweepAuditRepository.insertResolutionAudit` + (optional) `ConfidencePromotionService.onUpdateFieldAccepted`.
 6. **Repository** `SatelliteRepository.updateField` and `SweepAuditRepository.insertResolutionAudit` — DB writes.
 
 **The sim side of the loop** (swarm → suggestion, runs _before_ step 1):
 
 1. **Worker** `swarm-aggregate.worker` fires when all fish drained.
 2. **Service** `AggregatorService.aggregate(swarmId)` → returns `SwarmAggregate`.
-3. **Service** `SimPromotionService.promote(swarmId, aggregate)` (via the **`SimPromotionAdapter` port**, not via inline closure):
-   - UC3 path: `ResearchKgRepository.insertCycle` → `insertFinding` → `insertEdge` → `SimRunRepository.updateSwarmOutcome` → `SweepRepository.insertOne`.
+3. **Adapter** `SsaSimPromotionAdapter.promote(...)` (called via the **`SimPromotionAdapter` port**) delegates to **service** `SimPromotionService`.
+   - UC3 path: `ResearchKgRepository.insertCycle` → `insertFinding` → `insertEdge` → `SimSwarmRepository.setOutcomeReportFindingId` → `SweepRepository.insertOne`.
    - UC_TELEMETRY path: `SatelliteTelemetryRepository.findNullColumns` → loop over scalars → `SweepRepository.insertOne` per scalar.
 4. **Repository** writes land in Postgres + Redis.
 
@@ -187,26 +190,26 @@ Per-LOC mapping (copy this table into the PR description):
 
 | Source (packages/sweep/src/sim/promote.ts)     | Destination (apps/console-api/src/...)                                 | Layer       |
 | ---------------------------------------------- | ---------------------------------------------------------------------- | ----------- |
-| L38-44 `isKgPromotable`, `isTerminal`          | `utils/sim-predicates.ts`                                              | utils       |
-| L51-60 `loadSimTurn`                           | `repositories/sim-run.repository.ts#loadSimTurn`                       | repo        |
+| L38-44 `isKgPromotable`, `isTerminal`          | `agent/ssa/sim/promotion-policy.ts`                                    | adapter pack |
+| L51-60 `loadSimTurn`                           | `repositories/sim-turn.repository.ts#loadSimTurn`                      | repo        |
 | L82-294 `emitSuggestionFromModal`              | `services/sim-promotion.service.ts#promoteModal`                       | service     |
 | L134-154 `researchCycle.insert`                | `repositories/research-kg.repository.ts#insertCycle`                   | repo        |
 | L169-203 `researchFinding.insert`              | `repositories/research-kg.repository.ts#insertFinding`                 | repo        |
 | L209-221 `researchEdge.insert`                 | `repositories/research-kg.repository.ts#insertEdge`                    | repo        |
-| L228-232 `simSwarm.update`                     | `repositories/sim-run.repository.ts#setSwarmOutcomeFindingId`          | repo        |
+| L228-232 `simSwarm.update`                     | `repositories/sim-swarm.repository.ts#setOutcomeReportFindingId`       | repo        |
 | L266-279 `sweepRepo.insertOne`                 | stays — called from `SimPromotionService`                              | repo call   |
-| L301-317 `actionTarget`                        | `transformers/sim-suggestion.transformer.ts`                           | transformer |
-| L319-346 `composeTitle` / `composeDescription` | `transformers/sim-suggestion.transformer.ts`                           | transformer |
-| L348-367 `describeAction`                      | `transformers/sim-suggestion.transformer.ts`                           | transformer |
+| L301-317 `actionTarget`                        | `agent/ssa/sim/promotion-policy.ts`                                    | adapter pack |
+| L319-346 `composeTitle` / `composeDescription` | `agent/ssa/sim/promotion-policy.ts`                                    | adapter pack |
+| L348-367 `describeAction`                      | `agent/ssa/sim/promotion-policy.ts`                                    | adapter pack |
 | L369-379 `safeEmbed`                           | `utils/embed-safe.ts` (or inline)                                      | util        |
 | L406-543 `emitTelemetrySuggestions`            | `services/sim-promotion.service.ts#promoteTelemetry`                   | service     |
 | L545-561 `findNullTelemetryColumns`            | `repositories/satellite-telemetry.repository.ts#findNullScalarColumns` | repo        |
-| L568-587 `scoreScalar`                         | `utils/sim-predicates.ts`                                              | util        |
+| L568-587 `scoreScalar`                         | `agent/ssa/sim/promotion-policy.ts`                                    | adapter pack |
 | L589-591 `round`                               | `utils/math.ts` (or inline)                                            | util        |
 
 After Plan 6: `packages/sweep/src/sim/promote.ts` → **deleted**. Its exports (`isKgPromotable`, `isTerminal`, `loadSimTurn`, `emitSuggestionFromModal`, `emitTelemetrySuggestions`, `EmitSuggestionDeps`, `EmitTelemetrySuggestionsDeps`) are removed from [packages/sweep/src/index.ts:88-94](/home/jerem/interview-thalamus-sweep/packages/sweep/src/index.ts#L88).
 
-The `swarm-aggregate` worker stops taking `emitSuggestion` / `emitTelemetrySuggestions` callbacks and takes a single `SimPromotionAdapter` port instead. Its e2e test ([apps/console-api/tests/e2e/swarm-uc3.e2e.spec.ts:157-162](/home/jerem/interview-thalamus-sweep/apps/console-api/tests/e2e/swarm-uc3.e2e.spec.ts#L157)) wires the new adapter.
+The `swarm-aggregate` worker stops taking `emitSuggestion` / `emitTelemetrySuggestions` callbacks and takes a single `SimPromotionAdapter` port instead. Because the current scaffolded port shape is too narrow for UC_TELEMETRY (one `suggestionId` vs many), Phase A explicitly widens it to carry either modal or telemetry promotion input and return `suggestionIds: string[]` plus optional `findingId`.
 
 ---
 
@@ -235,7 +238,7 @@ Target worker bodies (post-Plan 6):
 | `ingestion.worker.ts`       | `IngestionRegistry.dispatch(jobName)` ✓                                                                                  |
 | `sim-turn.worker.ts`        | `SequentialTurnRunner.runTurn` / `DagTurnRunner.runTurn` + `SimOrchestrator.scheduleNext` ✓                              |
 | `swarm-fish.worker.ts`      | `SwarmService.runFish` (already thin)                                                                                    |
-| `swarm-aggregate.worker.ts` | `AggregatorService.aggregate` → `SimPromotionService.promote` (single port call, replacing today's 2 optional callbacks) |
+| `swarm-aggregate.worker.ts` | `AggregatorService.aggregate` → `SimPromotionAdapter.promote(...)` (SSA impl delegates to `SimPromotionService`) |
 
 ---
 
@@ -243,20 +246,21 @@ Target worker bodies (post-Plan 6):
 
 ### Phase A — Port formalization (LOW risk, zero behavior change)
 
-Goal: give names to things already half-named, and delete the "optional callback" DI pattern from the aggregate worker.
+Goal: give names to things already half-named, fix the too-narrow sim-promotion port, and delete the "optional callback" DI pattern from the aggregate worker.
 
-- A.1 Promote `SimPromotionAdapter` from scaffold to used port. Rewire `createSwarmAggregateWorker` to take `simPromotion: SimPromotionAdapter` instead of `emitSuggestion` + `emitTelemetrySuggestions`. Inside the worker, `await simPromotion.promote({ swarmId, aggregate, kind })`.
-- A.2 Temporarily route `simPromotion` to a pass-through adapter that calls today's `emitSuggestionFromModal` / `emitTelemetrySuggestions`. `promote.ts` untouched.
-- A.3 Update `apps/console-api/tests/e2e/swarm-uc3.e2e.spec.ts` to pass the new adapter. Green-bar check.
+- A.1 Widen `packages/sweep/src/sim/ports/promotion.port.ts` so the port can express both UC3 modal promotion and UC_TELEMETRY multi-suggestion promotion. Use a discriminated input (`kind: "modal" | "telemetry"`) and return `suggestionIds: string[]` plus optional `findingId`.
+- A.2 Rewire `createSwarmAggregateWorker` to take `simPromotion: SimPromotionAdapter` instead of `emitSuggestion` + `emitTelemetrySuggestions`.
+- A.3 Temporarily route `simPromotion` to a pass-through adapter that calls today's `emitSuggestionFromModal` / `emitTelemetrySuggestions`. `promote.ts` untouched.
+- A.4 Update `apps/console-api/tests/e2e/swarm-uc3.e2e.spec.ts` to pass the new adapter. Green-bar check.
 
 **Risk gate:** UC3 e2e green + `pnpm -r typecheck` clean.
 
 ### Phase B — Repository extraction (LOW risk, pure moves)
 
-Goal: move Postgres writes out of `promote.ts` and the `simHook` closure into named repositories that the SSA sim pack depends on.
+Goal: move Postgres writes out of `promote.ts` and the `simHook` closure into named repositories / services that console-api and the SSA adapters depend on.
 
 - B.1 Create `apps/console-api/src/repositories/research-kg.repository.ts` with `insertCycle`, `insertFinding`, `insertEdge`. Tests: unit (mock db) + integration (real schema).
-- B.2 Create `apps/console-api/src/repositories/sim-run.repository.ts` with `loadSimTurn`, `setSwarmOutcomeFindingId`.
+- B.2 Create `apps/console-api/src/repositories/sim-turn.repository.ts` with `loadSimTurn`; create or extend `apps/console-api/src/repositories/sim-swarm.repository.ts` with `setOutcomeReportFindingId`.
 - B.3 Create `apps/console-api/src/repositories/satellite-telemetry.repository.ts` with `findNullScalarColumns(satelliteId)`.
 - B.4 Fix the post-build patch at [apps/console-api/src/container.ts:217-221](/home/jerem/interview-thalamus-sweep/apps/console-api/src/container.ts#L217) by passing a `() => sweepRepo.loadPastFeedback()` thunk in `SsaAuditDeps` (or deferring to a late-bound provider).
 
@@ -264,14 +268,14 @@ Goal: move Postgres writes out of `promote.ts` and the `simHook` closure into na
 
 ### Phase C — Service extraction (MEDIUM risk, real behavior move)
 
-Goal: replace the pass-through `SsaSimPromotionAdapter` from Phase A with a real implementation composed of the new repositories + transformers.
+Goal: replace the pass-through `SsaSimPromotionAdapter` from Phase A with a real adapter that delegates to a console-api service composed of the new repositories + pack helpers.
 
-- C.1 Create `apps/console-api/src/transformers/sim-suggestion.transformer.ts` (lift `composeTitle` / `composeDescription` / `describeAction` / `actionTarget` from `promote.ts:301-367`).
-- C.2 Create `apps/console-api/src/utils/sim-predicates.ts` (lift `isKgPromotable`, `isTerminal`, `scoreScalar`).
-- C.3 Create `apps/console-api/src/services/sim-promotion.service.ts` with `promoteModal(swarmId, aggregate)` and `promoteTelemetry(aggregate)`. Compose: `ResearchKgRepository` + `SimRunRepository` + `SatelliteTelemetryRepository` + `SweepRepository` + `SsaPromotionAdapter` + transformers.
+- C.1 Create `apps/console-api/src/agent/ssa/sim/promotion-policy.ts` (lift `composeTitle` / `composeDescription` / `describeAction` / `actionTarget` / `isKgPromotable` / `isTerminal` / `scoreScalar` from `promote.ts`).
+- C.2 Create `apps/console-api/src/services/sim-promotion.service.ts` with `promoteModal(swarmId, aggregate)` and `promoteTelemetry(aggregate)`. Compose: `ResearchKgRepository` + `SimTurnRepository` + `SimSwarmRepository` + `SatelliteTelemetryRepository` + `SweepRepository` + `promotion-policy.ts`.
+- C.3 Implement the real `SsaSimPromotionAdapter` in `apps/console-api/src/agent/ssa/sim/promotion.ts`: accept the widened `SimPromoteInput`, dispatch to `SimPromotionService`, return normalized `suggestionIds` / `findingId`.
 - C.4 Create `apps/console-api/src/services/confidence-promotion.service.ts` — encapsulate the `simHook` rule from [packages/sweep/src/config/container.ts:249-266](/home/jerem/interview-thalamus-sweep/packages/sweep/src/config/container.ts#L249) (`telemetryEdgeId` derivation + `confidenceService.promote`). Exposed method: `onUpdateFieldAccepted(event)`.
 - C.5 Extend `SsaPromotionAdapter` so it calls `confidencePromotion.onUpdateFieldAccepted` when the action is `update_field` with sim provenance. Remove the confidence stub branch at [apps/console-api/src/agent/ssa/sweep/promotion.ssa.ts:73-81](/home/jerem/interview-thalamus-sweep/apps/console-api/src/agent/ssa/sweep/promotion.ssa.ts#L73).
-- C.6 Wire the real `SsaSimPromotionAdapter` in `apps/console-api/src/container.ts`, replacing the pass-through from A.2.
+- C.6 Wire the real `SsaSimPromotionAdapter` in `apps/console-api/src/container.ts`, replacing the pass-through from A.3. The adapter should depend on `SimPromotionService`, not on repositories directly.
 - C.7 Remove the `simHook` closure from `packages/sweep/src/config/container.ts` (kernel loses all knowledge of confidence promotion). Delete the `onSimUpdateAccepted` option from `createLegacySsaResolutionRegistry` inputs.
 
 **Risk gate:** UC3 e2e green + UC_TELEMETRY e2e green + unit specs green. Snapshot the `sweep_suggestion` rows produced by a fixture swarm before + after the phase; diff must be empty modulo timestamps + UUIDs.
@@ -294,7 +298,7 @@ Goal: remove the duplication and the legacy fallbacks.
 
 ## 7. Risks
 
-1. **Container construction cycle.** `SsaPromotionAdapter` wants `ConfidencePromotionService`, which wants `ConfidenceService` from the sweep container, which is built after `SsaPromotionAdapter` today. Mitigation: build `ConfidenceService` in console-api's container _before_ `buildSweepContainer` and pass it both into `SsaPromotionAdapter` and the sweep container as `opts.confidenceService` (new field). This inverts today's ownership cleanly.
+1. **Container construction cycle.** `SsaPromotionAdapter` wants `ConfidencePromotionService`, which wants `ConfidenceService`, which is currently created in the sweep container's sim block. Mitigation: create `ConfidenceService` in `apps/console-api/src/container.ts` first, inject it into `ConfidencePromotionService`, then pass the finished adapter/service graph into `buildSweepContainer` via existing port wiring. No new `opts.confidenceService` field should be needed on the kernel container.
 2. **Test fixtures couple to the god file.** `apps/console-api/tests/e2e/swarm-uc3.e2e.spec.ts` imports `emitSuggestionFromModal` directly. Phase A.3 rewires first; Phase D must confirm no other test pins the symbol.
 3. **BullMQ job payload drift.** `SwarmAggregateJobPayload` is fine today; workers only change in how they dispatch (new port). Do not alter payload shape in Phase A (it would force a queue drain migration).
 4. **ConfidenceService key collisions.** `telemetryEdgeId` synthesises an FNV-1a over `${satelliteId}:${field}`. Moving to `ConfidencePromotionService` preserves the derivation verbatim; do not "clean it up". Pin with a unit test.
@@ -307,8 +311,9 @@ Goal: remove the duplication and the legacy fallbacks.
 ## 8. Success criteria
 
 - `promote.ts` deleted.
-- `SimPromotionAdapter` is the single sim→sweep contract (one port, one impl, one call-site in `swarm-aggregate.worker`).
+- `SimPromotionAdapter` is the single sim→sweep contract (one port, one SSA impl, one call-site in `swarm-aggregate.worker`).
 - `apps/console-api/src/container.ts` has zero post-build patches.
 - `packages/sweep/src/config/container.ts` has zero business-rule closures (no `simHook`, no `telemetryEdgeId`).
-- Every file under `packages/sweep/src/` and `apps/console-api/src/agent/ssa/` answers to exactly one layer tag (`types` | `repositories` | `services` | `controllers` | `routes` | `transformers` | `ports` | `utils` | `workers` | `config`).
+- External/application consumers reach thalamus / sweep / sim through console-api HTTP routes; no presentation-layer caller imports sweep/sim package internals directly.
+- Every file under `packages/sweep/src/` and `apps/console-api/src/agent/ssa/` answers to exactly one role tag (`types` | `repositories` | `services` | `controllers` | `routes` | `transformers` | `ports` | `utils` | `workers` | `config` | `adapter-pack`).
 - `pnpm -r typecheck` clean; `cd packages/sweep && pnpm exec vitest run tests/e2e/swarm-uc3.e2e.spec.ts` green; `cd apps/console-api && pnpm exec vitest run` green.

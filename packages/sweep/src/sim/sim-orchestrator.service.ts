@@ -1,28 +1,5 @@
-/**
- * Sim Orchestrator — creates sim_run structures, schedules turns via
- * BullMQ, handles pause/resume/inject/status.
- *
- * Two modes:
- *   1. Standalone (this file's startStandalone) — admin/debug single runs,
- *      each turn is a BullMQ sim-turn job processed by sim-turn.worker.ts.
- *      Supports pause/resume and god-event injection mid-run.
- *   2. Swarm-fish (via createFish) — the swarm service creates sim_run rows
- *      here then drives turns INLINE inside its fish worker, bypassing the
- *      sim-turn queue. The orchestrator never schedules turns for swarm
- *      fish; it just provides the shared "create run + agents" primitive.
- */
-
-import { eq, sql } from "drizzle-orm";
-import type { Queue } from "bullmq";
-import type { Database, NewSimRun, NewSimSwarm, NewSimTurn } from "@interview/db-schema";
-import {
-  simRun,
-  simSwarm,
-  simTurn,
-} from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
 import type {
-  FleetSnapshot,
   SeedRefs,
   SimConfig,
   SimKind,
@@ -30,27 +7,26 @@ import type {
   SwarmConfig,
   PerturbationSpec,
 } from "./types";
-import { buildOperatorAgent } from "./agent-builder";
+import { buildSimAgent } from "./agent-builder";
 import type {
-  SimFleetProvider,
   SimAgentPersonaComposer,
   SimPerturbationPack,
+  SimQueuePort,
+  SimRuntimeStore,
+  SimSubjectProvider,
+  SimSubjectSnapshot,
 } from "./ports";
-import type { SimTurnJobPayload } from "../jobs/queues";
 
 const logger = createLogger("sim-orchestrator");
 
-const DEFAULT_UC1_MAX_TURNS = 15;
-const DEFAULT_UC3_MAX_TURNS = 20;
+const DEFAULT_MULTI_SUBJECT_MAX_TURNS = 15;
+const DEFAULT_NEGOTIATION_MAX_TURNS = 20;
 
 export interface OrchestratorDeps {
-  db: Database;
-  simTurnQueue: Queue<SimTurnJobPayload>;
-  /** Plan 2 · B.1 — fleet port, consumed by buildOperatorAgent. */
-  fleet: SimFleetProvider;
-  /** Plan 2 · B.3 — persona composer port. */
+  store: SimRuntimeStore;
+  queue: SimQueuePort;
+  subjects: SimSubjectProvider;
   persona: SimAgentPersonaComposer;
-  /** Plan 2 · B.6 — perturbation pack: god-event extraction + generator set. */
   perturbationPack: SimPerturbationPack;
 }
 
@@ -66,13 +42,14 @@ export interface CreateFishOpts {
 export interface CreateFishResult {
   simRunId: number;
   agentIds: number[];
-  fleetSnapshots: Map<number, FleetSnapshot>;
+  subjectSnapshots: Map<number, SimSubjectSnapshot>;
 }
 
 export interface StartStandaloneOpts {
   kind: SimKind;
   title: string;
-  operatorIds: number[];
+  subjectIds: number[];
+  baseSeed?: Record<string, unknown>;
   horizonDays?: number;
   turnsPerDay?: number;
   maxTurns?: number;
@@ -80,7 +57,7 @@ export interface StartStandaloneOpts {
   nanoModel?: string;
   seed?: number;
   createdBy?: number;
-  conjunctionFindingId?: number;
+  subjectKind?: string;
 }
 
 export interface StartStandaloneResult {
@@ -90,16 +67,11 @@ export interface StartStandaloneResult {
 }
 
 export interface GodEventInput {
-  kind:
-    | "regulation"
-    | "asat_event"
-    | "launch_surge"
-    | "debris_cascade"
-    | "custom";
+  kind: string;
   summary: string;
   detail?: string;
-  targetSatelliteId?: number;
-  targetOperatorId?: number;
+  targetEntityId?: number;
+  targetSubjectId?: number;
 }
 
 export interface SimStatus {
@@ -114,21 +86,16 @@ export interface SimStatus {
 export class SimOrchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
 
-  // -------------------------------------------------------------------
-  // Standalone — size-1 swarm, scheduler-driven turns
-  // -------------------------------------------------------------------
-
   async startStandalone(opts: StartStandaloneOpts): Promise<StartStandaloneResult> {
-    if (opts.operatorIds.length < 1) {
-      throw new Error("startStandalone requires at least 1 operatorId");
-    }
-    if (opts.kind === "uc3_conjunction" && opts.operatorIds.length !== 2) {
-      throw new Error("UC3 requires exactly 2 operators");
+    if (opts.subjectIds.length < 1) {
+      throw new Error("startStandalone requires at least 1 subjectId");
     }
 
     const maxTurns =
       opts.maxTurns ??
-      (opts.kind === "uc3_conjunction" ? DEFAULT_UC3_MAX_TURNS : DEFAULT_UC1_MAX_TURNS);
+      (opts.subjectIds.length === 2
+        ? DEFAULT_NEGOTIATION_MAX_TURNS
+        : DEFAULT_MULTI_SUBJECT_MAX_TURNS);
 
     const swarmConfig: SwarmConfig = {
       llmMode: opts.llmMode,
@@ -140,13 +107,14 @@ export class SimOrchestrator {
     };
 
     const baseSeed: SeedRefs = {
-      operatorIds: opts.operatorIds,
-      conjunctionFindingId: opts.conjunctionFindingId,
+      ...(opts.baseSeed ?? {}),
+      subjectIds: opts.subjectIds,
+      subjectKind: opts.subjectKind,
       horizonDays: opts.horizonDays ?? 5,
       turnsPerDay: opts.turnsPerDay ?? 1,
     };
 
-    const swarmInsert: NewSimSwarm = {
+    const swarmId = await this.deps.store.insertSwarm({
       kind: opts.kind,
       title: opts.title,
       baseSeed,
@@ -154,18 +122,11 @@ export class SimOrchestrator {
       size: 1,
       config: swarmConfig,
       status: "running",
-      createdBy: opts.createdBy !== undefined ? BigInt(opts.createdBy) : null,
-    };
-
-    const [swarmRow] = await this.deps.db
-      .insert(simSwarm)
-      .values(swarmInsert)
-      .returning({ id: simSwarm.id });
-    if (!swarmRow) throw new Error("insert sim_swarm returned no row");
-    const swarmId = Number(swarmRow.id);
+      createdBy: opts.createdBy ?? null,
+    });
 
     const simConfig: SimConfig = {
-      turnsPerDay: baseSeed.turnsPerDay ?? 1,
+      turnsPerDay: readPositiveInt(baseSeed.turnsPerDay, 1),
       maxTurns,
       llmMode: opts.llmMode,
       seed: swarmConfig.seed,
@@ -181,12 +142,7 @@ export class SimOrchestrator {
       config: simConfig,
     });
 
-    // Mark the run as running and enqueue turn 0.
-    await this.deps.db
-      .update(simRun)
-      .set({ status: "running" })
-      .where(eq(simRun.id, BigInt(fish.simRunId)));
-
+    await this.deps.store.updateRunStatus(fish.simRunId, "running");
     await this.enqueueTurn(fish.simRunId, 0);
 
     logger.info(
@@ -197,78 +153,71 @@ export class SimOrchestrator {
     return { swarmId, simRunId: fish.simRunId, agentIds: fish.agentIds };
   }
 
-  // -------------------------------------------------------------------
-  // Shared primitive — create sim_run + agents (reused by swarm service)
-  // -------------------------------------------------------------------
-
   async createFish(opts: CreateFishOpts): Promise<CreateFishResult> {
-    const operatorIds = opts.seedApplied.operatorIds ?? [];
-    if (operatorIds.length === 0) {
+    const subjectIds = readSubjectIds(opts.seedApplied);
+    if (subjectIds.length === 0) {
       throw new Error(
-        `createFish(swarm=${opts.swarmId}, fish=${opts.fishIndex}) requires operatorIds in seedApplied`,
+        `createFish(swarm=${opts.swarmId}, fish=${opts.fishIndex}) requires subjectIds in seedApplied`,
       );
     }
 
-    const runInsert: NewSimRun = {
-      swarmId: BigInt(opts.swarmId),
+    const simRunId = await this.deps.store.insertRun({
+      swarmId: opts.swarmId,
       fishIndex: opts.fishIndex,
       kind: opts.kind,
       seedApplied: opts.seedApplied,
       perturbation: opts.perturbation,
       config: opts.config,
       status: "pending",
-    };
-    const [runRow] = await this.deps.db
-      .insert(simRun)
-      .values(runInsert)
-      .returning({ id: simRun.id });
-    if (!runRow) throw new Error("insert sim_run returned no row");
-    const simRunId = Number(runRow.id);
+    });
 
-    // Apply perturbations that target agent composition before build.
-    const negotiationFraming = opts.kind === "uc3_conjunction";
-    const { riskProfileByIndex, constraintOverridesByIndex } =
-      this.projectAgentPerturbations(opts.perturbation);
+    const negotiationFraming = subjectIds.length === 2;
+    const { subjectHintsByIndex } = this.deps.perturbationPack.agentHints(
+      opts.perturbation as Record<string, unknown>,
+    );
 
     const agentIds: number[] = [];
-    const fleetSnapshots = new Map<number, FleetSnapshot>();
-    for (let i = 0; i < operatorIds.length; i++) {
-      const operatorId = operatorIds[i];
-      const built = await buildOperatorAgent(
+    const subjectSnapshots = new Map<number, SimSubjectSnapshot>();
+    const subjectKind = readSubjectKind(opts.seedApplied);
+    for (let i = 0; i < subjectIds.length; i++) {
+      const subjectId = subjectIds[i];
+      const built = await buildSimAgent(
         {
-          db: this.deps.db,
-          fleet: this.deps.fleet,
+          store: this.deps.store,
+          subjects: this.deps.subjects,
           persona: this.deps.persona,
         },
         {
           simRunId,
-          operatorId,
+          subjectId,
+          subjectKind,
           agentIndex: i,
-          riskProfile: riskProfileByIndex.get(i),
-          constraintOverrides: constraintOverridesByIndex.get(i),
           negotiationFraming,
+          ...(subjectHintsByIndex.get(i) ?? {}),
         },
       );
       agentIds.push(built.agentId);
-      fleetSnapshots.set(built.agentId, built.fleetSnapshot);
+      subjectSnapshots.set(built.agentId, built.subjectSnapshot);
     }
 
-    // Seed god events from perturbation (if any), as a pre-turn (index -1 is
-    // reserved; we use turn_index = 0 for pre-seeded god turns — agents see
-    // them in their observable timeline at turn 0).
-    const rawGod = this.deps.perturbationPack.extractGodEvents(
-      opts.perturbation as unknown as Record<string, unknown>,
+    const seededEvents = this.deps.perturbationPack.extractGodEvents(
+      opts.perturbation as Record<string, unknown>,
     );
-    const seededGod: GodEventInput[] = rawGod.map((g) => ({
-      kind: g.kind as GodEventInput["kind"],
-      summary: g.summary,
-      detail: g.detail,
-      targetSatelliteId: (g.targets?.targetSatelliteId as number | undefined),
-      targetOperatorId: (g.targets?.targetOperatorId as number | undefined),
-    }));
-    if (seededGod.length > 0) {
-      for (const ev of seededGod) {
-        await this.writeGodTurn(simRunId, 0, ev);
+    if (seededEvents.length > 0) {
+      for (const event of seededEvents) {
+        await this.writeGodTurn(simRunId, 0, {
+          kind: event.kind,
+          summary: event.summary,
+          detail: event.detail,
+          targetEntityId:
+            typeof event.targets?.targetEntityId === "number"
+              ? event.targets.targetEntityId
+              : undefined,
+          targetSubjectId:
+            typeof event.targets?.targetSubjectId === "number"
+              ? event.targets.targetSubjectId
+              : undefined,
+        });
       }
     }
 
@@ -277,18 +226,14 @@ export class SimOrchestrator {
         swarmId: opts.swarmId,
         fishIndex: opts.fishIndex,
         simRunId,
-        operatorCount: operatorIds.length,
-        godSeeded: seededGod.length,
+        subjectCount: subjectIds.length,
+        seededEvents: seededEvents.length,
       },
       "fish created",
     );
 
-    return { simRunId, agentIds, fleetSnapshots };
+    return { simRunId, agentIds, subjectSnapshots };
   }
-
-  // -------------------------------------------------------------------
-  // Scheduling — called by sim-turn.worker after each turn completes
-  // -------------------------------------------------------------------
 
   async scheduleNext(simRunId: number): Promise<{ scheduled: boolean; reason?: string }> {
     const run = await this.loadRun(simRunId);
@@ -297,16 +242,10 @@ export class SimOrchestrator {
 
     const played = await this.countAgentTurns(simRunId);
     const agentCount = await this.countAgents(simRunId);
-    // "turnsPlayed" at DAG = number of full turns where at least one agent
-    // acted. Approximation: ceil(agent_turn_rows / agentCount).
     const turnsCompleted = agentCount > 0 ? Math.ceil(played / agentCount) : 0;
-
     const config = run.config as SimConfig;
     if (turnsCompleted >= config.maxTurns) {
-      await this.deps.db
-        .update(simRun)
-        .set({ status: "done", completedAt: new Date() })
-        .where(eq(simRun.id, BigInt(simRunId)));
+      await this.deps.store.updateRunStatus(simRunId, "done", new Date());
       logger.info({ simRunId, turnsCompleted }, "run reached maxTurns, closing");
       return { scheduled: false, reason: "max_turns_reached" };
     }
@@ -315,29 +254,13 @@ export class SimOrchestrator {
     return { scheduled: true };
   }
 
-  private async enqueueTurn(simRunId: number, turnIndex: number): Promise<void> {
-    await this.deps.simTurnQueue.add(
-      "sim-turn",
-      { simRunId, turnIndex },
-      { jobId: `sim-${simRunId}-t${turnIndex}` },
-    );
-    logger.debug({ simRunId, turnIndex }, "sim-turn enqueued");
-  }
-
-  // -------------------------------------------------------------------
-  // Pause / resume
-  // -------------------------------------------------------------------
-
   async pause(simRunId: number): Promise<void> {
     const run = await this.loadRun(simRunId);
     if (!run) throw new Error(`sim_run ${simRunId} not found`);
     if (run.status !== "running") {
       throw new Error(`cannot pause: status=${run.status}`);
     }
-    await this.deps.db
-      .update(simRun)
-      .set({ status: "paused" })
-      .where(eq(simRun.id, BigInt(simRunId)));
+    await this.deps.store.updateRunStatus(simRunId, "paused");
     logger.info({ simRunId }, "sim_run paused");
   }
 
@@ -347,18 +270,10 @@ export class SimOrchestrator {
     if (run.status !== "paused") {
       throw new Error(`cannot resume: status=${run.status}`);
     }
-    await this.deps.db
-      .update(simRun)
-      .set({ status: "running" })
-      .where(eq(simRun.id, BigInt(simRunId)));
-    // Schedule the next turn based on what's already played.
+    await this.deps.store.updateRunStatus(simRunId, "running");
     await this.scheduleNext(simRunId);
     logger.info({ simRunId }, "sim_run resumed");
   }
-
-  // -------------------------------------------------------------------
-  // God channel injection
-  // -------------------------------------------------------------------
 
   async inject(simRunId: number, event: GodEventInput): Promise<{ simTurnId: number }> {
     const run = await this.loadRun(simRunId);
@@ -367,26 +282,18 @@ export class SimOrchestrator {
       throw new Error(`cannot inject: status=${run.status}`);
     }
 
-    // Inject at currentTurn + 1 so the event surfaces on the *next* agent
-    // turn's observable timeline.
     const played = await this.countAgentTurns(simRunId);
     const agentCount = await this.countAgents(simRunId);
     const turnsCompleted = agentCount > 0 ? Math.ceil(played / agentCount) : 0;
-    const injectTurnIndex = turnsCompleted;
-
-    const simTurnId = await this.writeGodTurn(simRunId, injectTurnIndex, event);
+    const simTurnId = await this.writeGodTurn(simRunId, turnsCompleted, event);
 
     logger.info(
-      { simRunId, simTurnId, turnIndex: injectTurnIndex, godKind: event.kind },
+      { simRunId, simTurnId, turnIndex: turnsCompleted, eventKind: event.kind },
       "god event injected",
     );
 
     return { simTurnId };
   }
-
-  // -------------------------------------------------------------------
-  // Status
-  // -------------------------------------------------------------------
 
   async status(simRunId: number): Promise<SimStatus | null> {
     const run = await this.loadRun(simRunId);
@@ -397,50 +304,35 @@ export class SimOrchestrator {
     const turnsPlayed = agentCount > 0 ? Math.ceil(played / agentCount) : 0;
     const config = run.config as SimConfig;
 
-    const lastTurn = await this.deps.db.execute(sql`
-      SELECT MAX(created_at) AS last_at
-      FROM sim_turn
-      WHERE sim_run_id = ${BigInt(simRunId)}
-    `);
-    const lastAt = (lastTurn.rows[0] as { last_at: Date | null } | undefined)?.last_at ?? null;
-
     return {
       swarmId: Number(run.swarmId),
       simRunId,
       status: run.status,
       turnsPlayed,
       maxTurns: config.maxTurns,
-      lastTurnAt: lastAt,
+      lastTurnAt: await this.deps.store.lastTurnCreatedAt(simRunId),
     };
   }
 
-  // -------------------------------------------------------------------
-  // Internals
-  // -------------------------------------------------------------------
+  private async enqueueTurn(simRunId: number, turnIndex: number): Promise<void> {
+    await this.deps.queue.enqueueSimTurn({
+      simRunId,
+      turnIndex,
+      jobId: `sim-${simRunId}-t${turnIndex}`,
+    });
+    logger.debug({ simRunId, turnIndex }, "sim-turn enqueued");
+  }
 
-  private async loadRun(simRunId: number) {
-    const rows = await this.deps.db
-      .select()
-      .from(simRun)
-      .where(eq(simRun.id, BigInt(simRunId)))
-      .limit(1);
-    return rows[0] ?? null;
+  private loadRun(simRunId: number) {
+    return this.deps.store.getRun(simRunId);
   }
 
   private async countAgents(simRunId: number): Promise<number> {
-    const rows = await this.deps.db.execute(sql`
-      SELECT count(*)::int AS c FROM sim_agent WHERE sim_run_id = ${BigInt(simRunId)}
-    `);
-    return (rows.rows[0] as { c: number } | undefined)?.c ?? 0;
+    return (await this.deps.store.listAgents(simRunId)).length;
   }
 
   private async countAgentTurns(simRunId: number): Promise<number> {
-    const rows = await this.deps.db.execute(sql`
-      SELECT count(*)::int AS c
-      FROM sim_turn
-      WHERE sim_run_id = ${BigInt(simRunId)} AND actor_kind = 'agent'
-    `);
-    return (rows.rows[0] as { c: number } | undefined)?.c ?? 0;
+    return this.deps.store.countAgentTurnsForRun(simRunId);
   }
 
   private async writeGodTurn(
@@ -448,42 +340,35 @@ export class SimOrchestrator {
     turnIndex: number,
     event: GodEventInput,
   ): Promise<number> {
-    const insert: NewSimTurn = {
-      simRunId: BigInt(simRunId),
+    return this.deps.store.insertGodTurn({
+      simRunId,
       turnIndex,
-      actorKind: "god",
-      agentId: null,
       action: {
         kind: "hold",
-        reason: `god event injection: ${event.kind}`,
-      } as never,
+        reason: `event injection: ${event.kind}`,
+      },
       rationale: event.detail ?? event.summary,
       observableSummary: event.summary,
-      llmCostUsd: null,
-    };
-    const [row] = await this.deps.db
-      .insert(simTurn)
-      .values(insert)
-      .returning({ id: simTurn.id });
-    if (!row) throw new Error("insert god sim_turn returned no row");
-    return Number(row.id);
+    });
   }
+}
 
-  private projectAgentPerturbations(p: PerturbationSpec): {
-    riskProfileByIndex: Map<number, "conservative" | "balanced" | "aggressive">;
-    constraintOverridesByIndex: Map<number, Record<string, unknown>>;
-  } {
-    const risk = new Map<number, "conservative" | "balanced" | "aggressive">();
-    const constraints = new Map<number, Record<string, unknown>>();
-    if (p.kind === "persona_tweak") {
-      risk.set(p.agentIndex, p.riskProfile);
-    } else if (p.kind === "constraint_override") {
-      constraints.set(p.agentIndex, p.overrides);
-    } else if (p.kind === "delta_v_budget") {
-      constraints.set(p.agentIndex, { maxDeltaVMpsPerSat: p.maxPerSat });
-    }
-    return { riskProfileByIndex: risk, constraintOverridesByIndex: constraints };
-  }
+function readPositiveInt(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : fallback;
+}
 
-  // Plan 2 · B.6: extractGodEvents moved to SimPerturbationPack port.
+function readSubjectIds(seed: Record<string, unknown>): number[] {
+  const raw = seed.subjectIds;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((value) => Number(value))
+    .filter((value) => Number.isSafeInteger(value));
+}
+
+function readSubjectKind(seed: Record<string, unknown>): string | undefined {
+  return typeof seed.subjectKind === "string" && seed.subjectKind.length > 0
+    ? seed.subjectKind
+    : undefined;
 }

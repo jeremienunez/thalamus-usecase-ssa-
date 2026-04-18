@@ -1,0 +1,30 @@
+flowchart LR
+    subgraph SSA["Space Situational Awareness"]
+        direction TB
+        SSA1["catalog cortex"]
+        SSA2["observations cortex"]
+        SSA3["conjunction-analysis"]
+        SSA4["correlation cortex"]
+        SSA5["maneuver-planning"]
+        SSA6["ConjunctionEvent"]
+        SSA7["Mission operator"]
+    end
+
+    subgraph THREAT["Threat Intelligence"]
+        direction TB
+        TI1["vulnerability-catalog<br/>(CVE / advisory)"]
+        TI2["ioc-normalization"]
+        TI3["threat-screening"]
+        TI4["dual-stream-correlation<br/>(OSINT × field)"]
+        TI5["response-planning<br/>(containment)"]
+        TI6["ThreatEvent"]
+        TI7["Threat analyst"]
+    end
+
+    SSA1 -.->|"rename + refetch"| TI1
+    SSA2 -.->|"rename + refetch"| TI2
+    SSA3 -.->|"rename + refetch"| TI3
+    SSA4 -.->|"rename + refetch"| TI4
+    SSA5 -.->|"rename + refetch"| TI5
+    SSA6 -.->|"rename"| TI6
+    SSA7 -.->|"role swap"| TI7

@@ -1,0 +1,26 @@
+mindmap
+    root((Architecture<br/>decisions))
+        Isolation
+            Cortex pattern over single research agent
+            Isolated blast radius per domain
+            Trivially testable
+        Economics
+            Swarm of nanos over single strong model
+            ~10× cheaper per source
+            Bounded latency
+        Versioning
+            Skills as files not strings
+            Diffable in PRs
+            Reviewable by non-engineers
+        Safety
+            Redis-backed findings with explicit review step
+            Human is part of the loop not an exception
+            Guardrails in code not in prompts
+        Architecture
+            Repo = queries / Service = logic
+            Monorepo over two services
+            Shared types are load-bearing
+        Flexibility
+            Multi-provider by construction
+            Per-step model selection
+            Sensitive workloads on self-hosted weights

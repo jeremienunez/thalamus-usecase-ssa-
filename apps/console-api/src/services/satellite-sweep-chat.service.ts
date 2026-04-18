@@ -5,12 +5,46 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-// NOTE: chat service uses sweep-side SatelliteRepository's richer findByIdFull
-// (returns operator detail + doctrine + bus joins). Console-api's own
-// findByIdFull has a thinner projection and doesn't carry those fields.
-// Phase 4+ may unify the shapes; for Plan 1 we keep using sweep's.
-import type { SatelliteRepository } from "@interview/sweep";
 import type { SatelliteSweepChatRepository } from "../repositories/satellite-sweep-chat.repository";
+
+/**
+ * Rich satellite profile the chat service needs (operator detail, doctrine,
+ * bus telemetry, payloads). Declared locally as a structural port so this
+ * file no longer depends on the legacy package-side SatelliteRepository.
+ * Any concrete repo whose findByIdFull returns this shape can be injected.
+ */
+export interface SatelliteFullProfile {
+  name: string;
+  operatorCountryName: string | null;
+  classificationName?: string | null;
+  launchYear: number | null;
+  platformClass?: string | null;
+  platformClassName?: string | null;
+  massKg?: number | null;
+  telemetrySummary?: Record<string, unknown> | null;
+  operatorDetail?: {
+    name: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    groundStation?: string | null;
+  } | null;
+  doctrine?: Record<string, unknown> | null;
+  satelliteBus?: {
+    id: string;
+    name: string;
+    telemetrySummary: Record<string, number | null>;
+  } | null;
+  payloads?: Array<{
+    name: string;
+    role?: string | null;
+    massKg?: number | null;
+    powerW?: number | null;
+  }>;
+}
+
+export interface SatelliteFullProfileRepo {
+  findByIdFull(id: bigint): Promise<SatelliteFullProfile | null>;
+}
 import type { LifetimeCurve, VizService } from "./viz.service";
 import type {
   EphemerisHistoryPoint,
@@ -25,6 +59,11 @@ import type {
   SweepChatMessage,
   SweepChatState,
 } from "../transformers/satellite-sweep-chat.dto";
+import {
+  SATELLITE_SWEEP_CHAT_ROLE,
+  SATELLITE_SWEEP_CHAT_INSTRUCTIONS,
+  buildSweepFindingsExtractorInstructions,
+} from "../prompts";
 
 const logger = createLogger("satellite-sweep-chat");
 
@@ -35,7 +74,7 @@ export interface ChatStreamEvent {
 
 export class SatelliteSweepChatService {
   constructor(
-    private satelliteRepo: SatelliteRepository,
+    private satelliteRepo: SatelliteFullProfileRepo,
     private sweepRepo: SatelliteSweepChatRepository,
     private vizService: VizService,
     private satelliteService: SatelliteService,
@@ -137,17 +176,13 @@ export class SatelliteSweepChatService {
   }
 
   private buildSystemPrompt(
-    satellite: NonNullable<
-      Awaited<ReturnType<SatelliteRepository["findByIdFull"]>>
-    >,
+    satellite: SatelliteFullProfile,
     lifetimeCurve: unknown,
     ephemerisHistory: unknown[],
     findings: SweepFinding[],
   ): string {
     const parts: string[] = [
-      "You are a space situational awareness analyst with deep expertise in orbital mechanics, mission operations, and satellite catalog integrity.",
-      "You have access to web search for real-time data and code interpreter for calculations.",
-      "When you discover a noteworthy insight, state it clearly with supporting evidence.",
+      ...SATELLITE_SWEEP_CHAT_ROLE,
       "",
       "## SATELLITE DATA",
       `Name: ${satellite.name}`,
@@ -232,15 +267,7 @@ export class SatelliteSweepChatService {
       }
     }
 
-    parts.push(
-      "",
-      "## INSTRUCTIONS",
-      "- Answer in the same language the user uses",
-      "- Use web search to find current TLEs, recent maneuver alerts, advisory bulletins, launch news",
-      "- Use code interpreter for calculations when needed (propagation, conjunction screening, delta-v budgets)",
-      "- Be specific with numbers, dates, and sources",
-      "- Cross-reference the satellite data above with your web findings",
-    );
+    parts.push("", "## INSTRUCTIONS", ...SATELLITE_SWEEP_CHAT_INSTRUCTIONS);
 
     return parts.join("\n");
   }
@@ -264,10 +291,7 @@ export class SatelliteSweepChatService {
 
     try {
       const result = await callNano({
-        instructions: `Extract structured findings from this satellite SSA analysis response.
-Return a JSON array (or empty array if no concrete findings).
-Each finding: { "satelliteId": "${satelliteId}", "category": "orbit"|"advisory"|"mission"|"regime"|"maneuver"|"conjunction"|"lifetime"|"general", "title": "short title", "summary": "1-2 sentence summary", "confidence": 0.0-1.0, "evidence": ["url or data point"] }
-Only extract concrete, actionable insights with specific data — not generic observations.`,
+        instructions: buildSweepFindingsExtractorInstructions(satelliteId),
         input: response,
         enableWebSearch: false,
       });

@@ -1,11 +1,12 @@
 /**
- * Dual-API contract test for SweepRepository.
+ * Generic-first contract test for SweepRepository.
  *
  * Asserts:
- *   1. Generic methods are opt-in and require a FindingDomainSchema.
- *   2. insertGeneric + listGeneric + getGeneric round-trip through the
+ *   1. insertGeneric + listGeneric + getGeneric round-trip through the
  *      pack's schema without touching Redis layout.
- *   3. Old flat API (insertOne/list/getById) still sees flat SSA rows.
+ *   2. Schema-less mode still round-trips opaque domain fields through the
+ *      fallback flat/blob serializer.
+ *   3. insertOne remains an alias for insertGeneric.
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
@@ -14,23 +15,21 @@ import type IORedis from "ioredis";
 import { SweepRepository } from "../../src/repositories/sweep.repository";
 import type { FindingDomainSchema } from "../../src/ports";
 
-// Minimal FindingDomainSchema mirroring SsaFindingSchema without pulling in
-// the console-api pack (packages can't import from apps).
-const ssaLikeSchema: FindingDomainSchema = {
-  indexedFields: ["operatorCountryId", "category", "severity"],
+const exampleSchema: FindingDomainSchema = {
+  indexedFields: ["subjectId", "bucket", "priority"],
   serialize(input) {
     const f = input as Record<string, unknown>;
     return {
       flatFields: {
-        operatorCountryId: f.operatorCountryId == null ? null : String(f.operatorCountryId),
-        operatorCountryName: String(f.operatorCountryName ?? ""),
-        category: String(f.category ?? ""),
-        severity: String(f.severity ?? ""),
+        subjectId: f.subjectId == null ? null : String(f.subjectId),
+        groupName: String(f.groupName ?? ""),
+        bucket: String(f.bucket ?? ""),
+        priority: String(f.priority ?? ""),
         title: String(f.title ?? ""),
-        description: String(f.description ?? ""),
-        affectedSatellites: Number(f.affectedSatellites ?? 0),
-        suggestedAction: String(f.suggestedAction ?? ""),
-        webEvidence: f.webEvidence == null ? null : String(f.webEvidence),
+        summary: String(f.summary ?? ""),
+        itemCount: Number(f.itemCount ?? 0),
+        suggestedStep: String(f.suggestedStep ?? ""),
+        referenceUrl: f.referenceUrl == null ? null : String(f.referenceUrl),
       },
       blob: {},
     };
@@ -38,15 +37,15 @@ const ssaLikeSchema: FindingDomainSchema = {
   deserialize(raw) {
     const f = raw.flatFields;
     return {
-      operatorCountryId: f.operatorCountryId ?? null,
-      operatorCountryName: f.operatorCountryName ?? "",
-      category: f.category ?? "",
-      severity: f.severity ?? "",
+      subjectId: f.subjectId ?? null,
+      groupName: f.groupName ?? "",
+      bucket: f.bucket ?? "",
+      priority: f.priority ?? "",
       title: f.title ?? "",
-      description: f.description ?? "",
-      affectedSatellites: Number(f.affectedSatellites ?? 0),
-      suggestedAction: f.suggestedAction ?? "",
-      webEvidence: f.webEvidence ?? null,
+      summary: f.summary ?? "",
+      itemCount: Number(f.itemCount ?? 0),
+      suggestedStep: f.suggestedStep ?? "",
+      referenceUrl: f.referenceUrl ?? null,
     };
   },
 };
@@ -62,23 +61,23 @@ beforeEach(async () => {
 
 function makeRepo(withSchema = true) {
   return withSchema
-    ? new SweepRepository({ redis, schema: ssaLikeSchema })
+    ? new SweepRepository({ redis, schema: exampleSchema })
     : new SweepRepository(redis);
 }
 
 const sample = {
-  operatorCountryId: 42n,
-  operatorCountryName: "Testland",
-  category: "enrichment" as const,
-  severity: "info" as const,
+  subjectId: 42n,
+  groupName: "Example Group",
+  bucket: "coverage-gap" as const,
+  priority: "info" as const,
   title: "Missing payload",
-  description: "17 sats",
-  affectedSatellites: 17,
-  suggestedAction: "Backfill",
-  webEvidence: "https://example.com",
+  summary: "17 items",
+  itemCount: 17,
+  suggestedStep: "Backfill",
+  referenceUrl: "https://example.com",
 };
 
-describe("SweepRepository dual API", () => {
+describe("SweepRepository generic contract", () => {
   it("accepts legacy constructor (IORedis) — schema-less mode", () => {
     expect(() => makeRepo(false)).not.toThrow();
   });
@@ -87,77 +86,92 @@ describe("SweepRepository dual API", () => {
     expect(() => makeRepo(true)).not.toThrow();
   });
 
-  it("insertGeneric throws without schema", async () => {
-    const repo = makeRepo(false);
-    await expect(
-      repo.insertGeneric({
-        domain: "ssa",
-        domainFields: sample,
-        resolutionPayload: null,
-      }),
-    ).rejects.toThrow(/requires a FindingDomainSchema/);
-  });
-
   it("insertGeneric round-trips via getGeneric", async () => {
     const repo = makeRepo(true);
     const id = await repo.insertGeneric({
-      domain: "ssa",
+      domain: "example-domain",
       domainFields: sample,
       resolutionPayload: null,
     });
     const row = await repo.getGeneric(id);
     expect(row).toBeTruthy();
     expect(row!.id).toBe(id);
-    expect(row!.domain).toBe("ssa");
+    expect(row!.domain).toBe("example-domain");
     expect(row!.domainFields).toMatchObject({
-      operatorCountryName: "Testland",
-      category: "enrichment",
-      severity: "info",
+      groupName: "Example Group",
+      bucket: "coverage-gap",
+      priority: "info",
       title: "Missing payload",
-      description: "17 sats",
-      affectedSatellites: 17,
-      suggestedAction: "Backfill",
-      webEvidence: "https://example.com",
+      summary: "17 items",
+      itemCount: 17,
+      suggestedStep: "Backfill",
+      referenceUrl: "https://example.com",
     });
   });
 
-  it("insertGeneric writes a flat row readable by the legacy getById", async () => {
+  it("getById returns the same generic view exposed by getGeneric", async () => {
     const repo = makeRepo(true);
     const id = await repo.insertGeneric({
-      domain: "ssa",
+      domain: "example-domain",
       domainFields: sample,
-      resolutionPayload: JSON.stringify({ actions: [{ kind: "enrich", satelliteIds: [] }] }),
+      resolutionPayload: JSON.stringify({
+        actions: [{ kind: "domain-action", targetIds: [] }],
+      }),
     });
-    const flat = await repo.getById(id);
-    expect(flat).toBeTruthy();
-    expect(flat!.operatorCountryName).toBe("Testland");
-    expect(flat!.category).toBe("enrichment");
-    expect(flat!.severity).toBe("info");
-    expect(flat!.resolutionPayload).toMatch(/enrich/);
+    const row = await repo.getById(id);
+    expect(row).toBeTruthy();
+    expect(row!.domainFields).toMatchObject({
+      groupName: "Example Group",
+      bucket: "coverage-gap",
+      priority: "info",
+    });
+    expect(row!.resolutionPayload).toMatch(/domain-action/);
   });
 
   it("listGeneric returns generic rows for pending suggestions", async () => {
     const repo = makeRepo(true);
     await repo.insertGeneric({
-      domain: "ssa",
+      domain: "example-domain",
       domainFields: sample,
       resolutionPayload: null,
     });
     await repo.insertGeneric({
-      domain: "ssa",
+      domain: "example-domain",
       domainFields: { ...sample, title: "Another" },
       resolutionPayload: null,
     });
     const { rows, total } = await repo.listGeneric({ reviewed: false, limit: 10 });
     expect(total).toBe(2);
     expect(rows).toHaveLength(2);
-    expect(rows[0]!.domain).toBe("ssa");
+    expect(rows[0]!.domain).toBe("example-domain");
     expect(rows[0]!.domainFields.title).toBeDefined();
   });
 
-  it("listGeneric throws without schema", async () => {
+  it("schema-less mode round-trips flat fields and blob fields", async () => {
     const repo = makeRepo(false);
-    await expect(repo.listGeneric({})).rejects.toThrow(/requires a FindingDomainSchema/);
+    const id = await repo.insertGeneric({
+      domain: "generic",
+      domainFields: {
+        title: "Fallback row",
+        priority: 3,
+        active: true,
+        subjectId: 42n,
+        nested: { source: "blob" },
+        tags: ["alpha", "beta"],
+      },
+      resolutionPayload: null,
+    });
+    const row = await repo.getGeneric(id);
+    expect(row).toBeTruthy();
+    expect(row!.domain).toBe("generic");
+    expect(row!.domainFields).toMatchObject({
+      title: "Fallback row",
+      priority: "3",
+      active: "true",
+      subjectId: "42",
+      nested: { source: "blob" },
+      tags: ["alpha", "beta"],
+    });
   });
 
   it("getGeneric returns null for an unknown id", async () => {
@@ -165,14 +179,17 @@ describe("SweepRepository dual API", () => {
     expect(await repo.getGeneric("9999")).toBeNull();
   });
 
-  it("legacy insertOne still returns a string id and produces a flat row", async () => {
+  it("insertOne remains an alias for insertGeneric", async () => {
     const repo = makeRepo(false);
     const id = await repo.insertOne({
-      ...sample,
+      domain: "generic",
+      domainFields: {
+        title: "Missing payload",
+      },
       resolutionPayload: null,
     });
     expect(typeof id).toBe("string");
     const row = await repo.getById(id);
-    expect(row!.title).toBe("Missing payload");
+    expect(row!.domainFields.title).toBe("Missing payload");
   });
 });

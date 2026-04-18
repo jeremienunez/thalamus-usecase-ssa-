@@ -18,7 +18,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SeedRefs } from "@interview/db-schema";
+import type { SeedRefs } from "@interview/sweep";
 import { createLogger } from "@interview/shared/observability";
 
 const logger = createLogger("bus-datasheets");

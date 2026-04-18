@@ -19,6 +19,7 @@ import type { SatelliteEnrichmentService } from "../services/satellite-enrichmen
 import type { OrbitalAnalysisService } from "../services/orbital-analysis.service";
 import type { OpacityService } from "../services/opacity.service";
 import type { IngestionService } from "../services/ingestion.service";
+import type { RuntimeConfigService } from "../services/runtime-config.service";
 
 import { registerHealthRoutes } from "./health.routes";
 import { registerSatelliteRoutes } from "./satellites.routes";
@@ -38,6 +39,8 @@ import { registerSatelliteEnrichmentRoutes } from "./satellite-enrichment.routes
 import { registerOrbitalRoutes } from "./orbital.routes";
 import { registerOpacityRoutes } from "./opacity.routes";
 import { registerIngestionRoutes } from "./ingestion.routes";
+import { registerSimRoutes, type SimRouteServices } from "./sim.routes";
+import { registerRuntimeConfigRoutes } from "./runtime-config.routes";
 
 export type { SweepSuggestionsDeps } from "../services/sweep-suggestions.service";
 
@@ -61,6 +64,8 @@ export type AppServices = {
   orbitalAnalysis: OrbitalAnalysisService;
   opacity: OpacityService;
   ingestion: IngestionService;
+  sim: SimRouteServices;
+  runtimeConfig: RuntimeConfigService;
 };
 
 export function registerAllRoutes(
@@ -85,4 +90,6 @@ export function registerAllRoutes(
   registerOrbitalRoutes(app, s.orbitalAnalysis);
   registerOpacityRoutes(app, s.opacity);
   registerIngestionRoutes(app, s.ingestion);
+  registerSimRoutes(app, s.sim);
+  registerRuntimeConfigRoutes(app, s.runtimeConfig);
 }

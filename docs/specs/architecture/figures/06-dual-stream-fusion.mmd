@@ -1,0 +1,40 @@
+flowchart TB
+    subgraph OSINT["OSINT Stream — conf ∈ [0.2, 0.5]"]
+        direction LR
+        TLE["CelesTrak TLE<br/>(days-stale)"]
+        Amateur["Amateur observers<br/>(partial coverage)"]
+        Press["Press / socials"]
+    end
+
+    subgraph FIELD["Field Stream — conf ∈ [0.85, 1.0]"]
+        direction LR
+        Radar["Classified tracking<br/>radars"]
+        Ephemeris["Operator<br/>ephemerides"]
+        Telemetry["Satellite<br/>telemetry"]
+    end
+
+    subgraph THALAMUS_SSA["Thalamus cortices"]
+        Catalog["catalog<br/>TLE ingestion +<br/>orbital propagation"]
+        Obs["observations<br/>radar + optical<br/>normalization"]
+        Conj["conjunction-analysis<br/>close-approach screening<br/>confidence bands"]
+        Corr["correlation<br/>dual-stream fusion"]
+        Maneuver["maneuver-planning<br/>burn windows +<br/>delta-v budget"]
+    end
+
+    OSINT --> Catalog
+    Catalog --> Conj
+    FIELD --> Obs
+    Obs --> Corr
+    Conj --> Corr
+
+    Corr --> Decision{"P(collision)<br/>≥ 10⁻⁴ ?"}
+
+    Decision -->|"YES"| Finding["Sweep Finding<br/>→ mission operator"]
+    Decision -->|"NO"| Logged["Logged,<br/>no alert"]
+
+    Finding --> Operator{"Operator<br/>decision"}
+    Operator -->|"ACCEPT"| Burn["Burn command<br/>+ audit row"]
+    Operator -->|"REJECT"| Monitor["Keep monitoring"]
+
+    Burn --> Maneuver
+    Maneuver --> Recheck["Post-maneuver<br/>conjunction re-check"]

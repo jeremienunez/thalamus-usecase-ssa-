@@ -20,11 +20,11 @@ export const sweepQueue = new Queue("sweep", {
 });
 
 /**
- * Satellite enrichment queue — consumed by sweep-resolution.service
- * when an `enrich` resolution action is executed. Kept as a dedicated
- * queue to isolate enrichment back-pressure from the main sweep queue.
+ * Audit-target queue — consumed by sweep-resolution.service when an
+ * `enrich` resolution action is executed. Kept separate to isolate
+ * back-pressure from the main sweep queue.
  */
-export const satelliteQueue = new Queue("satellite", {
+export const auditTargetQueue = new Queue("audit-target", {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -127,7 +127,7 @@ sweepQueueEvents.on("failed", ({ jobId, failedReason }) => {
 export async function closeQueues(): Promise<void> {
   await Promise.all([
     sweepQueue.close(),
-    satelliteQueue.close(),
+    auditTargetQueue.close(),
     simTurnQueue.close(),
     swarmFishQueue.close(),
     swarmAggregateQueue.close(),

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
 import type { Regime } from "@interview/shared";
+import { TELEMETRY_SCALAR_COLUMN } from "../types/sim-telemetry.types";
 import { fieldSqlFor } from "../utils/sql-field";
 import type {
   SatelliteOrbitalRow,
@@ -145,7 +146,7 @@ export class SatelliteRepository {
     return rows.rows;
   }
 
-  /** Full satellite lookup by id with all joins. */
+  /** Full satellite lookup by id with all joins (incl. satellite_bus). */
   async findByIdFull(
     id: bigint | number,
   ): Promise<FindByIdFullRow | null> {
@@ -158,12 +159,14 @@ export class SatelliteRepository {
         oc.name as "operatorCountryName", oc.id as "operatorCountryId",
         pc.name as "platformClassName", pc.id as "platformClassId",
         orr.name as "orbitRegimeName", orr.id as "orbitRegimeId",
+        sb.name as "busName",
         s.telemetry_summary as "telemetrySummary"
       FROM satellite s
       LEFT JOIN operator op ON op.id = s.operator_id
       LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
       LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
       LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
+      LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
       WHERE s.id = ${BigInt(id)}
       LIMIT 1
     `);
@@ -188,12 +191,14 @@ export class SatelliteRepository {
         oc.name as "operatorCountryName", oc.id as "operatorCountryId",
         pc.name as "platformClassName", pc.id as "platformClassId",
         orr.name as "orbitRegimeName", orr.id as "orbitRegimeId",
+        sb.name as "busName",
         s.telemetry_summary as "telemetrySummary"
       FROM satellite s
       LEFT JOIN operator op ON op.id = s.operator_id
       LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
       LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
       LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
+      LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
       WHERE 1 = 1
         ${operatorFilter}
       ORDER BY s.launch_year DESC NULLS LAST, s.name ASC
@@ -571,5 +576,34 @@ export class SatelliteRepository {
     `);
     const res = await this.db.execute<{ id: string }>(query);
     return (res.rows as Array<{ id: string }>).map((r) => BigInt(r.id));
+  }
+
+  /**
+   * Telemetry scalar columns that are currently NULL on a given satellite.
+   * Consumed by `services/sim-promotion.service.ts` to decide which
+   * per-scalar sweep_suggestions the telemetry aggregator may emit:
+   * non-NULL columns are skipped to avoid overwriting real data.
+   *
+   * Returns a `Set<string>` keyed by snake_case column name (matches
+   * `TELEMETRY_SCALAR_COLUMN` values from @interview/db-schema).
+   *
+   * Introduced: Plan 5 · 1.A.7 (ported verbatim from the legacy
+   * `packages/sweep/src/sim/promote.ts::findNullTelemetryColumns`).
+   */
+  async findNullTelemetryColumns(satelliteId: bigint): Promise<Set<string>> {
+    const cols = Object.values(TELEMETRY_SCALAR_COLUMN);
+    const selects = cols.map((c) => `"${c}" IS NULL AS "${c}"`).join(", ");
+    const res = await this.db.execute(
+      sql.raw(
+        `SELECT ${selects} FROM satellite WHERE id = ${satelliteId.toString()}::bigint LIMIT 1`,
+      ),
+    );
+    const row = res.rows[0] as Record<string, boolean | null> | undefined;
+    if (!row) return new Set();
+    const out = new Set<string>();
+    for (const c of cols) {
+      if (row[c] === true) out.add(c);
+    }
+    return out;
   }
 }

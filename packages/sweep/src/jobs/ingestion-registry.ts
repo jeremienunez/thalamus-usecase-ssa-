@@ -1,23 +1,15 @@
 /**
  * Ingestion fetcher registry — `jobName → fetcher fn` map consumed by the
- * ingestion worker. Each Phase 3 ingester (TLE history, solar weather,
- * launch manifest, NOTAMs, fragmentation events, ITU filings) lives in
- * `./ingesters/` and registers itself here with a stable jobName that
- * matches its scheduler entry.
- *
- * Built once at container boot via `createIngestionRegistry(deps)` so
- * fetchers receive shared infra (db handle, logger, redis) without each
- * having to know about composition root.
+ * ingestion worker. Each ingest source is contributed by an
+ * IngestionSourceProvider at boot — the provider is constructed with its own
+ * DB/Redis handles inside the app pack, so the kernel registry carries zero
+ * persistence knowledge.
  */
 
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type * as schema from "@interview/db-schema";
-import type IORedis from "ioredis";
 import { createLogger, type Logger } from "@interview/shared/observability";
 import type { IngestionSourceProvider } from "../ports";
 
 export interface IngestionContext {
-  db: NodePgDatabase<typeof schema>;
   logger: Logger;
   jobName: string;
 }
@@ -34,21 +26,12 @@ export interface IngestionResult {
 export type IngestionFetcher = (ctx: IngestionContext) => Promise<IngestionResult>;
 
 export interface IngestionRegistryDeps {
-  db: NodePgDatabase<typeof schema>;
   /** Optional — defaults to `createLogger("ingestion")` so callers don't
    *  have to thread Fastify's logger through (which has a different shape). */
   logger?: Logger;
   /**
-   * Optional — forwarded to IngestionSource.run as `ctx.redis`. Current SSA
-   * fetchers (tle-history, itu-filings, launch-manifest, …) don't need it;
-   * kept typed so future sources can consume it without changing the port.
-   */
-  redis?: IORedis;
-  /**
    * Domain ingestion providers. Each provider.register() hooks its sources
-   * into the registry via the `IngestionSource.run` → legacy fetcher adapter
-   * installed below. Console-api's SSA pack supplies `ssaIngestionProvider`
-   * (6 fetchers) here at boot.
+   * into the registry via the `IngestionSource.run` adapter installed below.
    */
   providers?: IngestionSourceProvider[];
 }
@@ -56,10 +39,8 @@ export interface IngestionRegistryDeps {
 export class IngestionRegistry {
   private fetchers = new Map<string, IngestionFetcher>();
   private readonly logger: Logger;
-  private readonly db: NodePgDatabase<typeof schema>;
 
   constructor(deps: IngestionRegistryDeps) {
-    this.db = deps.db;
     this.logger = deps.logger ?? createLogger("ingestion");
   }
 
@@ -87,7 +68,6 @@ export class IngestionRegistry {
       );
     }
     return fetcher({
-      db: this.db,
       logger: this.logger.child({ ingestionJob: jobName }),
       jobName,
     });
@@ -96,16 +76,9 @@ export class IngestionRegistry {
 
 /**
  * Build the registry and install the baseline `noop` fetcher used by the
- * harness e2e test (`POST /api/ingestion/run/noop`).
- *
- * Plan 1 Task 1.7 moved the 6 SSA fetchers (tle-history, space-weather,
- * launch-manifest, notams, fragmentation-events, itu-filings) to
- * `apps/console-api/src/agent/ssa/sweep/ingesters/`. Task 2.4 will add a
- * `providers[]` field on this registry's deps so that pack can register
- * them via `IngestionSourceProvider`. Between Task 1.7 and Task 3.1
- * (console-api wiring), scheduled SSA ingestion jobs fail with "no
- * fetcher registered" — live ingestion is temporarily paused during the
- * refactor window.
+ * harness e2e test (`POST /api/ingestion/run/noop`). Providers registered
+ * via `deps.providers` contribute their own sources — constructed with
+ * the caller's persistence handles, never with engine-side ones.
  */
 export function createIngestionRegistry(
   deps: IngestionRegistryDeps,
@@ -117,21 +90,13 @@ export function createIngestionRegistry(
     return { inserted: 0, skipped: 0, notes: "noop harness probe" };
   });
 
-  // Adapter: bridge legacy IngestionFetcher(ctx: IngestionContext) to the
-  // port's IngestionSource.run(ctx: IngestionRunContext). Current fetchers
-  // use `db` + `logger`; `redis` is optional and forwarded when supplied.
   for (const provider of deps.providers ?? []) {
     provider.register({
       add: (source) => {
         registry.register(source.id, async (legacyCtx) => {
-          const result = await source.run({
-            db: legacyCtx.db,
-            logger: legacyCtx.logger,
-            redis: deps.redis,
-          });
+          const result = await source.run({ logger: legacyCtx.logger });
           // Legacy contract returns IngestionResult; sources wrap themselves
-          // with that shape (see apps/console-api/src/agent/ssa/sweep/
-          // ingesters/*.ts). Cast narrows the generic TResult.
+          // with that shape. Cast narrows the generic TResult.
           return result as IngestionResult;
         });
       },

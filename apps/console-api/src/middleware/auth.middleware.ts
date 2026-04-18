@@ -29,3 +29,24 @@ export function requireTier(..._tiers: string[]) {
 export function requireRoles(..._roles: string[]) {
   return async (_req: FastifyRequest, _reply: FastifyReply): Promise<void> => {};
 }
+
+export function requireSimKernelSecret() {
+  return async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    const expected = process.env.SIM_KERNEL_SHARED_SECRET;
+    if (!expected) {
+      await reply
+        .code(500)
+        .send({ error: "SIM_KERNEL_SHARED_SECRET is not configured" });
+      return;
+    }
+
+    const raw = req.headers["x-sim-kernel-secret"];
+    const provided = Array.isArray(raw) ? raw[0] : raw;
+    if (provided !== expected) {
+      await reply.code(403).send({ error: "forbidden" });
+    }
+  };
+}

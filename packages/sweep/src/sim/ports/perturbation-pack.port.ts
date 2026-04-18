@@ -2,13 +2,12 @@
  * SimPerturbationPack — kernel ↔ pack contract for per-fish perturbation
  * generators + god-event templates.
  *
- * Each sim swarm kind (SSA UC1 debris breakup / UC3 conjunction / etc.)
- * ships its own family of PerturbationSpec generators + the canonical
- * GOD_EVENT_TEMPLATES used by extractGodEvents at turn 0. The kernel stays
- * pack-agnostic; only the RNG is kernel-owned.
+ * Each sim swarm kind ships its own family of perturbation generators plus
+ * any canonical turn-zero events. The kernel stays pack-agnostic; only the
+ * RNG is kernel-owned.
  *
- * Introduced: Plan 2 Task A.1 (scaffold) / B.6 (impl lifts uc1Generators +
- * uc3Generators + GOD_EVENT_TEMPLATES to apps/console-api).
+ * Introduced: Plan 2 Task A.1 (scaffold) / B.6 (impl lifts pack logic out of
+ * the kernel).
  */
 
 /**
@@ -21,7 +20,7 @@ export interface GenericGodEvent {
   kind: string;
   summary: string;
   detail?: string;
-  /** Opaque — pack may carry targetSatelliteId, targetOperatorId, etc. */
+  /** Opaque pack-owned event metadata. */
   targets?: Record<string, unknown>;
 }
 
@@ -37,9 +36,17 @@ export interface SimPerturbationPack {
     rng: () => number;
   }): GenericPerturbationSpec[];
 
+  applyToSeed(args: {
+    baseSeed: Record<string, unknown>;
+    spec: GenericPerturbationSpec;
+  }): Record<string, unknown>;
+
+  agentHints(spec: GenericPerturbationSpec): {
+    subjectHintsByIndex: Map<number, Record<string, unknown>>;
+  };
+
   /**
-   * Extract the god-events carried by a PerturbationSpec (for UC1-style
-   * god-event-first injection at turn 0).
+   * Extract turn-zero events carried by a perturbation spec.
    */
   extractGodEvents(spec: GenericPerturbationSpec): GenericGodEvent[];
 }

@@ -13,28 +13,13 @@ import { createLlmTransport } from "../transports/llm-chat";
 import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJson } from "../utils/llm-json-parser";
 import type { CortexRegistry } from "../cortices/registry";
+import type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 import { buildPlannerSystemPrompt } from "../prompts";
 import { DAEMON_DAGS as DEFAULT_DAEMON_DAGS } from "../config/daemon-dags.config";
 
 const logger = createLogger("thalamus-planner");
 
-// ============================================================================
-// DAG Types
-// ============================================================================
-
-export interface DAGNode {
-  cortex: string;
-  params: Record<string, unknown>;
-  dependsOn: string[];
-}
-
-export type QueryComplexity = "simple" | "moderate" | "deep";
-
-export interface DAGPlan {
-  intent: string;
-  nodes: DAGNode[];
-  complexity: QueryComplexity;
-}
+export type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 
 const dagPlanSchema = z.object({
   intent: z.string(),

@@ -13,6 +13,7 @@
 
 import {
   spaceWeatherForecast,
+  type Database,
   type NewSpaceWeatherForecast,
 } from "@interview/db-schema";
 import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
@@ -181,8 +182,11 @@ function parseSidcEisn(text: string): NewSpaceWeatherForecast[] {
 // Ingester
 // ---------------------------------------------------------------------------
 
-async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
-  const { db, logger } = ctx;
+export function createSpaceWeatherSource(
+  db: Database,
+): IngestionSource<IngestionResult> {
+  async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+    const { logger } = ctx;
   const perSource: Record<string, { fetched: number; inserted: number }> = {};
 
   async function ingest(
@@ -269,9 +273,10 @@ async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
   };
 }
 
-export const spaceWeatherSource: IngestionSource<IngestionResult> = {
-  id: "space-weather",
-  description: "NOAA SWPC + GFZ Potsdam + SIDC space weather nowcast",
-  cron: "30 4 * * *",
-  run,
-};
+  return {
+    id: "space-weather",
+    description: "NOAA SWPC + GFZ Potsdam + SIDC space weather nowcast",
+    cron: "30 4 * * *",
+    run,
+  };
+}

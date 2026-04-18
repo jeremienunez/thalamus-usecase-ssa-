@@ -1,4 +1,5 @@
-import type { StepName, StepPhase } from "../observability/step-logger";
+import type { StepName } from "../observability/steps";
+import type { StepPhase } from "../observability/step-events";
 
 export type ReplStreamEvent =
   | {

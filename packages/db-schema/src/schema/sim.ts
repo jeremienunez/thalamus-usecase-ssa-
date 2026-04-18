@@ -33,49 +33,13 @@ import { vector, EMBEDDING_DIMENSIONS } from "./_vector";
 // Kept here (not in shared) because they are orchestration-internal.
 // -----------------------------------------------------------------------
 
-export type SimKind =
-  | "uc1_operator_behavior"
-  | "uc3_conjunction"
-  | "uc_telemetry_inference"
-  | "uc_pc_estimator";
+export type SimKind = string;
 export type SimSwarmStatus = "pending" | "running" | "done" | "failed";
 export type SimRunStatus = "pending" | "running" | "paused" | "done" | "failed";
 export type ActorKind = "agent" | "god" | "system";
 export type MemoryKind = "self_action" | "observation" | "belief";
 
-export interface SeedRefs {
-  operatorIds?: number[];
-  conjunctionFindingId?: number;
-  horizonDays?: number;
-  turnsPerDay?: number;
-  /**
-   * UC_TELEMETRY: satellite whose NULL scalars the swarm should infer.
-   * Present when sim_swarm.kind === "uc_telemetry_inference".
-   */
-  telemetryTargetSatelliteId?: number;
-  /**
-   * Optional bus datasheet prior injected into the telemetry_inference_agent
-   * prompt. One per fish seed (perturbation may re-scale the datasheet to
-   * spread the prior across fish).
-   */
-  busDatasheetPrior?: {
-    busArchetype: string;
-    scalars: Record<string, { typical: number; min: number; max: number; unit: string }>;
-  };
-  /**
-   * UC_PC_ESTIMATOR: conjunction_event.id whose Pc the swarm should estimate.
-   * Present when sim_swarm.kind === "uc_pc_estimator".
-   */
-  pcEstimatorTarget?: number;
-  /**
-   * Per-fish perturbed Pc assumptions. Applied by applyPerturbation — one
-   * (hardBodyRadius, covarianceScale) tuple per fish seed.
-   */
-  pcAssumptions?: {
-    hardBodyRadiusMeters: number;
-    covarianceScale: "tight" | "nominal" | "loose";
-  };
-}
+export type SeedRefs = Record<string, unknown>;
 
 export interface SwarmConfig {
   llmMode: "cloud" | "fixtures" | "record";
@@ -94,142 +58,9 @@ export interface SimConfig {
   nanoModel: string;
 }
 
-export type PerturbationSpec =
-  | { kind: "noop" }
-  | {
-      kind: "god_event";
-      event: {
-        kind: "regulation" | "asat_event" | "launch_surge" | "debris_cascade" | "custom";
-        summary: string;
-        detail?: string;
-        targetSatelliteId?: number;
-        targetOperatorId?: number;
-      };
-    }
-  | {
-      kind: "constraint_override";
-      agentIndex: number;
-      overrides: Record<string, unknown>;
-    }
-  | {
-      kind: "persona_tweak";
-      agentIndex: number;
-      riskProfile: "conservative" | "balanced" | "aggressive";
-    }
-  | { kind: "launch_surge"; regimeId: number; extraSatellites: number }
-  | { kind: "delta_v_budget"; agentIndex: number; maxPerSat: number }
-  | {
-      /** UC_PC_ESTIMATOR: per-fish (hard-body radius, covariance envelope). */
-      kind: "pc_assumptions";
-      hardBodyRadiusMeters: number;
-      covarianceScale: "tight" | "nominal" | "loose";
-    };
+export type PerturbationSpec = { kind: string; [key: string]: unknown };
 
-export type TurnAction =
-  | { kind: "maneuver"; satelliteId: number; deltaVmps: number; reason: string }
-  | {
-      kind: "propose_split";
-      ownShareDeltaV: number;
-      counterpartyShareDeltaV: number;
-      reason: string;
-    }
-  | { kind: "accept"; reason: string }
-  | { kind: "reject"; reason: string }
-  | {
-      kind: "launch";
-      satelliteCount: number;
-      regimeId?: number;
-      reason: string;
-    }
-  | { kind: "retire"; satelliteId: number; reason: string }
-  | {
-      kind: "lobby";
-      policyTopic: string;
-      stance: "support" | "oppose";
-      reason: string;
-    }
-  | { kind: "hold"; reason: string }
-  | {
-      /**
-       * Multi-agent inference of NULL scalar telemetry for a target satellite.
-       * The swarm aggregator consumes these rows and computes a per-field
-       * median + σ consensus, which is promoted to sweep_suggestions with
-       * source_class = "SIM_UNCORROBORATED".
-       */
-      kind: "infer_telemetry";
-      satelliteId: number;
-      scalars: Record<TelemetryScalarKey, {
-        value: number;
-        unit: string;
-      }>;
-      confidence: number;   // self-reported, 0..1
-      reason: string;
-    }
-  | {
-      /**
-       * Probabilistic collision-probability estimate for a conjunction event.
-       * One fish = one Pc point under perturbed (hardBodyRadius, covariance)
-       * assumptions. Aggregator computes median + σ across fish.
-       */
-      kind: "estimate_pc";
-      conjunctionId: number;
-      pcEstimate: number;
-      pcBand: { p5: number; p50: number; p95: number };
-      dominantMode:
-        | "elliptical-overlap"
-        | "short-encounter"
-        | "long-encounter"
-        | "unknown";
-      rationale: string;
-      assumptions: {
-        hardBodyRadiusMeters: number;
-        covarianceScale: "tight" | "nominal" | "loose";
-        conjunctionGeometry: string;
-      };
-      flags: Array<
-        "low-data" | "high-uncertainty" | "degraded-covariance" | "field-required"
-      >;
-    };
-
-/**
- * Scalar keys inferable by the telemetry swarm. Matches the 8 design-sheet
- * derivable fields on `satellite` (power/thermal/pointing/attitude/link/data/
- * duty/eclipse). The other 6 telemetry columns (solar array health, battery
- * DoD, propellant remaining, radiation dose, debris proximity, mission age)
- * are NOT inferable from a bus datasheet and remain FIELD-only.
- */
-export type TelemetryScalarKey =
-  | "powerDraw"
-  | "thermalMargin"
-  | "pointingAccuracy"
-  | "attitudeRate"
-  | "linkBudget"
-  | "dataRate"
-  | "payloadDuty"
-  | "eclipseRatio";
-
-export const TELEMETRY_SCALAR_KEYS: readonly TelemetryScalarKey[] = [
-  "powerDraw",
-  "thermalMargin",
-  "pointingAccuracy",
-  "attitudeRate",
-  "linkBudget",
-  "dataRate",
-  "payloadDuty",
-  "eclipseRatio",
-] as const;
-
-/** Mapping to DB column name (camelCase → snake_case). */
-export const TELEMETRY_SCALAR_COLUMN: Record<TelemetryScalarKey, string> = {
-  powerDraw: "power_draw",
-  thermalMargin: "thermal_margin",
-  pointingAccuracy: "pointing_accuracy",
-  attitudeRate: "attitude_rate",
-  linkBudget: "link_budget",
-  dataRate: "data_rate",
-  payloadDuty: "payload_duty",
-  eclipseRatio: "eclipse_ratio",
-};
+export type TurnAction = { kind: string; [key: string]: unknown };
 
 // -----------------------------------------------------------------------
 // Swarm — fan-out container

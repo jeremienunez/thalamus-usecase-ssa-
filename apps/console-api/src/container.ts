@@ -17,12 +17,32 @@ import {
   buildThalamusContainer,
   type WebSearchPort,
 } from "@interview/thalamus";
+import { setNanoConfigProvider } from "@interview/thalamus/explorer/nano-caller";
+import {
+  setNanoSwarmConfigProvider,
+  setNanoSwarmProfile,
+} from "@interview/thalamus/explorer/nano-swarm";
+import { setCuratorPrompt } from "@interview/thalamus/explorer/curator";
+import {
+  SSA_NANO_SWARM_PROFILE,
+  SSA_CURATOR_PROMPT,
+} from "./prompts";
 import {
   buildSweepContainer,
   createIngestionRegistry,
   createIngestionWorker,
   ingestionQueue,
   registerSchedulers,
+  SimSubjectHttpAdapter,
+  SimHttpClient,
+  type SimHttpTransport,
+  SimQueueHttpAdapter,
+  SimRuntimeStoreHttpAdapter,
+  SimSwarmStoreHttpAdapter,
+  SimScenarioContextHttpAdapter,
+  simTurnQueue,
+  swarmAggregateQueue,
+  swarmFishQueue,
 } from "@interview/sweep";
 import { IngestionService } from "./services/ingestion.service";
 
@@ -33,8 +53,19 @@ import {
   createSsaResolutionRegistry,
   SsaAuditProvider,
   SsaFindingRoutingPolicy,
-  ssaIngestionProvider,
+  createSsaIngestionProvider,
 } from "./agent/ssa/sweep";
+import {
+  SsaActionSchemaProvider,
+  SsaAggregationStrategy,
+  SsaCortexSelector,
+  SsaKindGuard,
+  SsaPersonaComposer,
+  SsaPerturbationPack,
+  SsaPromptRenderer,
+  startPcEstimatorSwarm,
+  startTelemetrySwarm,
+} from "./agent/ssa/sim";
 
 export const SSA_SKILLS_DIR = resolve(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -45,6 +76,8 @@ export interface ContainerConfig {
   db: NodePgDatabase<typeof schema>;
   redis: Redis;
   webSearch: WebSearchPort;
+  simLlmMode?: "cloud" | "fixtures" | "record";
+  simKernelSharedSecret?: string;
   /** Optional override; defaults to bundled SSA skill pack */
   skillsDir?: string;
 }
@@ -57,6 +90,7 @@ import { ResearchEdgeRepository } from "./repositories/research-edge.repository"
 import { EnrichmentCycleRepository } from "./repositories/enrichment-cycle.repository";
 import { SweepAuditRepository } from "./repositories/sweep-audit.repository";
 import { SweepFeedbackRepository } from "./repositories/sweep-feedback.repository";
+import { RuntimeConfigRepository } from "./repositories/runtime-config.repository";
 import { ReflexionRepository } from "./repositories/reflexion.repository";
 import { StatsRepository } from "./repositories/stats.repository";
 
@@ -93,6 +127,25 @@ import { SatelliteAuditService } from "./services/satellite-audit.service";
 import { SatelliteEnrichmentService } from "./services/satellite-enrichment.service";
 import { OrbitalAnalysisService } from "./services/orbital-analysis.service";
 import { OpacityService } from "./services/opacity.service";
+import { SatelliteFleetRepository } from "./repositories/satellite-fleet.repository";
+import { SimRunRepository } from "./repositories/sim-run.repository";
+import { SimTurnRepository } from "./repositories/sim-turn.repository";
+import { SimAgentRepository } from "./repositories/sim-agent.repository";
+import { SimSwarmRepository } from "./repositories/sim-swarm.repository";
+import { SimMemoryRepository } from "./repositories/sim-memory.repository";
+import { SimTerminalRepository } from "./repositories/sim-terminal.repository";
+import { SimAgentService } from "./services/sim-agent.service";
+import { SimGodChannelService } from "./services/sim-god-channel.service";
+import { SimTargetService } from "./services/sim-target.service";
+import { SimFleetService } from "./services/sim-fleet.service";
+import { SimSwarmStoreService } from "./services/sim-swarm-store.service";
+import { SimRunService } from "./services/sim-run.service";
+import { SimSwarmService } from "./services/sim-swarm.service";
+import { SimTurnService } from "./services/sim-turn.service";
+import { SimMemoryService } from "./services/sim-memory.service";
+import { SimTerminalService } from "./services/sim-terminal.service";
+import { SimPromotionService } from "./services/sim-promotion.service";
+import { RuntimeConfigService } from "./services/runtime-config.service";
 
 import { buildCortexDataProvider } from "./agent/ssa/cortex-data-provider";
 import { buildSsaDomainConfig } from "./agent/ssa/domain-config";
@@ -103,6 +156,7 @@ import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
 export async function buildContainer(
   config: ContainerConfig,
   logger: FastifyBaseLogger,
+  simTransport: SimHttpTransport,
 ): Promise<{
   services: AppServices;
   info: { cortices: number };
@@ -126,6 +180,7 @@ export async function buildContainer(
   const satelliteEnrichmentRepo = new SatelliteEnrichmentRepository(db);
   const fleetAnalysisRepo = new FleetAnalysisRepository(db);
   const trafficForecastRepo = new TrafficForecastRepository(db);
+  const satelliteFleetRepo = new SatelliteFleetRepository(db);
 
   // Cortex-facing data services (same contract as the HTTP routes).
   const sourceDataService = new SourceDataService(sourceRepo);
@@ -150,6 +205,24 @@ export async function buildContainer(
     conjunctionView: conjunctionViewService,
   });
 
+  // ─── Runtime-tunable config (exposed via /api/config/runtime) ───────
+  // Build FIRST so thalamus/sweep pickups read from Redis at call time.
+  // CLAUDE.md §1: the package-side code consumes ConfigProvider<T> ports
+  // — never a direct Redis handle — so the HTTP surface is the only write
+  // path ops can use to tune knobs.
+  const runtimeConfigService = new RuntimeConfigService(
+    new RuntimeConfigRepository(redis),
+  );
+  setNanoConfigProvider(runtimeConfigService.provider("thalamus.nano"));
+  setNanoSwarmConfigProvider(
+    runtimeConfigService.provider("thalamus.nanoSwarm"),
+  );
+
+  // Inject SSA domain profile into the (agnostic) thalamus package.
+  // Package ships generic defaults; console-api owns the métier.
+  setNanoSwarmProfile(SSA_NANO_SWARM_PROFILE);
+  setCuratorPrompt(SSA_CURATOR_PROMPT);
+
   const thalamus = buildThalamusContainer({
     db,
     skillsDir,
@@ -160,21 +233,16 @@ export async function buildContainer(
 
   // ─── Sweep SSA port wiring (Plan 1 Task 3.1) ─────────────────────
   //
-  // Six port impls flow into buildSweepContainer via opts.ports. When
-  // supplied they override the sweep-side legacy fallbacks (which remain
-  // as defaults so unit tests and the UC3 E2E fixture can omit ports).
-  //
-  // Phase 4 will swap SsaAuditProvider + createSsaResolutionRegistry from
-  // the sweep-side SatelliteRepository to console-api's SatelliteAuditService
-  // once the 8 audit query methods fold in; for now the sweep-side repo is
-  // used to preserve byte-identical behaviour vs pre-refactor.
+  // Six port impls flow into buildSweepContainer via opts.ports. Audit is
+  // now mandatory; the remaining ports still override sweep-side legacy
+  // fallbacks until their cutover is complete.
   const sweepFeedbackRepo = new SweepFeedbackRepository(redis);
 
-  // Plan 1 Task 4.2: SSA pack now uses console-api's own SatelliteRepository
-  // (audit queries folded in by Task 4.1). Sweep-side SatelliteRepository
-  // is unused by the console-api port impls and only lives on inside the
-  // sweep container's legacy fallback (used by the UC3 E2E fixture until
-  // Plan 2 moves it here).
+  // SSA pack uses console-api's own SatelliteRepository and Drizzle handle;
+  // the sweep package carries zero domain persistence code — every fetcher
+  // captures `db` via its factory and the kernel registry sees only opaque
+  // IngestionSource objects.
+  const ssaIngestionProvider = createSsaIngestionProvider(db);
 
   const ssaPromotion = new SsaPromotionAdapter({
     sweepAuditRepo: auditRepo,
@@ -197,14 +265,64 @@ export async function buildContainer(
       loadPastFeedback: async () => [],
     },
     feedbackRepo: sweepFeedbackRepo,
+    config: runtimeConfigService.provider("sweep.nanoSweep"),
   });
   const ssaFindingRouting = new SsaFindingRoutingPolicy();
+  const simRunRepo = new SimRunRepository(db);
+  const simTurnRepo = new SimTurnRepository(db);
+  const simAgentRepo = new SimAgentRepository(db);
+  const simSwarmRepo = new SimSwarmRepository(db);
+  const simMemoryRepo = new SimMemoryRepository(db);
+  const simTerminalRepo = new SimTerminalRepository(db);
+  const simTargetService = new SimTargetService(
+    simRunRepo,
+    satelliteRepo,
+    conjunctionRepo,
+  );
+  const ssaPersonaComposer = new SsaPersonaComposer();
+  const ssaPromptRenderer = new SsaPromptRenderer();
+  const ssaCortexSelector = new SsaCortexSelector();
+  const ssaActionSchemaProvider = new SsaActionSchemaProvider();
+  const ssaPerturbationPack = new SsaPerturbationPack();
+  const ssaAggregationStrategy = new SsaAggregationStrategy();
+  const ssaKindGuard = new SsaKindGuard();
+  const simSwarmStoreService = new SimSwarmStoreService(
+    db,
+    simSwarmRepo,
+    simRunRepo,
+    simTerminalRepo,
+  );
+  const simHttp = new SimHttpClient(simTransport);
+  const simQueue = new SimQueueHttpAdapter(simHttp, {
+    kernelSecret: config.simKernelSharedSecret,
+  });
+  const simRuntimeStore = new SimRuntimeStoreHttpAdapter(simHttp);
+  const simSwarmStore = new SimSwarmStoreHttpAdapter(simHttp);
+  const simSubjectProvider = new SimSubjectHttpAdapter(simHttp);
+  const simScenarioContextProvider = new SimScenarioContextHttpAdapter(simHttp);
 
   const sweep = buildSweepContainer({
-    db,
     redis,
+    sim: {
+      cortexRegistry: thalamus.registry,
+      embed: thalamus.embedder.embedQuery.bind(thalamus.embedder),
+      llmMode: config.simLlmMode ?? "cloud",
+      queue: simQueue,
+      runtimeStore: simRuntimeStore,
+      swarmStore: simSwarmStore,
+      subjects: simSubjectProvider,
+      scenarioContext: simScenarioContextProvider,
+      persona: ssaPersonaComposer,
+      prompt: ssaPromptRenderer,
+      cortexSelector: ssaCortexSelector,
+      schemaProvider: ssaActionSchemaProvider,
+      perturbationPack: ssaPerturbationPack,
+      aggStrategy: ssaAggregationStrategy,
+      kindGuard: ssaKindGuard,
+    },
     ports: {
       findingSchema: ssaFindingSchema,
+      findingDomain: "ssa",
       audit: ssaAuditProvider,
       promotion: ssaPromotion,
       findingRouting: ssaFindingRouting,
@@ -212,6 +330,9 @@ export async function buildContainer(
       ingestion: [ssaIngestionProvider],
     },
   });
+  if (!sweep.sim) {
+    throw new Error("sweep sim services failed to initialize");
+  }
 
   // Post-build patch: the audit provider needs a real loadPastFeedback
   // reader. The sweep container owns the SweepRepository, so we bind it
@@ -248,13 +369,10 @@ export async function buildContainer(
   const cycleRunner = new CycleRunnerService(thalamus, sweep, logger);
   const autonomyService = new AutonomyService(cycleRunner, logger);
 
-  // Ingestion harness: registry → worker → service.
-  // Plan 1 Task 3.1 threads the SSA fetchers via the ssaIngestionProvider
-  // (see Tasks 1.7 + 2.4). Live SSA ingestion resumed after the pause
-  // introduced in Task 1.7.
+  // Ingestion harness: registry → worker → service. The SSA provider is
+  // built above from the factory (each fetcher closes over `db`), so the
+  // registry receives opaque IngestionSource objects with no Drizzle surface.
   const ingestionRegistry = createIngestionRegistry({
-    db,
-    redis,
     providers: [ssaIngestionProvider],
   });
   const ingestionWorker = createIngestionWorker(ingestionRegistry);
@@ -282,6 +400,30 @@ export async function buildContainer(
     cycleStreamPump,
     cycleSummariser,
   );
+
+  const simGodChannelService = new SimGodChannelService(
+    simRunRepo,
+    simAgentRepo,
+    simTurnRepo,
+  );
+  const simFleetService = new SimFleetService(satelliteFleetRepo);
+  const simRunService = new SimRunService(
+    simRunRepo,
+    simAgentRepo,
+    simTurnRepo,
+  );
+  const simAgentService = new SimAgentService(simAgentRepo);
+  const simSwarmService = new SimSwarmService(simSwarmRepo, simRunRepo);
+  const simTurnService = new SimTurnService(simTurnRepo);
+  const simMemoryService = new SimMemoryService(simMemoryRepo);
+  const simTerminalService = new SimTerminalService(simTerminalRepo);
+  const simPromotionService = new SimPromotionService({
+    db,
+    sweepRepo: sweep.sweepRepo,
+    satelliteRepo,
+    swarmRepo: simSwarmRepo,
+    embed: thalamus.embedder.embedQuery.bind(thalamus.embedder),
+  });
 
   const services: AppServices = {
     satelliteView: new SatelliteViewService(satelliteRepo),
@@ -315,6 +457,57 @@ export async function buildContainer(
     orbitalAnalysis: orbitalAnalysisService,
     opacity: opacityService,
     ingestion: ingestionService,
+    sim: {
+      orchestrator: sweep.sim.orchestrator,
+      swarmStatus: sweep.sim.swarmService,
+      swarmStore: simSwarmStoreService,
+      run: simRunService,
+      agent: simAgentService,
+      swarm: simSwarmService,
+      turn: simTurnService,
+      memory: simMemoryService,
+      terminal: simTerminalService,
+      queue: {
+        enqueueSimTurn: async ({ simRunId, turnIndex, jobId }) => {
+          await simTurnQueue.add(
+            "sim-turn",
+            { simRunId, turnIndex },
+            jobId ? { jobId } : undefined,
+          );
+        },
+        enqueueSwarmFish: async ({ swarmId, simRunId, fishIndex, jobId }) => {
+          await swarmFishQueue.add(
+            "swarm-fish",
+            { swarmId, simRunId, fishIndex },
+            jobId ? { jobId } : undefined,
+          );
+        },
+        enqueueSwarmAggregate: async ({ swarmId, jobId }) => {
+          await swarmAggregateQueue.add(
+            "swarm-aggregate",
+            { swarmId },
+            jobId ? { jobId } : undefined,
+          );
+        },
+      },
+      launcher: {
+        startTelemetry: (opts) =>
+          startTelemetrySwarm(
+            { satelliteRepo, swarmService: sweep.sim!.swarmService },
+            opts,
+          ),
+        startPc: (opts) =>
+          startPcEstimatorSwarm(
+            { conjunctionRepo, swarmService: sweep.sim!.swarmService },
+            opts,
+          ),
+      },
+      godChannel: simGodChannelService,
+      target: simTargetService,
+      fleet: simFleetService,
+      promotion: simPromotionService,
+    },
+    runtimeConfig: runtimeConfigService,
   };
 
   const snapshot = await snapshotHealth(db, redis, thalamus.registry.size());

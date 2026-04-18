@@ -15,12 +15,10 @@
  */
 
 import type { Worker } from "bullmq";
-import { eq } from "drizzle-orm";
-import type { Database } from "@interview/db-schema";
-import { simRun } from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
 import type { SequentialTurnRunner } from "../../sim/turn-runner-sequential";
 import type { DagTurnRunner } from "../../sim/turn-runner-dag";
+import type { SimKindGuard, SimRuntimeStore } from "../../sim/ports";
 import type { SwarmService, SwarmFishJobPayload } from "../../sim/swarm.service";
 import type { SimConfig } from "../../sim/types";
 import { createWorker } from "./helpers";
@@ -28,10 +26,11 @@ import { createWorker } from "./helpers";
 const logger = createLogger("swarm-fish-worker");
 
 export interface SwarmFishWorkerDeps {
-  db: Database;
+  store: SimRuntimeStore;
   swarmService: SwarmService;
   sequentialRunner: SequentialTurnRunner;
   dagRunner: DagTurnRunner;
+  kindGuard: SimKindGuard;
   concurrency?: number;
 }
 
@@ -48,17 +47,7 @@ export function createSwarmFishWorker(
       let failureReason: string | null = null;
 
       try {
-        const run = await deps.db
-          .select({
-            id: simRun.id,
-            kind: simRun.kind,
-            status: simRun.status,
-            config: simRun.config,
-          })
-          .from(simRun)
-          .where(eq(simRun.id, BigInt(simRunId)))
-          .limit(1)
-          .then((r) => r[0] ?? null);
+        const run = await deps.store.getRun(simRunId);
 
         if (!run) throw new Error(`sim_run ${simRunId} not found`);
         if (run.status !== "running") {
@@ -76,32 +65,21 @@ export function createSwarmFishWorker(
         // Inline turn loop.
         let terminal = false;
         let turnIndex = 0;
+        const driver = deps.kindGuard.driverForKind(run.kind);
         while (turnIndex < maxTurns && !terminal) {
-          if (run.kind === "uc3_conjunction") {
+          if (driver.runner === "sequential") {
             const r = await deps.sequentialRunner.runTurn({ simRunId, turnIndex });
             terminal = r.terminal;
-          } else if (run.kind === "uc1_operator_behavior") {
-            await deps.dagRunner.runTurn({ simRunId, turnIndex });
-            // DAG driver does not self-terminate early; fish runs to maxTurns.
-          } else if (run.kind === "uc_telemetry_inference") {
-            // Single-agent single-turn swarm: the fish emits one
-            // infer_telemetry action and is done. Use the DAG runner (it's
-            // the same per-agent parallel-turn path with 1 agent) and mark
-            // terminal immediately so we skip the remaining maxTurns loop.
-            await deps.dagRunner.runTurn({ simRunId, turnIndex });
-            terminal = true;
           } else {
-            throw new Error(`unknown sim_run.kind: ${String(run.kind)}`);
+            await deps.dagRunner.runTurn({ simRunId, turnIndex });
+            terminal = driver.singleTurn;
           }
           turnIndex++;
         }
 
         // Close the fish if it ran to maxTurns without a terminal action
         // (sequential with no accept/reject, or DAG always).
-        await deps.db
-          .update(simRun)
-          .set({ status: "done", completedAt: new Date() })
-          .where(eq(simRun.id, BigInt(simRunId)));
+        await deps.store.updateRunStatus(simRunId, "done", new Date());
 
         success = true;
         logger.info(
@@ -115,10 +93,7 @@ export function createSwarmFishWorker(
           "fish failed",
         );
         // Mark the fish as failed so the swarm can still aggregate.
-        await deps.db
-          .update(simRun)
-          .set({ status: "failed", completedAt: new Date() })
-          .where(eq(simRun.id, BigInt(simRunId)));
+        await deps.store.updateRunStatus(simRunId, "failed", new Date());
       } finally {
         // Always notify the swarm — even on failure — so quorum tracking
         // can progress.

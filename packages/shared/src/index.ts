@@ -6,3 +6,4 @@ export * from "./types/orchestration.types";
 export type { ReplStreamEvent, ReplStreamEventType } from "./types/repl-stream";
 export * from "./schemas/payload-profile.schema";
 export * from "./ssa";
+export * from "./config";

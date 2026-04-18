@@ -3,10 +3,10 @@
  *
  * The kernel's turn-runner consumes this port to build the per-turn response
  * envelope: `{ action, rationale, observableSummary }`. The pack owns the
- * shape of `action` (e.g. SSA: maneuver | wait | evaluate_telemetry | ...).
+ * shape of `action`.
  *
- * Introduced: Plan 2 Task A.1 (scaffold) / B.5 (impl moves SSA schemas to
- * apps/console-api/src/agent/ssa/sim/action-schema.ts).
+ * Introduced: Plan 2 Task A.1 (scaffold) / B.5 (impl moves action schemas to
+ * the app pack).
  */
 
 import type { z } from "zod";

@@ -29,13 +29,14 @@ is now a generic sweep/finding engine; all SSA business logic lives in
 **Full test count**: 652 passing · 23 todo · 0 skipped · 0 failing.
 UC3 E2E still runs on the sweep-side legacy fallback (Plan 2 moves it).
 
-## Sim agnostic refactor — Plan 2 — 2026-04-18 (mostly done · checkpoint)
+## Sim agnostic refactor — Plan 2 — 2026-04-18 (B.1–B.11 shipped · HTTP boundary landed)
 
 Ran on `refactor/sim-agnostic` on top of Plan 1. B.1 → B.11 landed; 7 sim
-legacy adapters deleted. UC3 E2E injects the 10 SSA sim ports. Sweep kernel
-still hosts `promote.ts` (592 L) + `aggregator-telemetry.ts` +
-`god-channel.service.ts` + their 2 supporting legacy files — the SRP-heavy
-sim↔sweep glue. Plan 6 addresses these.
+legacy adapters deleted; 3 extra HTTP ports added (`runtime-store`,
+`swarm-store`, `queue`). UC3 E2E injects the 10 SSA sim ports + uses the
+HTTP adapters. Sweep kernel still hosts `promote.ts` (592 L) +
+`aggregator-telemetry.ts` + `god-channel.service.ts` + their 2 supporting
+legacy files — the SRP-heavy sim↔sweep glue. Plan 6 addresses these.
 
 - [x] **Scaffolding** — 10 port stubs + SSA sim pack dirs + sim arch-guard
       (describe.skip until C.1).

@@ -1,0 +1,43 @@
+classDiagram
+    class Satellite {
+        +string noradId
+        +string name
+        +OrbitParams orbit
+        +string operator
+    }
+
+    class Debris {
+        +string catalogId
+        +float size
+        +OrbitParams orbit
+        +string sourceEvent
+    }
+
+    class Observation {
+        +string sourceType [OSINT | FIELD]
+        +float confidence
+        +DateTime timestamp
+        +GeoJSON sensorPosition
+    }
+
+    class ConjunctionEvent {
+        +float probabilityOfCollision
+        +ConfidenceBand confidenceBand
+        +string sourceClass
+        +DateTime tca
+        +float missDistance
+    }
+
+    class Maneuver {
+        +float deltaV
+        +DateTime burnWindow
+        +string operatorDecision
+        +string auditTrail
+        +bool reversible
+    }
+
+    Satellite "1" --> "*" Observation : tracked by
+    Debris "1" --> "*" Observation : tracked by
+    Observation "*" --> "1" ConjunctionEvent : contributes to
+    ConjunctionEvent "1" --> "0..1" Maneuver : triggers
+    Maneuver --> ConjunctionEvent : post-burn re-check

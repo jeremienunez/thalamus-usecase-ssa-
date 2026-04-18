@@ -57,7 +57,6 @@ module.exports = {
           '^node-inspect/lib/_inspect$',
           '^node-inspect/lib/internal/inspect_client$',
           '^node-inspect/lib/internal/inspect_repl$',
-          '^async_hooks$',
           '^punycode$',
           '^domain$',
           '^constants$',
@@ -182,6 +181,103 @@ module.exports = {
         path: '^apps/console-api/src/repositories/'
       }
     },
+    {
+      name: 'sweep-satellite-repository-is-quarantined',
+      severity: 'error',
+      comment:
+        'packages/sweep/src/repositories/satellite.repository.ts is legacy SSA data access. Do not add new consumers outside the temporary quarantine points.',
+      from: {
+        path: '^packages/sweep/src/',
+        pathNot: [
+          '^packages/sweep/src/config/container[.]ts$',
+          '^packages/sweep/src/services/legacy-ssa-resolution[.]ts$',
+          '^packages/sweep/src/index[.]ts$'
+        ]
+      },
+      to: {
+        path: '^packages/sweep/src/repositories/satellite[.]repository[.]ts$'
+      }
+    },
+    {
+      name: 'sweep-satellite-types-are-quarantined',
+      severity: 'error',
+      comment:
+        'packages/sweep/src/types/satellite.types.ts is tied to the legacy SSA repository path. Do not add new consumers outside that quarantine.',
+      from: {
+        path: '^packages/sweep/src/',
+        pathNot: [
+          '^packages/sweep/src/repositories/satellite[.]repository[.]ts$'
+        ]
+      },
+      to: {
+        path: '^packages/sweep/src/types/satellite[.]types[.]ts$'
+      }
+    },
+    {
+      name: 'sweep-legacy-resolution-is-quarantined',
+      severity: 'error',
+      comment:
+        'packages/sweep/src/services/legacy-ssa-resolution.ts is temporary fallback code. Do not add new consumers outside the sweep container.',
+      from: {
+        path: '^packages/sweep/src/',
+        pathNot: [
+          '^packages/sweep/src/config/container[.]ts$'
+        ]
+      },
+      to: {
+        path: '^packages/sweep/src/services/legacy-ssa-resolution[.]ts$'
+      }
+    },
+    {
+      name: 'sweep-legacy-promotion-is-quarantined',
+      severity: 'error',
+      comment:
+        'packages/sweep/src/services/legacy-ssa-promotion.ts is temporary fallback code. Do not add new consumers outside the sweep container.',
+      from: {
+        path: '^packages/sweep/src/',
+        pathNot: [
+          '^packages/sweep/src/config/container[.]ts$'
+        ]
+      },
+      to: {
+        path: '^packages/sweep/src/services/legacy-ssa-promotion[.]ts$'
+      }
+    },
+    {
+      name: 'sweep-services-no-new-db-coupling',
+      severity: 'error',
+      comment:
+        'packages/sweep services should stay persistence-agnostic. New db-schema or drizzle imports belong in app-owned adapters, not in fresh engine services.',
+      from: {
+        path: '^packages/sweep/src/services/',
+        pathNot: [
+          '^packages/sweep/src/services/legacy-ssa-resolution[.]ts$',
+          '^packages/sweep/src/services/legacy-ssa-promotion[.]ts$'
+        ]
+      },
+      to: {
+        path: [
+          '^packages/db-schema/',
+          '^drizzle-orm(?:/|$)'
+        ]
+      }
+    },
+    {
+      name: 'sweep-container-no-new-repository-construction',
+      severity: 'error',
+      comment:
+        'buildSweepContainer should not start growing new app-owned repository dependencies. Keep repository construction quarantined while the remaining legacy paths are being removed.',
+      from: {
+        path: '^packages/sweep/src/config/container[.]ts$'
+      },
+      to: {
+        path: '^packages/sweep/src/repositories/',
+        pathNot: [
+          '^packages/sweep/src/repositories/sweep[.]repository[.]ts$',
+          '^packages/sweep/src/repositories/satellite[.]repository[.]ts$'
+        ]
+      }
+    },
 
     // rules you might want to tweak for your specific situation:
     
@@ -263,10 +359,13 @@ module.exports = {
     },
 
     // Which modules to exclude
-    // exclude : {
-    //   // path: an array of regular expressions in strings to match against
-    //   path: '',
-    // },
+    exclude: {
+      path: [
+        '(^|/)(?:__tests__|tests?|coverage|dist|build|storybook-static)/',
+        '[.](?:spec|test)[.](?:js|mjs|cjs|jsx|ts|mts|cts|tsx)$',
+        '(^|/)(?:vite|vitest|postcss|tailwind)[.]config[.](?:js|cjs|mjs|ts|cts|mts)$',
+      ]
+    },
 
     // Which modules to exclusively include (array of regular expressions in strings)
     // dependency-cruiser will skip everything that doesn't match this pattern
@@ -313,7 +412,7 @@ module.exports = {
     // if true combines the package.jsons found from the module up to the base
     // folder the cruise is initiated from. Useful for how (some) mono-repos
     // manage dependencies & dependency definitions.
-    // combinedDependencies: false,
+    combinedDependencies: true,
 
     // if true leave symlinks untouched, otherwise use the realpath
     // preserveSymlinks: false,
@@ -326,7 +425,7 @@ module.exports = {
     // dependency-cruiser's current working directory). When not provided
     // defaults to './tsconfig.json'.
     tsConfig: {
-      fileName: 'tsconfig.base.json'
+      fileName: 'tsconfig.depcruise.json'
     },
 
     // Webpack configuration to use to get resolve options from.
@@ -375,14 +474,14 @@ module.exports = {
       // _your_ environment). If that list is larger than you need you can pass
       // the extensions you actually use (e.g. ['.js', '.jsx']). This can speed
       // up module resolution, which is the most expensive step.
-      extensions: [".ts", ".d.ts"],
+      extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".d.ts", ".json"],
       
       // What to consider a 'main' field in package.json
       
       // if you migrate to ESM (or are in an ESM environment already) you will want to
       // have "module" in the list of mainFields, like so:
       // mainFields: ["module", "main", "types", "typings"],
-      mainFields: ["main", "types", "typings"],
+      mainFields: ["module", "main", "types", "typings"],
       
       // A list of alias fields in package.jsons
       // See https://github.com/defunctzombie/package-browser-field-spec and

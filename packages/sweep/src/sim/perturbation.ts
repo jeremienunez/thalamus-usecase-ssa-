@@ -1,16 +1,6 @@
 /**
- * Deterministic RNG for sim kernel.
- *
- * Plan 2 · B.6: uc1Generators + uc3Generators + generateDefaultPerturbations
- * moved to the pack (SimPerturbationPack.generateSet). Kernel keeps only the
- * Mulberry32 RNG and the pure `applyPerturbation` seed transform — both are
- * domain-agnostic.
- *
- * Determinism invariant: (baseSeed, spec) → applied seed is pure; same
- * inputs always yield byte-identical output.
+ * Deterministic RNG for the sim kernel.
  */
-
-import type { PerturbationSpec, SeedRefs } from "./types";
 
 // -----------------------------------------------------------------------
 // Seeded RNG — Mulberry32, deterministic and dependency-free.
@@ -38,23 +28,12 @@ export function rngFromSeed(seed: number): Rng {
   };
 }
 
-// -----------------------------------------------------------------------
-// applyPerturbation — pure seed transform. Only pc_assumptions mutates
-// meaningfully; other kinds are seed-preserving (side-effects handled by
-// agent-build time + god-event injection via SimPerturbationPack).
-// -----------------------------------------------------------------------
-
-export function applyPerturbation(base: SeedRefs, spec: PerturbationSpec): SeedRefs {
-  switch (spec.kind) {
-    case "pc_assumptions":
-      return {
-        ...base,
-        pcAssumptions: {
-          hardBodyRadiusMeters: spec.hardBodyRadiusMeters,
-          covarianceScale: spec.covarianceScale,
-        },
-      };
-    default:
-      return { ...base };
-  }
+export function applyPerturbation(
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...base,
+    ...patch,
+  };
 }

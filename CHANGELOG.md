@@ -4,6 +4,93 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Sim 5-layer + HTTP boundary + Thalamus domain-agnostic — 2026-04-18 (evening)
+
+Branch `refactor/sim-agnostic`, on top of Plan 1 (sweep-agnostic) and Plan 2
+B.1–B.11. Closes the CLAUDE.md §1 invariant for the sim subsystem: kernel no
+longer reaches app internals — it consumes `console-api` over HTTP; thalamus
+no longer encodes SSA vocabulary — the profile is injected at container
+build time.
+
+**Sim boundary — HTTP, not in-process.**
+
+- New `packages/sweep/src/sim/http/` — typed `SimHttpClient` + 6 adapters
+  (`fleet`, `promotion`, `queue`, `runtime-store`, `swarm-store`, `target`).
+  Three new kernel ports (`runtime-store`, `swarm-store`, `queue`) flank the
+  8 existing ones; the kernel now talks to the app over a single contract
+  (`POST /api/sim/**` routes).
+- Sim 5-layer landed in `apps/console-api/src/`: 7 new repositories
+  (`satellite-fleet`, `sim-run`, `sim-turn`, `sim-agent`, `sim-swarm`,
+  `sim-memory`, `sim-terminal`) + 11 new services (`SimAgent`,
+  `SimGodChannel`, `SimTarget`, `SimFleet`, `SimSwarmStore`, `SimRun`,
+  `SimSwarm`, `SimTurn`, `SimMemory`, `SimTerminal`, `SimPromotion`) +
+  `RuntimeConfigRepository` / `RuntimeConfigService`. SSA sim pack
+  (`apps/console-api/src/agent/ssa/sim/`) wires 10 port implementations:
+  `action-schema`, `aggregation-strategy`, `cortex-selector`,
+  `fleet-provider`, `kind-guard`, `persona-composer`, `perturbation-pack`,
+  `promotion`, `prompt-renderer`, `targets` + `aggregators/pc` +
+  `bus-datasheets` + `swarms/{telemetry,pc}`.
+- Legacy sweep-side sim adapters deleted: `legacy-ssa-promotion.ts` (132 L),
+  `legacy-ssa-resolution.ts` (634 L), sweep-owned `satellite.repository.ts`
+  (1326 L). `BuildSweepOpts.ports` made required; CLI + UC3 E2E inject
+  disabled stubs so no fallback path survives. Sweep arch-guard still
+  accepts the remaining Plan 6 allowlist (promote.ts + 2 legacy-ssa-\*).
+
+**Thalamus domain-agnostic — profile injection at container build.**
+
+- `packages/thalamus/src/prompts/` now exports `DEFAULT_NANO_SWARM_PROFILE`
+  (4 generic lenses: news / trend / data / market) + `DEFAULT_CURATOR_PROMPT`
+  - setters `setNanoSwarmProfile()` / `setCuratorPrompt()`. Thalamus ships
+    standalone-testable with zero SSA knowledge.
+- SSA-specific profile (50 specialized lenses, keyword → operator/regime
+  map, SSA rubrics) and SSA curator prompt moved to
+  `apps/console-api/src/prompts/nano-swarm-ssa.prompt.ts` +
+  `curator-ssa.prompt.ts`. `container.ts` injects both via the setters
+  next to the existing `setNanoConfigProvider` / `setNanoSwarmConfigProvider`
+  runtime-tunable wiring.
+- `nano-swarm.ts` slimmed from 607 to ~90 lines: the wave executor now
+  delegates to `callNano(mode)` in `explorer/nano-caller.ts`; all the
+  domain-specific orchestration lives in the injected profile. Dedup logic
+  preserved.
+
+**SSA audit prompts extracted.**
+
+- `apps/console-api/src/agent/ssa/sweep/audit-provider.ssa.ts` no longer
+  inlines the nano-sweep prompt template. Moved to
+  `apps/console-api/src/prompts/ssa-audit.prompt.ts` (existing prompts/
+  convention, per `feedback_prompt_placement` — non-cortex prompts live in
+  `<pkg>/src/prompts/`).
+
+**Smaller targeted SOLID cleanups.**
+
+- `packages/sweep/src/repositories/sweep.repository.ts` — extracted a single
+  `toRow(hash)` helper; deleted the 24-field hash-to-row construction
+  duplicated between `insertMany` and `insertOne`; `list()` simplified on
+  the same helper. Net −43 lines, behaviour preserved (unit specs green).
+- `apps/console-api/src/agent/ssa/sweep/resolution-handlers.ssa.ts` —
+  extracted `resolveOrPrompt()` consolidating the 0 / 1 / N-match
+  disambiguation flow used by `resolveAndUpdate`,
+  `createLinkPayloadHandler`, and `createReassignOperatorCountryHandler`.
+  Net −28 lines, typecheck clean.
+- `doctrine-parser.ssa.ts` and `transformers/sweep-audit.transformer.ts`
+  deleted (no remaining consumers after Plan 1 + Plan 2).
+
+**Runtime-tunable configuration.**
+
+- `RuntimeConfigRepository` persists per-domain config (`nano`, `nano-swarm`,
+  per-mode overrides); `RuntimeConfigService` exposes get/set with schema
+  validation; `setNanoConfigProvider` / `setNanoSwarmConfigProvider` in
+  thalamus pull current config at call-time so operator changes take effect
+  without a redeploy.
+
+**Documentation.**
+
+- `README.md` trimmed from 741 → 129 lines — narrative moved to 13 LaTeX
+  specs under `docs/specs/architecture/` (ontology, design stance, layout,
+  thalamus, sweep, SSA primary build, transpositions, three swarms, shared
+  foundation, design choices, running locally, consoles, references). Each
+  spec compiles to a standalone PDF via `make -C docs/specs all`.
+
 ### Thalamus reliability sweep #2 — 2026-04-17 (afternoon)
 
 Follow-up to the morning deep-audit. Adversarial queries on `launch_scout`

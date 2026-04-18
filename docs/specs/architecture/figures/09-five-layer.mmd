@@ -1,0 +1,5 @@
+flowchart LR
+    Routes["Routes<br/>(HTTP boundary)"] --> Controllers["Controllers<br/>(parse + validate)"]
+    Controllers --> Services["Services<br/>(business logic)"]
+    Services --> Repositories["Repositories<br/>(Drizzle queries)"]
+    Repositories --> Entities["Entities<br/>(DB schema)"]

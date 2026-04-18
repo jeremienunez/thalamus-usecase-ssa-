@@ -23,13 +23,13 @@ export class SsaKindGuard implements SimKindGuard {
     if (!SSA_KINDS.has(kind)) {
       throw new Error(`SsaKindGuard: unsupported sim kind "${kind}"`);
     }
-    const operatorIds = (baseSeed.operatorIds as number[] | undefined) ?? [];
+    const subjectIds = (baseSeed.subjectIds as number[] | undefined) ?? [];
 
-    if (kind === "uc3_conjunction" && operatorIds.length !== 2) {
-      throw new Error("UC3 swarm requires exactly 2 operatorIds in baseSeed");
+    if (kind === "uc3_conjunction" && subjectIds.length !== 2) {
+      throw new Error("UC3 swarm requires exactly 2 subjectIds in baseSeed");
     }
-    if (kind === "uc1_operator_behavior" && operatorIds.length < 1) {
-      throw new Error("UC1 swarm requires at least 1 operatorId in baseSeed");
+    if (kind === "uc1_operator_behavior" && subjectIds.length < 1) {
+      throw new Error("UC1 swarm requires at least 1 subjectId in baseSeed");
     }
     if (kind === "uc_pc_estimator") {
       if (baseSeed.pcEstimatorTarget == null) {
@@ -39,9 +39,9 @@ export class SsaKindGuard implements SimKindGuard {
       }
     }
     if (kind === "uc_telemetry_inference") {
-      if (operatorIds.length !== 1) {
+      if (subjectIds.length !== 1) {
         throw new Error(
-          "UC_TELEMETRY swarm requires exactly 1 operatorId in baseSeed (the target satellite's operator)",
+          "UC_TELEMETRY swarm requires exactly 1 subjectId in baseSeed",
         );
       }
       if (baseSeed.telemetryTargetSatelliteId == null) {
@@ -54,5 +54,20 @@ export class SsaKindGuard implements SimKindGuard {
 
   defaultMaxTurns(kind: string): number {
     return kind === "uc3_conjunction" ? 20 : 15;
+  }
+
+  driverForKind(kind: string): {
+    runner: "sequential" | "dag";
+    singleTurn: boolean;
+  } {
+    switch (kind) {
+      case "uc3_conjunction":
+        return { runner: "sequential", singleTurn: false };
+      case "uc_telemetry_inference":
+      case "uc_pc_estimator":
+        return { runner: "dag", singleTurn: true };
+      default:
+        return { runner: "dag", singleTurn: false };
+    }
   }
 }

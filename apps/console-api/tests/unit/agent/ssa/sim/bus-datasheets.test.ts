@@ -15,7 +15,7 @@ import {
   listBusNames,
   __resetBusDatasheetCache,
 } from "../../../../../src/agent/ssa/sim/bus-datasheets/loader";
-import { TELEMETRY_SCALAR_KEYS } from "@interview/db-schema";
+import { TELEMETRY_SCALAR_KEYS } from "../../../../../src/types/sim-telemetry.types";
 
 beforeAll(() => {
   __resetBusDatasheetCache();

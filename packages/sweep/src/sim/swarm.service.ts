@@ -1,33 +1,13 @@
-/**
- * Swarm Service — fan out K fish, track quorum, fire aggregator.
- *
- * Orchestration flow:
- *   launchSwarm() → create sim_swarm + K sim_runs (via orchestrator.createFish)
- *                 → enqueue K swarmFish jobs
- *   swarm-fish.worker → drain fish turns inline → onFishComplete()
- *   onFishComplete() counts done+failed fish; when done+failed >= size,
- *                    enqueues swarmAggregate job (dedupe by swarmId).
- *   swarm-aggregate.worker → aggregator.aggregate(), swarmReporter.render(),
- *                            emitSuggestion() (UC3), mark swarm done.
- *
- * Failure semantics:
- *   - A fish that throws (LLM unrecoverable, DB error, timeout) is marked
- *     sim_run.status='failed'. The swarm continues until all fish are
- *     accounted for; the aggregator applies quorum threshold.
- *   - If done+failed >= size but succeeded < quorum, swarm transitions to
- *     'failed' with no suggestion emitted.
- */
-
-import { and, eq, sql } from "drizzle-orm";
-import type { Queue } from "bullmq";
-import type { Database } from "@interview/db-schema";
-import { simRun, simSwarm } from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
-import type { LaunchSwarmInput } from "./legacy-ssa-schema";
 import type { SimOrchestrator } from "./sim-orchestrator.service";
-import type { SwarmConfig, SimConfig, SimKind, SeedRefs, PerturbationSpec } from "./types";
-import { applyPerturbation } from "./perturbation";
-import type { SimKindGuard } from "./ports";
+import type { SwarmConfig, SimConfig, SimKind } from "./types";
+import type {
+  SimKindGuard,
+  SimPerturbationPack,
+  SimQueuePort,
+  SimRuntimeStore,
+  SimSwarmStore,
+} from "./ports";
 
 const logger = createLogger("swarm-service");
 
@@ -42,15 +22,27 @@ export interface SwarmAggregateJobPayload {
 }
 
 export interface SwarmServiceDeps {
-  db: Database;
+  store: SimRuntimeStore;
+  swarmStore: SimSwarmStore;
   orchestrator: SimOrchestrator;
-  swarmFishQueue: Queue<SwarmFishJobPayload>;
-  swarmAggregateQueue: Queue<SwarmAggregateJobPayload>;
-  /** Plan 2 · B.9 — per-kind validator + maxTurns default. */
+  queue: SimQueuePort;
   kindGuard: SimKindGuard;
+  perturbationPack: SimPerturbationPack;
 }
 
-export interface LaunchSwarmOpts extends LaunchSwarmInput {
+export interface LaunchSwarmOpts {
+  kind: string;
+  title: string;
+  baseSeed: Record<string, unknown>;
+  perturbations: Array<Record<string, unknown>>;
+  config: {
+    llmMode: "cloud" | "fixtures" | "record";
+    quorumPct: number;
+    perFishTimeoutMs: number;
+    fishConcurrency: number;
+    nanoModel: string;
+    seed: number;
+  };
   createdBy?: number;
 }
 
@@ -81,12 +73,8 @@ export class SwarmService {
     if (perturbations.length < 1) {
       throw new Error("launchSwarm requires at least 1 perturbation");
     }
-    this.deps.kindGuard.validateLaunch({
-      kind,
-      baseSeed: baseSeed as unknown as Record<string, unknown>,
-    });
+    this.deps.kindGuard.validateLaunch({ kind, baseSeed });
 
-    // 1. Insert sim_swarm row.
     const swarmConfig: SwarmConfig = {
       llmMode: config.llmMode,
       quorumPct: config.quorumPct,
@@ -95,31 +83,27 @@ export class SwarmService {
       nanoModel: config.nanoModel,
       seed: config.seed,
     };
-    const [swarmRow] = await this.deps.db
-      .insert(simSwarm)
-      .values({
-        kind,
-        title,
-        baseSeed: baseSeed as SeedRefs,
-        perturbations: perturbations as PerturbationSpec[],
-        size: perturbations.length,
-        config: swarmConfig,
-        status: "running",
-        createdBy: opts.createdBy !== undefined ? BigInt(opts.createdBy) : null,
-      })
-      .returning({ id: simSwarm.id });
-    if (!swarmRow) throw new Error("insert sim_swarm returned no row");
-    const swarmId = Number(swarmRow.id);
+    const swarmId = await this.deps.store.insertSwarm({
+      kind,
+      title,
+      baseSeed,
+      perturbations: perturbations as Array<{ kind: string; [key: string]: unknown }>,
+      size: perturbations.length,
+      config: swarmConfig,
+      status: "running",
+      createdBy: opts.createdBy ?? null,
+    });
 
-    // 2. For each perturbation, create a fish (sim_run + agents) via the
-    // orchestrator, then enqueue its swarm-fish job.
     const maxTurns = this.deps.kindGuard.defaultMaxTurns(kind);
     const firstSimRunIds: number[] = [];
     for (let i = 0; i < perturbations.length; i++) {
-      const spec = perturbations[i] as PerturbationSpec;
-      const fishSeed = applyPerturbation(baseSeed as SeedRefs, spec);
+      const spec = perturbations[i];
+      const fishSeed = this.deps.perturbationPack.applyToSeed({
+        baseSeed,
+        spec,
+      });
       const simConfig: SimConfig = {
-        turnsPerDay: fishSeed.turnsPerDay ?? 1,
+        turnsPerDay: readPositiveInt(fishSeed.turnsPerDay, 1),
         maxTurns,
         llmMode: config.llmMode,
         seed: config.seed + i,
@@ -130,21 +114,17 @@ export class SwarmService {
         fishIndex: i,
         kind,
         seedApplied: fishSeed,
-        perturbation: spec,
+        perturbation: spec as { kind: string; [key: string]: unknown },
         config: simConfig,
       });
 
-      // Mark fish as running — the worker will drain its turns inline.
-      await this.deps.db
-        .update(simRun)
-        .set({ status: "running" })
-        .where(eq(simRun.id, BigInt(fish.simRunId)));
-
-      await this.deps.swarmFishQueue.add(
-        "swarm-fish",
-        { swarmId, simRunId: fish.simRunId, fishIndex: i },
-        { jobId: `swarm-${swarmId}-fish-${i}` },
-      );
+      await this.deps.store.updateRunStatus(fish.simRunId, "running");
+      await this.deps.queue.enqueueSwarmFish({
+        swarmId,
+        simRunId: fish.simRunId,
+        fishIndex: i,
+        jobId: `swarm-${swarmId}-fish-${i}`,
+      });
       firstSimRunIds.push(fish.simRunId);
     }
 
@@ -160,10 +140,6 @@ export class SwarmService {
     };
   }
 
-  /**
-   * Called by the swarm-fish worker after each fish completes (done or
-   * failed). Enqueues the aggregate job once all fish are accounted for.
-   */
   async onFishComplete(swarmId: number): Promise<{ aggregateEnqueued: boolean }> {
     const counts = await this.countFishByStatus(swarmId);
     const swarm = await this.loadSwarm(swarmId);
@@ -171,11 +147,10 @@ export class SwarmService {
     const accounted = counts.done + counts.failed;
     if (accounted < swarm.size) return { aggregateEnqueued: false };
 
-    await this.deps.swarmAggregateQueue.add(
-      "swarm-aggregate",
-      { swarmId },
-      { jobId: `swarm-${swarmId}-aggregate` },
-    );
+    await this.deps.queue.enqueueSwarmAggregate({
+      swarmId,
+      jobId: `swarm-${swarmId}-aggregate`,
+    });
     logger.info(
       { swarmId, done: counts.done, failed: counts.failed, size: swarm.size },
       "all fish accounted for — aggregate enqueued",
@@ -202,68 +177,29 @@ export class SwarmService {
   }
 
   async abort(swarmId: number): Promise<void> {
-    // Mark the swarm failed and cascade to any still-pending fish.
-    await this.deps.db.transaction(async (tx) => {
-      await tx
-        .update(simSwarm)
-        .set({ status: "failed", completedAt: new Date() })
-        .where(eq(simSwarm.id, BigInt(swarmId)));
-      await tx
-        .update(simRun)
-        .set({ status: "failed", completedAt: new Date() })
-        .where(
-          and(
-            eq(simRun.swarmId, BigInt(swarmId)),
-            sql`${simRun.status} IN ('pending','running')`,
-          ),
-        );
-    });
+    await this.deps.swarmStore.abortSwarm(swarmId);
     logger.warn({ swarmId }, "swarm aborted");
   }
 
-  // -------------------------------------------------------------------
-  // Internals
-  // -------------------------------------------------------------------
-
   private async loadSwarm(swarmId: number) {
-    const rows = await this.deps.db.execute(sql`
-      SELECT id, kind, size, status,
-             outcome_report_finding_id, suggestion_id
-      FROM sim_swarm WHERE id = ${BigInt(swarmId)} LIMIT 1
-    `);
-    const r = rows.rows[0] as
-      | {
-          id: string | number;
-          kind: SimKind;
-          size: number;
-          status: "pending" | "running" | "done" | "failed";
-          outcome_report_finding_id: string | number | null;
-          suggestion_id: string | number | null;
-        }
-      | undefined;
-    if (!r) return null;
-    return {
-      id: Number(r.id),
-      kind: r.kind,
-      size: r.size,
-      status: r.status,
-      outcomeReportFindingId: r.outcome_report_finding_id !== null ? Number(r.outcome_report_finding_id) : null,
-      suggestionId: r.suggestion_id !== null ? Number(r.suggestion_id) : null,
-    };
+    return this.deps.swarmStore.getSwarm(swarmId);
   }
 
   private async countFishByStatus(
     swarmId: number,
   ): Promise<{ done: number; failed: number; running: number; pending: number }> {
-    const rows = await this.deps.db.execute(sql`
-      SELECT status, count(*)::int AS c
-      FROM sim_run WHERE swarm_id = ${BigInt(swarmId)}
-      GROUP BY status
-    `);
-    const out = { done: 0, failed: 0, running: 0, pending: 0 };
-    for (const row of rows.rows as Array<{ status: keyof typeof out; c: number }>) {
-      if (row.status in out) out[row.status] = row.c;
-    }
-    return out;
+    const counts = await this.deps.swarmStore.countFishByStatus(swarmId);
+    return {
+      done: counts.done,
+      failed: counts.failed,
+      running: counts.running,
+      pending: counts.pending,
+    };
   }
+}
+
+function readPositiveInt(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : fallback;
 }

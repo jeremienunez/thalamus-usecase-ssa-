@@ -1,0 +1,13 @@
+flowchart TB
+    subgraph CORTEX["cortices/{domain}/"]
+        direction TB
+        Skills["skills/*.md<br/>─────────────<br/>Versioned prompt files<br/>Diffable in PRs<br/>Reviewable by analysts"]
+        SQL["sql-helpers.ts<br/>─────────────<br/>Drizzle-typed queries<br/>No raw SQL"]
+        Sources["sources/*.ts<br/>─────────────<br/>SourceFetcher interface<br/>One per external system<br/>Mockable"]
+        Executor["executor.ts<br/>─────────────<br/>Plan → Dispatch → Write<br/>Owns tool declarations<br/>Budget-aware"]
+    end
+
+    Executor -->|"reads"| Skills
+    Executor -->|"calls"| SQL
+    Executor -->|"spawns"| Sources
+

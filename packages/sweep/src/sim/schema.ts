@@ -1,10 +1,7 @@
 /**
  * Generic sim kernel schemas.
  *
- * Plan 2 · B.5: domain-specific schemas (turnActionSchema, godEventSchema,
- * perturbationSchema, seedRefsSchema, launchSwarmSchema) moved to the SSA
- * pack (apps/console-api/src/agent/ssa/sim/action-schema.ts) and mirrored
- * in the legacy fallback (./legacy-ssa-schema.ts).
+ * Domain-specific schemas live in the owning app pack.
  *
  * The kernel keeps only:
  *   - buildTurnResponseSchema(action) — wraps a pack-supplied action schema

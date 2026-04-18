@@ -2,19 +2,21 @@
  * Telemetry swarm launcher — public entry point for UC_TELEMETRY.
  *
  * Given a satellite id + fish count, resolves the satellite's operator + bus
- * archetype, flattens the datasheet prior, and delegates to SwarmService.
- *
- * Perturbations: K fish, each with a distinct riskProfile persona. Optional
- * ±5% datasheet-range jitter per fish gives the aggregator spread.
- *
- * Returns LaunchSwarmResult from SwarmService — caller polls sim_swarm.status
- * until done/failed via the existing BullMQ fish/aggregate pipeline.
+ * archetype through console-api's repository/service layer, flattens the
+ * datasheet prior, and delegates to SwarmService.
  */
 
-import { sql } from "drizzle-orm";
-import type { Database, SeedRefs, PerturbationSpec, SwarmConfig } from "@interview/db-schema";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import type { SwarmService, LaunchSwarmResult } from "@interview/sweep";
+import type {
+  FindByIdFullRow,
+} from "../../../../types/satellite.types";
+import type {
+  LaunchSwarmResult,
+  PerturbationSpec,
+  SeedRefs,
+  SwarmConfig,
+  SwarmService,
+} from "@interview/sweep";
 import { lookupBusPrior } from "../bus-datasheets/loader";
 
 const logger = createLogger("telemetry-swarm");
@@ -43,39 +45,32 @@ function pickPersonas(k: number): RiskProfile[] {
   return out;
 }
 
+export interface TelemetrySwarmTargetReadPort {
+  findByIdFull(id: bigint | number): Promise<FindByIdFullRow | null>;
+}
+
 async function loadTargetContext(
-  db: Database,
+  satelliteRepo: TelemetrySwarmTargetReadPort,
   satelliteId: number,
 ): Promise<{
   operatorId: number;
   satelliteName: string;
   busName: string | null;
 } | null> {
-  const rows = await db.execute(sql`
-    SELECT
-      s.id::int          AS id,
-      s.name             AS name,
-      s.operator_id::int AS operator_id,
-      sb.name            AS bus_name
-    FROM satellite s
-    LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
-    WHERE s.id = ${BigInt(satelliteId)}
-    LIMIT 1
-  `);
-  const r = rows.rows[0] as
-    | { id: number; name: string; operator_id: number | null; bus_name: string | null }
-    | undefined;
-  if (!r) return null;
-  if (r.operator_id == null) return null;
+  const row = await satelliteRepo.findByIdFull(BigInt(satelliteId));
+  if (!row || row.operatorId == null) return null;
   return {
-    operatorId: r.operator_id,
-    satelliteName: r.name,
-    busName: r.bus_name,
+    operatorId: Number(row.operatorId),
+    satelliteName: row.name,
+    busName: row.busName,
   };
 }
 
 export async function startTelemetrySwarm(
-  deps: { db: Database; swarmService: SwarmService },
+  deps: {
+    satelliteRepo: TelemetrySwarmTargetReadPort;
+    swarmService: SwarmService;
+  },
   opts: TelemetrySwarmOpts,
 ): Promise<LaunchSwarmResult> {
   const fishCount = opts.fishCount ?? DEFAULT_FISH_COUNT;
@@ -87,75 +82,76 @@ export async function startTelemetrySwarm(
   });
 
   try {
-  const target = await loadTargetContext(deps.db, opts.satelliteId);
-  if (!target) {
-    throw new Error(
-      `Satellite ${opts.satelliteId} not found (or missing operator) — cannot launch telemetry swarm`,
+    const target = await loadTargetContext(deps.satelliteRepo, opts.satelliteId);
+    if (!target) {
+      throw new Error(
+        `Satellite ${opts.satelliteId} not found (or missing operator) — cannot launch telemetry swarm`,
+      );
+    }
+
+    const priorLookup = lookupBusPrior(target.busName);
+    if (!priorLookup.found) {
+      logger.warn(
+        { satelliteId: opts.satelliteId, busName: target.busName },
+        "no bus datasheet matched — fish will infer without a published prior and cap confidence at 0.25",
+      );
+    }
+
+    const baseSeed: SeedRefs = {
+      subjectIds: [target.operatorId],
+      subjectKind: "operator",
+      telemetryTargetSatelliteId: opts.satelliteId,
+      busDatasheetPrior: priorLookup.prior ?? undefined,
+    };
+
+    const personas = pickPersonas(fishCount);
+    const perturbations: PerturbationSpec[] = personas.map((riskProfile, i) => ({
+      kind: "persona_tweak",
+      agentIndex: 0,
+      riskProfile,
+      ...(i > 2 ? {} : {}),
+    }));
+
+    const cfg: SwarmConfig = {
+      llmMode: opts.config?.llmMode ?? "cloud",
+      quorumPct: opts.config?.quorumPct ?? 0.6,
+      perFishTimeoutMs: opts.config?.perFishTimeoutMs ?? 60_000,
+      fishConcurrency:
+        opts.config?.fishConcurrency ??
+        Math.min(fishCount, MAX_FISH_CONCURRENCY),
+      nanoModel: opts.config?.nanoModel ?? "gpt-5-nano",
+      seed: opts.config?.seed ?? Math.floor(Math.random() * 1_000_000),
+    };
+
+    const title = `uc_telemetry:${opts.satelliteId}:${target.satelliteName}`;
+    const result = await deps.swarmService.launchSwarm({
+      kind: "uc_telemetry_inference",
+      title,
+      baseSeed,
+      perturbations,
+      config: cfg,
+      createdBy: opts.createdBy,
+    });
+
+    logger.info(
+      {
+        swarmId: result.swarmId,
+        satelliteId: opts.satelliteId,
+        busName: target.busName,
+        busMatched: priorLookup.found,
+        fishCount: result.fishCount,
+      },
+      "telemetry swarm launched",
     );
-  }
 
-  const priorLookup = lookupBusPrior(target.busName);
-  if (!priorLookup.found) {
-    logger.warn(
-      { satelliteId: opts.satelliteId, busName: target.busName },
-      "no bus datasheet matched — fish will infer without a published prior and cap confidence at 0.25",
-    );
-  }
-
-  const baseSeed: SeedRefs = {
-    operatorIds: [target.operatorId],
-    telemetryTargetSatelliteId: opts.satelliteId,
-    busDatasheetPrior: priorLookup.prior ?? undefined,
-  };
-
-  const personas = pickPersonas(fishCount);
-  const perturbations: PerturbationSpec[] = personas.map((riskProfile, i) => ({
-    kind: "persona_tweak",
-    agentIndex: 0, // single-agent swarm — the target-operator persona
-    riskProfile,
-    ...(i > 2 ? {} : {}), // hook: datasheet_jitter perturbation could live here
-  }));
-
-  const cfg: SwarmConfig = {
-    llmMode: opts.config?.llmMode ?? "cloud",
-    quorumPct: opts.config?.quorumPct ?? 0.6,
-    perFishTimeoutMs: opts.config?.perFishTimeoutMs ?? 60_000,
-    fishConcurrency:
-      opts.config?.fishConcurrency ??
-      Math.min(fishCount, MAX_FISH_CONCURRENCY),
-    nanoModel: opts.config?.nanoModel ?? "gpt-5-nano",
-    seed: opts.config?.seed ?? Math.floor(Math.random() * 1_000_000),
-  };
-
-  const title = `uc_telemetry:${opts.satelliteId}:${target.satelliteName}`;
-  const result = await deps.swarmService.launchSwarm({
-    kind: "uc_telemetry_inference",
-    title,
-    baseSeed,
-    perturbations,
-    config: cfg,
-    createdBy: opts.createdBy,
-  });
-
-  logger.info(
-    {
+    stepLog(logger, "swarm", "done", {
       swarmId: result.swarmId,
       satelliteId: opts.satelliteId,
-      busName: target.busName,
-      busMatched: priorLookup.found,
       fishCount: result.fishCount,
-    },
-    "telemetry swarm launched",
-  );
+      busMatched: priorLookup.found,
+    });
 
-  stepLog(logger, "swarm", "done", {
-    swarmId: result.swarmId,
-    satelliteId: opts.satelliteId,
-    fishCount: result.fishCount,
-    busMatched: priorLookup.found,
-  });
-
-  return result;
+    return result;
   } catch (err) {
     stepLog(logger, "swarm", "error", {
       satelliteId: opts.satelliteId,

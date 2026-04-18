@@ -1,0 +1,61 @@
+% SPEC-ARCH-06 — Primary build: Space Situational Awareness
+
+\input{./preamble-arch.tex}
+
+\specID{SPEC-ARCH-06}
+\specTitle{Primary build --- Space Situational Awareness}
+\specStatus{OVERVIEW}
+\specVersion{0.1}
+\specOwner{Jeremie Nunez}
+
+\begin{document}
+\makespecheader
+
+\section{Context}
+
+Collision avoidance in orbit is the archetypal dual-stream critical-system loop. Noisy open catalogs and amateur observations vs.\ high-trust classified radars. An operator in the loop before any maneuver. Confidence thresholds that trigger money (delta-v) and avoid Kessler cascades.
+
+\section{Dual-stream fusion}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{figures/06-dual-stream-fusion.pdf}
+  \caption{OSINT (conf $\in [0.2, 0.5]$) and Field (conf $\in [0.85, 1.0]$) streams feed five Thalamus cortices; close approaches above $P_c \geq 10^{-4}$ reach the operator as a Sweep finding.}
+  \label{fig:arch-06-dual}
+\end{figure}
+
+\section{Confidence propagation --- by construction}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\linewidth]{figures/06-confidence-propagation.pdf}
+  \caption{An OSINT edge cannot self-promote to actionable confidence without Field corroboration. The guardrail is in code, not in prompts.}
+  \label{fig:arch-06-confidence}
+\end{figure}
+
+This is exactly the shape defined in \href{../thalamus/dual-stream-confidence.pdf}{SPEC-TH-040 \texttt{dual-stream-confidence}} and \href{../thalamus/field-correlation.pdf}{SPEC-TH-041 \texttt{field-correlation}} --- the specs were written to fit this use case.
+
+\section{Cortices}
+
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{catalog} --- TLE / ephemeris ingestion, orbital propagation
+  \item \texttt{observations} --- radar + optical tracking data normalization
+  \item \texttt{conjunction-analysis} --- close-approach screening with confidence bands
+  \item \texttt{correlation} --- dual-stream fusion (public catalog $\times$ classified radar tracks)
+  \item \texttt{maneuver-planning} --- burn windows, delta-v budget, post-maneuver conjunction re-check
+\end{itemize}
+
+\section{Entity model}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\linewidth]{figures/06-entity-model.pdf}
+  \caption{Satellite / Debris / Observation / ConjunctionEvent / Maneuver. Every maneuver is reversible-by-design through the audit ledger.}
+  \label{fig:arch-06-entities}
+\end{figure}
+
+\textbf{HITL = mission operator.} Every \texttt{ConjunctionEvent} above threshold ($P \geq 10^{-4}$, standard NASA convention) becomes a Sweep finding. The operator validates or rejects before any burn is committed. Audit row per decision --- the \texttt{Maneuver} ledger is reversible-by-design (a burn can be reconstructed from the audit trail post-incident).
+
+\textbf{Why a platform, not a product:} any org running space assets --- operators, agencies, earth-observation primes, secure-comms providers --- has a variant of this loop. The platform industrializes it once (orchestrator, swarm, guardrails, HITL, audit); each tenant plugs its own catalog sources, radar feeds, and thresholds behind the same \texttt{SourceFetcher} interface.
+
+\end{document}

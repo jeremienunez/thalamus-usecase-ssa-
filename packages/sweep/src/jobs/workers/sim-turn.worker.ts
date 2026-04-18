@@ -10,23 +10,22 @@
  */
 
 import type { Worker } from "bullmq";
-import { eq } from "drizzle-orm";
-import type { Database } from "@interview/db-schema";
-import { simRun } from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
 import type { SimOrchestrator } from "../../sim/sim-orchestrator.service";
 import type { SequentialTurnRunner } from "../../sim/turn-runner-sequential";
 import type { DagTurnRunner } from "../../sim/turn-runner-dag";
+import type { SimKindGuard, SimRuntimeStore } from "../../sim/ports";
 import type { SimTurnJobPayload } from "../queues";
 import { createWorker } from "./helpers";
 
 const logger = createLogger("sim-turn-worker");
 
 export interface SimTurnWorkerDeps {
-  db: Database;
+  store: SimRuntimeStore;
   orchestrator: SimOrchestrator;
   sequentialRunner: SequentialTurnRunner;
   dagRunner: DagTurnRunner;
+  kindGuard: SimKindGuard;
   concurrency?: number;
 }
 
@@ -39,16 +38,7 @@ export function createSimTurnWorker(
     processor: async (job) => {
       const { simRunId, turnIndex } = job.data;
 
-      const run = await deps.db
-        .select({
-          id: simRun.id,
-          kind: simRun.kind,
-          status: simRun.status,
-        })
-        .from(simRun)
-        .where(eq(simRun.id, BigInt(simRunId)))
-        .limit(1)
-        .then((rows) => rows[0] ?? null);
+      const run = await deps.store.getRun(simRunId);
 
       if (!run) {
         logger.warn({ simRunId, turnIndex }, "sim_run not found, dropping job");
@@ -62,20 +52,18 @@ export function createSimTurnWorker(
         return { skipped: true, reason: `status=${run.status}` };
       }
 
-      // Route by kind.
-      if (run.kind === "uc3_conjunction") {
+      const driver = deps.kindGuard.driverForKind(run.kind);
+      if (driver.runner === "sequential") {
         const r = await deps.sequentialRunner.runTurn({ simRunId, turnIndex });
         if (r.terminal) {
           logger.info(
             { simRunId, turnIndex, actionKind: r.action.kind },
-            "UC3 terminal action — run closed by Sequential driver",
+            "terminal action — run closed by sequential driver",
           );
           return { terminal: true, simTurnId: r.simTurnId };
         }
-      } else if (run.kind === "uc1_operator_behavior") {
-        await deps.dagRunner.runTurn({ simRunId, turnIndex });
       } else {
-        throw new Error(`unknown sim_run.kind: ${String(run.kind)}`);
+        await deps.dagRunner.runTurn({ simRunId, turnIndex });
       }
 
       // Ask orchestrator to schedule the next turn (or close the run).

@@ -12,11 +12,10 @@
  * than 2 distinct vectors, clustering degrades to bucketing by action.kind.
  */
 
-import { sql } from "drizzle-orm";
-import type { Database, TurnAction } from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
 import type { EmbedFn } from "./memory.service";
-import type { SimAggregationStrategy } from "./ports";
+import type { TurnAction } from "./types";
+import type { SimAggregationStrategy, SimSwarmStore } from "./ports";
 
 const logger = createLogger("sim-aggregator");
 
@@ -58,7 +57,7 @@ export interface SwarmAggregate {
 }
 
 export interface AggregatorDeps {
-  db: Database;
+  swarmStore: Pick<SimSwarmStore, "getSwarm" | "listTerminalsForSwarm">;
   embed?: EmbedFn;
   /** Plan 2 · B.8 — pack-provided label + fallback bucketing. */
   strategy: SimAggregationStrategy;
@@ -150,72 +149,33 @@ export class AggregatorService {
   // -------------------------------------------------------------------
 
   private async loadSwarm(swarmId: number) {
-    const rows = await this.deps.db.execute(sql`
-      SELECT size, config FROM sim_swarm WHERE id = ${BigInt(swarmId)} LIMIT 1
-    `);
-    const row = rows.rows[0] as
-      | { size: number; config: { quorumPct?: number } }
-      | undefined;
+    const row = await this.deps.swarmStore.getSwarm(swarmId);
     if (!row) return null;
     return { size: row.size, quorumPct: row.config.quorumPct };
   }
 
   private async loadTerminals(swarmId: number): Promise<FishTerminal[]> {
-    // For each sim_run in the swarm, select the agent turn with the
-    // highest turn_index. If the run has zero agent turns (quorum fail
-    // case), it is omitted — its status is reflected via sim_run.status.
-    const rows = await this.deps.db.execute(sql`
-      WITH latest AS (
-        SELECT DISTINCT ON (r.id)
-          r.id                AS sim_run_id,
-          r.fish_index        AS fish_index,
-          r.status            AS run_status,
-          r.config            AS run_config,
-          t.agent_id          AS agent_id,
-          t.action            AS action,
-          t.observable_summary AS observable_summary
-        FROM sim_run r
-        LEFT JOIN sim_turn t
-          ON t.sim_run_id = r.id AND t.actor_kind = 'agent'
-        WHERE r.swarm_id = ${BigInt(swarmId)}
-        ORDER BY r.id, t.turn_index DESC NULLS LAST
-      )
-      SELECT l.*,
-             a.agent_index AS agent_index,
-             (SELECT count(*) FROM sim_turn t2
-              WHERE t2.sim_run_id = l.sim_run_id AND t2.actor_kind = 'agent')::int AS turns_played
-      FROM latest l
-      LEFT JOIN sim_agent a ON a.id = l.agent_id
-    `);
+    const rows = await this.deps.swarmStore.listTerminalsForSwarm(swarmId);
 
     const terminals: FishTerminal[] = [];
     const textsToEmbed: string[] = [];
     const embedTargets: number[] = [];
 
-    for (const r of rows.rows as Array<{
-      sim_run_id: string | number;
-      fish_index: number;
-      run_status: string;
-      agent_id: string | number | null;
-      agent_index: number | null;
-      action: TurnAction | null;
-      observable_summary: string | null;
-      turns_played: number;
-    }>) {
-      if (!r.action || !r.observable_summary) continue;
+    for (const row of rows) {
+      if (!row.action || !row.observableSummary) continue;
       const terminal: FishTerminal = {
-        simRunId: Number(r.sim_run_id),
-        fishIndex: r.fish_index,
-        agentIndex: r.agent_index ?? null,
-        action: r.action,
-        observableSummary: r.observable_summary,
+        simRunId: row.simRunId,
+        fishIndex: row.fishIndex,
+        agentIndex: row.agentIndex ?? null,
+        action: row.action,
+        observableSummary: row.observableSummary,
         embedding: null,
-        status: r.run_status === "done" ? "done" : "failed",
-        turnsPlayed: r.turns_played,
+        status: row.runStatus === "done" ? "done" : "failed",
+        turnsPlayed: row.turnsPlayed,
       };
       terminals.push(terminal);
       if (this.deps.embed) {
-        textsToEmbed.push(r.observable_summary);
+        textsToEmbed.push(row.observableSummary);
         embedTargets.push(terminals.length - 1);
       }
     }
@@ -298,7 +258,7 @@ export class AggregatorService {
   }
 
   private clusterByActionKind(fish: FishTerminal[]): Cluster[] {
-    // Plan 2 · B.8: bucket membership decided by the pack (SSA: by action.kind).
+    // Bucket membership is decided by the pack.
     // The kernel hydrates the full Cluster with exemplar / centroid data.
     const packClusters = this.deps.strategy.clusterFallback(
       fish.map((f) => ({

@@ -1,22 +1,7 @@
 /**
- * packages/sweep/ arch-guard — enforces "generic sweep engine, no SSA".
+ * packages/sweep/ arch-guard for the non-sim surface.
  *
- * Three checks (all excluding sim/, handled by Plan 2):
- *   1. No SSA-flavoured file names outside sim/.
- *   2. No imports of SSA-scoped symbols from @interview/db-schema outside sim/.
- *   3. No raw SQL against SSA tables outside sim/.
- *
- * Plan 2 deferrals are explicitly allowlisted:
- *   - packages/sweep/src/repositories/satellite.repository.ts
- *   - packages/sweep/src/types/satellite.types.ts
- *   - packages/sweep/src/services/legacy-ssa-resolution.ts
- *   - packages/sweep/src/services/legacy-ssa-promotion.ts
- *   - packages/sweep/src/services/nano-sweep.service.ts (holds LegacyNanoSweepAuditProvider)
- *
- * These files exist solely as the fallback path used by the UC3 E2E
- * fixture in packages/sweep/tests/e2e/swarm-uc3.e2e.spec.ts, which
- * instantiates buildSweepContainer without opts.ports. Plan 2 moves the
- * fixture to apps/console-api and deletes the fallback.
+ * Sim-specific checks live in `tests/sim/arch-guard.spec.ts`.
  */
 
 import { describe, it, expect } from "vitest";
@@ -57,13 +42,7 @@ const FORBIDDEN_FILE_NAMES = [
  * Files allowed to retain SSA-flavoured imports / raw SQL for Plan 1.
  * Plan 2 removes all of them when the UC3 E2E fixture moves to console-api.
  */
-const PLAN2_DEFERRED_ALLOWLIST = [
-  "/repositories/satellite.repository.ts",
-  "/types/satellite.types.ts",
-  "/services/legacy-ssa-resolution.ts",
-  "/services/legacy-ssa-promotion.ts",
-  "/services/nano-sweep.service.ts",
-];
+const PLAN2_DEFERRED_ALLOWLIST: string[] = [];
 
 function isAllowlisted(file: string): boolean {
   return PLAN2_DEFERRED_ALLOWLIST.some((suffix) => file.endsWith(suffix));
@@ -80,8 +59,8 @@ async function walk(dir: string, out: string[] = []): Promise<string[]> {
   return out;
 }
 
-describe("packages/sweep/ is SSA-agnostic (sim/ excluded — Plan 2 handles it)", () => {
-  it("no SSA-flavoured file names exist outside sim/ (Plan 2 allowlist applied)", async () => {
+describe("packages/sweep outside sim stays domain-neutral", () => {
+  it("no domain-flavoured file names exist outside sim/", async () => {
     const files = await walk(ROOT);
     const violations = files
       .filter((f) => !f.startsWith(SIM))
@@ -90,7 +69,7 @@ describe("packages/sweep/ is SSA-agnostic (sim/ excluded — Plan 2 handles it)"
     expect(violations).toEqual([]);
   });
 
-  it("no imports of SSA symbols from @interview/db-schema outside sim/ (Plan 2 allowlist applied)", async () => {
+  it("no imports of domain symbols from @interview/db-schema outside sim/", async () => {
     const files = (await walk(ROOT))
       .filter((f) => !f.startsWith(SIM))
       .filter((f) => !isAllowlisted(f));
@@ -111,7 +90,7 @@ describe("packages/sweep/ is SSA-agnostic (sim/ excluded — Plan 2 handles it)"
     expect(violations).toEqual([]);
   });
 
-  it("no raw SQL against SSA tables outside sim/ (Plan 2 allowlist applied)", async () => {
+  it("no raw SQL against domain tables outside sim/", async () => {
     const files = (await walk(ROOT))
       .filter((f) => !f.startsWith(SIM))
       .filter((f) => !isAllowlisted(f));

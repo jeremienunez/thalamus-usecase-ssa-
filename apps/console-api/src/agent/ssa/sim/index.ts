@@ -37,7 +37,15 @@ export { SsaPerturbationPack } from "./perturbation-pack";
 export { SsaAggregationStrategy } from "./aggregation-strategy";
 export { SsaKindGuard } from "./kind-guard";
 export { SsaSimPromotionAdapter } from "./promotion";
-export type { SsaSimPromotionDeps } from "./promotion";
+export {
+  emitSuggestionFromModal,
+  emitTelemetrySuggestions,
+} from "./promotion";
+export type {
+  SsaSimPromotionDeps,
+  EmitSuggestionDeps,
+  EmitTelemetrySuggestionsDeps,
+} from "./promotion";
 
 // Plan 2 · B.10 — swarm launchers + aggregators + bus-datasheets
 export { startTelemetrySwarm } from "./swarms/telemetry";
@@ -57,6 +65,12 @@ export type {
   PcSeverity,
   PcSweepSuggestion,
 } from "./aggregators/pc";
+export { TelemetryAggregatorService } from "./aggregators/telemetry";
+export type {
+  TelemetryAggregate,
+  TelemetryAggregatorDeps,
+  TelemetryScalarStats,
+} from "./aggregators/telemetry";
 export {
   lookupBusPrior,
   lookupBusEntry,
