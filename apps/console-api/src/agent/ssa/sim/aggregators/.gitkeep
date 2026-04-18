@@ -1,0 +1,4 @@
+TODO(Plan 2 · B.10): move aggregator-telemetry.ts + aggregator-pc.ts here.
+  from: packages/sweep/src/sim/aggregator-telemetry.ts → aggregators/telemetry.ts
+  from: packages/sweep/src/sim/aggregator-pc.ts        → aggregators/pc.ts
+Delete this .gitkeep once those files land.

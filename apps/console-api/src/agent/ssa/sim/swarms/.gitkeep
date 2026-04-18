@@ -1,0 +1,4 @@
+TODO(Plan 2 · B.10): move telemetry-swarm.service.ts + pc-swarm.service.ts here.
+  from: packages/sweep/src/sim/telemetry-swarm.service.ts → swarms/telemetry.ts
+  from: packages/sweep/src/sim/pc-swarm.service.ts        → swarms/pc.ts
+Delete this .gitkeep once those files land.

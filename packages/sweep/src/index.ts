@@ -65,6 +65,8 @@ export type {
 // Sim engine (SPEC-SW-006)
 export * from "./sim/types";
 export * from "./sim/schema";
+// Plan 2 — 10 sim kernel ports (scaffold, impls in apps/console-api/src/agent/ssa/sim/).
+export * from "./sim/ports";
 export { buildOperatorAgent } from "./sim/agent-builder";
 export type {
   BuildAgentOpts,

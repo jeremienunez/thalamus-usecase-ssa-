@@ -1,0 +1,4 @@
+TODO(Plan 2 · B.10): move bus-datasheets.ts + bus-datasheets.json here.
+  from: packages/sweep/src/sim/bus-datasheets.ts   → bus-datasheets/loader.ts
+  from: packages/sweep/src/sim/bus-datasheets.json → bus-datasheets/datasheets.json
+Delete this .gitkeep once those files land.
