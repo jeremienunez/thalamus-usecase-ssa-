@@ -8,43 +8,14 @@
 
 import { createLogger } from "@interview/shared/observability";
 import { godEventSchema } from "./legacy-ssa-schema";
+// Plan 2 · B.6: GOD_EVENT_TEMPLATES now lives in the perturbation pack.
+// Sweep-internal fallback re-exports it via legacy-ssa-perturbation-pack.
+import { GOD_EVENT_TEMPLATES } from "./legacy-ssa-perturbation-pack";
 import type { SimOrchestrator, GodEventInput } from "./sim-orchestrator.service";
 
 const logger = createLogger("god-channel");
 
-export const GOD_EVENT_TEMPLATES: Record<
-  string,
-  Omit<GodEventInput, "summary"> & { summaryTemplate: string }
-> = {
-  asat_sample: {
-    kind: "asat_event",
-    summaryTemplate:
-      "Kinetic ASAT test fragments {target} — debris cloud rises across LEO shells; tracking advisories broadcast.",
-    detail:
-      "A kinetic anti-satellite test has fragmented the target satellite. Operators in adjacent orbital shells face elevated conjunction rates for the coming weeks. Debris models are being updated by tracking networks.",
-  },
-  regulation_sample: {
-    kind: "regulation",
-    summaryTemplate:
-      "New regulation effective {target}: operators must maneuver within 24h of high-probability conjunction alerts or face licence review.",
-    detail:
-      "A regulator has issued a binding rule compressing the maneuver-decision window. Operators who fail to act within 24h of high-probability conjunction alerts may face licence review, fines, or operational suspension.",
-  },
-  launch_surge_sample: {
-    kind: "launch_surge",
-    summaryTemplate:
-      "Unexpected launch surge: +{target} satellites deploying to the primary commercial regime over the next 30 days.",
-    detail:
-      "A constellation operator has accelerated its deployment schedule. The primary regime will see a concentrated influx of new satellites, tightening slot availability and raising baseline conjunction rates.",
-  },
-  debris_cascade_sample: {
-    kind: "debris_cascade",
-    summaryTemplate:
-      "Secondary collision in {target}: initial debris from previous event triggers a cascade — tracking coverage degraded.",
-    detail:
-      "A follow-on collision has produced a second-generation debris population. The cascade increases tracking uncertainty and forces a reassessment of maneuver thresholds fleet-wide.",
-  },
-};
+export { GOD_EVENT_TEMPLATES };
 
 export class GodChannelService {
   constructor(private readonly orchestrator: SimOrchestrator) {}

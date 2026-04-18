@@ -28,6 +28,7 @@ import type {
   SimPromptComposer,
   SimCortexSelector,
   SimActionSchemaProvider,
+  SimPerturbationPack,
 } from "../sim/ports";
 import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
 import { LegacySsaTurnTargetProvider } from "../sim/legacy-ssa-targets";
@@ -35,6 +36,7 @@ import { LegacySsaPersonaComposer } from "../sim/legacy-ssa-persona";
 import { LegacySsaPromptRenderer } from "../sim/legacy-ssa-prompt";
 import { LegacySsaCortexSelector } from "../sim/legacy-ssa-cortex-selector";
 import { LegacySsaActionSchemaProvider } from "../sim/legacy-ssa-schema";
+import { LegacySsaPerturbationPack } from "../sim/legacy-ssa-perturbation-pack";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -121,6 +123,8 @@ export interface BuildSweepOpts {
     cortexSelector?: SimCortexSelector;
     /** Plan 2 · B.5 — action schema port. Fallback LegacySsaActionSchemaProvider. */
     schemaProvider?: SimActionSchemaProvider;
+    /** Plan 2 · B.6 — perturbation pack port. Fallback LegacySsaPerturbationPack. */
+    perturbationPack?: SimPerturbationPack;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -203,6 +207,8 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       opts.sim.cortexSelector ?? new LegacySsaCortexSelector();
     const schemaProvider: SimActionSchemaProvider =
       opts.sim.schemaProvider ?? new LegacySsaActionSchemaProvider();
+    const perturbationPack: SimPerturbationPack =
+      opts.sim.perturbationPack ?? new LegacySsaPerturbationPack();
     const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,
@@ -229,6 +235,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       simTurnQueue,
       fleet,
       persona,
+      perturbationPack,
     });
     const godChannel = new GodChannelService(orchestrator);
     const aggregator = new AggregatorService({ db, embed: opts.sim.embed });

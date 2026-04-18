@@ -31,7 +31,11 @@ import type {
   PerturbationSpec,
 } from "./types";
 import { buildOperatorAgent } from "./agent-builder";
-import type { SimFleetProvider, SimAgentPersonaComposer } from "./ports";
+import type {
+  SimFleetProvider,
+  SimAgentPersonaComposer,
+  SimPerturbationPack,
+} from "./ports";
 import type { SimTurnJobPayload } from "../jobs/queues";
 
 const logger = createLogger("sim-orchestrator");
@@ -46,6 +50,8 @@ export interface OrchestratorDeps {
   fleet: SimFleetProvider;
   /** Plan 2 · B.3 — persona composer port. */
   persona: SimAgentPersonaComposer;
+  /** Plan 2 · B.6 — perturbation pack: god-event extraction + generator set. */
+  perturbationPack: SimPerturbationPack;
 }
 
 export interface CreateFishOpts {
@@ -250,7 +256,16 @@ export class SimOrchestrator {
     // Seed god events from perturbation (if any), as a pre-turn (index -1 is
     // reserved; we use turn_index = 0 for pre-seeded god turns — agents see
     // them in their observable timeline at turn 0).
-    const seededGod = this.extractGodEvents(opts.perturbation);
+    const rawGod = this.deps.perturbationPack.extractGodEvents(
+      opts.perturbation as unknown as Record<string, unknown>,
+    );
+    const seededGod: GodEventInput[] = rawGod.map((g) => ({
+      kind: g.kind as GodEventInput["kind"],
+      summary: g.summary,
+      detail: g.detail,
+      targetSatelliteId: (g.targets?.targetSatelliteId as number | undefined),
+      targetOperatorId: (g.targets?.targetOperatorId as number | undefined),
+    }));
     if (seededGod.length > 0) {
       for (const ev of seededGod) {
         await this.writeGodTurn(simRunId, 0, ev);
@@ -470,26 +485,5 @@ export class SimOrchestrator {
     return { riskProfileByIndex: risk, constraintOverridesByIndex: constraints };
   }
 
-  private extractGodEvents(p: PerturbationSpec): GodEventInput[] {
-    if (p.kind === "god_event") {
-      return [
-        {
-          kind: p.event.kind,
-          summary: p.event.summary,
-          detail: p.event.detail,
-          targetSatelliteId: p.event.targetSatelliteId,
-          targetOperatorId: p.event.targetOperatorId,
-        },
-      ];
-    }
-    if (p.kind === "launch_surge") {
-      return [
-        {
-          kind: "launch_surge",
-          summary: `Launch surge in regime ${p.regimeId}: +${p.extraSatellites} satellites expected`,
-        },
-      ];
-    }
-    return [];
-  }
+  // Plan 2 · B.6: extractGodEvents moved to SimPerturbationPack port.
 }

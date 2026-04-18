@@ -52,6 +52,7 @@ import { SsaPersonaComposer } from "../../src/agent/ssa/sim/persona-composer";
 import { SsaPromptRenderer } from "../../src/agent/ssa/sim/prompt-renderer";
 import { SsaCortexSelector } from "../../src/agent/ssa/sim/cortex-selector";
 import { SsaActionSchemaProvider } from "../../src/agent/ssa/sim/action-schema";
+import { SsaPerturbationPack } from "../../src/agent/ssa/sim/perturbation-pack";
 
 // -----------------------------------------------------------------------
 // Test config
@@ -117,6 +118,7 @@ beforeAll(async () => {
   const ssaPrompt = new SsaPromptRenderer();
   const ssaCortexSelector = new SsaCortexSelector();
   const ssaSchema = new SsaActionSchemaProvider();
+  const ssaPerturbationPack = new SsaPerturbationPack();
 
   container = buildSweepContainer({
     db,
@@ -134,6 +136,7 @@ beforeAll(async () => {
       prompt: ssaPrompt,
       cortexSelector: ssaCortexSelector,
       schemaProvider: ssaSchema,
+      perturbationPack: ssaPerturbationPack,
     },
   });
 

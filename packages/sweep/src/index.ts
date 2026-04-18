@@ -161,9 +161,7 @@ export type {
   SwarmFishJobPayload,
   SwarmAggregateJobPayload,
 } from "./sim/swarm.service";
-export {
-  rngFromSeed,
-  applyPerturbation,
-  generateDefaultPerturbations,
-} from "./sim/perturbation";
+export { rngFromSeed, applyPerturbation } from "./sim/perturbation";
 export type { Rng } from "./sim/perturbation";
+// generateDefaultPerturbations removed in Plan 2 · B.6 — callers should use
+// SimPerturbationPack.generateSet (apps/console-api/src/agent/ssa/sim/perturbation-pack.ts).

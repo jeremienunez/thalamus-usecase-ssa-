@@ -1,24 +1,21 @@
 /**
- * SsaPerturbationPack — SSA perturbation generators + god-event extraction.
+ * LegacySsaPerturbationPack + GOD_EVENT_TEMPLATES (sweep-side fallback).
  *
- * Plan 2 · B.6. Lifted from packages/sweep/src/sim/perturbation.ts
- * (uc1Generators + uc3Generators) and sim-orchestrator.service.ts
- * (extractGodEvents private method). GOD_EVENT_TEMPLATES moves from
- * god-channel.service.ts so the pack owns the complete perturbation
- * vocabulary.
+ * Plan 2 · B.6. Mirror of apps/console-api/src/agent/ssa/sim/perturbation-pack.ts.
+ * Used when buildSweepContainer is called without opts.sim.perturbationPack.
  *
- * The kernel only provides the RNG; the pack generates specs and extracts
- * god events from them.
+ * GOD_EVENT_TEMPLATES is re-exported from here so god-channel.service.ts
+ * (still kernel-resident until B.6.5/C.2) keeps compiling until it moves.
+ *
+ * Deleted at Plan 2 Étape 4.
  */
 
 import type {
   GenericGodEvent,
   GenericPerturbationSpec,
   SimPerturbationPack,
-} from "@interview/sweep";
+} from "./ports";
 
-// SSA-typed aliases — kernel receives these as the opaque
-// GenericPerturbationSpec / GenericGodEvent bag.
 type SsaPerturbationSpec =
   | { kind: "noop" }
   | {
@@ -49,11 +46,6 @@ type SsaPerturbationSpec =
       covarianceScale: "tight" | "nominal" | "loose";
     };
 
-/**
- * Narrative templates for admin/debug god-event injection. Moved from
- * god-channel.service.ts in Plan 2 · B.6. The admin UI + CLI can emit
- * narratively consistent events without free-form prose.
- */
 export const GOD_EVENT_TEMPLATES: Record<
   string,
   {
@@ -92,7 +84,7 @@ export const GOD_EVENT_TEMPLATES: Record<
   },
 };
 
-export class SsaPerturbationPack implements SimPerturbationPack {
+export class LegacySsaPerturbationPack implements SimPerturbationPack {
   generateSet(args: {
     simKind: string;
     baseSeed: Record<string, unknown>;
@@ -143,10 +135,6 @@ export class SsaPerturbationPack implements SimPerturbationPack {
     return [];
   }
 }
-
-// -----------------------------------------------------------------------
-// Internals — generator pools + small RNG wrapper
-// -----------------------------------------------------------------------
 
 interface RngWrap {
   next(): number;
