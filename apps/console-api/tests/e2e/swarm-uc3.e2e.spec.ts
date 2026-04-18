@@ -45,6 +45,8 @@ import {
   closeQueues,
   type SwarmAggregate,
 } from "@interview/sweep";
+import { SatelliteFleetRepository } from "../../src/repositories/satellite-fleet.repository";
+import { SsaFleetProvider } from "../../src/agent/ssa/sim/fleet-provider";
 
 // -----------------------------------------------------------------------
 // Test config
@@ -101,6 +103,11 @@ beforeAll(async () => {
   await drainQueues().catch(() => undefined);
   seededOperatorIds = await seedOperators();
 
+  // Plan 2 · B.1 — inject the SSA fleet port so the E2E exercises the
+  // console-api path (not the sweep-internal LegacySsaFleetProvider fallback).
+  const fleetRepo = new SatelliteFleetRepository(db);
+  const ssaFleet = new SsaFleetProvider({ fleetRepo });
+
   container = buildSweepContainer({
     db,
     redis,
@@ -111,6 +118,7 @@ beforeAll(async () => {
       // bucketing when fewer than 2 vectors, which works for size=3 swarms.
       embed: async () => null,
       llmMode: "fixtures",
+      fleet: ssaFleet,
     },
   });
 

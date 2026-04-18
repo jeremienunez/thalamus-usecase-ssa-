@@ -42,6 +42,28 @@ UC3 E2E still runs on the sweep-side legacy fallback (Plan 2 moves it).
       (remove the mutable `simHook.cb` bridge in sweep container).
 - [ ] Drop the 5 entries from `PLAN2_DEFERRED_ALLOWLIST` in the arch-guard.
 
+### Follow-up — Repository split (post-Plan-2)
+
+Plan 2 B.1 introduces a narrow `satellite-fleet.repository.ts` for sim fleet
+snapshots. The existing `apps/console-api/src/repositories/satellite.repository.ts`
+(575 lines, ~12 methods) stays untouched during Plan 2 to keep blast radius
+small. Split after Plan 2 merges:
+
+- [ ] `satellite-view.repository.ts` ← listWithOrbital, findByIdFull,
+      listByOperator, listMissionWindows, findPayloadNamesByIds
+- [ ] `satellite-audit.repository.ts` (exists) ← absorb nullScanByColumn,
+      findSatelliteIdsWithNullColumn, listNullCandidatesForField,
+      discoverNullableScalarColumns
+- [ ] `satellite-enrichment.repository.ts` (exists) ← absorb
+      knnNeighboursForField, updateField, getOperatorCountrySweepStats
+- [ ] Delete the monolithic `satellite.repository.ts` once all callers
+      migrate; update container wiring + controllers.
+- [ ] Parallel split on `packages/sweep/src/repositories/satellite.repository.ts`
+      (the legacy one on PLAN2 allowlist) if still alive post-Plan-2.
+
+Rationale: one SQL responsibility per file; sim (and future domains) can
+compose narrow repos without dragging the whole 575-line surface.
+
 ### Follow-up — Plan 3 (CLI → HTTP)
 
 - [ ] Add 4 new routes on console-api: `POST /api/sim/telemetry/start`,

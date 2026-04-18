@@ -1,16 +1,14 @@
 /**
- * SsaFleetProvider — SSA subject = operator. Delegates to SatelliteAuditService
- * + SatelliteRepository. ZERO new SQL (Plan 1 folded satellite audit queries
- * into SatelliteAuditService).
+ * SsaFleetProvider — SSA implementation of SimFleetProvider.
  *
- * TODO(Plan 2 · B.1): implement getAgentSubject / getAuthorLabels by calling
- *   SatelliteAuditService.listByOperator + SatelliteRepository.findOperatorCountry.
- *   If SatelliteAuditService lacks an aggregate method (regime mix / platform
- *   mix / avgLaunchYear), extend it IN THE SAME COMMIT (Plan 1 rule:
- *   "extend existing service, don't duplicate").
+ * Plan 2 · B.1. Delegates to the narrow SatelliteFleetRepository (console-api).
+ * Zero new SQL: the SQL bodies moved verbatim from
+ *   packages/sweep/src/sim/agent-builder.ts (loadFleetSnapshot) and
+ *   packages/sweep/src/sim/memory.service.ts (lookupAuthorLabels)
+ * into apps/console-api/src/repositories/satellite-fleet.repository.ts.
  *
- * Move bodies from packages/sweep/src/sim/agent-builder.ts (loadFleetSnapshot)
- * and packages/sweep/src/sim/memory.service.ts (lookupAuthorLabels).
+ * The port consumes kind="operator" only. Non-operator kinds throw — the sim
+ * kernel has no domain knowledge of what "subject" means; only this pack does.
  */
 
 import type {
@@ -18,23 +16,35 @@ import type {
   AgentSubjectRef,
   AgentSubjectSnapshot,
 } from "@interview/sweep";
+import type { SatelliteFleetRepository } from "../../../repositories/satellite-fleet.repository";
 
 export interface SsaFleetDeps {
-  // TODO(B.1): satelliteAudit: SatelliteAuditService;
-  // TODO(B.1): satelliteRepo: SatelliteRepository;
-  _placeholder?: never;
+  fleetRepo: SatelliteFleetRepository;
 }
 
 export class SsaFleetProvider implements SimFleetProvider {
-  constructor(private readonly _deps: SsaFleetDeps = {}) {}
+  constructor(private readonly deps: SsaFleetDeps) {}
 
-  async getAgentSubject(_ref: AgentSubjectRef): Promise<AgentSubjectSnapshot> {
-    // TODO(B.1): implement via SatelliteAuditService + SatelliteRepository.
-    throw new Error("SsaFleetProvider.getAgentSubject: TODO Plan 2 · B.1");
+  async getAgentSubject(ref: AgentSubjectRef): Promise<AgentSubjectSnapshot> {
+    if (ref.kind !== "operator") {
+      throw new Error(
+        `SsaFleetProvider: only supports kind="operator", got "${ref.kind}"`,
+      );
+    }
+    const snapshot = await this.deps.fleetRepo.getOperatorFleetSnapshot(ref.id);
+    return {
+      displayName: snapshot.operatorName,
+      attributes: {
+        operatorCountry: snapshot.operatorCountry,
+        satelliteCount: snapshot.satelliteCount,
+        regimeMix: snapshot.regimeMix,
+        platformMix: snapshot.platformMix,
+        avgLaunchYear: snapshot.avgLaunchYear,
+      },
+    };
   }
 
-  async getAuthorLabels(_agentIds: number[]): Promise<Map<number, string>> {
-    // TODO(B.1): implement via operator lookup.
-    throw new Error("SsaFleetProvider.getAuthorLabels: TODO Plan 2 · B.1");
+  async getAuthorLabels(agentIds: number[]): Promise<Map<number, string>> {
+    return this.deps.fleetRepo.getSimAgentAuthorLabels(agentIds);
   }
 }

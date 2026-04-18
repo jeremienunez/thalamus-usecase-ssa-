@@ -21,6 +21,8 @@ import type {
   ResolutionHandlerRegistry,
   IngestionSourceProvider,
 } from "../ports";
+import type { SimFleetProvider } from "../sim/ports";
+import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -85,6 +87,12 @@ export interface BuildSweepOpts {
     cortexRegistry: CortexRegistry;
     embed: EmbedFn;
     llmMode: "cloud" | "fixtures" | "record";
+    /**
+     * Plan 2 · B.1 — SimFleetProvider port. When omitted, the container
+     * constructs LegacySsaFleetProvider (sweep-internal fallback). Console-api
+     * injects SsaFleetProvider (agent/ssa/sim/fleet-provider.ts).
+     */
+    fleet?: SimFleetProvider;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -153,7 +161,11 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
 
   let sim: SimServices | undefined;
   if (opts.sim) {
-    const memoryService = new MemoryService(db, opts.sim.embed);
+    // Plan 2 · B.1 — fleet port: use the injected SSA provider or fall back
+    // to the legacy SQL adapter (allowlisted until Étape 4 deletes it).
+    const fleet: SimFleetProvider =
+      opts.sim.fleet ?? new LegacySsaFleetProvider(db);
+    const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,
       memory: memoryService,
@@ -166,7 +178,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       cortexRegistry: opts.sim.cortexRegistry,
       llmMode: opts.sim.llmMode,
     });
-    const orchestrator = new SimOrchestrator({ db, simTurnQueue });
+    const orchestrator = new SimOrchestrator({ db, simTurnQueue, fleet });
     const godChannel = new GodChannelService(orchestrator);
     const aggregator = new AggregatorService({ db, embed: opts.sim.embed });
     const telemetryAggregator = new TelemetryAggregatorService({ db });

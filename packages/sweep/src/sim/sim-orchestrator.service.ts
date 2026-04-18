@@ -12,11 +12,10 @@
  *      fish; it just provides the shared "create run + agents" primitive.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Queue } from "bullmq";
 import type { Database, NewSimRun, NewSimSwarm, NewSimTurn } from "@interview/db-schema";
 import {
-  simAgent,
   simRun,
   simSwarm,
   simTurn,
@@ -32,6 +31,7 @@ import type {
   PerturbationSpec,
 } from "./types";
 import { buildOperatorAgent } from "./agent-builder";
+import type { SimFleetProvider } from "./ports";
 import type { SimTurnJobPayload } from "../jobs/queues";
 
 const logger = createLogger("sim-orchestrator");
@@ -42,6 +42,8 @@ const DEFAULT_UC3_MAX_TURNS = 20;
 export interface OrchestratorDeps {
   db: Database;
   simTurnQueue: Queue<SimTurnJobPayload>;
+  /** Plan 2 · B.1 — fleet port, consumed by buildOperatorAgent. */
+  fleet: SimFleetProvider;
 }
 
 export interface CreateFishOpts {
@@ -224,14 +226,17 @@ export class SimOrchestrator {
     const fleetSnapshots = new Map<number, FleetSnapshot>();
     for (let i = 0; i < operatorIds.length; i++) {
       const operatorId = operatorIds[i];
-      const built = await buildOperatorAgent(this.deps.db, {
-        simRunId,
-        operatorId,
-        agentIndex: i,
-        riskProfile: riskProfileByIndex.get(i),
-        constraintOverrides: constraintOverridesByIndex.get(i),
-        negotiationFraming,
-      });
+      const built = await buildOperatorAgent(
+        { db: this.deps.db, fleet: this.deps.fleet },
+        {
+          simRunId,
+          operatorId,
+          agentIndex: i,
+          riskProfile: riskProfileByIndex.get(i),
+          constraintOverrides: constraintOverridesByIndex.get(i),
+          negotiationFraming,
+        },
+      );
       agentIds.push(built.agentId);
       fleetSnapshots.set(built.agentId, built.fleetSnapshot);
     }

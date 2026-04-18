@@ -13,8 +13,9 @@
 
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 import type { Database, MemoryKind, NewSimAgentMemory } from "@interview/db-schema";
-import { simAgent, simAgentMemory, simTurn } from "@interview/db-schema";
+import { simAgentMemory, simTurn } from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
+import type { SimFleetProvider } from "./ports";
 
 const logger = createLogger("sim-memory");
 
@@ -62,6 +63,7 @@ export class MemoryService {
   constructor(
     private readonly db: Database,
     private readonly embed: EmbedFn,
+    private readonly fleet: SimFleetProvider,
   ) {}
 
   /**
@@ -233,18 +235,9 @@ export class MemoryService {
   }
 
   private async lookupAuthorLabels(agentIds: number[]): Promise<Map<number, string>> {
-    const out = new Map<number, string>();
-    if (agentIds.length === 0) return out;
-    const unique = Array.from(new Set(agentIds));
-    const rows = await this.db.execute(sql`
-      SELECT a.id::text AS id, coalesce(op.name, 'agent#' || a.agent_index) AS label
-      FROM sim_agent a
-      LEFT JOIN operator op ON op.id = a.operator_id
-      WHERE a.id = ANY(${sql.raw(`ARRAY[${unique.map((i) => `${i}::bigint`).join(",")}]`)})
-    `);
-    for (const r of rows.rows as Array<{ id: string; label: string }>) {
-      out.set(Number(r.id), r.label);
-    }
-    return out;
+    // Plan 2 · B.1: delegated to the SimFleetProvider port. SQL moved to
+    // apps/console-api/src/repositories/satellite-fleet.repository.ts (SSA)
+    // or packages/sweep/src/sim/legacy-ssa-fleet.ts (fallback).
+    return this.fleet.getAuthorLabels(agentIds);
   }
 }
