@@ -18,11 +18,9 @@ export type {
 } from "./repositories/sweep.repository";
 export { SatelliteRepository } from "./repositories/satellite.repository";
 
-// Controllers
-export { AdminSweepController } from "./controllers/admin-sweep.controller";
-
-// Routes
-export { registerAdminSweepRoutes } from "./routes/admin.routes";
+// (AdminSweepController + admin.routes.ts deleted in Plan 1 Task 6.1 —
+// dead code superseded by console-api's sweep-suggestions.controller +
+// sweep-mission.controller.)
 
 // Jobs
 export { createSweepWorker } from "./jobs/workers/sweep.worker";
@@ -58,7 +56,6 @@ export type {
   SweepContainer,
   BuildSweepOpts,
   SimServices,
-  AdminControllers,
 } from "./config/container";
 
 // Middleware stubs

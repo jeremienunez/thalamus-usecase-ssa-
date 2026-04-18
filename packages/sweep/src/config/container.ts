@@ -34,7 +34,6 @@ import {
 import { createLegacySsaResolutionRegistry } from "../services/legacy-ssa-resolution";
 import { LegacySsaPromotionAdapter } from "../services/legacy-ssa-promotion";
 import { MessagingService } from "../services/messaging.service";
-import { AdminSweepController } from "../controllers/admin-sweep.controller";
 import { MemoryService, type EmbedFn } from "../sim/memory.service";
 import { SequentialTurnRunner } from "../sim/turn-runner-sequential";
 import { DagTurnRunner } from "../sim/turn-runner-dag";
@@ -49,10 +48,6 @@ import {
   swarmFishQueue,
   swarmAggregateQueue,
 } from "../jobs/queues";
-
-export interface AdminControllers {
-  sweep: AdminSweepController;
-}
 
 export interface SimServices {
   memoryService: MemoryService;
@@ -77,7 +72,6 @@ export interface SweepContainer {
   nanoSweepService: NanoSweepService;
   resolutionService: SweepResolutionService;
   messagingService: MessagingService;
-  adminControllers: AdminControllers;
   sim?: SimServices;
 }
 
@@ -157,14 +151,6 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
     sweepRepo,
   });
 
-  const adminControllers: AdminControllers = {
-    sweep: new AdminSweepController(
-      nanoSweepService,
-      sweepRepo,
-      resolutionService,
-    ),
-  };
-
   let sim: SimServices | undefined;
   if (opts.sim) {
     const memoryService = new MemoryService(db, opts.sim.embed);
@@ -239,7 +225,6 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
     nanoSweepService,
     resolutionService,
     messagingService,
-    adminControllers,
     sim,
   };
 }
