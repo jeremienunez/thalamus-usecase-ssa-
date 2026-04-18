@@ -29,6 +29,7 @@ import type {
   SimCortexSelector,
   SimActionSchemaProvider,
   SimPerturbationPack,
+  SimAggregationStrategy,
 } from "../sim/ports";
 import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
 import { LegacySsaTurnTargetProvider } from "../sim/legacy-ssa-targets";
@@ -37,6 +38,7 @@ import { LegacySsaPromptRenderer } from "../sim/legacy-ssa-prompt";
 import { LegacySsaCortexSelector } from "../sim/legacy-ssa-cortex-selector";
 import { LegacySsaActionSchemaProvider } from "../sim/legacy-ssa-schema";
 import { LegacySsaPerturbationPack } from "../sim/legacy-ssa-perturbation-pack";
+import { LegacySsaAggregationStrategy } from "../sim/legacy-ssa-aggregation-strategy";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -125,6 +127,8 @@ export interface BuildSweepOpts {
     schemaProvider?: SimActionSchemaProvider;
     /** Plan 2 · B.6 — perturbation pack port. Fallback LegacySsaPerturbationPack. */
     perturbationPack?: SimPerturbationPack;
+    /** Plan 2 · B.8 — aggregation strategy. Fallback LegacySsaAggregationStrategy. */
+    aggStrategy?: SimAggregationStrategy;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -209,6 +213,8 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       opts.sim.schemaProvider ?? new LegacySsaActionSchemaProvider();
     const perturbationPack: SimPerturbationPack =
       opts.sim.perturbationPack ?? new LegacySsaPerturbationPack();
+    const aggStrategy: SimAggregationStrategy =
+      opts.sim.aggStrategy ?? new LegacySsaAggregationStrategy();
     const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,
@@ -238,7 +244,11 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       perturbationPack,
     });
     const godChannel = new GodChannelService(orchestrator);
-    const aggregator = new AggregatorService({ db, embed: opts.sim.embed });
+    const aggregator = new AggregatorService({
+      db,
+      embed: opts.sim.embed,
+      strategy: aggStrategy,
+    });
     const telemetryAggregator = new TelemetryAggregatorService({ db });
     const swarmService = new SwarmService({
       db,

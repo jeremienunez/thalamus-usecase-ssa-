@@ -53,6 +53,7 @@ import { SsaPromptRenderer } from "../../src/agent/ssa/sim/prompt-renderer";
 import { SsaCortexSelector } from "../../src/agent/ssa/sim/cortex-selector";
 import { SsaActionSchemaProvider } from "../../src/agent/ssa/sim/action-schema";
 import { SsaPerturbationPack } from "../../src/agent/ssa/sim/perturbation-pack";
+import { SsaAggregationStrategy } from "../../src/agent/ssa/sim/aggregation-strategy";
 
 // -----------------------------------------------------------------------
 // Test config
@@ -119,6 +120,7 @@ beforeAll(async () => {
   const ssaCortexSelector = new SsaCortexSelector();
   const ssaSchema = new SsaActionSchemaProvider();
   const ssaPerturbationPack = new SsaPerturbationPack();
+  const ssaAggStrategy = new SsaAggregationStrategy();
 
   container = buildSweepContainer({
     db,
@@ -137,6 +139,7 @@ beforeAll(async () => {
       cortexSelector: ssaCortexSelector,
       schemaProvider: ssaSchema,
       perturbationPack: ssaPerturbationPack,
+      aggStrategy: ssaAggStrategy,
     },
   });
 

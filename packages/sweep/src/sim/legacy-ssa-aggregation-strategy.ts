@@ -1,15 +1,15 @@
 /**
- * SsaAggregationStrategy — SSA labelling + fallback clustering.
+ * LegacySsaAggregationStrategy — fallback SimAggregationStrategy.
  *
- * Plan 2 · B.8. Lifted verbatim from packages/sweep/src/sim/aggregator.service.ts
- * (labelFromAction + clusterByActionKind). Kernel keeps the k-means core.
+ * Mirror of apps/console-api/src/agent/ssa/sim/aggregation-strategy.ts.
+ * Deleted at Plan 2 Étape 4.
  */
 
 import type {
   AggregationCluster,
   AggregationInput,
   SimAggregationStrategy,
-} from "@interview/sweep";
+} from "./ports";
 
 type SsaAction =
   | { kind: "maneuver"; satelliteId: number }
@@ -23,7 +23,7 @@ type SsaAction =
   | { kind: "infer_telemetry" }
   | { kind: "estimate_pc" };
 
-export class SsaAggregationStrategy implements SimAggregationStrategy {
+export class LegacySsaAggregationStrategy implements SimAggregationStrategy {
   labelAction(action: Record<string, unknown> | null): string {
     if (!action) return "unknown";
     const a = action as SsaAction;

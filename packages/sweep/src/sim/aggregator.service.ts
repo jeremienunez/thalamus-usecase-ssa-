@@ -16,6 +16,7 @@ import { sql } from "drizzle-orm";
 import type { Database, TurnAction } from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
 import type { EmbedFn } from "./memory.service";
+import type { SimAggregationStrategy } from "./ports";
 
 const logger = createLogger("sim-aggregator");
 
@@ -59,6 +60,8 @@ export interface SwarmAggregate {
 export interface AggregatorDeps {
   db: Database;
   embed?: EmbedFn;
+  /** Plan 2 · B.8 — pack-provided label + fallback bucketing. */
+  strategy: SimAggregationStrategy;
 }
 
 export class AggregatorService {
@@ -243,6 +246,8 @@ export class AggregatorService {
     if (withVec.length < 2) {
       return this.clusterByActionKind(fish);
     }
+    // `clusterByActionKind` + `labelFromAction` are proxies for pack-owned logic
+    // below; see SimAggregationStrategy port (Plan 2 · B.8).
 
     // Adaptive k: 1 cluster per ~10 fish, clamped [2, 7].
     const k = Math.max(2, Math.min(7, Math.ceil(withVec.length / 10)));
@@ -278,7 +283,9 @@ export class AggregatorService {
         if (members.length === 0) return null;
         const exemplar = members[0];
         return {
-          label: labelFromAction(exemplar.action),
+          label: this.deps.strategy.labelAction(
+            exemplar.action as unknown as Record<string, unknown>,
+          ),
           fraction: members.length / total,
           memberFishIndexes: members.map((m) => m.fishIndex).sort((a, b) => a - b),
           exemplarSimRunId: exemplar.simRunId,
@@ -291,49 +298,29 @@ export class AggregatorService {
   }
 
   private clusterByActionKind(fish: FishTerminal[]): Cluster[] {
-    const buckets = new Map<string, FishTerminal[]>();
-    for (const f of fish) {
-      const key = f.action.kind;
-      const arr = buckets.get(key) ?? [];
-      arr.push(f);
-      buckets.set(key, arr);
-    }
-    const total = fish.length;
-    const out: Cluster[] = [];
-    for (const [kind, members] of buckets) {
-      const exemplar = members[0];
-      out.push({
-        label: kind,
-        fraction: members.length / total,
-        memberFishIndexes: members.map((m) => m.fishIndex).sort((a, b) => a - b),
+    // Plan 2 · B.8: bucket membership decided by the pack (SSA: by action.kind).
+    // The kernel hydrates the full Cluster with exemplar / centroid data.
+    const packClusters = this.deps.strategy.clusterFallback(
+      fish.map((f) => ({
+        action: f.action as unknown as Record<string, unknown>,
+        fishIndex: f.fishIndex,
+        embedding: f.embedding,
+      })),
+    );
+    const byFishIndex = new Map<number, FishTerminal>();
+    for (const f of fish) byFishIndex.set(f.fishIndex, f);
+    return packClusters.map((pc): Cluster => {
+      const exemplar = byFishIndex.get(pc.memberFishIndexes[0])!;
+      return {
+        label: pc.label,
+        fraction: pc.fraction,
+        memberFishIndexes: pc.memberFishIndexes,
         exemplarSimRunId: exemplar.simRunId,
         exemplarAction: exemplar.action,
         exemplarSummary: exemplar.observableSummary,
         centroid: null,
-      });
-    }
-    return out;
-  }
-}
-
-function labelFromAction(a: TurnAction): string {
-  switch (a.kind) {
-    case "maneuver":
-      return `maneuver sat#${a.satelliteId}`;
-    case "propose_split":
-      return `propose (own Δv=${a.ownShareDeltaV.toFixed(0)})`;
-    case "accept":
-      return "accept";
-    case "reject":
-      return "reject";
-    case "launch":
-      return `launch +${a.satelliteCount}`;
-    case "retire":
-      return `retire sat#${a.satelliteId}`;
-    case "lobby":
-      return `lobby ${a.policyTopic} (${a.stance})`;
-    case "hold":
-      return "hold";
+      };
+    });
   }
 }
 
