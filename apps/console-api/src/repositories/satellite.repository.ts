@@ -289,4 +289,287 @@ export class SatelliteRepository {
 
     return results.rows;
   }
+
+  // ─── Nano-sweep audit queries ─────────────────────────────────────
+  //
+  // Folded from packages/sweep/src/repositories/satellite.repository.ts in
+  // Plan 1 Task 4.1. Consumed by the SSA sweep pack (SsaAuditProvider)
+  // through the injected satelliteRepo dep.
+
+  /** Aggregated stats per operator-country for nano-sweep audit. */
+  async getOperatorCountrySweepStats(): Promise<
+    Array<{
+      operatorCountryId: bigint;
+      operatorCountryName: string;
+      orbitRegimeName: string;
+      satelliteCount: number;
+      missingPayloads: number;
+      missingOrbitRegime: number;
+      missingLaunchYear: number;
+      missingMass: number;
+      hasDoctrine: boolean;
+      avgMass: number | null;
+      topPayloads: string[];
+      sampleSatellites: Array<{
+        name: string;
+        massKg: number;
+        launchYear: number | null;
+      }>;
+    }>
+  > {
+    const rows = await this.db.execute(sql`
+      SELECT
+        oc.id as operator_country_id,
+        oc.name as operator_country_name,
+        reg.name as orbit_regime_name,
+        count(s.id)::int as satellite_count,
+        count(s.id) FILTER (WHERE NOT EXISTS (
+          SELECT 1 FROM satellite_payload sp WHERE sp.satellite_id = s.id
+        ))::int as missing_payloads,
+        count(s.id) FILTER (WHERE s.g_orbit_regime_description IS NULL OR s.g_orbit_regime_description = '')::int as missing_orbit_regime,
+        count(s.id) FILTER (WHERE s.launch_year IS NULL)::int as missing_launch_year,
+        count(s.id) FILTER (WHERE s.mass_kg = 0 OR s.mass_kg IS NULL)::int as missing_mass,
+        (oc.doctrine IS NOT NULL) as has_doctrine,
+        round(avg(s.mass_kg) FILTER (WHERE s.mass_kg > 0))::real as avg_mass
+      FROM operator_country oc
+      JOIN orbit_regime reg ON reg.id = oc.orbit_regime_id
+      LEFT JOIN satellite s ON s.operator_country_id = oc.id
+      GROUP BY oc.id, oc.name, reg.name, oc.doctrine
+      HAVING count(s.id) > 0
+      ORDER BY count(s.id) DESC
+    `);
+
+    const results: Array<{
+      operatorCountryId: bigint;
+      operatorCountryName: string;
+      orbitRegimeName: string;
+      satelliteCount: number;
+      missingPayloads: number;
+      missingOrbitRegime: number;
+      missingLaunchYear: number;
+      missingMass: number;
+      hasDoctrine: boolean;
+      avgMass: number | null;
+      topPayloads: string[];
+      sampleSatellites: Array<{
+        name: string;
+        massKg: number;
+        launchYear: number | null;
+      }>;
+    }> = [];
+    for (const row of rows.rows as Record<string, unknown>[]) {
+      const ocId = row.operator_country_id as bigint;
+      const payloadsRes = await this.db.execute(sql`
+        SELECT p.name FROM satellite_payload sp
+        JOIN payload p ON p.id = sp.payload_id
+        JOIN satellite s ON s.id = sp.satellite_id
+        WHERE s.operator_country_id = ${ocId}
+        GROUP BY p.name ORDER BY count(*) DESC LIMIT 5
+      `);
+      const sampleRes = await this.db.execute(sql`
+        SELECT name, mass_kg, launch_year
+        FROM satellite WHERE operator_country_id = ${ocId} AND mass_kg > 0
+        ORDER BY mass_kg DESC LIMIT 3
+      `);
+      results.push({
+        operatorCountryId: ocId,
+        operatorCountryName: row.operator_country_name as string,
+        orbitRegimeName: row.orbit_regime_name as string,
+        satelliteCount: row.satellite_count as number,
+        missingPayloads: row.missing_payloads as number,
+        missingOrbitRegime: row.missing_orbit_regime as number,
+        missingLaunchYear: row.missing_launch_year as number,
+        missingMass: row.missing_mass as number,
+        hasDoctrine: row.has_doctrine as boolean,
+        avgMass: row.avg_mass as number | null,
+        topPayloads: (payloadsRes.rows as Array<{ name: string }>).map(
+          (p) => p.name,
+        ),
+        sampleSatellites: (sampleRes.rows as Array<Record<string, unknown>>).map(
+          (s) => ({
+            name: s.name as string,
+            massKg: s.mass_kg as number,
+            launchYear: s.launch_year as number | null,
+          }),
+        ),
+      });
+    }
+    return results;
+  }
+
+  /**
+   * Discover nullable scalar columns on `satellite` at call time
+   * (information_schema introspection). Excluded by policy: id, name, slug,
+   * timestamps, jsonb, narrative description columns.
+   */
+  async discoverNullableScalarColumns(): Promise<string[]> {
+    const res = await this.db.execute(sql`
+      SELECT column_name, data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name   = 'satellite'
+        AND is_nullable  = 'YES'
+    `);
+    const EXCLUDED = new Set<string>([
+      "id",
+      "name",
+      "slug",
+      "created_at",
+      "updated_at",
+      "profile_metadata",
+      "descriptions",
+      "metadata",
+      "telemetry_summary",
+      "g_short_description",
+      "g_description",
+      "g_operator_description",
+      "g_operator_country_description",
+      "g_orbit_regime_description",
+      "g_launch_year_description",
+      "photo_url",
+    ]);
+    const SCALAR_TYPES = new Set<string>([
+      "integer",
+      "bigint",
+      "smallint",
+      "real",
+      "double precision",
+      "numeric",
+      "text",
+      "character varying",
+      "boolean",
+    ]);
+    return (res.rows as Array<{ column_name: string; data_type: string }>)
+      .filter(
+        (r) =>
+          !EXCLUDED.has(r.column_name) &&
+          SCALAR_TYPES.has(r.data_type.toLowerCase()),
+      )
+      .map((r) => r.column_name);
+  }
+
+  /** Null-fraction scan by (operator_country × column). */
+  async nullScanByColumn(opts?: {
+    maxOperatorCountries?: number;
+    minNullFraction?: number;
+    minTotal?: number;
+    columns?: string[];
+  }): Promise<
+    Array<{
+      operatorCountryId: bigint | null;
+      operatorCountryName: string;
+      totalSatellites: number;
+      column: string;
+      nullCount: number;
+      nullFraction: number;
+    }>
+  > {
+    const threshold = opts?.minNullFraction ?? 0.1;
+    const minTotal = opts?.minTotal ?? 3;
+    const limit = opts?.maxOperatorCountries ?? 500;
+
+    const allCols = opts?.columns?.length
+      ? opts.columns
+      : await this.discoverNullableScalarColumns();
+    if (allCols.length === 0) return [];
+
+    const discovered = new Set(await this.discoverNullableScalarColumns());
+    const safeCols = allCols.filter((c) => discovered.has(c));
+    if (safeCols.length === 0) return [];
+
+    const selects = safeCols
+      .map(
+        (c, i) =>
+          `count(*) FILTER (WHERE s."${c}" IS NULL)::int AS "nc_${i}"`,
+      )
+      .join(",\n  ");
+
+    const query = sql.raw(`
+      SELECT
+        s.operator_country_id::text       AS operator_country_id,
+        oc.name                           AS operator_country_name,
+        count(*)::int                     AS total_count,
+        ${selects}
+      FROM satellite s
+      LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
+      GROUP BY s.operator_country_id, oc.name
+      HAVING count(*) >= ${minTotal}
+      ORDER BY total_count DESC
+      LIMIT ${limit}
+    `);
+
+    const res = await this.db.execute<Record<string, string | number | null>>(
+      query,
+    );
+
+    const out: Array<{
+      operatorCountryId: bigint | null;
+      operatorCountryName: string;
+      totalSatellites: number;
+      column: string;
+      nullCount: number;
+      nullFraction: number;
+    }> = [];
+    for (const row of res.rows as Array<Record<string, string | number | null>>) {
+      const ocId =
+        row.operator_country_id !== null &&
+        row.operator_country_id !== undefined
+          ? BigInt(row.operator_country_id as string | number)
+          : null;
+      const name =
+        (row.operator_country_name as string | null) ?? "(no country)";
+      const total = Number(row.total_count ?? 0);
+      if (total < minTotal) continue;
+      for (let i = 0; i < safeCols.length; i++) {
+        const nc = Number(row[`nc_${i}`] ?? 0);
+        if (nc === 0) continue;
+        const frac = nc / total;
+        if (frac < threshold) continue;
+        out.push({
+          operatorCountryId: ocId,
+          operatorCountryName: name,
+          totalSatellites: total,
+          column: safeCols[i]!,
+          nullCount: nc,
+          nullFraction: frac,
+        });
+      }
+    }
+
+    out.sort((a, b) => {
+      if (b.nullFraction !== a.nullFraction)
+        return b.nullFraction - a.nullFraction;
+      return b.nullCount - a.nullCount;
+    });
+    return out;
+  }
+
+  /** Satellite IDs for (operator_country × column) where column IS NULL. */
+  async findSatelliteIdsWithNullColumn(opts: {
+    operatorCountryId: bigint | null;
+    column: string;
+    limit?: number;
+  }): Promise<bigint[]> {
+    const discovered = new Set(await this.discoverNullableScalarColumns());
+    if (!discovered.has(opts.column)) {
+      throw new Error(
+        `column '${opts.column}' is not a nullable scalar on satellite`,
+      );
+    }
+    const limit = opts.limit ?? 200;
+    const ocFilter =
+      opts.operatorCountryId !== null
+        ? `AND s.operator_country_id = ${opts.operatorCountryId.toString()}::bigint`
+        : `AND s.operator_country_id IS NULL`;
+    const query = sql.raw(`
+      SELECT s.id::text AS id
+      FROM satellite s
+      WHERE s."${opts.column}" IS NULL
+        ${ocFilter}
+      ORDER BY s.id
+      LIMIT ${limit}
+    `);
+    const res = await this.db.execute<{ id: string }>(query);
+    return (res.rows as Array<{ id: string }>).map((r) => BigInt(r.id));
+  }
 }
