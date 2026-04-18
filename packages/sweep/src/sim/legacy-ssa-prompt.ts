@@ -1,55 +1,77 @@
 /**
- * Turn prompt renderer — composes the user message for sim_operator_agent.
+ * LegacySsaPromptRenderer — fallback SimPromptComposer.
  *
- * The cortex skill body is the system prompt; this file produces the user
- * prompt block. Structure is stable across DAG and Sequential drivers so
- * fixture cache keys match between modes.
+ * Body lifted from the deleted prompt.ts. Identical output to the console-api
+ * SsaPromptRenderer. Used only when buildSweepContainer is called without
+ * opts.sim.prompt. Deleted at Plan 2 Étape 4.
  */
 
-import type { AgentContext } from "./types";
+import type {
+  PromptRenderContext,
+  SimPromptComposer,
+} from "./ports";
+import type { FleetSnapshot, PcEstimatorTarget, TelemetryTarget } from "./types";
 
 const MAX_MEMORIES = 8;
 const MAX_OBSERVABLE = 15;
 
-export function renderTurnPrompt(ctx: AgentContext): string {
-  return [
-    `TURN ${ctx.turnIndex}`,
-    "",
-    "## Your persona",
-    ctx.persona,
-    "",
-    "## Your goals",
-    ctx.goals.map((g) => `- ${g}`).join("\n") || "- (no explicit goals set)",
-    "",
-    "## Your constraints",
-    "```json",
-    JSON.stringify(ctx.constraints, null, 2),
-    "```",
-    "",
-    "## Fleet snapshot",
-    renderFleetSnapshot(ctx),
-    "",
-    "## Top relevant memories (private)",
-    renderMemories(ctx),
-    "",
-    "## Observable timeline (what other agents + god-view have done)",
-    renderObservable(ctx),
-    "",
-    "## God-view injections active this turn",
-    renderGodEvents(ctx),
-    "",
-    ...(ctx.telemetryTarget
-      ? ["## Telemetry inference target", renderTelemetryTarget(ctx.telemetryTarget), ""]
-      : []),
-    ...(ctx.pcEstimatorTarget
-      ? [renderPcEstimatorTarget(ctx.pcEstimatorTarget), ""]
-      : []),
-    "## Task",
-    "Decide what you do this turn. Respond with a single JSON object matching the schema in your instructions. No prose before or after.",
-  ].join("\n");
+export class LegacySsaPromptRenderer implements SimPromptComposer {
+  render(ctx: PromptRenderContext): string {
+    const frame = ctx.frame as {
+      turnIndex: number;
+      persona: string;
+      goals: string[];
+      constraints: Record<string, unknown>;
+    };
+    const domain = ctx.domain as {
+      fleetSnapshot: FleetSnapshot | null;
+      telemetryTarget: TelemetryTarget | null;
+      pcEstimatorTarget: PcEstimatorTarget | null;
+    };
+
+    return [
+      `TURN ${frame.turnIndex}`,
+      "",
+      "## Your persona",
+      frame.persona,
+      "",
+      "## Your goals",
+      frame.goals.map((g) => `- ${g}`).join("\n") || "- (no explicit goals set)",
+      "",
+      "## Your constraints",
+      "```json",
+      JSON.stringify(frame.constraints, null, 2),
+      "```",
+      "",
+      "## Fleet snapshot",
+      renderFleetSnapshot(domain.fleetSnapshot),
+      "",
+      "## Top relevant memories (private)",
+      renderMemories(ctx.topMemories),
+      "",
+      "## Observable timeline (what other agents + god-view have done)",
+      renderObservable(ctx.observable),
+      "",
+      "## God-view injections active this turn",
+      renderGodEvents(ctx.godEvents),
+      "",
+      ...(domain.telemetryTarget
+        ? [
+            "## Telemetry inference target",
+            renderTelemetryTarget(domain.telemetryTarget),
+            "",
+          ]
+        : []),
+      ...(domain.pcEstimatorTarget
+        ? [renderPcEstimatorTarget(domain.pcEstimatorTarget), ""]
+        : []),
+      "## Task",
+      "Decide what you do this turn. Respond with a single JSON object matching the schema in your instructions. No prose before or after.",
+    ].join("\n");
+  }
 }
 
-function renderPcEstimatorTarget(t: import("./types").PcEstimatorTarget): string {
+function renderPcEstimatorTarget(t: PcEstimatorTarget): string {
   const fmt = (v: number | null | undefined, digits = 3): string =>
     v == null || Number.isNaN(v) ? "—" : Number(v).toFixed(digits);
   const fmtSci = (v: number | null | undefined): string =>
@@ -65,7 +87,8 @@ function renderPcEstimatorTarget(t: import("./types").PcEstimatorTarget): string
   const primaryBus = t.primary.bus ?? "—";
   const secondaryBus = t.secondary.bus ?? "—";
   const primaryNorad = t.primary.noradId != null ? String(t.primary.noradId) : "—";
-  const secondaryNorad = t.secondary.noradId != null ? String(t.secondary.noradId) : "—";
+  const secondaryNorad =
+    t.secondary.noradId != null ? String(t.secondary.noradId) : "—";
   return [
     "## Pc estimation target",
     `- Conjunction ID: ${t.conjunctionId}`,
@@ -83,14 +106,16 @@ function renderPcEstimatorTarget(t: import("./types").PcEstimatorTarget): string
   ].join("\n");
 }
 
-function renderTelemetryTarget(t: import("./types").TelemetryTarget): string {
+function renderTelemetryTarget(t: TelemetryTarget): string {
   const header = [
     `- satelliteId: ${t.satelliteId}`,
     `- name: ${t.satelliteName}`,
     t.noradId != null ? `- noradId: ${t.noradId}` : null,
     t.regime ? `- regime: ${t.regime}` : null,
     t.launchYear != null ? `- launchYear: ${t.launchYear}` : null,
-    t.busArchetype ? `- bus: ${t.busArchetype}` : "- bus: (unknown — no datasheet prior available)",
+    t.busArchetype
+      ? `- bus: ${t.busArchetype}`
+      : "- bus: (unknown — no datasheet prior available)",
   ].filter((l): l is string => l !== null);
 
   if (!t.busDatasheetPrior || Object.keys(t.busDatasheetPrior).length === 0) {
@@ -129,8 +154,7 @@ function renderTelemetryTarget(t: import("./types").TelemetryTarget): string {
   return header.join("\n");
 }
 
-function renderFleetSnapshot(ctx: AgentContext): string {
-  const s = ctx.fleetSnapshot;
+function renderFleetSnapshot(s: FleetSnapshot | null): string {
   if (!s) return "- (no snapshot available)";
   const regimes = s.regimeMix.length
     ? s.regimeMix.map((r) => `${r.regime}: ${r.count}`).join(", ")
@@ -148,19 +172,21 @@ function renderFleetSnapshot(ctx: AgentContext): string {
   ].join("\n");
 }
 
-function renderMemories(ctx: AgentContext): string {
-  if (ctx.topMemories.length === 0) return "- (no prior memories this run)";
-  return ctx.topMemories
+function renderMemories(
+  topMemories: PromptRenderContext["topMemories"],
+): string {
+  if (topMemories.length === 0) return "- (no prior memories this run)";
+  return topMemories
     .slice(0, MAX_MEMORIES)
-    .map((m) => `- [t${m.turnIndex}, ${m.kind}] ${truncate(m.content, 200)}`)
+    .map(
+      (m) => `- [t${m.turnIndex}, ${m.kind}] ${truncate(m.content, 200)}`,
+    )
     .join("\n");
 }
 
-function renderObservable(ctx: AgentContext): string {
-  if (ctx.observable.length === 0) return "- (nothing observed yet)";
-  // Rendered in chronological order (oldest first) for readability, even though
-  // the query returns DESC.
-  const chrono = [...ctx.observable].reverse();
+function renderObservable(observable: PromptRenderContext["observable"]): string {
+  if (observable.length === 0) return "- (nothing observed yet)";
+  const chrono = [...observable].reverse();
   return chrono
     .slice(-MAX_OBSERVABLE)
     .map((o) => {
@@ -175,9 +201,9 @@ function renderObservable(ctx: AgentContext): string {
     .join("\n");
 }
 
-function renderGodEvents(ctx: AgentContext): string {
-  if (ctx.godEvents.length === 0) return "- (no god-view injections active)";
-  return ctx.godEvents
+function renderGodEvents(godEvents: PromptRenderContext["godEvents"]): string {
+  if (godEvents.length === 0) return "- (no god-view injections active)";
+  return godEvents
     .map((g) =>
       g.detail
         ? `- [t${g.turnIndex}] ${g.summary} — ${truncate(g.detail, 300)}`

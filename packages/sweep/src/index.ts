@@ -82,7 +82,8 @@ export type {
   TopKOpts,
   RecentObservableOpts,
 } from "./sim/memory.service";
-export { renderTurnPrompt } from "./sim/prompt";
+// renderTurnPrompt removed in Plan 2 · B.4 — prompts now flow through the
+// SimPromptComposer port (apps/console-api/src/agent/ssa/sim/prompt-renderer.ts).
 export {
   isKgPromotable,
   isTerminal,

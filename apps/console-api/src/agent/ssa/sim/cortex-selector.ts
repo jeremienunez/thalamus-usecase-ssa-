@@ -1,22 +1,29 @@
 /**
  * SsaCortexSelector — picks the SSA skill name per turn.
  *
- * TODO(Plan 2 · B.4): replace DEFAULT_CORTEX_NAME / TELEMETRY_CORTEX_NAME /
- *   PC_ESTIMATOR_CORTEX_NAME constants in turn-runner-dag.ts:42-46. Dispatch:
+ * Plan 2 · B.4. Replaces DEFAULT_CORTEX_NAME / TELEMETRY_CORTEX_NAME /
+ * PC_ESTIMATOR_CORTEX_NAME constants that lived in turn-runner-dag.ts +
+ * turn-runner-sequential.ts. Dispatch:
  *
- *     simKind === "uc_telemetry_inference" → "telemetry_infer"
- *     simKind === "uc_pc_estimator"         → "pc_estimator"
- *     otherwise                             → "sim_operator_agent"
+ *   hints.hasPcEstimatorTarget          → "pc_estimator_agent"
+ *   hints.hasTelemetryTarget (and not Pc) → "telemetry_inference_agent"
+ *   otherwise                            → "sim_operator_agent"
  */
 
 import type {
-  SimCortexSelector,
   CortexSelectionInput,
+  SimCortexSelector,
 } from "@interview/sweep";
 
+const DEFAULT_CORTEX_NAME = "sim_operator_agent";
+const TELEMETRY_CORTEX_NAME = "telemetry_inference_agent";
+const PC_ESTIMATOR_CORTEX_NAME = "pc_estimator_agent";
+
 export class SsaCortexSelector implements SimCortexSelector {
-  pickCortexName(_input: CortexSelectionInput): string {
-    // TODO(B.4): implement dispatch.
-    throw new Error("SsaCortexSelector.pickCortexName: TODO Plan 2 · B.4");
+  pickCortexName(input: CortexSelectionInput): string {
+    const hints = input.hints ?? {};
+    if (hints.hasPcEstimatorTarget) return PC_ESTIMATOR_CORTEX_NAME;
+    if (hints.hasTelemetryTarget) return TELEMETRY_CORTEX_NAME;
+    return DEFAULT_CORTEX_NAME;
   }
 }

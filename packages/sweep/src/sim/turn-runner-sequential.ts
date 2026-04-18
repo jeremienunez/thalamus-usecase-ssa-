@@ -22,32 +22,30 @@ import type {
 } from "./types";
 import { turnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
-import { renderTurnPrompt } from "./prompt";
 import { isTerminal } from "./promote";
-import type { SimTurnTargetProvider } from "./ports";
+import type {
+  SimCortexSelector,
+  SimPromptComposer,
+  SimTurnTargetProvider,
+} from "./ports";
 
 const logger = createLogger("sim-sequential");
 
-const DEFAULT_CORTEX_NAME = "sim_operator_agent";
-const TELEMETRY_CORTEX_NAME = "telemetry_inference_agent";
-const PC_ESTIMATOR_CORTEX_NAME = "pc_estimator_agent";
-
-function pickCortexName(ctx: AgentContext): string {
-  if (ctx.pcEstimatorTarget) return PC_ESTIMATOR_CORTEX_NAME;
-  if (ctx.telemetryTarget) return TELEMETRY_CORTEX_NAME;
-  return DEFAULT_CORTEX_NAME;
-}
 const MAX_JSON_RETRIES = 2;
 
 export interface SequentialRunnerDeps {
   db: Database;
   memory: MemoryService;
-  /** Cortex registry — used to resolve the sim_operator_agent skill body as nano instructions. */
+  /** Cortex registry — used to resolve skill bodies as nano instructions. */
   cortexRegistry: CortexRegistry;
   llmMode: "cloud" | "fixtures" | "record";
   embed?: (text: string) => Promise<number[] | null>;
   /** Plan 2 · B.2 — pack-provided turn target loader (telemetry / pc). */
   targets: SimTurnTargetProvider;
+  /** Plan 2 · B.4 — pack-provided prompt renderer. */
+  prompt: SimPromptComposer;
+  /** Plan 2 · B.4 — pack-provided cortex skill selector. */
+  cortexSelector: SimCortexSelector;
 }
 
 export interface RunTurnOpts {
@@ -200,8 +198,30 @@ export class SequentialTurnRunner {
   // -------------------------------------------------------------------
 
   private async callAgent(ctx: AgentContext): Promise<TurnResponse> {
-    const userPrompt = renderTurnPrompt(ctx);
-    const cortexName = pickCortexName(ctx);
+    const userPrompt = this.deps.prompt.render({
+      frame: {
+        turnIndex: ctx.turnIndex,
+        persona: ctx.persona,
+        goals: ctx.goals,
+        constraints: ctx.constraints,
+      },
+      domain: {
+        fleetSnapshot: ctx.fleetSnapshot,
+        telemetryTarget: ctx.telemetryTarget,
+        pcEstimatorTarget: ctx.pcEstimatorTarget,
+      },
+      observable: ctx.observable,
+      godEvents: ctx.godEvents,
+      topMemories: ctx.topMemories,
+    });
+    const cortexName = this.deps.cortexSelector.pickCortexName({
+      simKind: "",
+      turnIndex: ctx.turnIndex,
+      hints: {
+        hasTelemetryTarget: ctx.telemetryTarget !== null,
+        hasPcEstimatorTarget: ctx.pcEstimatorTarget !== null,
+      },
+    });
     const skill = this.deps.cortexRegistry.get(cortexName);
     if (!skill) {
       throw new Error(
@@ -245,7 +265,7 @@ export class SequentialTurnRunner {
       }
     }
     throw new Error(
-      `${pickCortexName(ctx)} response invalid after ${MAX_JSON_RETRIES + 1} attempts: ${lastError?.message}`,
+      `${cortexName} response invalid after ${MAX_JSON_RETRIES + 1} attempts: ${lastError?.message}`,
     );
   }
 

@@ -25,10 +25,14 @@ import type {
   SimFleetProvider,
   SimTurnTargetProvider,
   SimAgentPersonaComposer,
+  SimPromptComposer,
+  SimCortexSelector,
 } from "../sim/ports";
 import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
 import { LegacySsaTurnTargetProvider } from "../sim/legacy-ssa-targets";
 import { LegacySsaPersonaComposer } from "../sim/legacy-ssa-persona";
+import { LegacySsaPromptRenderer } from "../sim/legacy-ssa-prompt";
+import { LegacySsaCortexSelector } from "../sim/legacy-ssa-cortex-selector";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -109,6 +113,10 @@ export interface BuildSweepOpts {
      * back to LegacySsaPersonaComposer.
      */
     persona?: SimAgentPersonaComposer;
+    /** Plan 2 · B.4 — prompt renderer port. Fallback LegacySsaPromptRenderer. */
+    prompt?: SimPromptComposer;
+    /** Plan 2 · B.4 — cortex selector port. Fallback LegacySsaCortexSelector. */
+    cortexSelector?: SimCortexSelector;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -177,14 +185,18 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
 
   let sim: SimServices | undefined;
   if (opts.sim) {
-    // Plan 2 · B.1 / B.2 / B.3 — sim ports: use the injected SSA providers or
-    // fall back to the legacy adapters (allowlisted until Étape 4).
+    // Plan 2 · B.1 / B.2 / B.3 / B.4 — sim ports: use the injected SSA
+    // providers or fall back to the legacy adapters (allowlisted until Étape 4).
     const fleet: SimFleetProvider =
       opts.sim.fleet ?? new LegacySsaFleetProvider(db);
     const targets: SimTurnTargetProvider =
       opts.sim.targets ?? new LegacySsaTurnTargetProvider(db);
     const persona: SimAgentPersonaComposer =
       opts.sim.persona ?? new LegacySsaPersonaComposer();
+    const prompt: SimPromptComposer =
+      opts.sim.prompt ?? new LegacySsaPromptRenderer();
+    const cortexSelector: SimCortexSelector =
+      opts.sim.cortexSelector ?? new LegacySsaCortexSelector();
     const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,
@@ -192,6 +204,8 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       cortexRegistry: opts.sim.cortexRegistry,
       llmMode: opts.sim.llmMode,
       targets,
+      prompt,
+      cortexSelector,
     });
     const dagRunner = new DagTurnRunner({
       db,
@@ -199,6 +213,8 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       cortexRegistry: opts.sim.cortexRegistry,
       llmMode: opts.sim.llmMode,
       targets,
+      prompt,
+      cortexSelector,
     });
     const orchestrator = new SimOrchestrator({
       db,
