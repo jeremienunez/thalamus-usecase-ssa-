@@ -20,10 +20,11 @@ import type {
   TelemetryTarget,
   TurnResponse,
 } from "./types";
-import { turnResponseSchema } from "./schema";
+import { buildTurnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
 import { isTerminal } from "./promote";
 import type {
+  SimActionSchemaProvider,
   SimCortexSelector,
   SimPromptComposer,
   SimTurnTargetProvider,
@@ -46,6 +47,8 @@ export interface SequentialRunnerDeps {
   prompt: SimPromptComposer;
   /** Plan 2 · B.4 — pack-provided cortex skill selector. */
   cortexSelector: SimCortexSelector;
+  /** Plan 2 · B.5 — pack-provided action Zod schema. */
+  schemaProvider: SimActionSchemaProvider;
 }
 
 export interface RunTurnOpts {
@@ -247,7 +250,10 @@ export class SequentialTurnRunner {
       }
       try {
         const raw = extractJsonObject(res.text);
-        const parsed = turnResponseSchema.parse(raw);
+        const responseSchema = buildTurnResponseSchema(
+          this.deps.schemaProvider.actionSchema(),
+        );
+        const parsed = responseSchema.parse(raw);
         return parsed as TurnResponse;
       } catch (err) {
         lastError = err as Error;

@@ -7,7 +7,7 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import { godEventSchema } from "./schema";
+import { godEventSchema } from "./legacy-ssa-schema";
 import type { SimOrchestrator, GodEventInput } from "./sim-orchestrator.service";
 
 const logger = createLogger("god-channel");

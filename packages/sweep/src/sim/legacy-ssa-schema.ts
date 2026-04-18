@@ -1,26 +1,24 @@
 /**
- * SsaActionSchemaProvider + SSA Zod schemas.
+ * LegacySsaActionSchemaProvider + legacy SSA Zod schemas.
  *
- * Plan 2 · B.5. Lifted verbatim from packages/sweep/src/sim/schema.ts. The
- * kernel now carries only `buildTurnResponseSchema(action)` and
- * `swarmConfigSchema`; this file owns every SSA-specific discriminated
- * union (turn actions, god events, perturbations, seed refs, launch swarms).
+ * Fallback path identical to apps/console-api/src/agent/ssa/sim/action-schema.ts.
+ * Used when buildSweepContainer is called without opts.sim.schemaProvider.
+ * Also re-exports godEventSchema so god-channel.service.ts (moved to the pack
+ * in B.6) keeps compiling in the meantime.
  *
- * The action discriminated union mirrors TurnAction in db-schema/sim.ts —
- * keep the two in sync.
+ * Deleted at Plan 2 Étape 4 (along with god-channel.service.ts which moves
+ * in B.6).
  */
 
 import { z } from "zod";
 import { TELEMETRY_SCALAR_KEYS } from "@interview/db-schema";
-import type { SimActionSchemaProvider } from "@interview/sweep";
+import type { SimActionSchemaProvider } from "./ports";
 
-/** Per-scalar inference shape produced by the telemetry_inference_agent. */
 const scalarValueSchema = z.object({
   value: z.number().finite(),
   unit: z.string().min(1).max(16),
 });
 
-/** Record<TelemetryScalarKey, {value, unit}> — required keys match TELEMETRY_SCALAR_KEYS. */
 const telemetryScalarsSchema = z.object(
   Object.fromEntries(
     TELEMETRY_SCALAR_KEYS.map((k) => [k, scalarValueSchema]),
@@ -100,12 +98,6 @@ export const turnActionSchema = z.discriminatedUnion("kind", [
       .default([]),
   }),
 ]);
-
-// -----------------------------------------------------------------------
-// Perturbation + seed + swarm-launch schemas — admin/CLI/HTTP route payload
-// validators. The kernel only sees generic envelopes; these validate at the
-// boundary before anything reaches the kernel.
-// -----------------------------------------------------------------------
 
 export const godEventSchema = z.object({
   kind: z.enum([
@@ -190,13 +182,12 @@ export const launchSwarmSchema = z.object({
   title: z.string().min(1),
   baseSeed: seedRefsSchema,
   perturbations: z.array(perturbationSchema).min(1),
-  // config is generic and stays in sweep's schema.ts (swarmConfigSchema).
   config: z.any(),
 });
 
 export type LaunchSwarmInput = z.infer<typeof launchSwarmSchema>;
 
-export class SsaActionSchemaProvider implements SimActionSchemaProvider {
+export class LegacySsaActionSchemaProvider implements SimActionSchemaProvider {
   actionSchema(): z.ZodTypeAny {
     return turnActionSchema;
   }

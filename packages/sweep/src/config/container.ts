@@ -27,12 +27,14 @@ import type {
   SimAgentPersonaComposer,
   SimPromptComposer,
   SimCortexSelector,
+  SimActionSchemaProvider,
 } from "../sim/ports";
 import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
 import { LegacySsaTurnTargetProvider } from "../sim/legacy-ssa-targets";
 import { LegacySsaPersonaComposer } from "../sim/legacy-ssa-persona";
 import { LegacySsaPromptRenderer } from "../sim/legacy-ssa-prompt";
 import { LegacySsaCortexSelector } from "../sim/legacy-ssa-cortex-selector";
+import { LegacySsaActionSchemaProvider } from "../sim/legacy-ssa-schema";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -117,6 +119,8 @@ export interface BuildSweepOpts {
     prompt?: SimPromptComposer;
     /** Plan 2 · B.4 — cortex selector port. Fallback LegacySsaCortexSelector. */
     cortexSelector?: SimCortexSelector;
+    /** Plan 2 · B.5 — action schema port. Fallback LegacySsaActionSchemaProvider. */
+    schemaProvider?: SimActionSchemaProvider;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -197,6 +201,8 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       opts.sim.prompt ?? new LegacySsaPromptRenderer();
     const cortexSelector: SimCortexSelector =
       opts.sim.cortexSelector ?? new LegacySsaCortexSelector();
+    const schemaProvider: SimActionSchemaProvider =
+      opts.sim.schemaProvider ?? new LegacySsaActionSchemaProvider();
     const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,
@@ -206,6 +212,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       targets,
       prompt,
       cortexSelector,
+      schemaProvider,
     });
     const dagRunner = new DagTurnRunner({
       db,
@@ -215,6 +222,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       targets,
       prompt,
       cortexSelector,
+      schemaProvider,
     });
     const orchestrator = new SimOrchestrator({
       db,

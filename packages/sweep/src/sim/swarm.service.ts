@@ -23,7 +23,7 @@ import type { Queue } from "bullmq";
 import type { Database } from "@interview/db-schema";
 import { simRun, simSwarm } from "@interview/db-schema";
 import { createLogger } from "@interview/shared/observability";
-import type { LaunchSwarmInput } from "./schema";
+import type { LaunchSwarmInput } from "./legacy-ssa-schema";
 import type { SimOrchestrator } from "./sim-orchestrator.service";
 import type { SwarmConfig, SimConfig, SimKind, SeedRefs, PerturbationSpec } from "./types";
 import { applyPerturbation } from "./perturbation";
