@@ -100,7 +100,37 @@ export interface AgentContext {
   pcEstimatorTarget: PcEstimatorTarget | null;
 }
 
-export type PcEstimatorTarget = import("./load-pc-target").PcEstimatorTarget;
+/**
+ * Conjunction target for Pc-estimator swarms. Carries the conjunction event
+ * + both satellites + the per-fish perturbation (hard-body radius × covariance
+ * scale). Loaded by SimTurnTargetProvider (Plan 2 · B.2).
+ */
+export interface PcEstimatorTarget {
+  conjunctionId: number;
+  tca: Date | null;
+  missDistanceKm: number | null;
+  relativeVelocityKmps: number | null;
+  currentPc: number | null;
+  hardBodyRadiusMeters: number | null;
+  combinedSigmaKm: number | null;
+  primary: {
+    id: number;
+    name: string;
+    noradId: number | null;
+    bus: string | null;
+  };
+  secondary: {
+    id: number;
+    name: string;
+    noradId: number | null;
+    bus: string | null;
+  };
+  /** Per-fish perturbation extracted from seed_applied.pcAssumptions. */
+  assumptions: {
+    hardBodyRadiusMeters: number;
+    covarianceScale: "tight" | "nominal" | "loose";
+  } | null;
+}
 
 /** Satellite + bus-datasheet prior, injected as a dedicated prompt block. */
 export interface TelemetryTarget {

@@ -21,8 +21,9 @@ import type {
   ResolutionHandlerRegistry,
   IngestionSourceProvider,
 } from "../ports";
-import type { SimFleetProvider } from "../sim/ports";
+import type { SimFleetProvider, SimTurnTargetProvider } from "../sim/ports";
 import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
+import { LegacySsaTurnTargetProvider } from "../sim/legacy-ssa-targets";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -93,6 +94,11 @@ export interface BuildSweepOpts {
      * injects SsaFleetProvider (agent/ssa/sim/fleet-provider.ts).
      */
     fleet?: SimFleetProvider;
+    /**
+     * Plan 2 · B.2 — SimTurnTargetProvider port. When omitted, falls back
+     * to LegacySsaTurnTargetProvider.
+     */
+    targets?: SimTurnTargetProvider;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -161,22 +167,26 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
 
   let sim: SimServices | undefined;
   if (opts.sim) {
-    // Plan 2 · B.1 — fleet port: use the injected SSA provider or fall back
-    // to the legacy SQL adapter (allowlisted until Étape 4 deletes it).
+    // Plan 2 · B.1 / B.2 — sim ports: use the injected SSA providers or
+    // fall back to the legacy SQL adapters (allowlisted until Étape 4).
     const fleet: SimFleetProvider =
       opts.sim.fleet ?? new LegacySsaFleetProvider(db);
+    const targets: SimTurnTargetProvider =
+      opts.sim.targets ?? new LegacySsaTurnTargetProvider(db);
     const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,
       memory: memoryService,
       cortexRegistry: opts.sim.cortexRegistry,
       llmMode: opts.sim.llmMode,
+      targets,
     });
     const dagRunner = new DagTurnRunner({
       db,
       memory: memoryService,
       cortexRegistry: opts.sim.cortexRegistry,
       llmMode: opts.sim.llmMode,
+      targets,
     });
     const orchestrator = new SimOrchestrator({ db, simTurnQueue, fleet });
     const godChannel = new GodChannelService(orchestrator);

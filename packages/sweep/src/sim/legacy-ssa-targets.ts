@@ -1,46 +1,106 @@
 /**
- * Load the PcEstimatorTarget for a sim_run — mirrors loadTelemetryTarget.
+ * LegacySsaTurnTargetProvider — fallback SimTurnTargetProvider.
  *
- * Reads `sim_run.seed_applied.pcEstimatorTarget` (the conjunction_event.id).
- * Joins conjunction_event + both satellites + bus/mass metadata. Non-Pc swarms
- * return null so the turn-runners can treat absence as "this isn't a Pc fish".
+ * Implements the port inside the sweep package using raw SQL. Used ONLY when
+ * buildSweepContainer is called WITHOUT opts.sim.targets. The console-api
+ * path injects SsaTurnTargetProvider (apps/console-api/src/agent/ssa/sim/targets.ts).
  *
- * Defensive: if conjunction_event columns (covariance, mass) are NULL in the
- * seed catalog, we return null placeholders — the fish is expected to flag
- * `low-data` rather than invent values.
+ * Plan 2 lifecycle:
+ *   - B.2: this file lands (replaces load-telemetry-target.ts + load-pc-target.ts).
+ *   - Étape 4: deleted; container always requires the port.
+ *
+ * Returns a bag `{ telemetryTarget, pcEstimatorTarget }`. Both nullable.
  */
 
 import { sql } from "drizzle-orm";
 import type { Database, SeedRefs } from "@interview/db-schema";
+import type {
+  SimTurnTargetProvider,
+} from "./ports";
+import type { TelemetryTarget, PcEstimatorTarget } from "./types";
 
-export interface PcEstimatorTarget {
-  conjunctionId: number;
-  tca: Date | null;
-  missDistanceKm: number | null;
-  relativeVelocityKmps: number | null;
-  currentPc: number | null;
-  hardBodyRadiusMeters: number | null;
-  combinedSigmaKm: number | null;
-  primary: {
-    id: number;
-    name: string;
-    noradId: number | null;
-    bus: string | null;
-  };
-  secondary: {
-    id: number;
-    name: string;
-    noradId: number | null;
-    bus: string | null;
-  };
-  /** Per-fish perturbation extracted from seed_applied.pcAssumptions. */
-  assumptions: {
-    hardBodyRadiusMeters: number;
-    covarianceScale: "tight" | "nominal" | "loose";
-  } | null;
+export class LegacySsaTurnTargetProvider implements SimTurnTargetProvider {
+  constructor(private readonly db: Database) {}
+
+  async loadTargets(args: {
+    simRunId: number;
+    seedHints: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    const [telemetryTarget, pcEstimatorTarget] = await Promise.all([
+      loadTelemetryTarget(this.db, args.simRunId),
+      loadPcTarget(this.db, args.simRunId),
+    ]);
+    return { telemetryTarget, pcEstimatorTarget };
+  }
 }
 
-export async function loadPcTarget(
+async function loadTelemetryTarget(
+  db: Database,
+  simRunId: number,
+): Promise<TelemetryTarget | null> {
+  const runRows = await db.execute(sql`
+    SELECT seed_applied
+    FROM sim_run
+    WHERE id = ${BigInt(simRunId)}
+    LIMIT 1
+  `);
+  const row = runRows.rows[0] as { seed_applied: SeedRefs } | undefined;
+  if (!row) return null;
+  const seed = row.seed_applied ?? {};
+  const satelliteId = seed.telemetryTargetSatelliteId;
+  if (satelliteId == null) return null;
+
+  const satRows = await db.execute(sql`
+    SELECT
+      s.id::int                                       AS id,
+      s.name                                          AS name,
+      NULLIF(s.telemetry_summary->>'noradId','')::int AS norad_id,
+      s.launch_year                                   AS launch_year,
+      orr.name                                        AS regime,
+      sb.name                                         AS bus_name
+    FROM satellite s
+    LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
+    LEFT JOIN orbit_regime orr    ON orr.id = oc.orbit_regime_id
+    LEFT JOIN satellite_bus sb    ON sb.id = s.satellite_bus_id
+    WHERE s.id = ${BigInt(satelliteId)}
+    LIMIT 1
+  `);
+  const sat = satRows.rows[0] as
+    | {
+        id: number;
+        name: string;
+        norad_id: number | null;
+        launch_year: number | null;
+        regime: string | null;
+        bus_name: string | null;
+      }
+    | undefined;
+  if (!sat) {
+    return {
+      satelliteId,
+      satelliteName: `(unknown sat id=${satelliteId})`,
+      noradId: null,
+      regime: null,
+      launchYear: null,
+      busArchetype: seed.busDatasheetPrior?.busArchetype ?? null,
+      busDatasheetPrior: seed.busDatasheetPrior?.scalars ?? null,
+      sources: [],
+    };
+  }
+
+  return {
+    satelliteId: sat.id,
+    satelliteName: sat.name,
+    noradId: sat.norad_id,
+    regime: sat.regime,
+    launchYear: sat.launch_year,
+    busArchetype: seed.busDatasheetPrior?.busArchetype ?? sat.bus_name,
+    busDatasheetPrior: seed.busDatasheetPrior?.scalars ?? null,
+    sources: [],
+  };
+}
+
+async function loadPcTarget(
   db: Database,
   simRunId: number,
 ): Promise<PcEstimatorTarget | null> {

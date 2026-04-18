@@ -24,12 +24,17 @@ import { simAgent, simRun, simTurn } from "@interview/db-schema";
 import type { CortexRegistry } from "@interview/thalamus";
 import { callNanoWithMode, extractJsonObject } from "@interview/thalamus";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import type { AgentContext, FleetSnapshot, TurnResponse } from "./types";
+import type {
+  AgentContext,
+  FleetSnapshot,
+  PcEstimatorTarget,
+  TelemetryTarget,
+  TurnResponse,
+} from "./types";
 import { turnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
 import { renderTurnPrompt } from "./prompt";
-import { loadTelemetryTarget } from "./load-telemetry-target";
-import { loadPcTarget } from "./load-pc-target";
+import type { SimTurnTargetProvider } from "./ports";
 
 const logger = createLogger("sim-dag");
 
@@ -51,6 +56,8 @@ export interface DagRunnerDeps {
   /** Cortex registry — used to resolve the sim_operator_agent skill body as nano instructions. */
   cortexRegistry: CortexRegistry;
   llmMode: "cloud" | "fixtures" | "record";
+  /** Plan 2 · B.2 — pack-provided turn target loader (telemetry / pc). */
+  targets: SimTurnTargetProvider;
 }
 
 export interface DagRunTurnOpts {
@@ -330,10 +337,13 @@ export class DagTurnRunner {
     ]);
 
     const godEvents = await this.loadGodEvents(args.simRunId, args.turnIndex);
-    const [telemetryTarget, pcEstimatorTarget] = await Promise.all([
-      loadTelemetryTarget(this.deps.db, args.simRunId),
-      loadPcTarget(this.deps.db, args.simRunId),
-    ]);
+    const targets = await this.deps.targets.loadTargets({
+      simRunId: args.simRunId,
+      seedHints: {},
+    });
+    const telemetryTarget = (targets.telemetryTarget as TelemetryTarget | null) ?? null;
+    const pcEstimatorTarget =
+      (targets.pcEstimatorTarget as PcEstimatorTarget | null) ?? null;
 
     return {
       simRunId: args.simRunId,
