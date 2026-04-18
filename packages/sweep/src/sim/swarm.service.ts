@@ -27,6 +27,7 @@ import type { LaunchSwarmInput } from "./legacy-ssa-schema";
 import type { SimOrchestrator } from "./sim-orchestrator.service";
 import type { SwarmConfig, SimConfig, SimKind, SeedRefs, PerturbationSpec } from "./types";
 import { applyPerturbation } from "./perturbation";
+import type { SimKindGuard } from "./ports";
 
 const logger = createLogger("swarm-service");
 
@@ -45,6 +46,8 @@ export interface SwarmServiceDeps {
   orchestrator: SimOrchestrator;
   swarmFishQueue: Queue<SwarmFishJobPayload>;
   swarmAggregateQueue: Queue<SwarmAggregateJobPayload>;
+  /** Plan 2 · B.9 — per-kind validator + maxTurns default. */
+  kindGuard: SimKindGuard;
 }
 
 export interface LaunchSwarmOpts extends LaunchSwarmInput {
@@ -78,31 +81,10 @@ export class SwarmService {
     if (perturbations.length < 1) {
       throw new Error("launchSwarm requires at least 1 perturbation");
     }
-    if (kind === "uc3_conjunction" && (baseSeed.operatorIds?.length ?? 0) !== 2) {
-      throw new Error("UC3 swarm requires exactly 2 operatorIds in baseSeed");
-    }
-    if (kind === "uc1_operator_behavior" && (baseSeed.operatorIds?.length ?? 0) < 1) {
-      throw new Error("UC1 swarm requires at least 1 operatorId in baseSeed");
-    }
-    if (kind === "uc_pc_estimator") {
-      if (baseSeed.pcEstimatorTarget == null) {
-        throw new Error(
-          "UC_PC_ESTIMATOR swarm requires baseSeed.pcEstimatorTarget (conjunction_event.id)",
-        );
-      }
-    }
-    if (kind === "uc_telemetry_inference") {
-      if ((baseSeed.operatorIds?.length ?? 0) !== 1) {
-        throw new Error(
-          "UC_TELEMETRY swarm requires exactly 1 operatorId in baseSeed (the target satellite's operator)",
-        );
-      }
-      if (baseSeed.telemetryTargetSatelliteId == null) {
-        throw new Error(
-          "UC_TELEMETRY swarm requires baseSeed.telemetryTargetSatelliteId",
-        );
-      }
-    }
+    this.deps.kindGuard.validateLaunch({
+      kind,
+      baseSeed: baseSeed as unknown as Record<string, unknown>,
+    });
 
     // 1. Insert sim_swarm row.
     const swarmConfig: SwarmConfig = {
@@ -131,8 +113,7 @@ export class SwarmService {
 
     // 2. For each perturbation, create a fish (sim_run + agents) via the
     // orchestrator, then enqueue its swarm-fish job.
-    const maxTurns =
-      kind === "uc3_conjunction" ? 20 : 15; // defaults; caller can override via config extensions later
+    const maxTurns = this.deps.kindGuard.defaultMaxTurns(kind);
     const firstSimRunIds: number[] = [];
     for (let i = 0; i < perturbations.length; i++) {
       const spec = perturbations[i] as PerturbationSpec;

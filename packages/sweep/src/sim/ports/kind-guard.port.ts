@@ -10,8 +10,15 @@
  */
 
 export interface SimKindGuard {
-  /** Throws if the kind is not supported by the pack. */
-  validateLaunch(kind: string): void;
+  /**
+   * Throws if the kind is not supported by the pack OR the baseSeed
+   * doesn't satisfy the pack's per-kind invariants (e.g. SSA UC3 needs
+   * exactly 2 operatorIds, pc_estimator needs a conjunction id).
+   */
+  validateLaunch(args: {
+    kind: string;
+    baseSeed: Record<string, unknown>;
+  }): void;
   /** Per-kind default maxTurns (clamped by caller). */
   defaultMaxTurns(kind: string): number;
 }

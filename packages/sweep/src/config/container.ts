@@ -30,6 +30,7 @@ import type {
   SimActionSchemaProvider,
   SimPerturbationPack,
   SimAggregationStrategy,
+  SimKindGuard,
 } from "../sim/ports";
 import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
 import { LegacySsaTurnTargetProvider } from "../sim/legacy-ssa-targets";
@@ -39,6 +40,7 @@ import { LegacySsaCortexSelector } from "../sim/legacy-ssa-cortex-selector";
 import { LegacySsaActionSchemaProvider } from "../sim/legacy-ssa-schema";
 import { LegacySsaPerturbationPack } from "../sim/legacy-ssa-perturbation-pack";
 import { LegacySsaAggregationStrategy } from "../sim/legacy-ssa-aggregation-strategy";
+import { LegacySsaKindGuard } from "../sim/legacy-ssa-kind-guard";
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -129,6 +131,8 @@ export interface BuildSweepOpts {
     perturbationPack?: SimPerturbationPack;
     /** Plan 2 · B.8 — aggregation strategy. Fallback LegacySsaAggregationStrategy. */
     aggStrategy?: SimAggregationStrategy;
+    /** Plan 2 · B.9 — sim kind guard + defaultMaxTurns. Fallback LegacySsaKindGuard. */
+    kindGuard?: SimKindGuard;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -215,6 +219,8 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       opts.sim.perturbationPack ?? new LegacySsaPerturbationPack();
     const aggStrategy: SimAggregationStrategy =
       opts.sim.aggStrategy ?? new LegacySsaAggregationStrategy();
+    const kindGuard: SimKindGuard =
+      opts.sim.kindGuard ?? new LegacySsaKindGuard();
     const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,
@@ -255,6 +261,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       orchestrator,
       swarmFishQueue,
       swarmAggregateQueue,
+      kindGuard,
     });
     const confidenceService = new ConfidenceService();
 

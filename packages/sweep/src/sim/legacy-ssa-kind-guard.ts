@@ -1,11 +1,11 @@
 /**
- * SsaKindGuard — SSA-supported sim kinds + per-kind invariants + maxTurns.
+ * LegacySsaKindGuard — fallback SimKindGuard.
  *
- * Plan 2 · B.9. Lifted from packages/sweep/src/sim/swarm.service.ts
- * launchSwarm guards and the inline `maxTurns` default.
+ * Mirror of apps/console-api/src/agent/ssa/sim/kind-guard.ts. Deleted at
+ * Plan 2 Étape 4.
  */
 
-import type { SimKindGuard } from "@interview/sweep";
+import type { SimKindGuard } from "./ports";
 
 const SSA_KINDS = new Set<string>([
   "uc1_operator_behavior",
@@ -14,14 +14,14 @@ const SSA_KINDS = new Set<string>([
   "uc_pc_estimator",
 ]);
 
-export class SsaKindGuard implements SimKindGuard {
+export class LegacySsaKindGuard implements SimKindGuard {
   validateLaunch(args: {
     kind: string;
     baseSeed: Record<string, unknown>;
   }): void {
     const { kind, baseSeed } = args;
     if (!SSA_KINDS.has(kind)) {
-      throw new Error(`SsaKindGuard: unsupported sim kind "${kind}"`);
+      throw new Error(`LegacySsaKindGuard: unsupported sim kind "${kind}"`);
     }
     const operatorIds = (baseSeed.operatorIds as number[] | undefined) ?? [];
 
