@@ -58,8 +58,9 @@ export type {
   SimServices,
 } from "./config/container";
 
-// Middleware stubs
-export * from "./middleware/auth.middleware";
+// (auth.middleware stubs kept in-tree for legacy sweep-internal use but no
+// longer re-exported — console-api carries its own copy compatible with
+// its Fastify v5 types.)
 
 // Sim engine (SPEC-SW-006)
 export * from "./sim/types";
