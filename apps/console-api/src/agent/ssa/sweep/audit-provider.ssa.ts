@@ -12,9 +12,11 @@
  * (NanoSweepService.sweep in Phase 2) persists them via
  * SweepRepository.insertGeneric.
  *
- * Deps still reference sweep-side SatelliteRepository + SweepRepository;
- * Phase 4 swaps satelliteRepo to console-api's SatelliteAuditService once
- * the 8 audit methods fold in.
+ * Plan 1 Task 4.2: satelliteRepo is now console-api's own SatelliteRepository
+ * (the audit methods getOperatorCountrySweepStats + nullScanByColumn +
+ * findSatelliteIdsWithNullColumn were folded in by Task 4.1). sweepRepo is
+ * still the sweep-side interface — only `loadPastFeedback` is consumed, and
+ * the sweep container owns it.
  */
 
 import { createLogger } from "@interview/shared/observability";
@@ -27,12 +29,9 @@ import type {
   AuditCandidate,
   DomainAuditProvider,
 } from "@interview/sweep";
-import type {
-  SatelliteRepository,
-  SweepRepository,
-  PastFeedback,
-} from "@interview/sweep";
+import type { SweepRepository, PastFeedback } from "@interview/sweep";
 import { resolutionPayloadSchema } from "@interview/sweep";
+import type { SatelliteRepository } from "../../../repositories/satellite.repository";
 import type { SweepFeedbackRepository } from "../../../repositories/sweep-feedback.repository";
 
 const logger = createLogger("ssa-audit-provider");

@@ -5,17 +5,16 @@
  * Five handlers, one ResolutionHandler each, behind the ResolutionHandlerRegistry
  * port. The sweep-resolution engine (Task 2.3) will dispatch action.kind → handler.
  *
- * Dep shape temporarily uses the sweep-side SatelliteRepository — Phase 4
- * swaps it for SatelliteAuditService once the 8 audit methods fold in.
- *
- * The onSimUpdateAccepted hook stays on the legacy sweep container path
- * until Plan 2 consolidates sim source-class promotion.
+ * Plan 1 Task 4.2: satelliteRepo is now console-api's own SatelliteRepository
+ * (updateField + FK queries available directly). The onSimUpdateAccepted
+ * hook still flows from the sweep container path until Plan 2 consolidates
+ * sim source-class promotion into the promotion port.
  */
 
 import { randomUUID as _ignoreUnused } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Database } from "@interview/db-schema";
-import type { SatelliteRepository } from "@interview/sweep";
+import type { SatelliteRepository } from "../../../repositories/satellite.repository";
 import type {
   ResolutionHandler,
   ResolutionHandlerRegistry,
@@ -128,10 +127,16 @@ async function updateSatellitesScalar(
   }
   let updated = 0;
   for (const satelliteId of satelliteIds) {
-    const ok = await deps.satelliteRepo.update(satelliteId, {
-      [field]: value,
-    } as never);
-    if (ok) updated++;
+    try {
+      // console-api's updateField takes (id, field, value) rather than
+      // (id, partial). Single-field semantics match the handler's usage —
+      // sim_swarm telemetry updates one scalar at a time.
+      await deps.satelliteRepo.updateField(satelliteId, field, value);
+      updated++;
+    } catch {
+      // Unknown field / failed update — mirror the legacy behaviour of
+      // counting only successful updates.
+    }
   }
   return { affectedRows: updated };
 }

@@ -23,10 +23,6 @@ import {
   createIngestionWorker,
   ingestionQueue,
   registerSchedulers,
-  // Sweep-side SatelliteRepository aliased to disambiguate from console-api's
-  // local one (different surface — audit queries vs lookup/insert).
-  // Plan 1 Task 4 folds its methods into SatelliteAuditService.
-  SatelliteRepository as SweepSideSatelliteRepo,
 } from "@interview/sweep";
 import { IngestionService } from "./services/ingestion.service";
 
@@ -173,7 +169,12 @@ export async function buildContainer(
   // once the 8 audit query methods fold in; for now the sweep-side repo is
   // used to preserve byte-identical behaviour vs pre-refactor.
   const sweepFeedbackRepo = new SweepFeedbackRepository(redis);
-  const sweepSideSatRepo = new SweepSideSatelliteRepo(db);
+
+  // Plan 1 Task 4.2: SSA pack now uses console-api's own SatelliteRepository
+  // (audit queries folded in by Task 4.1). Sweep-side SatelliteRepository
+  // is unused by the console-api port impls and only lives on inside the
+  // sweep container's legacy fallback (used by the UC3 E2E fixture until
+  // Plan 2 moves it here).
 
   const ssaPromotion = new SsaPromotionAdapter({
     sweepAuditRepo: auditRepo,
@@ -185,10 +186,10 @@ export async function buildContainer(
   });
   const ssaResolutionRegistry = createSsaResolutionRegistry({
     db,
-    satelliteRepo: sweepSideSatRepo,
+    satelliteRepo,
   });
   const ssaAuditProvider = new SsaAuditProvider({
-    satelliteRepo: sweepSideSatRepo,
+    satelliteRepo,
     sweepRepo: {
       // loadPastFeedback is the only sweepRepo surface the provider uses;
       // we forward to the one built inside the sweep container below via

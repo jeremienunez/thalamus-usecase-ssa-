@@ -15,9 +15,9 @@ function fakeDb() {
 
 function fakeSatelliteRepo() {
   return {
-    update: vi.fn().mockResolvedValue(true),
+    updateField: vi.fn().mockResolvedValue(undefined),
   } as unknown as SsaHandlerDeps["satelliteRepo"] & {
-    update: ReturnType<typeof vi.fn>;
+    updateField: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -49,8 +49,11 @@ describe("update_field handler", () => {
 
     expect(result.ok).toBe(true);
     expect(result.affectedRows).toBe(2);
-    expect(satelliteRepo.update).toHaveBeenCalledTimes(2);
-    expect(satelliteRepo.update.mock.calls[0]?.[1]).toEqual({ massKg: 150 });
+    expect(satelliteRepo.updateField).toHaveBeenCalledTimes(2);
+    // updateField(id, field, value) — field name maps mass_kg → massKg
+    // via the handler's fieldMap lookup.
+    expect(satelliteRepo.updateField.mock.calls[0]?.[1]).toBe("massKg");
+    expect(satelliteRepo.updateField.mock.calls[0]?.[2]).toBe(150);
   });
 
   it("returns ok with affectedRows=0 when value is null (nullScan acknowledgement)", async () => {
@@ -70,7 +73,7 @@ describe("update_field handler", () => {
 
     expect(result.ok).toBe(true);
     expect(result.affectedRows).toBe(0);
-    expect(satelliteRepo.update).not.toHaveBeenCalled();
+    expect(satelliteRepo.updateField).not.toHaveBeenCalled();
     expect(db.execute).not.toHaveBeenCalled();
   });
 
