@@ -11,7 +11,7 @@
 import { sql } from "drizzle-orm";
 import type { Database, SeedRefs, PerturbationSpec, SwarmConfig } from "@interview/db-schema";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import type { SwarmService, LaunchSwarmResult } from "./swarm.service";
+import type { SwarmService, LaunchSwarmResult } from "@interview/sweep";
 
 const logger = createLogger("pc-swarm");
 

@@ -98,13 +98,10 @@ export type {
   TelemetryAggregatorDeps,
   TelemetryScalarStats,
 } from "./sim/aggregator-telemetry";
-export { startTelemetrySwarm } from "./sim/telemetry-swarm.service";
-export type { TelemetrySwarmOpts } from "./sim/telemetry-swarm.service";
-export {
-  lookupBusPrior,
-  lookupBusEntry,
-  listBusNames,
-} from "./sim/bus-datasheets";
+// Plan 2 · B.10: swarm launchers + bus-datasheets relocated to
+//   apps/console-api/src/agent/ssa/sim/swarms/telemetry.ts, /pc.ts
+//   apps/console-api/src/agent/ssa/sim/bus-datasheets/loader.ts
+// CLI is broken until Plan 3 rewires via HTTP routes.
 export { SequentialTurnRunner } from "./sim/turn-runner-sequential";
 export type {
   SequentialRunnerDeps,

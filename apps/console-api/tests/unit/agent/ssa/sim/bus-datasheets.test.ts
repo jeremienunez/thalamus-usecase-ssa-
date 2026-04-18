@@ -14,7 +14,7 @@ import {
   lookupBusEntry,
   listBusNames,
   __resetBusDatasheetCache,
-} from "../../src/sim/bus-datasheets";
+} from "../../../../../src/agent/ssa/sim/bus-datasheets/loader";
 import { TELEMETRY_SCALAR_KEYS } from "@interview/db-schema";
 
 beforeAll(() => {

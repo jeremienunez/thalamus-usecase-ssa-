@@ -3,7 +3,7 @@ import {
   computePcAggregate,
   aggregateToSuggestion,
   severityFromMedian,
-} from "../../src/sim/aggregator-pc";
+} from "../../../../../src/agent/ssa/sim/aggregators/pc";
 import type { TurnAction } from "@interview/db-schema";
 
 // The aggregator treats `dominantMode` and `flags` as opaque strings for

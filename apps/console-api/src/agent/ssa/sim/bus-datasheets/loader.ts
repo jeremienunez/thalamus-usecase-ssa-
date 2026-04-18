@@ -91,14 +91,14 @@ function loadFile(): {
 } {
   if (cache) return cache;
   const here = dirname(fileURLToPath(import.meta.url));
-  const path = resolve(here, "bus-datasheets.json");
+  const path = resolve(here, "datasheets.json");
   let raw: string;
   try {
     raw = readFileSync(path, "utf8");
   } catch (err) {
-    logger.error({ err, path }, "bus-datasheets.json not found");
+    logger.error({ err, path }, "datasheets.json not found");
     throw new Error(
-      `bus-datasheets.json missing — expected at ${path}. Did you forget to copy it on deploy?`,
+      `datasheets.json missing — expected at ${path}. Did you forget to copy it on deploy?`,
     );
   }
   const file = JSON.parse(raw) as BusDatasheetsFile;

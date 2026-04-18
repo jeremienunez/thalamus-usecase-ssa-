@@ -21,7 +21,10 @@ import {
   buildThalamusContainer,
   callNanoWithMode,
 } from "@interview/thalamus";
-import { buildSweepContainer, startTelemetrySwarm } from "@interview/sweep";
+import { buildSweepContainer } from "@interview/sweep";
+// Plan 2 · B.10: startTelemetrySwarm moved to console-api SSA pack. Plan 3
+// will rewire this CLI path via POST /api/sim/telemetry/start. Until then
+// CLI telemetry.start throws at runtime (see telemetry adapter below).
 import {
   researchCycle,
   researchFinding,
@@ -215,29 +218,15 @@ export async function buildRealAdapters(
 
     // --- 2. telemetry.start ---------------------------------------------
     telemetry: {
-      start: async ({ satId }) => {
-        if (!sweepC.sim) {
-          throw new Error("sweep sim-services not wired");
-        }
-        const result = await startTelemetrySwarm(
-          { db, swarmService: sweepC.sim.swarmService },
-          {
-            satelliteId: Number(satId),
-            fishCount: 3,
-            config: {
-              llmMode,
-              quorumPct: 0.66,
-              perFishTimeoutMs: 60_000,
-              fishConcurrency: 3,
-            },
-          },
+      start: async ({ satId: _satId }) => {
+        // Plan 2 · B.10: startTelemetrySwarm relocated to console-api SSA
+        // pack. CLI is slated to migrate to HTTP in Plan 3
+        // (POST /api/sim/telemetry/start). Until that lands, this path
+        // throws at runtime instead of compiling to a broken import.
+        throw new Error(
+          "CLI telemetry.start is disabled until Plan 3 (CLI → HTTP). " +
+            "Use the console-api HTTP route or the SSA pack launcher directly.",
         );
-        return {
-          distribution: {
-            swarmId: result.swarmId,
-            fishCount: result.fishCount,
-          },
-        };
       },
     },
 

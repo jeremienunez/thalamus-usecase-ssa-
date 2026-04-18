@@ -38,3 +38,27 @@ export { SsaAggregationStrategy } from "./aggregation-strategy";
 export { SsaKindGuard } from "./kind-guard";
 export { SsaSimPromotionAdapter } from "./promotion";
 export type { SsaSimPromotionDeps } from "./promotion";
+
+// Plan 2 · B.10 — swarm launchers + aggregators + bus-datasheets
+export { startTelemetrySwarm } from "./swarms/telemetry";
+export type { TelemetrySwarmOpts } from "./swarms/telemetry";
+export { startPcEstimatorSwarm } from "./swarms/pc";
+export type { PcEstimatorSwarmOpts } from "./swarms/pc";
+export {
+  PcAggregatorService,
+  computePcAggregate,
+  aggregateToSuggestion,
+  severityFromMedian,
+} from "./aggregators/pc";
+export type {
+  PcAggregate,
+  PcAggregatorDeps,
+  PcCluster,
+  PcSeverity,
+  PcSweepSuggestion,
+} from "./aggregators/pc";
+export {
+  lookupBusPrior,
+  lookupBusEntry,
+  listBusNames,
+} from "./bus-datasheets/loader";

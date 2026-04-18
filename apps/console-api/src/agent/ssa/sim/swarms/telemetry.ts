@@ -14,8 +14,8 @@
 import { sql } from "drizzle-orm";
 import type { Database, SeedRefs, PerturbationSpec, SwarmConfig } from "@interview/db-schema";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import type { SwarmService, LaunchSwarmResult } from "./swarm.service";
-import { lookupBusPrior } from "./bus-datasheets";
+import type { SwarmService, LaunchSwarmResult } from "@interview/sweep";
+import { lookupBusPrior } from "../bus-datasheets/loader";
 
 const logger = createLogger("telemetry-swarm");
 

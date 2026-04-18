@@ -6,9 +6,9 @@
  * the right shape. The SwarmService is mocked — we don't boot BullMQ here.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { startTelemetrySwarm } from "../../src/sim/telemetry-swarm.service";
-import { __resetBusDatasheetCache } from "../../src/sim/bus-datasheets";
-import type { SwarmService, LaunchSwarmResult } from "../../src/sim/swarm.service";
+import { startTelemetrySwarm } from "../../../../../src/agent/ssa/sim/swarms/telemetry";
+import { __resetBusDatasheetCache } from "../../../../../src/agent/ssa/sim/bus-datasheets/loader";
+import type { SwarmService, LaunchSwarmResult } from "@interview/sweep";
 import type { Database } from "@interview/db-schema";
 
 beforeEach(() => {
@@ -28,15 +28,14 @@ function mockDb(sat: {
   } as any;
 }
 
-function mockSwarmService(): {
-  svc: SwarmService;
-  launch: ReturnType<typeof vi.fn>;
-} {
-  const launch = vi.fn(async (): Promise<LaunchSwarmResult> => ({
-    swarmId: 42,
-    fishCount: 5,
-    firstSimRunId: 100,
-  }));
+function mockSwarmService() {
+  const launch = vi.fn(
+    async (_opts: unknown): Promise<LaunchSwarmResult> => ({
+      swarmId: 42,
+      fishCount: 5,
+      firstSimRunId: 100,
+    }),
+  );
   const svc = { launchSwarm: launch } as unknown as SwarmService;
   return { svc, launch };
 }
