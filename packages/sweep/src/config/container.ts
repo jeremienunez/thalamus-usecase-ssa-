@@ -32,15 +32,8 @@ import type {
   SimAggregationStrategy,
   SimKindGuard,
 } from "../sim/ports";
-import { LegacySsaFleetProvider } from "../sim/legacy-ssa-fleet";
-import { LegacySsaTurnTargetProvider } from "../sim/legacy-ssa-targets";
-import { LegacySsaPersonaComposer } from "../sim/legacy-ssa-persona";
-import { LegacySsaPromptRenderer } from "../sim/legacy-ssa-prompt";
-import { LegacySsaCortexSelector } from "../sim/legacy-ssa-cortex-selector";
-import { LegacySsaActionSchemaProvider } from "../sim/legacy-ssa-schema";
-import { LegacySsaPerturbationPack } from "../sim/legacy-ssa-perturbation-pack";
-import { LegacySsaAggregationStrategy } from "../sim/legacy-ssa-aggregation-strategy";
-import { LegacySsaKindGuard } from "../sim/legacy-ssa-kind-guard";
+// Plan 2 · B.11: Legacy* fallback adapters deleted — sim ports are now
+// required in BuildSweepOpts.sim and injected by console-api.
 import { SatelliteRepository } from "../repositories/satellite.repository";
 import { SweepRepository } from "../repositories/sweep.repository";
 import {
@@ -100,39 +93,25 @@ export interface BuildSweepOpts {
   redis: IORedis;
   /** Optional graph service injected so resolutions can log to the KG */
   graphService?: ResearchGraphService;
-  /** Optional sim-engine deps. When supplied, container.sim is wired. */
+  /**
+   * Optional sim-engine deps. When supplied, container.sim is wired.
+   * Plan 2 · B.11: every sim port is REQUIRED. Callers must inject a
+   * concrete implementation — no sweep-internal fallback. Console-api
+   * supplies them from apps/console-api/src/agent/ssa/sim/*.
+   */
   sim?: {
     cortexRegistry: CortexRegistry;
     embed: EmbedFn;
     llmMode: "cloud" | "fixtures" | "record";
-    /**
-     * Plan 2 · B.1 — SimFleetProvider port. When omitted, the container
-     * constructs LegacySsaFleetProvider (sweep-internal fallback). Console-api
-     * injects SsaFleetProvider (agent/ssa/sim/fleet-provider.ts).
-     */
-    fleet?: SimFleetProvider;
-    /**
-     * Plan 2 · B.2 — SimTurnTargetProvider port. When omitted, falls back
-     * to LegacySsaTurnTargetProvider.
-     */
-    targets?: SimTurnTargetProvider;
-    /**
-     * Plan 2 · B.3 — SimAgentPersonaComposer port. When omitted, falls
-     * back to LegacySsaPersonaComposer.
-     */
-    persona?: SimAgentPersonaComposer;
-    /** Plan 2 · B.4 — prompt renderer port. Fallback LegacySsaPromptRenderer. */
-    prompt?: SimPromptComposer;
-    /** Plan 2 · B.4 — cortex selector port. Fallback LegacySsaCortexSelector. */
-    cortexSelector?: SimCortexSelector;
-    /** Plan 2 · B.5 — action schema port. Fallback LegacySsaActionSchemaProvider. */
-    schemaProvider?: SimActionSchemaProvider;
-    /** Plan 2 · B.6 — perturbation pack port. Fallback LegacySsaPerturbationPack. */
-    perturbationPack?: SimPerturbationPack;
-    /** Plan 2 · B.8 — aggregation strategy. Fallback LegacySsaAggregationStrategy. */
-    aggStrategy?: SimAggregationStrategy;
-    /** Plan 2 · B.9 — sim kind guard + defaultMaxTurns. Fallback LegacySsaKindGuard. */
-    kindGuard?: SimKindGuard;
+    fleet: SimFleetProvider;
+    targets: SimTurnTargetProvider;
+    persona: SimAgentPersonaComposer;
+    prompt: SimPromptComposer;
+    cortexSelector: SimCortexSelector;
+    schemaProvider: SimActionSchemaProvider;
+    perturbationPack: SimPerturbationPack;
+    aggStrategy: SimAggregationStrategy;
+    kindGuard: SimKindGuard;
   };
   /**
    * Optional port overrides. When a field is supplied, the container skips
@@ -201,26 +180,19 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
 
   let sim: SimServices | undefined;
   if (opts.sim) {
-    // Plan 2 · B.1 / B.2 / B.3 / B.4 — sim ports: use the injected SSA
-    // providers or fall back to the legacy adapters (allowlisted until Étape 4).
-    const fleet: SimFleetProvider =
-      opts.sim.fleet ?? new LegacySsaFleetProvider(db);
-    const targets: SimTurnTargetProvider =
-      opts.sim.targets ?? new LegacySsaTurnTargetProvider(db);
-    const persona: SimAgentPersonaComposer =
-      opts.sim.persona ?? new LegacySsaPersonaComposer();
-    const prompt: SimPromptComposer =
-      opts.sim.prompt ?? new LegacySsaPromptRenderer();
-    const cortexSelector: SimCortexSelector =
-      opts.sim.cortexSelector ?? new LegacySsaCortexSelector();
-    const schemaProvider: SimActionSchemaProvider =
-      opts.sim.schemaProvider ?? new LegacySsaActionSchemaProvider();
-    const perturbationPack: SimPerturbationPack =
-      opts.sim.perturbationPack ?? new LegacySsaPerturbationPack();
-    const aggStrategy: SimAggregationStrategy =
-      opts.sim.aggStrategy ?? new LegacySsaAggregationStrategy();
-    const kindGuard: SimKindGuard =
-      opts.sim.kindGuard ?? new LegacySsaKindGuard();
+    // Plan 2 · B.11: sim ports are required — caller injects every
+    // concrete implementation. Sweep-internal fallbacks deleted.
+    const {
+      fleet,
+      targets,
+      persona,
+      prompt,
+      cortexSelector,
+      schemaProvider,
+      perturbationPack,
+      aggStrategy,
+      kindGuard,
+    } = opts.sim;
     const memoryService = new MemoryService(db, opts.sim.embed, fleet);
     const sequentialRunner = new SequentialTurnRunner({
       db,

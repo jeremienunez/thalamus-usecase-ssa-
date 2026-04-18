@@ -168,19 +168,13 @@ export async function buildRealAdapters(
     dataProvider: {},
   });
 
-  // Sweep DI — for resolution + telemetry-swarm launch.
-  const llmMode =
-    (process.env.THALAMUS_MODE as "cloud" | "fixtures" | "record") ??
-    "fixtures";
+  // Sweep DI — resolution path only. Plan 2 · B.11 made sim ports
+  // required; CLI drops the sim block entirely until Plan 3 rewires
+  // telemetry/pc via HTTP routes (console-api will own the SSA pack).
   const sweepC = buildSweepContainer({
     db,
     redis: ctx.redis,
     graphService: thalamusC.graphService,
-    sim: {
-      cortexRegistry: ctx.registry,
-      embed: async () => null, // deterministic fallback — no Voyage dep required
-      llmMode,
-    },
   });
 
   return {
