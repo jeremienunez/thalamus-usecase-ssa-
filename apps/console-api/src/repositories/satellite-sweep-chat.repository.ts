@@ -14,7 +14,7 @@ import type {
   SweepFinding,
   SweepChatMessage,
   SweepChatState,
-} from "../transformers/satellite-sweep-chat.dto";
+} from "../types/satellite-sweep-chat.types";
 
 const PREFIX = "satellite-sweep";
 const TTL_DAYS = 90;

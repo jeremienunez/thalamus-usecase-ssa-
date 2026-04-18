@@ -16,7 +16,13 @@
  */
 
 import { notam, type NewNotam } from "@interview/db-schema";
-import type { IngestionFetcher } from "../ingestion-registry";
+import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
+
+interface IngestionResult {
+  inserted: number;
+  skipped: number;
+  notes?: string;
+}
 
 const FAA_TFR_LIST_URL = "https://tfr.faa.gov/tfrapi/exportTfrList";
 
@@ -99,7 +105,8 @@ function mapRow(row: FaaTfrRow, fetchedAt: Date): NewNotam | null {
   };
 }
 
-export const notamFetcher: IngestionFetcher = async ({ db, logger }) => {
+async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+  const { db, logger } = ctx;
   let payload: FaaTfrRow[] | null = null;
   try {
     const res = await fetch(FAA_TFR_LIST_URL, {
@@ -174,4 +181,11 @@ export const notamFetcher: IngestionFetcher = async ({ db, logger }) => {
     skipped: rows.length - inserted,
     notes: `FAA TFR: ${rows.length} upserted (${launchCount} launch-related)`,
   };
+}
+
+export const notamSource: IngestionSource<IngestionResult> = {
+  id: "notams",
+  description: "FAA TFR (Temporary Flight Restrictions) — SPACE OPERATIONS",
+  cron: "15 */6 * * *",
+  run,
 };

@@ -5,13 +5,17 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import type { SatelliteRepository } from "../repositories/satellite.repository";
+// NOTE: chat service uses sweep-side SatelliteRepository's richer findByIdFull
+// (returns operator detail + doctrine + bus joins). Console-api's own
+// findByIdFull has a thinner projection and doesn't carry those fields.
+// Phase 4+ may unify the shapes; for Plan 1 we keep using sweep's.
+import type { SatelliteRepository } from "@interview/sweep";
 import type { SatelliteSweepChatRepository } from "../repositories/satellite-sweep-chat.repository";
 import type { LifetimeCurve, VizService } from "./viz.service";
 import type {
   EphemerisHistoryPoint,
   SatelliteService,
-} from "./satellite.service";
+} from "./satellite-ephemeris.service";
 import {
   callNano,
   callNanoStream,

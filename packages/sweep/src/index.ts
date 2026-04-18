@@ -5,7 +5,6 @@ export * from "./ports";
 export { NanoSweepService } from "./services/nano-sweep.service";
 export { SweepResolutionService } from "./services/sweep-resolution.service";
 export type { OnSimUpdateAccepted } from "./services/sweep-resolution.service";
-export { SatelliteSweepChatService } from "./services/satellite-sweep-chat.service";
 export { MessagingService } from "./services/messaging.service";
 export { FindingRouterService } from "./services/finding-router.service";
 export type { FindingRouterDeps } from "./services/finding-router.service";
@@ -17,16 +16,13 @@ export type {
   PastFeedback,
   SweepSuggestionRow,
 } from "./repositories/sweep.repository";
-export { SatelliteSweepChatRepository } from "./repositories/satellite-sweep-chat.repository";
 export { SatelliteRepository } from "./repositories/satellite.repository";
 
 // Controllers
 export { AdminSweepController } from "./controllers/admin-sweep.controller";
-export { SatelliteSweepChatController } from "./controllers/satellite-sweep-chat.controller";
 
 // Routes
 export { registerAdminSweepRoutes } from "./routes/admin.routes";
-export { satelliteSweepChatRoutes } from "./routes/satellite-sweep-chat.routes";
 
 // Jobs
 export { createSweepWorker } from "./jobs/workers/sweep.worker";
@@ -54,7 +50,6 @@ export { registerSchedulers } from "./jobs/schedulers";
 
 // Transformers / DTOs
 export * from "./transformers/sweep.dto";
-export * from "./transformers/satellite-sweep-chat.dto";
 
 // Config helpers
 export { redis, getRedis, setRedisClient } from "./config/redis";

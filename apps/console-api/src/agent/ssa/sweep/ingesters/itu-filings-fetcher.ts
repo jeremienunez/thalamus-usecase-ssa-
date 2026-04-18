@@ -21,7 +21,13 @@ import {
   ituFiling,
   type NewItuFiling,
 } from "@interview/db-schema";
-import type { IngestionFetcher } from "../ingestion-registry";
+import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
+
+interface IngestionResult {
+  inserted: number;
+  skipped: number;
+  notes?: string;
+}
 
 type Seed = Omit<NewItuFiling, "fetchedAt" | "source"> & {
   filingDate: Date | null;
@@ -286,7 +292,8 @@ const FILINGS: Seed[] = [
   },
 ];
 
-export const ituFilingsFetcher: IngestionFetcher = async ({ db, logger }) => {
+async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+  const { db, logger } = ctx;
   const fetchedAt = new Date();
   const rows: NewItuFiling[] = FILINGS.map((f) => ({
     ...f,
@@ -344,4 +351,10 @@ export const ituFilingsFetcher: IngestionFetcher = async ({ db, logger }) => {
     skipped: rows.length - inserted,
     notes: `Curated seed: ${rows.length} filings, ${totalSats.toLocaleString()} planned sats across ${countries.size} countries`,
   };
+}
+
+export const ituFilingsSource: IngestionSource<IngestionResult> = {
+  id: "itu-filings",
+  description: "Curated ITU filings seed (manual trigger)",
+  run,
 };

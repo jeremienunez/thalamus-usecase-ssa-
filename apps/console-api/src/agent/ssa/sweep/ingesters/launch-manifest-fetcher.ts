@@ -12,7 +12,13 @@
 
 import { and, isNotNull, notIlike, notInArray, or, sql } from "drizzle-orm";
 import { launch, type NewLaunch } from "@interview/db-schema";
-import type { IngestionFetcher } from "../ingestion-registry";
+import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
+
+interface IngestionResult {
+  inserted: number;
+  skipped: number;
+  notes?: string;
+}
 
 const LL2_UPCOMING_URL =
   "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=100&mode=detailed";
@@ -144,10 +150,8 @@ function mapLaunch(r: Ll2Launch, fetchedAt: Date): NewLaunch | null {
 // Ingester
 // ---------------------------------------------------------------------------
 
-export const launchManifestFetcher: IngestionFetcher = async ({
-  db,
-  logger,
-}) => {
+async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+  const { db, logger } = ctx;
   let payload: Ll2Response | null = null;
   try {
     const res = await fetch(LL2_UPCOMING_URL, {
@@ -254,4 +258,11 @@ export const launchManifestFetcher: IngestionFetcher = async ({
     skipped: rows.length - inserted,
     notes: `LL2: ${rows.length} upcoming launches upserted; ${expired} stale rows marked`,
   };
+}
+
+export const launchManifestSource: IngestionSource<IngestionResult> = {
+  id: "launch-manifest",
+  description: "Launch Library 2 upcoming launches",
+  cron: "0 */12 * * *",
+  run,
 };

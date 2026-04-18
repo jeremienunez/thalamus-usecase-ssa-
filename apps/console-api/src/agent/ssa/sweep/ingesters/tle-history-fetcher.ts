@@ -10,7 +10,13 @@
 
 import { sql } from "drizzle-orm";
 import { tleHistory, type NewTleHistory } from "@interview/db-schema";
-import type { IngestionFetcher } from "../ingestion-registry";
+import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
+
+interface IngestionResult {
+  inserted: number;
+  skipped: number;
+  notes?: string;
+}
 
 const CELESTRAK_GROUPS = [
   "stations", "starlink", "oneweb", "iridium-next", "planet",
@@ -127,10 +133,8 @@ async function fetchGroup(group: string): Promise<ParsedTle[]> {
  * Pulls every CelesTrak group, deduplicates by NORAD, resolves to catalog
  * satelliteIds, and upserts into `tle_history`.
  */
-export const tleHistoryFetcher: IngestionFetcher = async ({
-  db,
-  logger,
-}) => {
+async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+  const { db, logger } = ctx;
   const byNorad = new Map<number, ParsedTle>();
   let fetchedGroups = 0;
   let failedGroups = 0;
@@ -242,4 +246,11 @@ export const tleHistoryFetcher: IngestionFetcher = async ({
     skipped,
     notes: `${byNorad.size} unique TLEs from ${fetchedGroups}/${CELESTRAK_GROUPS.length} groups; ${unmatched} NORADs not in catalog`,
   };
+}
+
+export const tleHistorySource: IngestionSource<IngestionResult> = {
+  id: "tle-history",
+  description: "CelesTrak TLE history backfill",
+  cron: "0 */6 * * *",
+  run,
 };

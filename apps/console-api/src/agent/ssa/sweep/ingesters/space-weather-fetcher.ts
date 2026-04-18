@@ -15,7 +15,13 @@ import {
   spaceWeatherForecast,
   type NewSpaceWeatherForecast,
 } from "@interview/db-schema";
-import type { IngestionFetcher } from "../ingestion-registry";
+import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
+
+interface IngestionResult {
+  inserted: number;
+  skipped: number;
+  notes?: string;
+}
 
 const NOAA_27DO_URL = "https://services.swpc.noaa.gov/text/27-day-outlook.txt";
 // GFZ nowcast Kp — request yesterday → tomorrow so the same call covers
@@ -175,10 +181,8 @@ function parseSidcEisn(text: string): NewSpaceWeatherForecast[] {
 // Ingester
 // ---------------------------------------------------------------------------
 
-export const spaceWeatherFetcher: IngestionFetcher = async ({
-  db,
-  logger,
-}) => {
+async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+  const { db, logger } = ctx;
   const perSource: Record<string, { fetched: number; inserted: number }> = {};
 
   async function ingest(
@@ -263,4 +267,11 @@ export const spaceWeatherFetcher: IngestionFetcher = async ({
       .map(([src, v]) => `${src}: ${v.inserted}/${v.fetched}`)
       .join("; "),
   };
+}
+
+export const spaceWeatherSource: IngestionSource<IngestionResult> = {
+  id: "space-weather",
+  description: "NOAA SWPC + GFZ Potsdam + SIDC space weather nowcast",
+  cron: "30 4 * * *",
+  run,
 };

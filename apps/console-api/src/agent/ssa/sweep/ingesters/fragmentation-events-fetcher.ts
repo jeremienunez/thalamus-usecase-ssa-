@@ -17,7 +17,13 @@ import {
   fragmentationEvent,
   type NewFragmentationEvent,
 } from "@interview/db-schema";
-import type { IngestionFetcher } from "../ingestion-registry";
+import type { IngestionSource, IngestionRunContext } from "@interview/sweep";
+
+interface IngestionResult {
+  inserted: number;
+  skipped: number;
+  notes?: string;
+}
 
 type Seed = Omit<NewFragmentationEvent, "fetchedAt" | "source"> & {
   dateUtc: Date;
@@ -267,10 +273,8 @@ const EVENTS: Seed[] = [
   },
 ];
 
-export const fragmentationEventsFetcher: IngestionFetcher = async ({
-  db,
-  logger,
-}) => {
+async function run(ctx: IngestionRunContext): Promise<IngestionResult> {
+  const { db, logger } = ctx;
   const fetchedAt = new Date();
   const rows: NewFragmentationEvent[] = EVENTS.map((e) => ({
     ...e,
@@ -310,4 +314,10 @@ export const fragmentationEventsFetcher: IngestionFetcher = async ({
     skipped: rows.length - inserted,
     notes: `Curated seed: ${rows.length} events upserted (${new Set(rows.map((r) => r.parentOperatorCountry)).size} operator countries)`,
   };
+}
+
+export const fragmentationEventsSource: IngestionSource<IngestionResult> = {
+  id: "fragmentation-events",
+  description: "Curated fragmentation-event seed (manual trigger)",
+  run,
 };
