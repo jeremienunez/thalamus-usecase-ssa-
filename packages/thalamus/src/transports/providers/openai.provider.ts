@@ -38,8 +38,18 @@ export class OpenAIProvider implements LlmProvider {
         : { format: { type: "text" } },
       store: true,
     };
-    if (opts.maxOutputTokens && opts.maxOutputTokens > 0) {
-      body.max_output_tokens = opts.maxOutputTokens;
+    // Reasoning tokens (GPT-5.4) count against max_output_tokens. With
+    // effort=xhigh the reasoning alone can burn 10–20k tokens — if the
+    // caller didn't set a cap, auto-provision a generous budget so the
+    // completion isn't truncated before the actual answer is emitted.
+    let maxOut = opts.maxOutputTokens ?? 0;
+    if (maxOut <= 0) {
+      if (effort === "xhigh") maxOut = 32_000;
+      else if (effort === "high") maxOut = 16_000;
+      else if (effort === "medium") maxOut = 8_000;
+    }
+    if (maxOut > 0) {
+      body.max_output_tokens = maxOut;
     }
     if (typeof opts.temperature === "number") {
       body.temperature = opts.temperature;

@@ -52,8 +52,19 @@ export interface ThalamusPlannerConfig {
   /** Model id within the selected provider (informational; planner log). */
   model: string;
   callTimeoutMs: number;
-  /** Hard USD cap per research cycle. Lower than complexity defaults wins. */
+  /** Hard USD cap per research cycle. When > 0 overrides the hardcoded
+   *  $0.10 global cap — lets reasoning-heavy runs (xhigh / thinking /
+   *  MiniMax) breathe without blowing a safety throttle. */
   maxCostUsd: number;
+  /** Base per-cortex execution timeout in ms. Auto-scaled at call time
+   *  by reasoning effort (xhigh ×6, high ×3, medium ×1.5), by provider
+   *  (MiniMax ×3), by thinking toggle (×3), and by local models (×2).
+   *  Per-cortex `callTimeoutMs` override (`thalamus.cortex.overrides[x]`)
+   *  wins over both the base and the auto-scale. */
+  cortexTimeoutMs: number;
+  /** Max findings the LLM is asked to produce per cortex turn. Raising
+   *  it enables richer briefings; lowering it keeps cycles fast. */
+  maxFindingsPerCortex: number;
   /** GPT-5.4 Responses API `reasoning.effort`. Valid values
    *  `none|low|medium|high|xhigh`. Other providers ignore it. */
   reasoningEffort: string;
@@ -89,6 +100,8 @@ export const DEFAULT_THALAMUS_PLANNER_CONFIG: ThalamusPlannerConfig = {
   model: "kimi-k2",
   callTimeoutMs: 45_000,
   maxCostUsd: 0.5,
+  cortexTimeoutMs: 90_000,
+  maxFindingsPerCortex: 3,
   reasoningEffort: "medium",
   maxOutputTokens: 0,
   temperature: 1.0,

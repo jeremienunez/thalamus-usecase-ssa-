@@ -59,6 +59,8 @@ export function registerThalamusConfigDomains(
       },
       callTimeoutMs: "number",
       maxCostUsd: "number",
+      cortexTimeoutMs: "number",
+      maxFindingsPerCortex: "number",
       reasoningEffort: { kind: "string", choices: REASONING_EFFORT_CHOICES },
       maxOutputTokens: "number",
       temperature: "number",

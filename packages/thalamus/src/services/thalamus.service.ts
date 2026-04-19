@@ -16,7 +16,10 @@ import {
   THALAMUS_CONFIG,
   ITERATION_BUDGETS,
 } from "../cortices/config";
-import { getReflexionConfig } from "../config/runtime-config";
+import {
+  getReflexionConfig,
+  getPlannerConfig,
+} from "../config/runtime-config";
 import {
   ResearchCycleTrigger,
   ResearchCycleStatus,
@@ -114,16 +117,23 @@ export class ThalamusService {
       //    operator knob wins when lower than the complexity default).
       const budget =
         ITERATION_BUDGETS[plan.complexity] ?? ITERATION_BUDGETS.moderate;
-      const reflexionCfg = await getReflexionConfig();
+      const [reflexionCfg, plannerCfg] = await Promise.all([
+        getReflexionConfig(),
+        getPlannerConfig(),
+      ]);
       const maxIter = Math.min(
         budget.maxIterations,
         THALAMUS_CONFIG.loop.maxIterationsPerChain,
         reflexionCfg.maxIterations,
       );
-      const maxCost = Math.min(
-        budget.maxCost,
-        THALAMUS_CONFIG.loop.maxCostPerChain,
-      );
+      // When the operator sets plannerCfg.maxCostUsd > 0, that explicit
+      // override wins over BOTH the complexity-indexed budget AND the
+      // hardcoded $0.10 safety cap — reasoning-heavy runs (xhigh /
+      // thinking / MiniMax) routinely need $0.50–$2 per cycle.
+      const maxCost =
+        plannerCfg.maxCostUsd > 0
+          ? plannerCfg.maxCostUsd
+          : Math.min(budget.maxCost, THALAMUS_CONFIG.loop.maxCostPerChain);
 
       logger.info(
         {

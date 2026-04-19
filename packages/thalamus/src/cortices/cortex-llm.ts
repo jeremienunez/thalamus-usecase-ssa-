@@ -56,6 +56,10 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
     getPlannerConfig(),
   ]);
   const override = cortexCfg.overrides[input.cortexName] ?? {};
+  // Fallback chain for "max findings the LLM may emit": caller-supplied
+  // value > planner-config default > hardcoded 3.
+  const effectiveMaxFindings =
+    input.maxFindings ?? plannerCfg.maxFindingsPerCortex ?? 3;
   if (override.enabled === false) {
     logger.info(
       { cortex: input.cortexName },
@@ -133,8 +137,8 @@ DATA:
 ${input.dataPayload}
 
 Respond only with the JSON object described in your Output Format section.
-Max ${input.maxFindings ?? 3} findings.`
-    : `Analyze the following data and produce up to ${input.maxFindings ?? 3} findings.
+Max ${effectiveMaxFindings} findings.`
+    : `Analyze the following data and produce up to ${effectiveMaxFindings} findings.
 ${langInstruction}
 ${modeInstruction}
 ${domainRules}
@@ -154,7 +158,7 @@ Each finding needs:
 ${entityTypeLine}
 
 If data comes from web search, use entityId:0 and describe the entity in evidence.source.
-Keep it SHORT. Max ${input.maxFindings ?? 3} findings.`;
+Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
 
   stepLog(logger, "nano.call", "start", {
     cortex: input.cortexName,

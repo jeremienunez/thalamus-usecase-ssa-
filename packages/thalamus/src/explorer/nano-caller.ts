@@ -227,8 +227,16 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
     reasoning: { effort },
   };
   if (req.responseFormat) bodyBase.text = { format: req.responseFormat };
-  if (ov.maxOutputTokens && ov.maxOutputTokens > 0) {
-    bodyBase.max_output_tokens = ov.maxOutputTokens;
+  // Auto-provision max_output_tokens when unset so reasoning tokens don't
+  // starve the completion (same rationale as OpenAIProvider).
+  let maxOut = ov.maxOutputTokens ?? 0;
+  if (maxOut <= 0) {
+    if (effort === "xhigh") maxOut = 32_000;
+    else if (effort === "high") maxOut = 16_000;
+    else if (effort === "medium") maxOut = 8_000;
+  }
+  if (maxOut > 0) {
+    bodyBase.max_output_tokens = maxOut;
   }
   if (typeof ov.temperature === "number") {
     bodyBase.temperature = ov.temperature;

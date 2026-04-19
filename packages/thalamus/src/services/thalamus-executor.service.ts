@@ -9,15 +9,70 @@ import { createLogger, stepLog } from "@interview/shared/observability";
 import type { CortexExecutor } from "../cortices/executor";
 import type { CortexOutput, CortexInput } from "../cortices/types";
 import type { DAGPlan, DAGNode } from "./thalamus-planner.service";
+import {
+  getPlannerConfig,
+  getCortexConfig,
+} from "../config/runtime-config";
 
 const logger = createLogger("thalamus-executor");
-
-const CORTEX_TIMEOUT_MS = 90_000;
 
 // Cortices with web enrichment + LLM synthesis need more time
 const CORTEX_TIMEOUT_OVERRIDES: Record<string, number> = {
   payload_profiler: 180_000, // 3 min — crawls SpaceTrack + ESA DISCOS + synthesis
 };
+
+/**
+ * Adaptive per-cortex timeout. Reasoning-heavy + thinking + local runs
+ * take much longer than the 90s default — e.g. gpt-5.4-nano xhigh routinely
+ * hits 2–3 min for a single cortex. Multipliers:
+ *   xhigh ×6, high ×3, medium ×1.5; MiniMax ×3; thinking ×3; local/ ×2.
+ * Per-cortex override (`thalamus.cortex.overrides[x].callTimeoutMs`) and
+ * static per-cortex overrides (payload_profiler) win over adaptive scaling.
+ */
+function computeTimeout(
+  cortexName: string,
+  baseMs: number,
+  plannerCfg: {
+    provider: string;
+    model: string;
+    reasoningEffort: string;
+    thinking: boolean;
+  },
+  cortexOverride:
+    | {
+        callTimeoutMs?: number;
+        provider?: string;
+        model?: string;
+        reasoningEffort?: string;
+        thinking?: boolean;
+      }
+    | undefined,
+): number {
+  if (cortexOverride?.callTimeoutMs && cortexOverride.callTimeoutMs > 0) {
+    return cortexOverride.callTimeoutMs;
+  }
+  const staticOverride = CORTEX_TIMEOUT_OVERRIDES[cortexName];
+  if (staticOverride) return staticOverride;
+
+  const effort = cortexOverride?.reasoningEffort ?? plannerCfg.reasoningEffort;
+  const provider = cortexOverride?.provider ?? plannerCfg.provider;
+  const model = cortexOverride?.model ?? plannerCfg.model;
+  const thinking =
+    typeof cortexOverride?.thinking === "boolean"
+      ? cortexOverride.thinking
+      : plannerCfg.thinking;
+
+  let mult = 1;
+  if (effort === "xhigh") mult = 6;
+  else if (effort === "high") mult = 3;
+  else if (effort === "medium") mult = 1.5;
+  if (provider === "minimax") mult = Math.max(mult, 3);
+  if (thinking === true) mult = Math.max(mult, 3);
+  if (typeof model === "string" && model.startsWith("local/")) {
+    mult = Math.max(mult, 2);
+  }
+  return Math.round(baseMs * mult);
+}
 
 export interface DAGExecutionResult {
   outputs: Map<string, CortexOutput>;
@@ -141,8 +196,25 @@ export class ThalamusDAGExecutor {
       context: previousFindings.length > 0 ? { previousFindings } : undefined,
     };
 
-    // Execute with timeout (per-cortex override for heavy cortices)
-    const timeout = CORTEX_TIMEOUT_OVERRIDES[node.cortex] ?? CORTEX_TIMEOUT_MS;
+    // Execute with adaptive timeout: base is runtime-config
+    // (thalamus.planner.cortexTimeoutMs), scaled by reasoning/provider/
+    // thinking, and superseded by any per-cortex override.
+    const [plannerCfg, cortexCfg] = await Promise.all([
+      getPlannerConfig(),
+      getCortexConfig(),
+    ]);
+    const cortexOverride = cortexCfg.overrides[node.cortex];
+    const timeout = computeTimeout(
+      node.cortex,
+      plannerCfg.cortexTimeoutMs,
+      {
+        provider: plannerCfg.provider,
+        model: plannerCfg.model,
+        reasoningEffort: plannerCfg.reasoningEffort,
+        thinking: plannerCfg.thinking,
+      },
+      cortexOverride,
+    );
     const cortexStartedAt = Date.now();
     stepLog(logger, "cortex", "start", {
       cortex: node.cortex,

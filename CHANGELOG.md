@@ -4,6 +4,52 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Adaptive cortex timeout + cycle budget override + reasoning-token auto-provision — 2026-04-19
+
+Follow-up after observing 3 cortex timeouts on a `gpt-5.4-nano` +
+`reasoningEffort: "high"` run (calls took 125–186s; executor gave up
+at 90s) and a cycle clamped to $0.10 even though the operator set
+`maxCostUsd: 1`.
+
+**Adaptive per-cortex timeout** (`thalamus-executor.service.ts`)
+
+- New base knob `thalamus.planner.cortexTimeoutMs` (default 90 000)
+- Auto-scaled at call time by model context:
+  - `reasoningEffort = xhigh` → ×6 (~9 min on default base)
+  - `reasoningEffort = high` → ×3 (~4.5 min)
+  - `reasoningEffort = medium` → ×1.5
+  - `provider = minimax` → at least ×3
+  - `thinking = true` → at least ×3
+  - `model` starts with `local/` → at least ×2
+- Per-cortex override (`thalamus.cortex.overrides[x].callTimeoutMs`)
+  still wins over both the base and the adaptive scale.
+- Static overrides preserved (`payload_profiler: 180s`).
+
+**Budget override** (`thalamus.service.ts`)
+
+- When `plannerCfg.maxCostUsd > 0`, it becomes the authoritative cycle
+  cost cap — wins over both the complexity-indexed
+  `ITERATION_BUDGETS[c].maxCost` and the hardcoded
+  `THALAMUS_CONFIG.loop.maxCostPerChain = $0.10`.
+- Default stays $0.10 safety throttle; opt-in via config only.
+
+**Reasoning-token auto-provision** (`openai.provider.ts`, `nano-caller.ts`)
+
+- GPT-5.4 reasoning tokens count against `max_output_tokens`. With
+  `effort=xhigh` reasoning alone burns 10–20k tokens, truncating the
+  completion if `max_output_tokens` is unset. Now auto-provisions
+  based on effort when the caller didn't cap:
+  - xhigh → 32 000
+  - high → 16 000
+  - medium → 8 000
+- Explicit `opts.maxOutputTokens > 0` always wins over the auto-provision.
+
+**Findings cap per cortex** (`cortex-llm.ts`)
+
+- New knob `thalamus.planner.maxFindingsPerCortex` (default 3).
+- Caller-supplied `input.maxFindings` (standard-strategy's data-driven
+  `clamp(5, authoritativeData.length, 30)`) still wins.
+
 ### Runtime config registry + 4 LLM providers + /config admin UI — 2026-04-19
 
 Large session: kernel knobs (planner, cortex, reflexion, sim fish,
