@@ -60,24 +60,29 @@ export function fmtVelocity(v: number | null | undefined): FormattedValue {
   return [kmps.toFixed(2), "km/s"];
 }
 
+/** Split a PC into mantissa + exponent, with guards for null/0/non-finite. */
+function parsePc(v: number | null | undefined): { m: number; e: number } | "zero" | "bad" {
+  if (bad(v)) return "bad";
+  const pc = v as number;
+  if (pc <= 0) return "zero";
+  const e = Math.floor(Math.log10(pc));
+  return { m: pc / Math.pow(10, e), e };
+}
+
 /** Probability of collision — scientific with proper superscript. */
 export function fmtPc(v: number | null | undefined): FormattedValue {
-  if (bad(v)) return [DASH, ""];
-  const pc = v as number;
-  if (pc <= 0) return ["0", ""];
-  const e = Math.floor(Math.log10(pc));
-  const m = pc / Math.pow(10, e);
-  return [`${m.toFixed(2)}×10${sup(e)}`, ""];
+  const p = parsePc(v);
+  if (p === "bad") return [DASH, ""];
+  if (p === "zero") return ["0", ""];
+  return [`${p.m.toFixed(2)}×10${sup(p.e)}`, ""];
 }
 
 /** Compact PC for tight cells (no ×10, just the e-notation). */
 export function fmtPcCompact(v: number | null | undefined): FormattedValue {
-  if (bad(v)) return [DASH, ""];
-  const pc = v as number;
-  if (pc <= 0) return ["0", ""];
-  const e = Math.floor(Math.log10(pc));
-  const m = pc / Math.pow(10, e);
-  return [`${m.toFixed(2)}e${e}`, ""];
+  const p = parsePc(v);
+  if (p === "bad") return [DASH, ""];
+  if (p === "zero") return ["0", ""];
+  return [`${p.m.toFixed(2)}e${p.e}`, ""];
 }
 
 export function fmtDeg(v: number | null | undefined): FormattedValue {

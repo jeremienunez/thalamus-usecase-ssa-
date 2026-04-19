@@ -122,52 +122,10 @@ export function ThalamusEntry() {
     });
   }, [data, findingTitleById, graphAdapter]);
 
-  useEffect(() => {
-    if (!graph || !containerRef.current) return;
-    const handle = graphAdapter.createSigmaRenderer(containerRef.current, graph, {
-      onNodeClick: (node, attrs) => {
-        if (node.startsWith("finding:")) {
-          const numeric = Number(node.split(":")[1]);
-          if (Number.isFinite(numeric)) {
-            closeDrawer();
-            setSelected(null);
-            setSelectedFindingNumeric(numeric);
-            return;
-          }
-        }
-        setSelectedFindingNumeric(null);
-        setSelected({
-          id: node,
-          label: attrs.label as string,
-          class: attrs.entityClass as EntityClass,
-          degree: attrs.degree as number,
-          x: attrs.x as number,
-          y: attrs.y as number,
-          cortex: attrs.cortex as string,
-        });
-        openDrawer(`kg:${node}`);
-      },
-      onHoverChange: (cursor) => {
-        document.body.style.cursor = cursor;
-      },
-    });
-    sigmaRef.current = handle;
-    return () => {
-      handle.kill();
-      sigmaRef.current = null;
-    };
-  }, [graph, graphAdapter, openDrawer, closeDrawer]);
-
-  const incidentEdges = useMemo<KgEdgeDTO[]>(() => {
-    if (!graph || !selected) return [];
-    return graphAdapter.incidentEdgesFor(graph, selected.id);
-  }, [graph, selected, graphAdapter]);
-
-  const handleFocus = (nodeId: string) => {
-    const r = sigmaRef.current;
-    if (!r || !graph?.hasNode(nodeId)) return;
-    const attrs = r.getNodeAttributes(nodeId);
-    r.focusNode(nodeId);
+  // Route a graph click/focus into the right drawer: findings pop the
+  // FindingReadout (fresh fetch from /api/findings/:id); other entities go
+  // through the standard ThalamusDrawer wired to the global drawer store.
+  const selectKgNode = (nodeId: string, attrs: Record<string, unknown>) => {
     if (nodeId.startsWith("finding:")) {
       const numeric = Number(nodeId.split(":")[1]);
       if (Number.isFinite(numeric)) {
@@ -188,6 +146,36 @@ export function ThalamusEntry() {
       cortex: attrs.cortex as string,
     });
     openDrawer(`kg:${nodeId}`);
+  };
+
+  useEffect(() => {
+    if (!graph || !containerRef.current) return;
+    const handle = graphAdapter.createSigmaRenderer(containerRef.current, graph, {
+      onNodeClick: selectKgNode,
+      onHoverChange: (cursor) => {
+        document.body.style.cursor = cursor;
+      },
+    });
+    sigmaRef.current = handle;
+    return () => {
+      handle.kill();
+      sigmaRef.current = null;
+    };
+    // selectKgNode is stable relative to its closures within the render
+    // scope; no need to add it to deps and risk re-mounting the renderer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, graphAdapter, openDrawer, closeDrawer]);
+
+  const incidentEdges = useMemo<KgEdgeDTO[]>(() => {
+    if (!graph || !selected) return [];
+    return graphAdapter.incidentEdgesFor(graph, selected.id);
+  }, [graph, selected, graphAdapter]);
+
+  const handleFocus = (nodeId: string) => {
+    const r = sigmaRef.current;
+    if (!r || !graph?.hasNode(nodeId)) return;
+    r.focusNode(nodeId);
+    selectKgNode(nodeId, r.getNodeAttributes(nodeId));
   };
 
   return (
