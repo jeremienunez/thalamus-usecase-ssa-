@@ -16,22 +16,10 @@ import { ThalamusPlanner } from "../src/services/thalamus-planner.service";
 import type { CortexRegistry } from "../src/cortices/registry";
 import type { DAGPlan } from "../src/cortices/types";
 
-function mkRegistry(
-  knownNames: string[] = [
-    "fleet_analyst",
-    "conjunction_analysis",
-    "regime_profiler",
-    "strategist",
-    "alpha",
-    "beta",
-  ],
-): CortexRegistry {
-  const set = new Set(knownNames);
-  return {
-    has: (name: string) => set.has(name),
-    names: () => [...set],
-    getHeadersForPlanner: () => "",
-  } as unknown as CortexRegistry;
+function mkRegistry(): CortexRegistry {
+  // resolveFallbackPlan + buildSystemPrompt don't touch the registry; a
+  // stub that satisfies the type is enough.
+  return {} as unknown as CortexRegistry;
 }
 
 describe("ThalamusPlanner.resolveFallbackPlan — selection order", () => {

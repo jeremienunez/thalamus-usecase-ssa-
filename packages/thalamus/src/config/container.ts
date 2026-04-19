@@ -113,7 +113,6 @@ export function buildThalamusContainer(
     plannerPrompt: domainConfig.plannerPrompt,
     fallbackPlan: domainConfig.fallbackPlan,
     fallbackCortices: domainConfig.fallbackCortices,
-    synthesisCortexName: domainConfig.synthesisCortexName,
   });
   const dagExecutor = new ThalamusDAGExecutor(executor);
   const reflexion = new ThalamusReflexion();

@@ -46,9 +46,6 @@ export interface PlannerConfig {
   /** Flat list of cortices used to synthesize a fallback DAG when no
    *  `fallbackPlan` is provided. Higher priority than the legacy default. */
   fallbackCortices?: string[];
-  /** Name of the synthesis cortex (clamp protection, mandatory injection).
-   *  Defaults to `"strategist"` — matches existing SSA behavior. */
-  synthesisCortexName?: string;
 }
 
 const dagPlanSchema = z.object({
@@ -81,7 +78,6 @@ export class ThalamusPlanner {
   }) => string;
   private readonly injectedFallbackPlan?: (query: string) => DAGPlan;
   private readonly fallbackCortices: string[];
-  readonly synthesisCortexName: string;
 
   constructor(
     private registry: CortexRegistry,
@@ -92,7 +88,6 @@ export class ThalamusPlanner {
     this.plannerPromptFn = config.plannerPrompt ?? buildPlannerSystemPrompt;
     this.injectedFallbackPlan = config.fallbackPlan;
     this.fallbackCortices = config.fallbackCortices ?? [];
-    this.synthesisCortexName = config.synthesisCortexName ?? "strategist";
   }
 
   /**
