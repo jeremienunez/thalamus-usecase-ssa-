@@ -81,6 +81,11 @@ export {
 
 // Ports
 export type { WebSearchPort } from "./ports/web-search.port";
+export type {
+  EntityCatalogPort,
+  EntityRef,
+} from "./ports/entity-catalog.port";
+export { NoopEntityCatalog } from "./entities/noop-entity-catalog";
 
 // Cortex execution strategies (extension points)
 export {
