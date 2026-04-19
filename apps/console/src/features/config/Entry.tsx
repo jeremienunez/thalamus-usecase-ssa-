@@ -1,17 +1,15 @@
-import { useState, useMemo } from "react";
 import { RotateCcw, Save, AlertCircle, CheckCircle2 } from "lucide-react";
 import { clsx } from "clsx";
+import { useDraft } from "@/hooks/useDraft";
 import {
   useRuntimeConfigList,
   usePatchRuntimeConfig,
   useResetRuntimeConfig,
-  fieldKindOf,
-  fieldChoices,
   MODEL_PRESETS,
   MODEL_FIELD_SUPPORT_MAP,
   type DomainPayload,
-  type FieldSpec,
 } from "@/features/config/runtime-config";
+import { FieldRow } from "./FieldRow";
 
 export function ConfigEntry() {
   const { data, isLoading, error } = useRuntimeConfigList();
@@ -85,60 +83,25 @@ function DomainCard({
   domain: string;
   payload: DomainPayload;
 }) {
-  const [draft, setDraft] = useState<Record<string, unknown>>(payload.value);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const patch = usePatchRuntimeConfig();
   const reset = useResetRuntimeConfig();
-
-  const dirty = useMemo(() => {
-    for (const k of Object.keys(payload.schema)) {
-      if (
-        JSON.stringify(draft[k]) !== JSON.stringify(payload.value[k])
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }, [draft, payload.schema, payload.value]);
-
-  function setField(key: string, value: unknown) {
-    setDraft({ ...draft, [key]: value });
-    if (errors[key]) {
-      const next = { ...errors };
-      delete next[key];
-      setErrors(next);
-    }
-  }
+  const { draft, errors, setErrors, dirty, diff, setField, replace } = useDraft(
+    payload.value,
+  );
 
   function onSave() {
-    const diff: Record<string, unknown> = {};
-    for (const k of Object.keys(payload.schema)) {
-      if (
-        JSON.stringify(draft[k]) !== JSON.stringify(payload.value[k])
-      ) {
-        diff[k] = draft[k];
-      }
-    }
     patch.mutate(
       { domain, patch: diff },
       {
-        onError: (err) => {
-          setErrors({ __root: (err as Error).message });
-        },
-        onSuccess: (resp) => {
-          setDraft(resp.value);
-          setErrors({});
-        },
+        onError: (err) => setErrors({ __root: (err as Error).message }),
+        onSuccess: (resp) => replace(resp.value),
       },
     );
   }
 
   function onReset() {
     reset.mutate(domain, {
-      onSuccess: (resp) => {
-        setDraft(resp.value);
-        setErrors({});
-      },
+      onSuccess: (resp) => replace(resp.value),
     });
   }
 
@@ -213,7 +176,8 @@ function DomainCard({
             if (key === "model" && typeof v === "string") {
               const p = MODEL_PRESETS.find((x) => x.value === v);
               if (p && "provider" in payload.schema) {
-                setDraft({ ...draft, model: v, provider: p.provider });
+                setField("model", v);
+                setField("provider", p.provider);
                 return;
               }
             }
@@ -242,327 +206,3 @@ function DomainCard({
   );
 }
 
-function FieldRow({
-  keyName,
-  spec,
-  value,
-  defaultValue,
-  onChange,
-  error,
-  unsupported,
-  unsupportedReason,
-}: {
-  keyName: string;
-  spec: FieldSpec;
-  value: unknown;
-  defaultValue: unknown;
-  onChange: (v: unknown) => void;
-  error?: string;
-  unsupported?: boolean;
-  unsupportedReason?: string;
-}) {
-  const kind = fieldKindOf(spec);
-  const choices = fieldChoices(spec);
-  const isDefault =
-    JSON.stringify(value) === JSON.stringify(defaultValue);
-
-  return (
-    <div
-      className={clsx(
-        "grid grid-cols-[240px_1fr_90px] items-start gap-4 px-4 py-3",
-        unsupported && "opacity-40",
-      )}
-      title={unsupportedReason}
-    >
-      <div className="min-w-0 pt-1">
-        <div className="mono text-body text-primary truncate" title={keyName}>
-          {keyName}
-        </div>
-        <div className="label text-muted">
-          {choices ? "enum" : kind}
-          {unsupported && <span className="ml-1 text-amber">· N/A</span>}
-        </div>
-      </div>
-      <div className="min-w-0">
-        <FieldInput
-          kind={kind}
-          choices={choices}
-          fieldName={keyName}
-          value={value}
-          onChange={onChange}
-        />
-        {error && (
-          <div className="mt-1 text-caption text-hot">{error}</div>
-        )}
-        {unsupportedReason && (
-          <div className="mt-1 text-caption text-muted">
-            {unsupportedReason}
-          </div>
-        )}
-      </div>
-      <div className="pt-1 text-right">
-        <span
-          className={clsx(
-            "label",
-            isDefault ? "text-muted" : "text-cyan",
-          )}
-        >
-          {isDefault ? "DEFAULT" : "MODIFIED"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function FieldInput({
-  kind,
-  choices,
-  fieldName,
-  value,
-  onChange,
-}: {
-  kind: string;
-  choices: readonly string[] | null;
-  fieldName: string;
-  value: unknown;
-  onChange: (v: unknown) => void;
-}) {
-  const baseInputClass =
-    "w-full bg-black/40 border border-hairline px-2 py-1 mono text-body text-primary focus:border-cyan focus:outline-none";
-
-  // Model dropdown with rich labels (overrides generic choices)
-  if (fieldName === "model") {
-    return (
-      <ModelSelect
-        value={typeof value === "string" ? value : ""}
-        onChange={onChange}
-      />
-    );
-  }
-
-  // Generic enum (provider, etc.)
-  if (choices) {
-    return (
-      <select
-        className={baseInputClass}
-        value={typeof value === "string" ? value : ""}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {choices.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  switch (kind) {
-    case "string":
-      return (
-        <input
-          type="text"
-          className={baseInputClass}
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case "number":
-      return (
-        <input
-          type="number"
-          className={baseInputClass}
-          value={typeof value === "number" ? value : 0}
-          onChange={(e) => onChange(Number(e.target.value))}
-          step={fieldName.includes("Pct") ? 0.05 : undefined}
-        />
-      );
-    case "boolean":
-      return (
-        <label className="flex cursor-pointer items-center gap-2 text-body">
-          <input
-            type="checkbox"
-            className="accent-cyan"
-            checked={value === true}
-            onChange={(e) => onChange(e.target.checked)}
-          />
-          <span className="mono text-caption text-muted">
-            {value === true ? "true" : "false"}
-          </span>
-        </label>
-      );
-    case "string[]":
-      return (
-        <StringArrayInput
-          value={Array.isArray(value) ? (value as string[]) : []}
-          onChange={onChange}
-        />
-      );
-    case "json":
-      return (
-        <JsonTextarea
-          value={value}
-          onChange={onChange}
-        />
-      );
-    default:
-      return (
-        <div className="mono text-caption text-muted">
-          unsupported kind: {kind}
-        </div>
-      );
-  }
-}
-
-function ModelSelect({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const baseInputClass =
-    "w-full bg-black/40 border border-hairline px-2 py-1 mono text-body text-primary focus:border-cyan focus:outline-none";
-  const isPreset = MODEL_PRESETS.some((p) => p.value === value);
-
-  // Group by provider
-  const byProvider = MODEL_PRESETS.reduce<Record<string, typeof MODEL_PRESETS>>(
-    (acc, p) => {
-      (acc[p.provider] ??= []).push(p);
-      return acc;
-    },
-    {},
-  );
-
-  return (
-    <div className="space-y-1">
-      <select
-        className={baseInputClass}
-        value={isPreset ? value : "__custom"}
-        onChange={(e) => {
-          if (e.target.value !== "__custom") onChange(e.target.value);
-        }}
-      >
-        {Object.entries(byProvider).map(([provider, presets]) => (
-          <optgroup key={provider} label={provider.toUpperCase()}>
-            {presets.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-        <option value="__custom">— custom (type below) —</option>
-      </select>
-      {!isPreset && (
-        <input
-          type="text"
-          className={baseInputClass}
-          value={value}
-          placeholder="custom model id"
-          onChange={(e) => onChange(e.target.value)}
-        />
-      )}
-    </div>
-  );
-}
-
-function StringArrayInput({
-  value,
-  onChange,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-}) {
-  const [pending, setPending] = useState("");
-
-  function commit() {
-    const trimmed = pending.trim();
-    if (!trimmed) return;
-    if (value.includes(trimmed)) {
-      setPending("");
-      return;
-    }
-    onChange([...value, trimmed]);
-    setPending("");
-  }
-
-  return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap gap-1">
-        {value.map((v) => (
-          <span
-            key={v}
-            className="inline-flex items-center gap-1 border border-cyan/50 bg-cyan/10 px-2 py-0.5 mono text-caption text-cyan"
-          >
-            {v}
-            <button
-              type="button"
-              onClick={() => onChange(value.filter((x) => x !== v))}
-              className="hover:text-hot cursor-pointer"
-              aria-label={`Remove ${v}`}
-            >
-              ×
-            </button>
-          </span>
-        ))}
-        {value.length === 0 && (
-          <span className="label text-muted">empty</span>
-        )}
-      </div>
-      <input
-        type="text"
-        className="w-full bg-black/40 border border-hairline px-2 py-1 mono text-body text-primary focus:border-cyan focus:outline-none"
-        value={pending}
-        placeholder="type and press Enter to add…"
-        onChange={(e) => setPending(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            commit();
-          }
-        }}
-        onBlur={commit}
-      />
-    </div>
-  );
-}
-
-function JsonTextarea({
-  value,
-  onChange,
-}: {
-  value: unknown;
-  onChange: (v: unknown) => void;
-}) {
-  const [raw, setRaw] = useState(() => JSON.stringify(value, null, 2));
-  const [parseError, setParseError] = useState<string | null>(null);
-
-  function commit(text: string) {
-    try {
-      const parsed = text.trim() === "" ? {} : JSON.parse(text);
-      setParseError(null);
-      onChange(parsed);
-    } catch (err) {
-      setParseError((err as Error).message);
-    }
-  }
-
-  return (
-    <div className="space-y-1">
-      <textarea
-        className="w-full min-h-[100px] bg-black/40 border border-hairline px-2 py-1 mono text-caption text-primary focus:border-cyan focus:outline-none resize-y"
-        value={raw}
-        onChange={(e) => {
-          setRaw(e.target.value);
-          commit(e.target.value);
-        }}
-      />
-      {parseError && (
-        <div className="text-caption text-hot">
-          JSON: {parseError}
-        </div>
-      )}
-    </div>
-  );
-}

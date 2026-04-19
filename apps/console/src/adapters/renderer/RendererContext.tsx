@@ -1,6 +1,11 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { makeGoldBumpTexture, makeHaloTexture, makeSolarPanelTexture } from "./textures";
-import { getCompanyColor, regimeColor, pcColor } from "./palette";
+import { getCompanyColor, regimeColor, ringColor, pcColor } from "./palette";
+import {
+  buildFullRingsGeometry,
+  buildTailsGeometry,
+  clearRingCache,
+} from "./orbit-geometry";
 
 export interface RendererAdapter {
   makeGoldBumpTexture: typeof makeGoldBumpTexture;
@@ -8,7 +13,11 @@ export interface RendererAdapter {
   makeSolarPanelTexture: typeof makeSolarPanelTexture;
   getCompanyColor: typeof getCompanyColor;
   regimeColor: typeof regimeColor;
+  ringColor: typeof ringColor;
   pcColor: typeof pcColor;
+  buildFullRingsGeometry: typeof buildFullRingsGeometry;
+  buildTailsGeometry: typeof buildTailsGeometry;
+  clearRingCache: typeof clearRingCache;
 }
 
 export const defaultRendererAdapter: RendererAdapter = {
@@ -17,7 +26,11 @@ export const defaultRendererAdapter: RendererAdapter = {
   makeSolarPanelTexture,
   getCompanyColor,
   regimeColor,
+  ringColor,
   pcColor,
+  buildFullRingsGeometry,
+  buildTailsGeometry,
+  clearRingCache,
 };
 
 const RendererContext = createContext<RendererAdapter | null>(null);

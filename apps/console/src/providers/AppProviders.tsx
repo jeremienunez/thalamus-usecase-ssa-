@@ -14,12 +14,18 @@ import {
   defaultPropagatorAdapter,
   type PropagatorAdapter,
 } from "@/adapters/propagator/PropagatorContext";
+import {
+  GraphProvider,
+  defaultGraphAdapter,
+  type GraphAdapter,
+} from "@/adapters/graph/GraphContext";
 
 export interface AppAdapters {
   api: ApiClient;
   sse: SseClient;
   renderer: RendererAdapter;
   propagator: PropagatorAdapter;
+  graph: GraphAdapter;
   queryClient: QueryClient;
 }
 
@@ -35,7 +41,9 @@ export function AppProviders({
       <ApiClientProvider value={adapters.api}>
         <SseClientProvider value={adapters.sse}>
           <RendererProvider value={adapters.renderer}>
-            <PropagatorProvider value={adapters.propagator}>{children}</PropagatorProvider>
+            <PropagatorProvider value={adapters.propagator}>
+              <GraphProvider value={adapters.graph}>{children}</GraphProvider>
+            </PropagatorProvider>
           </RendererProvider>
         </SseClientProvider>
       </ApiClientProvider>
@@ -49,6 +57,7 @@ export function buildDefaultAdapters(): AppAdapters {
     sse: createSseClient(),
     renderer: defaultRendererAdapter,
     propagator: defaultPropagatorAdapter,
+    graph: defaultGraphAdapter,
     queryClient: new QueryClient({
       defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 30_000 } },
     }),

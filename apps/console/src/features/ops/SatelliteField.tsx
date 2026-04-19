@@ -3,31 +3,9 @@ import { useFrame, ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { SatelliteDTO } from "@/shared/types";
+import { classifySatellite } from "@/shared/types/satellite-classification";
 import { propagateSgp4 } from "@/adapters/propagator/sgp4";
-
-const colorCache = new Map<string, THREE.Color>();
-function getCompanyColor(name: string): THREE.Color {
-  const n = name.toUpperCase();
-  const prefix = n.split("-")[0] || n.substring(0, 4);
-  if (colorCache.has(prefix)) return colorCache.get(prefix)!;
-
-  let color;
-  if (n.includes("THAL")) color = new THREE.Color(0xFFC000); // Thales stays gold
-  else if (n.includes("NASA")) color = new THREE.Color(0x05d9e8); // NASA Cyan
-  else if (n.includes("JAXA")) color = new THREE.Color(0x01ffc3); // JAXA Mint
-  else if (n.includes("ISRO") || n.includes("INDIA")) color = new THREE.Color(0xffb300); // ISRO Orange
-  else if (n.includes("PLAN")) color = new THREE.Color(0xb5179e); // Planet Purple
-  else if (n.includes("CNES")) color = new THREE.Color(0x4361ee); // CNES Blue
-  else if (n.includes("CNSA")) color = new THREE.Color(0xd90429); // CNSA Red
-  else if (n.includes("SPACE") || n.includes("STAR")) color = new THREE.Color(0xaaaaaa); // SpaceX Silver
-  else {
-    let hash = 0;
-    for (let i = 0; i < prefix.length; i++) hash = prefix.charCodeAt(i) + ((hash << 5) - hash);
-    color = new THREE.Color().setHSL(Math.abs(hash % 360) / 360, 0.85, 0.55);
-  }
-  colorCache.set(prefix, color);
-  return color;
-}
+import { useRenderer } from "@/adapters/renderer/RendererContext";
 
 type Props = {
   satellites: SatelliteDTO[];
@@ -46,191 +24,8 @@ hideTmp.updateMatrixWorld(true);
 const tmpColor = new THREE.Color();
 const upVec = new THREE.Vector3(0, 1, 0);
 
-function makeHaloTexture(): THREE.Texture {
-  const size = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.25, "rgba(255,255,255,0.55)");
-  grad.addColorStop(0.6, "rgba(255,255,255,0.08)");
-  grad.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.minFilter = THREE.LinearFilter;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-// Generates highly realistic "multi-layer insulation" (MLI) crinkle bump maps
-function makeGoldBumpTexture(): THREE.Texture {
-  const size = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  
-  ctx.fillStyle = "black";
-  ctx.fillRect(0, 0, size, size);
-  
-  // Draw random sharp geometric polygons for metallic foil crumples
-  for (let i = 0; i < 400; i++) {
-    const darkness = Math.random();
-    ctx.fillStyle = `rgba(255,255,255,${darkness})`;
-    ctx.beginPath();
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const s = 10 + Math.random() * 30; // large crinkles
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + s, y + (Math.random() - 0.5) * s);
-    ctx.lineTo(x + (Math.random() - 0.5) * s, y + s);
-    ctx.fill();
-  }
-  
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-// Generates high-contrast glowing solar panel grids
-function makeSolarPanelTexture(): THREE.Texture {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  
-  // Base vibrant deep blue
-  ctx.fillStyle = "#0D3B66"; 
-  ctx.fillRect(0, 0, size, size);
-  
-  // Glowing cyan grid lattice
-  ctx.strokeStyle = "#4CC9F0"; 
-  ctx.lineWidth = 6;
-  const cellsX = 10;
-  const cellsY = 4; 
-  for (let i = 0; i <= size; i += size/cellsX) {
-    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.stroke();
-  }
-  for (let i = 0; i <= size; i += size/cellsY) {
-    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
-  }
-
-  // Pre-bake an anisotropic highlight into the texture map
-  const grad = ctx.createLinearGradient(0, 0, size, size);
-  grad.addColorStop(0, "rgba(255,255,255,0.85)");
-  grad.addColorStop(0.4, "rgba(255,255,255,0)");
-  grad.addColorStop(1, "rgba(255,255,255,0.4)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.anisotropy = 16;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-/**
- * Bus-archetype classifier. Drives which 3D model an instance picks up.
- *
- * Prefer explicit operator-family matches (they tell us the mission class
- * beyond what the orbital regime alone implies). Fall back to regime when
- * the name doesn't disclose an operator.
- *
- * TELECOM  → large bus, big solar panels, dishes (GEO comms, MEO GNSS buses)
- * PROBE    → instrument-platform style (ISS, weather sats, science)
- * SMALLSAT → flat black box + single panel (Starlink-class, cubesats)
- */
-const getModelType = (s: SatelliteDTO): "TELECOM" | "PROBE" | "SMALLSAT" => {
-  const n = s.name.toUpperCase();
-
-  // Station-class / platforms
-  if (
-    n.includes("ISS") ||
-    n.includes("TIANGONG") ||
-    n.includes("HUBBLE") ||
-    n.includes("HST") ||
-    n.includes("TIANHE") ||
-    n.includes("TIANZHOU")
-  ) return "PROBE";
-
-  // Science / weather / Earth observation — instrument platforms
-  if (
-    n.startsWith("NOAA") ||
-    n.startsWith("GOES") ||
-    n.startsWith("LANDSAT") ||
-    n.startsWith("TERRA") ||
-    n.startsWith("AQUA") ||
-    n.startsWith("AURA") ||
-    n.startsWith("METOP") ||
-    n.startsWith("SENTINEL") ||
-    n.startsWith("CRYOSAT") ||
-    n.startsWith("JPSS") ||
-    n.startsWith("TDRS") ||
-    n.startsWith("METEOR") ||
-    n.startsWith("ICESAT") ||
-    n.startsWith("CALIPSO") ||
-    n.startsWith("JASON") ||
-    n.startsWith("SMAP") ||
-    n.startsWith("TIROS") ||
-    n.includes("NASA") ||
-    n.includes("JAXA") ||
-    n.includes("ISRO") ||
-    n.includes("CNSA") ||
-    n.includes("ESA")
-  ) return "PROBE";
-
-  // Commercial / government comms buses — big dish + panel assemblies
-  if (
-    n.startsWith("INTELSAT") ||
-    n.startsWith("INMARSAT") ||
-    n.startsWith("EUTELSAT") ||
-    n.startsWith("SES") ||
-    n.startsWith("DIRECTV") ||
-    n.startsWith("ECHOSTAR") ||
-    n.startsWith("GALAXY") ||
-    n.startsWith("ASTRA") ||
-    n.startsWith("NIMIQ") ||
-    n.startsWith("JCSAT") ||
-    n.startsWith("NSS") ||
-    n.startsWith("AMC") ||
-    n.startsWith("ASIASAT") ||
-    n.startsWith("VIASAT") ||
-    n.startsWith("SKYNET") ||
-    n.startsWith("WGS") ||
-    n.startsWith("MILSTAR") ||
-    n.startsWith("MUOS") ||
-    n.startsWith("SICRAL") ||
-    n.startsWith("GSAT") ||
-    n.includes("THAL") ||
-    n.includes("CNES")
-  ) return "TELECOM";
-
-  // GNSS buses — large structure with directional antennas
-  if (
-    n.startsWith("NAVSTAR") ||
-    n.startsWith("GPS") ||
-    n.startsWith("GALILEO") ||
-    n.startsWith("BEIDOU") ||
-    n.startsWith("GLONASS") ||
-    n.startsWith("QZS") ||
-    n.startsWith("IRNSS")
-  ) return "TELECOM";
-
-  // Regime-based fallback: GEO is almost always a big comms bus
-  if (s.regime === "GEO") return "TELECOM";
-
-  // LEO constellations (Starlink / OneWeb / Iridium / Planet / Globalstar /
-  // Orbcomm / Cosmos), plus anything we didn't classify — flat-panel smallsat
-  return "SMALLSAT";
-};
-
 export function SatelliteField({ satellites, selectedId, onSelect, timeScale, labelIds = [] }: Props) {
+  const renderer = useRenderer();
   const haloRef = useRef<THREE.InstancedMesh>(null);
   
   const m = {
@@ -275,10 +70,10 @@ export function SatelliteField({ satellites, selectedId, onSelect, timeScale, la
   );
 
   const viewData = useMemo(() => {
-    const goldBump = makeGoldBumpTexture();
-    const panelTex = makeSolarPanelTexture();
+    const goldBump = renderer.makeGoldBumpTexture();
+    const panelTex = renderer.makeSolarPanelTexture();
     return {
-      haloTex: makeHaloTexture(),
+      haloTex: renderer.makeHaloTexture(),
       
       // Universal vibrant chassis material that dynamically accepts instance color!
       matChassis: new THREE.MeshPhysicalMaterial({ 
@@ -344,7 +139,7 @@ export function SatelliteField({ satellites, selectedId, onSelect, timeScale, la
     const opacityMid = new THREE.Color(0xa8e3ff);
 
     satellites.forEach((s, i) => {
-      const baseCol = getCompanyColor(s.name);
+      const baseCol = renderer.getCompanyColor(s.name);
       const score = s.opacityScore ?? 0;
       const col =
         score >= 0.9
@@ -389,7 +184,7 @@ export function SatelliteField({ satellites, selectedId, onSelect, timeScale, la
     satellites.forEach((s, i) => {
       const p = propagateSgp4(s, nowMs, positions[i]);
       const isSelected = selectedId === s.id;
-      const type = getModelType(s);
+      const type = classifySatellite({ name: s.name, regime: s.regime });
       
       const up = p.clone().normalize();
       
@@ -548,7 +343,7 @@ export function SatelliteField({ satellites, selectedId, onSelect, timeScale, la
           >
             <div className="flex flex-col gap-0.5" style={{ transform: "translate(12px, -12px)" }}>
               <div className="flex max-w-[12rem] items-center gap-1 whitespace-nowrap border-l-2 border-cyan bg-panel/95 pl-1.5 pr-2 py-0.5 shadow-hud backdrop-blur-md">
-                <span className="h-1.5 w-1.5 shrink-0" style={{ backgroundColor: `#${getCompanyColor(s.name).getHexString()}` }} />
+                <span className="h-1.5 w-1.5 shrink-0" style={{ backgroundColor: `#${renderer.getCompanyColor(s.name).getHexString()}` }} />
                 <span
                   title={s.name}
                   className={

@@ -14,6 +14,11 @@ import {
   defaultPropagatorAdapter,
   type PropagatorAdapter,
 } from "@/adapters/propagator/PropagatorContext";
+import {
+  GraphProvider,
+  defaultGraphAdapter,
+  type GraphAdapter,
+} from "@/adapters/graph/GraphContext";
 
 /** Minimal stub ApiClient: every port returns an empty-shaped value. */
 export function makeStubApi(overrides: Partial<ApiClient> = {}): ApiClient {
@@ -90,6 +95,7 @@ export interface WrapDeps {
   sse?: SseClient;
   renderer?: RendererAdapter;
   propagator?: PropagatorAdapter;
+  graph?: GraphAdapter;
 }
 
 export function WrapProviders({
@@ -108,7 +114,9 @@ export function WrapProviders({
         <SseClientProvider value={deps.sse ?? stubSseClient}>
           <RendererProvider value={deps.renderer ?? defaultRendererAdapter}>
             <PropagatorProvider value={deps.propagator ?? defaultPropagatorAdapter}>
-              {children}
+              <GraphProvider value={deps.graph ?? defaultGraphAdapter}>
+                {children}
+              </GraphProvider>
             </PropagatorProvider>
           </RendererProvider>
         </SseClientProvider>

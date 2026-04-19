@@ -2,7 +2,9 @@ import { useMemo, useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { SatelliteDTO } from "@/shared/types";
-import { orbitRing, satellitePosition } from "@/adapters/propagator/sgp4";
+import { satellitePosition } from "@/adapters/propagator/sgp4";
+import { useRenderer } from "@/adapters/renderer/RendererContext";
+import type { TailsGeometry } from "@/adapters/renderer/orbit-geometry";
 
 export type TrailMode = "off" | "tails" | "full";
 export type RegimeFilterKey = "ALL" | "LEO" | "MEO" | "GEO" | "HEO";
@@ -18,101 +20,10 @@ type Props = {
 
 const REGIMES: Array<"LEO" | "MEO" | "GEO" | "HEO"> = ["LEO", "MEO", "GEO", "HEO"];
 
-/** Spec §2.1 color palette — full-ring colors (distinct from per-regime sat dot colors). */
-const RING_COLORS: Record<"LEO" | "MEO" | "GEO" | "HEO", string> = {
-  LEO: "#8ecae6",
-  MEO: "#2a9d8f",
-  GEO: "#e9c46a",
-  HEO: "#c77dff",
-};
-
 const TAIL_LEN = 60;
 
-// ---------------------------------------------------------------------------
-// orbitRing cache with simple LRU-ish eviction (cap 2000).
-// ---------------------------------------------------------------------------
-
-type RingCacheEntry = { ring: Float32Array };
-const RING_CACHE = new Map<string, RingCacheEntry>();
-const RING_CACHE_CAP = 2000;
-
-function ringCacheKey(s: SatelliteDTO): string {
-  // TLE epoch captures orbit freshness; fallback to id alone.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const epoch = (s as any).tleEpoch ?? (s as any).tle_epoch ?? "";
-  return `${s.id}:${epoch}`;
-}
-
-function getCachedRing(s: SatelliteDTO): Float32Array | null {
-  const key = ringCacheKey(s);
-  const hit = RING_CACHE.get(key);
-  if (hit) {
-    // Touch to keep order (Map preserves insertion order, so re-set moves to end).
-    RING_CACHE.delete(key);
-    RING_CACHE.set(key, hit);
-    return hit.ring;
-  }
-  try {
-    const ring = orbitRing(s, 128);
-    RING_CACHE.set(key, { ring });
-    if (RING_CACHE.size > RING_CACHE_CAP) {
-      // Drop the oldest half in one pass.
-      const drop = Math.floor(RING_CACHE_CAP / 2);
-      const iter = RING_CACHE.keys();
-      for (let i = 0; i < drop; i++) {
-        const k = iter.next().value;
-        if (k === undefined) break;
-        RING_CACHE.delete(k);
-      }
-    }
-    return ring;
-  } catch {
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// One-shot perf warning.
-// ---------------------------------------------------------------------------
+// One-shot perf warning flag.
 let WARNED_FULL_ALL = false;
-
-// ---------------------------------------------------------------------------
-// Full-ring geometry per regime: merge rings into LineSegments.
-// For each 128-point ring, emit 128 segments pairing consecutive points
-// (closed loop). Output vertex count = 256 × N_rings per regime.
-// ---------------------------------------------------------------------------
-
-function buildRegimeGeometry(
-  sats: SatelliteDTO[],
-): THREE.BufferGeometry | null {
-  if (sats.length === 0) return null;
-  const segPerRing = 128;
-  const vertsPerRing = segPerRing * 2;
-  const total = sats.length * vertsPerRing;
-  const positions = new Float32Array(total * 3);
-  let write = 0;
-
-  for (const s of sats) {
-    const ring = getCachedRing(s);
-    if (!ring) continue;
-    for (let k = 0; k < segPerRing; k++) {
-      const a = k * 3;
-      const b = ((k + 1) % segPerRing) * 3;
-      positions[write++] = ring[a] ?? 0;
-      positions[write++] = ring[a + 1] ?? 0;
-      positions[write++] = ring[a + 2] ?? 0;
-      positions[write++] = ring[b] ?? 0;
-      positions[write++] = ring[b + 1] ?? 0;
-      positions[write++] = ring[b + 2] ?? 0;
-    }
-  }
-
-  const geom = new THREE.BufferGeometry();
-  // If some rings failed we may have unused tail — trim.
-  const used = positions.subarray(0, write);
-  geom.setAttribute("position", new THREE.BufferAttribute(used, 3));
-  return geom;
-}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -125,6 +36,7 @@ export function OrbitTrails({
   timeScale,
   tRef: tRefExternal,
 }: Props) {
+  const { ringColor, buildFullRingsGeometry, buildTailsGeometry } = useRenderer();
   // Own time ref (used when parent doesn't provide one).
   const tRefInternal = useRef(0);
   const tRef = tRefExternal ?? tRefInternal;
@@ -140,7 +52,7 @@ export function OrbitTrails({
     for (const r of REGIMES) {
       if (!includesRegime(r)) continue;
       const inRegime = satellites.filter((s) => s.regime === r);
-      const g = buildRegimeGeometry(inRegime);
+      const g = buildFullRingsGeometry(inRegime);
       if (g) out[r] = g;
     }
     return out;
@@ -192,26 +104,12 @@ export function OrbitTrails({
   }, [satellites]);
 
   // Merged tails geometry: TAIL_LEN-1 segments per sat × N sats × 2 verts × 3.
-  const tailsGeom = useMemo(() => {
+  const tailsGeom = useMemo<TailsGeometry | null>(() => {
     if (trailMode !== "tails") return null;
     const visible = satellites.filter((s) =>
       includesRegime(s.regime as "LEO" | "MEO" | "GEO" | "HEO"),
     );
-    const segPerSat = TAIL_LEN - 1;
-    const total = visible.length * segPerSat * 2;
-    const g = new THREE.BufferGeometry();
-    g.setAttribute(
-      "position",
-      new THREE.BufferAttribute(new Float32Array(total * 3), 3),
-    );
-    g.setAttribute(
-      "color",
-      new THREE.BufferAttribute(new Float32Array(total * 3), 3),
-    );
-    // Keep list of sat ids aligned to buffer segments so useFrame can write.
-    (g as unknown as { _satIds: number[] })._satIds = visible.map((s) => s.id);
-    (g as unknown as { _sats: SatelliteDTO[] })._sats = visible;
-    return g;
+    return buildTailsGeometry(visible, TAIL_LEN);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     satellites.map((s) => s.id).join(","),
@@ -236,7 +134,7 @@ export function OrbitTrails({
     }
     if (!tRefExternal) tRef.current += dt * timeScale;
 
-    const sats = (tailsGeom as unknown as { _sats: SatelliteDTO[] })._sats;
+    const sats = tailsGeom._sats;
     const posAttr = tailsGeom.getAttribute("position") as THREE.BufferAttribute;
     const colAttr = tailsGeom.getAttribute("color") as THREE.BufferAttribute;
     const posArr = posAttr.array as Float32Array;
@@ -270,7 +168,7 @@ export function OrbitTrails({
       // Write segments into merged geometry: oldest → newest, fade tail→head.
       // Oldest slot = entry.nextIdx (the one we'll overwrite next).
       const base = new THREE.Color(
-        RING_COLORS[s.regime as "LEO" | "MEO" | "GEO" | "HEO"] ?? "#ffffff",
+        ringColor(s.regime as "LEO" | "MEO" | "GEO" | "HEO"),
       );
       const satOffset = si * floatsPerSat;
       for (let k = 0; k < segPerSat; k++) {
@@ -334,7 +232,7 @@ export function OrbitTrails({
           return (
             <lineSegments key={r} geometry={g}>
               <lineBasicMaterial
-                color={RING_COLORS[r]}
+                color={ringColor(r)}
                 opacity={0.35}
                 transparent
                 blending={THREE.AdditiveBlending}

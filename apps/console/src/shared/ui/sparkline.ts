@@ -16,3 +16,14 @@ export function confidenceBar(value: number, length = 8): string {
   }
   return out;
 }
+
+/**
+ * Binary block bar: solid █ for the filled portion, ░ for the empty.
+ * Used for histogram-style rows where `value/max` is the ratio and we want
+ * a clean rectangular bar (as opposed to the gradient sparkline above).
+ */
+export function blockBar(value: number, max: number, width = 20): string {
+  if (max <= 0) return " ".repeat(width);
+  const blocks = Math.max(1, Math.round((value / max) * width));
+  return "█".repeat(blocks) + "░".repeat(Math.max(0, width - blocks));
+}

@@ -1,8 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId } from "react";
 import { X } from "lucide-react";
 import { clsx } from "clsx";
 import { useFindingQuery } from "@/usecases/useFindingQuery";
 import type { FindingDTO } from "@/shared/types";
+import { SOURCE_COLOR, STATUS_COLOR } from "@/shared/types/graph-colors";
+import { KV } from "@/shared/ui/Drawer";
+import { useDrawerA11y } from "@/hooks/useDrawerA11y";
 
 type Props = {
   /** Numeric id stripped from `finding:NNN` (or null when nothing selected). */
@@ -20,24 +23,11 @@ type Props = {
 export function FindingReadout({ findingId, onClose, onFocusEntity }: Props) {
   const open = findingId !== null;
   const titleId = useId();
-  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const closeRef = useDrawerA11y(open, onClose);
 
   const { data, isLoading, error } = useFindingQuery(
     findingId !== null ? String(findingId) : null,
   );
-
-  useEffect(() => {
-    if (!open) return;
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
 
   return (
     <aside
@@ -178,11 +168,11 @@ function ReadoutBody({
         <p className="text-body leading-relaxed text-primary">{data.summary}</p>
       </Section>
       <Section title="CORTEX METADATA">
-        <DataRow label="Cortex" value={data.cortex || "—"} mono color={region.color} />
-        <DataRow label="Region" value={region.region} mono color={region.color} />
-        <DataRow label="Lobe" value={region.lobe} mono />
-        <DataRow label="Status" value={status.toUpperCase()} mono color={statusColor(status)} />
-        <DataRow label="Captured" value={created.toISOString().slice(0, 19) + "Z"} mono />
+        <KV k="Cortex" v={data.cortex || "—"} mono color={region.color} />
+        <KV k="Region" v={region.region} mono color={region.color} />
+        <KV k="Lobe" v={region.lobe} mono />
+        <KV k="Status" v={status.toUpperCase()} mono color={STATUS_COLOR[status] ?? "#8B949E"} />
+        <KV k="Captured" v={created.toISOString().slice(0, 19) + "Z"} mono />
       </Section>
       {data.linkedEntityIds && data.linkedEntityIds.length > 0 && (
         <Section title={`AXON ENDPOINTS · ${data.linkedEntityIds.length}`}>
@@ -226,7 +216,7 @@ function ReadoutBody({
                 <div className="mb-0.5 flex items-center gap-2">
                   <span
                     className="mono text-nano uppercase tracking-widest"
-                    style={{ color: sourceClassColor(e.kind) }}
+                    style={{ color: SOURCE_COLOR[e.kind as keyof typeof SOURCE_COLOR] ?? "#8B949E" }}
                   >
                     {e.kind}
                   </span>
@@ -296,9 +286,9 @@ function TitleBlock({
         <span
           className="inline-flex h-5 items-center border px-2 mono text-nano uppercase tracking-widest"
           style={{
-            color: statusColor(status),
-            borderColor: statusColor(status) + "55",
-            backgroundColor: statusColor(status) + "11",
+            color: STATUS_COLOR[status] ?? "#8B949E",
+            borderColor: (STATUS_COLOR[status] ?? "#8B949E") + "55",
+            backgroundColor: (STATUS_COLOR[status] ?? "#8B949E") + "11",
           }}
         >
           {status}
@@ -355,29 +345,6 @@ function Section({
   );
 }
 
-function DataRow({
-  label,
-  value,
-  mono,
-  color,
-}: {
-  label: string;
-  value: React.ReactNode;
-  mono?: boolean;
-  color?: string;
-}) {
-  return (
-    <div className="grid grid-cols-[112px_1fr] items-baseline gap-3 py-1 text-body">
-      <span className="text-caption text-muted">{label}</span>
-      <span
-        className={clsx(mono ? "mono text-numeric" : "text-primary")}
-        style={color ? { color } : undefined}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
 
 function entityKind(eid: string): string {
   const prefix = eid.split(":")[0] ?? "";
@@ -397,32 +364,4 @@ function entityKind(eid: string): string {
   }
 }
 
-function statusColor(status: FindingDTO["status"]): string {
-  switch (status) {
-    case "pending":
-      return "#F59E0B";
-    case "accepted":
-      return "#34D399";
-    case "rejected":
-      return "#F87171";
-    case "in-review":
-      return "#22D3EE";
-    default:
-      return "#8B949E";
-  }
-}
 
-function sourceClassColor(kind: string): string {
-  switch (kind) {
-    case "field":
-      return "#A78BFA";
-    case "osint":
-      return "#60A5FA";
-    case "sim":
-      return "#F59E0B";
-    case "derived":
-      return "#8B949E";
-    default:
-      return "#8B949E";
-  }
-}

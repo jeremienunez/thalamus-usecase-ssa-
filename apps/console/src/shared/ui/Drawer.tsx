@@ -1,7 +1,8 @@
-import { ReactNode, useEffect, useId, useRef } from "react";
+import { ReactNode, useId } from "react";
 import { X } from "lucide-react";
 import { clsx } from "clsx";
 import { useUiStore } from "@/shared/ui/uiStore";
+import { useDrawerA11y } from "@/hooks/useDrawerA11y";
 
 type Props = {
   title: string;
@@ -14,28 +15,7 @@ export function Drawer({ title, subtitle, children }: Props) {
   const close = useUiStore((s) => s.closeDrawer);
   const open = drawerId !== null;
   const titleId = useId();
-  const closeRef = useRef<HTMLButtonElement | null>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.activeElement as HTMLElement | null;
-    returnFocusRef.current = prev;
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        close();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      if (returnFocusRef.current && document.contains(returnFocusRef.current)) {
-        returnFocusRef.current.focus();
-      }
-    };
-  }, [open, close]);
+  const closeRef = useDrawerA11y(open, close);
 
   return (
     <aside
@@ -81,11 +61,26 @@ export function DrawerSection({ title, children }: { title: string; children: Re
   );
 }
 
-export function KV({ k, v, mono = false }: { k: string; v: ReactNode; mono?: boolean }) {
+export function KV({
+  k,
+  v,
+  mono = false,
+  color,
+}: {
+  k: string;
+  v: ReactNode;
+  mono?: boolean;
+  color?: string;
+}) {
   return (
     <div className="grid grid-cols-[112px_1fr] items-baseline gap-3 py-1 text-body">
       <span className="text-caption text-muted">{k}</span>
-      <span className={mono ? "mono text-numeric" : "text-primary"}>{v}</span>
+      <span
+        className={mono ? "mono text-numeric" : "text-primary"}
+        style={color ? { color } : undefined}
+      >
+        {v}
+      </span>
     </div>
   );
 }

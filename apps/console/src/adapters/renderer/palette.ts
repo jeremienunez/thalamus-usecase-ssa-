@@ -36,6 +36,16 @@ export function regimeColor(regime: "LEO" | "MEO" | "GEO" | "HEO"): THREE.Color 
   return new THREE.Color(regimeMap[regime]);
 }
 
+/**
+ * Trail/ring palette — intentionally distinct from `regimeColor` so orbit-ring
+ * overlays stay readable against per-regime satellite dots.
+ */
+const ringMap = { LEO: "#8ecae6", MEO: "#2a9d8f", GEO: "#e9c46a", HEO: "#c77dff" } as const;
+
+export function ringColor(regime: "LEO" | "MEO" | "GEO" | "HEO"): string {
+  return ringMap[regime];
+}
+
 export function pcColor(pc: number): THREE.Color {
   if (pc >= 1e-4) return new THREE.Color("#F87171");
   if (pc >= 1e-6) return new THREE.Color("#F59E0B");

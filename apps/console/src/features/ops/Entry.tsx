@@ -2,10 +2,14 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stars, Environment } from "@react-three/drei";
 import { useRef, useState, useEffect, useMemo } from "react";
 import { Pause, Play } from "lucide-react";
-import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
 import { useUtcClock } from "@/hooks/useUtcClock";
+import { useTimeControl, TIME_SPEEDS } from "@/hooks/useTimeControl";
+import { useRegimeFilter } from "@/hooks/useRegimeFilter";
+import { useThreatBoard } from "@/hooks/useThreatBoard";
+import { MetricTile, MetricTilePlaceholder } from "@/shared/ui/MetricTile";
 import { fmtPcCompact, fmtRangeKm, fmtVelocity } from "@/shared/types/units";
 import { Measure } from "@/shared/ui/Measure";
+import { HudPanel } from "@/shared/ui/HudPanel";
 import { Globe } from "./Globe";
 import { SatelliteField } from "./SatelliteField";
 import { ConjunctionArcs } from "./ConjunctionArcs";
@@ -21,9 +25,9 @@ import { OrbitTrails, type RegimeFilterKey } from "./OrbitTrails";
 import { useSatellitesQuery } from "@/usecases/useSatellitesQuery";
 import { useConjunctionsQuery } from "@/usecases/useConjunctionsQuery";
 import { useUiStore } from "@/shared/ui/uiStore";
-import type { ConjunctionDTO, SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/shared/types";
 
-const SPEEDS = [1, 60, 600, 3600];
+const SPEEDS = TIME_SPEEDS;
 const SPEED_LABELS = ["1×", "1m", "10m", "1h"];
 const SPEED_FULL = ["REAL-TIME", "1 MIN / S", "10 MIN / S", "1 H / S"];
 
@@ -33,44 +37,6 @@ function severityOf(pc: number): "hot" | "amber" | "dim" {
   if (pc >= 1e-4) return "hot";
   if (pc >= 1e-6) return "amber";
   return "dim";
-}
-
-function MetricTile({
-  label,
-  value,
-  display,
-  accent,
-}: {
-  label: string;
-  value: number;
-  display?: (v: number) => string;
-  accent?: "primary" | "hot" | "amber" | "cyan";
-}) {
-  const animated = useAnimatedNumber(Number.isFinite(value) ? value : 0, 420);
-  const color =
-    accent === "hot"
-      ? "text-hot"
-      : accent === "amber"
-        ? "text-amber"
-        : accent === "cyan"
-          ? "text-cyan"
-          : "text-primary";
-  const rendered = display ? display(animated) : Math.round(animated).toString();
-  return (
-    <div className="flex flex-col gap-0.5 px-3 py-2 border-l border-hairline first:border-l-0">
-      <div className="label text-nano">{label}</div>
-      <div className={`mono text-h2 leading-none ${color} tabular-nums`}>{rendered}</div>
-    </div>
-  );
-}
-
-function MetricTilePlaceholder({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col gap-0.5 px-3 py-2 border-l border-hairline first:border-l-0">
-      <div className="label text-nano">{label}</div>
-      <div className="mono text-h2 leading-none text-dim tabular-nums">…</div>
-    </div>
-  );
 }
 
 function CornerBracket({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
@@ -85,11 +51,7 @@ function CornerBracket({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
 }
 
 export function OpsEntry() {
-  const [speedIdx, setSpeedIdx] = useState(1);
-  const [paused, setPaused] = useState(false);
-  const prevSpeedIdx = useRef(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-
   const openDrawer = useUiStore((s) => s.openDrawer);
   const { utc, date } = useUtcClock();
 
@@ -106,22 +68,7 @@ export function OpsEntry() {
   const [hoveredCjId, setHoveredCjId] = useState<string | null>(null);
   const [selectedCjId, setSelectedCjId] = useState<string | null>(null);
 
-  const { threats, highCount, peakPc, labelIds } = useMemo(() => {
-    const sorted = [...conjunctions].sort(
-      (a, b) => b.probabilityOfCollision - a.probabilityOfCollision,
-    );
-    const top: ConjunctionDTO[] = sorted.slice(0, 5);
-    const high = conjunctions.filter((c) => c.probabilityOfCollision >= 1e-4).length;
-    const peak = sorted[0]?.probabilityOfCollision ?? 0;
-    // Limit world-space labels to the top-3 conjunctions (≤6 sats) to keep the
-    // 3D scene legible — denser sets cause label collisions like POISK vs (ZARYA).
-    const ids = new Set<number>();
-    for (const c of sorted.slice(0, 3)) {
-      ids.add(c.primaryId);
-      ids.add(c.secondaryId);
-    }
-    return { threats: top, highCount: high, peakPc: peak, labelIds: Array.from(ids) };
-  }, [conjunctions]);
+  const { threats, highCount, peakPc, labelIds } = useThreatBoard(conjunctions);
 
   const handleSelect = (id: number) => {
     setSelectedId(id);
@@ -131,37 +78,16 @@ export function OpsEntry() {
   const [focusId, setFocusId] = useState<number | null>(null);
   const orbitControlsRef = useRef<any>(null);
 
-  const [regimeVisible, setRegimeVisible] = useState<Record<RegimeKey, boolean>>({
-    LEO: true,
-    MEO: true,
-    GEO: true,
-    HEO: true,
-  });
-  const toggleRegime = (k: RegimeKey) =>
-    setRegimeVisible((v) => ({ ...v, [k]: !v[k] }));
+  const {
+    regimeVisible,
+    toggleRegime,
+    trailMode,
+    setTrailMode,
+    orbitRegimeFilter,
+    filteredSats,
+    regimeCounts,
+  } = useRegimeFilter(satellites);
 
-  const [trailMode, setTrailMode] = useState<TrailMode>("tails");
-
-  // Derive an OrbitTrails regime filter from the visibility record.
-  // All on → ALL; exactly one → that regime; mixed → ALL (OrbitTrails still
-  // only renders regimes where sats exist in `filteredSats`, so hidden regimes
-  // naturally drop out).
-  const orbitRegimeFilter: RegimeFilterKey = useMemo(() => {
-    const onKeys = (Object.keys(regimeVisible) as RegimeKey[]).filter(
-      (k) => regimeVisible[k],
-    );
-    if (onKeys.length === 1 && onKeys[0]) return onKeys[0] as RegimeFilterKey;
-    return "ALL";
-  }, [regimeVisible]);
-
-  const { filteredSats, regimeCounts } = useMemo(() => {
-    const counts: Record<RegimeKey, number> = { LEO: 0, MEO: 0, GEO: 0, HEO: 0 };
-    for (const s of satellites) counts[s.regime as RegimeKey]++;
-    const visibleSats = satellites.filter(
-      (s) => regimeVisible[s.regime as RegimeKey],
-    );
-    return { filteredSats: visibleSats, regimeCounts: counts };
-  }, [satellites, regimeVisible]);
   const handleSearchPick = (sat: SatelliteDTO) => {
     setSelectedId(sat.id);
     openDrawer(`sat:${sat.id}`);
@@ -169,19 +95,7 @@ export function OpsEntry() {
     setFocusId(sat.id);
   };
 
-  const effectiveSpeed = paused ? 0 : SPEEDS[speedIdx];
-
-  const togglePause = () => {
-    setPaused((p) => {
-      if (!p) prevSpeedIdx.current = speedIdx;
-      return !p;
-    });
-  };
-  const selectSpeed = (i: number) => {
-    setSpeedIdx(i);
-    setPaused(false);
-    prevSpeedIdx.current = i;
-  };
+  const { speedIdx, paused, effectiveSpeed, togglePause, selectSpeed } = useTimeControl(1);
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -259,21 +173,14 @@ export function OpsEntry() {
       <CornerBracket pos="br" />
 
       {/* Top-left: live telemetry card */}
-      <div className="pointer-events-none absolute left-4 top-4 z-hud border border-hairline bg-panel/90 backdrop-blur-md shadow-hud">
-        <div className="flex items-center gap-2 border-b border-hairline px-3 py-1.5">
-          <span className="relative flex h-1.5 w-1.5">
-            <span
-              className={`absolute inline-flex h-full w-full ${paused ? "bg-amber" : "animate-ping bg-cold"} opacity-75`}
-            />
-            <span
-              className={`relative inline-flex h-1.5 w-1.5 ${paused ? "bg-amber" : "bg-cold"}`}
-            />
-          </span>
-          <div className="label text-nano">
-            {paused ? "TELEMETRY · PAUSED" : "LIVE TELEMETRY"}
-          </div>
-          <span className="ml-auto mono text-nano text-dim">SSA / OPS</span>
-        </div>
+      <HudPanel
+        className="absolute left-4 top-4 z-hud"
+        passthrough
+        title={paused ? "TELEMETRY · PAUSED" : "LIVE TELEMETRY"}
+        dot={paused ? "amber" : "cold"}
+        live={!paused}
+        meta="SSA / OPS"
+      >
         <div className="flex">
           {loadingSats ? (
             <MetricTilePlaceholder label="TRACKED" />
@@ -297,7 +204,7 @@ export function OpsEntry() {
             accent={peakPc >= 1e-4 ? "hot" : peakPc >= 1e-6 ? "amber" : "primary"}
           />
         </div>
-      </div>
+      </HudPanel>
 
       {/* Top-center: satellite search + regime filter */}
       <div className="absolute left-1/2 top-4 z-hud flex -translate-x-1/2 flex-col items-center gap-2">
@@ -312,12 +219,13 @@ export function OpsEntry() {
       </div>
 
       {/* Top-right: threat board */}
-      <div className="pointer-events-none absolute right-4 top-4 z-hud w-[22rem] border border-hairline bg-panel/90 backdrop-blur-md shadow-hud">
-        <div className="flex items-center gap-2 border-b border-hairline px-3 py-1.5">
-          <div className="h-1.5 w-1.5 bg-hot" />
-          <div className="label text-nano">THREAT BOARD</div>
-          <span className="ml-auto mono text-nano text-dim">TOP {threats.length}</span>
-        </div>
+      <HudPanel
+        className="absolute right-4 top-4 z-hud w-[22rem]"
+        passthrough
+        title="THREAT BOARD"
+        dot="hot"
+        meta={`TOP ${threats.length}`}
+      >
         {threats.length === 0 ? (
           <div className="px-3 py-3 text-caption text-dim">— no events —</div>
         ) : (
@@ -354,64 +262,70 @@ export function OpsEntry() {
             })}
           </ul>
         )}
-      </div>
+      </HudPanel>
 
       {/* Bottom-left: UTC clock + legend + cycle launcher (stacked) */}
       <div className="pointer-events-none absolute bottom-4 left-4 z-hud flex max-h-[calc(100vh-8rem)] flex-col gap-2 overflow-y-auto">
-        <div className="border border-hairline bg-panel/90 px-3 py-2 shadow-hud backdrop-blur-md">
-          <div className="label text-nano">UTC</div>
-          <div className="mono text-h1 leading-none text-primary tabular-nums">{utc}</div>
-          <div className="mono text-nano text-dim tabular-nums">{date}</div>
-        </div>
-        <div className="border border-hairline bg-panel/90 px-3 py-2 shadow-hud backdrop-blur-md">
-          <div className="label mb-1 text-nano">LEGEND</div>
-          <div className="mono mb-0.5 text-nano uppercase tracking-widest text-dim">
-            arcs · P(C)
+        <HudPanel>
+          <div className="px-3 py-2">
+            <div className="label text-nano">UTC</div>
+            <div className="mono text-h1 leading-none text-primary tabular-nums">{utc}</div>
+            <div className="mono text-nano text-dim tabular-nums">{date}</div>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <span className="h-[2px] w-5 bg-hot" />
-              <span className="mono text-nano text-muted">≥ 1e-4 high</span>
+        </HudPanel>
+        <HudPanel>
+          <div className="px-3 py-2">
+            <div className="label mb-1 text-nano">LEGEND</div>
+            <div className="mono mb-0.5 text-nano uppercase tracking-widest text-dim">
+              arcs · P(C)
             </div>
-            <div className="flex items-center gap-2">
-              <span className="h-[2px] w-5 bg-amber" />
-              <span className="mono text-nano text-muted">≥ 1e-6 watch</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-[2px] w-5 bg-dim" />
-              <span className="mono text-nano text-muted">&lt; 1e-6 nominal</span>
-            </div>
-          </div>
-          <div className="mono mb-0.5 mt-1.5 text-nano uppercase tracking-widest text-dim">
-            dots · regime
-          </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-            {[
-              { k: "LEO", c: "bg-osint" },
-              { k: "MEO", c: "bg-field" },
-              { k: "GEO", c: "bg-cold" },
-              { k: "HEO", c: "bg-amber" },
-            ].map((r) => (
-              <div key={r.k} className="flex items-center gap-2">
-                <span className={`h-1.5 w-1.5 ${r.c}`} />
-                <span className="mono text-nano text-muted">{r.k}</span>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <span className="h-[2px] w-5 bg-hot" />
+                <span className="mono text-nano text-muted">≥ 1e-4 high</span>
               </div>
-            ))}
+              <div className="flex items-center gap-2">
+                <span className="h-[2px] w-5 bg-amber" />
+                <span className="mono text-nano text-muted">≥ 1e-6 watch</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-[2px] w-5 bg-dim" />
+                <span className="mono text-nano text-muted">&lt; 1e-6 nominal</span>
+              </div>
+            </div>
+            <div className="mono mb-0.5 mt-1.5 text-nano uppercase tracking-widest text-dim">
+              dots · regime
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+              {[
+                { k: "LEO", c: "bg-osint" },
+                { k: "MEO", c: "bg-field" },
+                { k: "GEO", c: "bg-cold" },
+                { k: "HEO", c: "bg-amber" },
+              ].map((r) => (
+                <div key={r.k} className="flex items-center gap-2">
+                  <span className={`h-1.5 w-1.5 ${r.c}`} />
+                  <span className="mono text-nano text-muted">{r.k}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        </HudPanel>
         <div className="pointer-events-auto">
           <CycleLaunchPanel />
         </div>
       </div>
 
       {/* Bottom-center: segmented time controller */}
-      <div className="absolute bottom-4 left-1/2 z-hud -translate-x-1/2 border border-hairline bg-panel/90 backdrop-blur-md shadow-hud">
-        <div className="flex items-center gap-2 border-b border-hairline px-3 py-1">
-          <div className="label text-nano">TIME CONTROL</div>
-          <span className="ml-2 mono text-nano text-cyan tabular-nums">
+      <HudPanel
+        className="absolute bottom-4 left-1/2 z-hud -translate-x-1/2"
+        title="TIME CONTROL"
+        meta={
+          <span className="text-cyan tabular-nums">
             {paused ? "PAUSED" : SPEED_FULL[speedIdx]}
           </span>
-        </div>
+        }
+      >
         <div className="flex items-stretch">
           <button
             aria-label={paused ? "Play" : "Pause"}
@@ -439,7 +353,7 @@ export function OpsEntry() {
             );
           })}
         </div>
-      </div>
+      </HudPanel>
 
       {/* Bottom-right: findings stream */}
       <div className="absolute bottom-4 right-4 z-hud">
