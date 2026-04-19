@@ -20,7 +20,6 @@ export type {
 import type {
   Regime,
   FindingStatus,
-  SatelliteDTO,
   ConjunctionDTO,
   KgNodeDTO,
   KgEdgeDTO,
@@ -30,6 +29,11 @@ import type {
   AutonomyStateDTO,
   CycleDTO,
 } from "@/shared/types";
+import { createFetchApiClient } from "@/adapters/api/client";
+import { createSatellitesApi } from "@/adapters/api/satellites";
+
+const _fetcher = createFetchApiClient();
+const _satellites = createSatellitesApi(_fetcher);
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -38,10 +42,7 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export const api = {
-  satellites: (regime?: Regime) =>
-    getJson<{ items: SatelliteDTO[]; count: number }>(
-      `/api/satellites${regime ? `?regime=${regime}` : ""}`,
-    ),
+  satellites: (regime?: Regime) => _satellites.list(regime),
   conjunctions: (minPc = 0) =>
     getJson<{ items: ConjunctionDTO[]; count: number }>(`/api/conjunctions?minPc=${minPc}`),
   kgNodes: () => getJson<{ items: KgNodeDTO[] }>(`/api/kg/nodes`),
