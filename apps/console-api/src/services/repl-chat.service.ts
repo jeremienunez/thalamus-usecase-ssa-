@@ -130,7 +130,10 @@ export class ReplChatService {
       yield {
         event: "done",
         data: {
-          provider: "kimi",
+          // No summariser call happened — we genuinely don't know which
+          // provider would have served this turn. "unknown" is honest
+          // and the UI renders it as-is (vs. falsely attributing to Kimi).
+          provider: "unknown",
           costUsd: 0,
           tookMs: Date.now() - t0,
           findingsCount: 0,

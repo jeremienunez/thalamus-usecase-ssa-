@@ -12,11 +12,16 @@
 
 import { createLlmTransport } from "./llm-chat";
 import { FixtureLlmTransport } from "./fixture-transport";
-import type { LlmTransport } from "./types";
+import type { LlmChatConfig, LlmTransport } from "./types";
 
 export function createLlmTransportWithMode(
   systemPrompt: string,
-  opts?: { maxRetries?: number; enableWebSearch?: boolean },
+  opts?: {
+    maxRetries?: number;
+    enableWebSearch?: boolean;
+    preferredProvider?: LlmChatConfig["preferredProvider"];
+    overrides?: LlmChatConfig["overrides"];
+  },
 ): LlmTransport {
   const mode = (process.env.THALAMUS_MODE ?? "cloud").toLowerCase();
   const real = createLlmTransport(systemPrompt, opts);
