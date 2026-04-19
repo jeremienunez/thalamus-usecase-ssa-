@@ -7,7 +7,7 @@ import {
   orbitRing,
   SCENE_SCALE,
   EARTH_KM,
-} from "./orbit";
+} from "./sgp4";
 
 const MU = 398600.4418;
 
