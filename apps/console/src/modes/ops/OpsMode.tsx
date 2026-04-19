@@ -5,7 +5,7 @@ import { Pause, Play } from "lucide-react";
 import { useAnimatedNumber } from "@/lib/useAnimatedNumber";
 import { useUtcClock } from "@/lib/useUtcClock";
 import { fmtPcCompact, fmtRangeKm, fmtVelocity } from "@/lib/units";
-import { Measure } from "@/components/Measure";
+import { Measure } from "@/shared/ui/Measure";
 import { Globe } from "./Globe";
 import { SatelliteField } from "./SatelliteField";
 import { ConjunctionArcs } from "./ConjunctionArcs";

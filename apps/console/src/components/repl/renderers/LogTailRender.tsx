@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import { AnimatedStepBadge } from "@/components/AnimatedStepBadge";
+import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
 import type { DispatchResult, LogEvent } from "@/lib/repl";
 
 const LEVEL_COLOR: Record<LogEvent["level"], string> = {

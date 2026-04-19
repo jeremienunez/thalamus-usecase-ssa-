@@ -5,9 +5,9 @@ import forceAtlas2 from "graphology-layout-forceatlas2";
 import { useKg, useFindings } from "@/lib/queries";
 import { ENTITY_COLOR, SOURCE_COLOR } from "@/lib/graphColors";
 import { useUiStore } from "@/lib/uiStore";
-import { Drawer, DrawerSection, KV } from "@/components/Drawer";
+import { Drawer, DrawerSection, KV } from "@/shared/ui/Drawer";
 import { fmtCount } from "@/lib/units";
-import { Measure } from "@/components/Measure";
+import { Measure } from "@/shared/ui/Measure";
 import { FindingReadout } from "./FindingReadout";
 import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/lib/api";
 

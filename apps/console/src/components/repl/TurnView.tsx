@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
-import { AnimatedStepBadge } from "@/components/AnimatedStepBadge";
-import { CycleLoader } from "@/components/CycleLoader";
+import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
+import { CycleLoader } from "@/shared/ui/CycleLoader";
 import type { Turn } from "@/lib/replReducer";
 import { ResultView } from "./ResultView";
 

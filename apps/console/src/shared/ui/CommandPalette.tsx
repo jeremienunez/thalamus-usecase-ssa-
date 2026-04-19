@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Search, Globe2, Network, Radar, Activity } from "lucide-react";
 import { clsx } from "clsx";
-import { useRepl } from "./repl/ReplContext";
+import { useRepl } from "@/components/repl/ReplContext";
 
 type Action = {
   id: string;

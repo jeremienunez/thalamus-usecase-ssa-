@@ -1,5 +1,5 @@
 import type { ReplStreamEvent } from "@interview/shared";
-import type { CycleStep } from "@/components/CycleLoader";
+import type { CycleStep } from "@/shared/ui/CycleLoader";
 import type { TurnResponse } from "@/lib/repl";
 
 export type TurnPhase =

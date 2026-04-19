@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Drawer, DrawerSection, KV } from "@/components/Drawer";
+import { Drawer, DrawerSection, KV } from "@/shared/ui/Drawer";
 import { useDecision, useFinding } from "@/lib/queries";
 import { useUiStore } from "@/lib/uiStore";
 import { SOURCE_COLOR, STATUS_COLOR } from "@/lib/graphColors";

@@ -3,8 +3,8 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { FullPaneFallback } from "./components/Skeleton";
+import { ErrorBoundary } from "@/shared/ui/ErrorBoundary";
+import { FullPaneFallback } from "@/shared/ui/Skeleton";
 import "./styles/globals.css";
 
 const queryClient = new QueryClient({

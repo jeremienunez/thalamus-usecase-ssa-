@@ -1,5 +1,5 @@
-import { Drawer, DrawerSection, KV } from "@/components/Drawer";
-import { Measure } from "@/components/Measure";
+import { Drawer, DrawerSection, KV } from "@/shared/ui/Drawer";
+import { Measure } from "@/shared/ui/Measure";
 import { useUiStore } from "@/lib/uiStore";
 import { clsx } from "clsx";
 import {

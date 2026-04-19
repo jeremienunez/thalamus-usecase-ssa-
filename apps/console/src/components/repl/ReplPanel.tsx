@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Terminal } from "lucide-react";
-import { AnimatedStepBadge } from "@/components/AnimatedStepBadge";
+import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
 import { useRepl } from "./ReplContext";
 import { TurnView } from "./TurnView";
 
