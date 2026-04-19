@@ -13,8 +13,9 @@ import {
  * Launch — a launch event / campaign record.
  *
  * Referenced polymorphically by researchEdge.entity_type = 'launch' and by
- * [entity-name-resolver.ts](../../../thalamus/src/repositories/entity-name-resolver.ts)
- * which uses `year` as the node label for the knowledge graph UI.
+ * the SSA EntityCatalogPort adapter (`apps/console-api/src/agent/ssa/
+ * ssa-entity-catalog.adapter.ts`) which uses `year` as the node label for
+ * the knowledge graph UI.
  *
  * Enriched in Phase 3c from Launch Library 2 (https://ll.thespacedevs.com)
  * — `externalLaunchId` is LL2's UUID, unique per upcoming launch. Legacy

@@ -28,8 +28,9 @@ import { StopCriteriaEvaluator } from "../services/stop-criteria.service";
 import { ResearchCycleRepository } from "../repositories/research-cycle.repository";
 import { ResearchFindingRepository } from "../repositories/research-finding.repository";
 import { ResearchEdgeRepository } from "../repositories/research-edge.repository";
-import { EntityNameResolver } from "../repositories/entity-name-resolver";
 import { VoyageEmbedder } from "../utils/voyage-embedder";
+import type { EntityCatalogPort } from "../ports/entity-catalog.port";
+import { NoopEntityCatalog } from "../entities/noop-entity-catalog";
 
 export interface ThalamusContainer {
   thalamusService: ThalamusService;
@@ -69,6 +70,13 @@ export interface BuildThalamusOpts {
   strategies?: CortexExecutionStrategy[];
   /** Optional Voyage API key override */
   voyageApiKey?: string;
+  /**
+   * Domain-owned entity catalog adapter. Defaults to `NoopEntityCatalog`
+   * which returns empty resolutions and cleans 0 rows — enough for tests
+   * and standalone demos. Apps ship an `EntityCatalogPort` impl at their
+   * composition root (e.g. `SsaEntityCatalogAdapter` for SSA).
+   */
+  entityCatalog?: EntityCatalogPort;
 }
 
 export function buildThalamusContainer(
@@ -79,7 +87,7 @@ export function buildThalamusContainer(
   const cycleRepo = new ResearchCycleRepository(db);
   const findingRepo = new ResearchFindingRepository(db);
   const edgeRepo = new ResearchEdgeRepository(db);
-  const entityResolver = new EntityNameResolver(db);
+  const entityCatalog = opts.entityCatalog ?? new NoopEntityCatalog();
   const embedder = new VoyageEmbedder(opts.voyageApiKey);
 
   const registry = new CortexRegistry(opts.skillsDir);
@@ -102,7 +110,7 @@ export function buildThalamusContainer(
     edgeRepo,
     cycleRepo,
     embedder,
-    entityResolver,
+    entityCatalog,
   );
 
   // Thalamus service collaborators — wired here so the service itself

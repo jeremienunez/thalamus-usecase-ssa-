@@ -7,6 +7,9 @@ import { createLogger } from "@interview/shared/observability";
 import { createHash } from "node:crypto";
 import type { VoyageEmbedder } from "../utils/voyage-embedder";
 import type {
+  EntityCatalogPort,
+} from "../ports/entity-catalog.port";
+import type {
   ResearchFinding,
   ResearchEdge,
   NewResearchFinding,
@@ -65,16 +68,11 @@ export interface EdgesGraphPort {
   createMany(edges: NewResearchEdge[]): Promise<ResearchEdge[]>;
   findByFinding(findingId: bigint): Promise<ResearchEdge[]>;
   findByFindings(findingIds: bigint[]): Promise<ResearchEdge[]>;
-  cleanOrphans(): Promise<number>;
   countByEntityType(): Promise<Array<{ entity_type: string; cnt: number }>>;
 }
 
 export interface CyclesGraphPort {
   incrementFindings(id: bigint): Promise<void>;
-}
-
-export interface EntityNamePort {
-  resolve(refs: Array<{ entityType: string; entityId: bigint }>): Promise<Map<string, string>>;
 }
 
 const logger = createLogger("research-graph");
@@ -102,7 +100,7 @@ export class ResearchGraphService {
     private edgeRepo: EdgesGraphPort,
     private cycleRepo: CyclesGraphPort,
     private embedder: VoyageEmbedder,
-    private entityResolver?: EntityNamePort,
+    private entityCatalog: EntityCatalogPort,
   ) {}
 
   /**
@@ -364,7 +362,7 @@ export class ResearchGraphService {
    */
   async expireAndClean(): Promise<{ expired: number; orphans: number }> {
     const expired = await this.findingRepo.expireOld();
-    const orphans = await this.edgeRepo.cleanOrphans();
+    const orphans = await this.entityCatalog.cleanOrphans();
     logger.info({ expired, orphans }, "Expire and clean completed");
     return { expired, orphans };
   }
@@ -377,10 +375,6 @@ export class ResearchGraphService {
     nodes: KnowledgeGraphNode[];
     links: KnowledgeGraphLink[];
   }> {
-    if (!this.entityResolver) {
-      throw new Error("EntityNameResolver not wired");
-    }
-
     // 1. Fetch active findings
     const findings = await this.findingRepo.findActive({
       ...opts,
@@ -398,8 +392,8 @@ export class ResearchGraphService {
       entityId: e.entityId,
     }));
 
-    // 4. Resolve entity names
-    const nameMap = await this.entityResolver.resolve(entityRefs);
+    // 4. Resolve entity names via the injected catalog port
+    const nameMap = await this.entityCatalog.resolveNames(entityRefs);
 
     // 5. Build finding nodes
     const nodes: KnowledgeGraphNode[] = findings.map((f) => ({
