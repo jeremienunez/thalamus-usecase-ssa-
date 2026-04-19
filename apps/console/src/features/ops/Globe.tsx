@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import * as THREE from "three";
-import { EARTH_UNITS } from "@/lib/orbit";
+import { EARTH_UNITS } from "@/adapters/propagator/sgp4";
 
 export function Globe() {
   const earthRef = useRef<THREE.Group>(null);

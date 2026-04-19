@@ -1,6 +1,6 @@
-import { useFindings } from "@/lib/queries";
-import { STATUS_COLOR } from "@/lib/graphColors";
-import { useUiStore } from "@/lib/uiStore";
+import { useFindings } from "@/usecases";
+import { STATUS_COLOR } from "@/shared/types/graph-colors";
+import { useUiStore } from "@/shared/ui/uiStore";
 
 export function SweepOverview({ onSelect }: { onSelect: (id: string) => void }) {
   const { data } = useFindings();

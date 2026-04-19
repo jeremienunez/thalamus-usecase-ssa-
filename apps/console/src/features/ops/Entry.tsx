@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import { Pause, Play } from "lucide-react";
 import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
 import { useUtcClock } from "@/hooks/useUtcClock";
-import { fmtPcCompact, fmtRangeKm, fmtVelocity } from "@/lib/units";
+import { fmtPcCompact, fmtRangeKm, fmtVelocity } from "@/shared/types/units";
 import { Measure } from "@/shared/ui/Measure";
 import { Globe } from "./Globe";
 import { SatelliteField } from "./SatelliteField";
@@ -15,12 +15,13 @@ import { OpsDrawer } from "./OpsDrawer";
 import { SatelliteSearch } from "./SatelliteSearch";
 import { CameraFocus } from "./CameraFocus";
 import { CycleLaunchPanel } from "./CycleLaunchPanel";
-import { FindingsPanel } from "@/features/findings/Panel";
+import { FindingsPanel } from "./FindingsPanel";
 import { RegimeFilter, type RegimeKey, type TrailMode } from "./RegimeFilter";
 import { OrbitTrails, type RegimeFilterKey } from "./OrbitTrails";
-import { useConjunctions, useSatellites } from "@/lib/queries";
-import { useUiStore } from "@/lib/uiStore";
-import type { ConjunctionDTO, SatelliteDTO } from "@/lib/api";
+import { useSatellitesQuery } from "@/usecases/useSatellitesQuery";
+import { useConjunctionsQuery } from "@/usecases/useConjunctionsQuery";
+import { useUiStore } from "@/shared/ui/uiStore";
+import type { ConjunctionDTO, SatelliteDTO } from "@/shared/types";
 
 const SPEEDS = [1, 60, 600, 3600];
 const SPEED_LABELS = ["1×", "1m", "10m", "1h"];
@@ -92,8 +93,8 @@ export function OpsEntry() {
   const openDrawer = useUiStore((s) => s.openDrawer);
   const { utc, date } = useUtcClock();
 
-  const { data: satData, isLoading: loadingSats } = useSatellites();
-  const { data: cjData } = useConjunctions(1e-8);
+  const { data: satData, isLoading: loadingSats } = useSatellitesQuery();
+  const { data: cjData } = useConjunctionsQuery(1e-8);
 
   const satellites = satData?.items ?? [];
   const conjunctions = cjData?.items ?? [];

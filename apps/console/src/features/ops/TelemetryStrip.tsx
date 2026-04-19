@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useConjunctions, useSatellites, useFindings } from "@/lib/queries";
+import { useConjunctions, useSatellites, useFindings } from "@/usecases";
 
 type Line = { ts: string; kind: "INFO" | "WARN" | "ACCEPT" | "REJECT"; msg: string };
 

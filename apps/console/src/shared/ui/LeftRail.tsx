@@ -1,9 +1,9 @@
 import { useRouterState } from "@tanstack/react-router";
 import { ReactNode, useState } from "react";
-import { useUiStore } from "@/lib/uiStore";
+import { useUiStore } from "@/shared/ui/uiStore";
 import { clsx } from "clsx";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { useRuntimeConfigList } from "@/lib/runtime-config";
+import { useRuntimeConfigList } from "@/features/config/runtime-config";
 
 export function LeftRail() {
   const { location } = useRouterState();

@@ -14,9 +14,9 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import type { ConjunctionDTO, SatelliteDTO } from "@/lib/api";
-import { satellitePosition } from "@/lib/orbit";
-import { severityOf, SEVERITY_COLOR, type Severity } from "@/lib/conjunction";
+import type { ConjunctionDTO, SatelliteDTO } from "@/shared/types";
+import { satellitePosition } from "@/adapters/propagator/sgp4";
+import { severityOf, SEVERITY_COLOR, type Severity } from "@/shared/types/conjunction";
 
 interface Props {
   conjunctions: ConjunctionDTO[];

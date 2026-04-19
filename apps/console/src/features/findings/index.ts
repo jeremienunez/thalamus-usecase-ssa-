@@ -1,1 +1,0 @@
-export { FindingReadout } from "./Readout";

@@ -1,8 +1,8 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/lib/api";
-import { satellitePosition } from "@/lib/orbit";
+import type { SatelliteDTO } from "@/shared/types";
+import { satellitePosition } from "@/adapters/propagator/sgp4";
 
 /**
  * Animates the camera toward a selected satellite over ~1s.

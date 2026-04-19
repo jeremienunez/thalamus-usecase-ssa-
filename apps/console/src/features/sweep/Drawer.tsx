@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Drawer, DrawerSection, KV } from "@/shared/ui/Drawer";
-import { useDecision, useFinding } from "@/lib/queries";
-import { useUiStore } from "@/lib/uiStore";
-import { SOURCE_COLOR, STATUS_COLOR } from "@/lib/graphColors";
-import type { FindingStatus } from "@/lib/api";
+import { useDecision, useFinding } from "@/usecases";
+import { useUiStore } from "@/shared/ui/uiStore";
+import { SOURCE_COLOR, STATUS_COLOR } from "@/shared/types/graph-colors";
+import type { FindingStatus } from "@/shared/types";
 import { Check, X, Edit3 } from "lucide-react";
 
 export function SweepDrawer({ findingId }: { findingId: string | null }) {

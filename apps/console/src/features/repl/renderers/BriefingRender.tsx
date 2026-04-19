@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
-import type { BriefingFinding, DispatchResult } from "@/lib/repl";
-import { confidenceBar } from "@/lib/sparkline";
+import type { BriefingFinding, DispatchResult } from "@/features/repl/types";
+import { confidenceBar } from "@/shared/ui/sparkline";
 
 const DOT_COLOR: Record<BriefingFinding["sourceClass"], string> = {
   field: "text-cold",

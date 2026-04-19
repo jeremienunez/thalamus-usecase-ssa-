@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import { AnimatedStepBadge } from "./AnimatedStepBadge";
-import type { StepName } from "@/lib/steps";
+import type { StepName } from "@/shared/types/steps";
 
 export type CycleStep = {
   name: StepName | "unknown";

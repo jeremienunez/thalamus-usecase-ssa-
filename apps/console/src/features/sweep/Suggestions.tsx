@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Check, X, Radar, Square } from "lucide-react";
 import { clsx } from "clsx";
-import type { SweepSuggestionDTO } from "@/lib/api";
+import type { SweepSuggestionDTO } from "@/shared/types";
 import {
   useSweepSuggestions,
   useReviewSuggestion,
   useMissionStatus,
   useMissionStart,
   useMissionStop,
-} from "@/lib/queries";
+} from "@/usecases";
 
 const SEVERITY_COLOR: Record<SweepSuggestionDTO["severity"], string> = {
   info: "#6E7681",

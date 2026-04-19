@@ -7,8 +7,8 @@ import {
   useAutonomyStop,
   useStats,
   useSweepSuggestions,
-} from "@/lib/queries";
-import type { AutonomyTickDTO } from "@/lib/api";
+} from "@/usecases";
+import type { AutonomyTickDTO } from "@/shared/types";
 
 const ACTION_COLOR: Record<AutonomyTickDTO["action"], string> = {
   thalamus: "text-cyan",

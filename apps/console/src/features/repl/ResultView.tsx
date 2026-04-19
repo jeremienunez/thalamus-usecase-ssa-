@@ -1,4 +1,4 @@
-import type { DispatchResult } from "@/lib/repl";
+import type { DispatchResult } from "@/features/repl/types";
 import { ChatRender } from "./renderers/ChatRender";
 import { BriefingRender } from "./renderers/BriefingRender";
 import { TelemetryRender } from "./renderers/TelemetryRender";

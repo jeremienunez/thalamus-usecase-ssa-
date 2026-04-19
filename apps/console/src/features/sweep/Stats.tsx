@@ -1,5 +1,5 @@
-import { useStats } from "@/lib/queries";
-import { STATUS_COLOR } from "@/lib/graphColors";
+import { useStats } from "@/usecases";
+import { STATUS_COLOR } from "@/shared/types/graph-colors";
 
 export function SweepStats() {
   const { data } = useStats();

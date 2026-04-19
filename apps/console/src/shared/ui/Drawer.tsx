@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 import { clsx } from "clsx";
-import { useUiStore } from "@/lib/uiStore";
+import { useUiStore } from "@/shared/ui/uiStore";
 
 type Props = {
   title: string;

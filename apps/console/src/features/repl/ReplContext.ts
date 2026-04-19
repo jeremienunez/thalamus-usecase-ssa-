@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { Turn } from "@/lib/replReducer";
+import type { Turn } from "@/features/repl/reducer";
 
 export type ReplCtx = {
   open: boolean;

@@ -6,14 +6,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { postTurn, isSlashCommand } from "@/lib/repl";
-import { postChatStream } from "@/lib/repl-stream";
+import { postTurn, isSlashCommand } from "@/features/repl/types";
+import { postChatStream } from "@/adapters/sse/repl";
 import {
   newTurn,
   turnReducer,
   type Turn,
   type TurnAction,
-} from "@/lib/replReducer";
+} from "@/features/repl/reducer";
 import { ReplContext, type ReplCtx } from "./ReplContext";
 
 export function ReplProvider({ children }: { children: ReactNode }) {

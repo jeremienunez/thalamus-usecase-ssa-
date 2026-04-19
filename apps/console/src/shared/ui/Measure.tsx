@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import type { FormattedValue } from "@/lib/units";
+import type { FormattedValue } from "@/shared/types/units";
 
 type Props = {
   value: FormattedValue;

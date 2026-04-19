@@ -1,8 +1,8 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/lib/api";
-import { orbitRing, satellitePosition } from "@/lib/orbit";
+import type { SatelliteDTO } from "@/shared/types";
+import { orbitRing, satellitePosition } from "@/adapters/propagator/sgp4";
 
 export type TrailMode = "off" | "tails" | "full";
 export type RegimeFilterKey = "ALL" | "LEO" | "MEO" | "GEO" | "HEO";

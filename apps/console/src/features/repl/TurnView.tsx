@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
 import { CycleLoader } from "@/shared/ui/CycleLoader";
-import type { Turn } from "@/lib/replReducer";
+import type { Turn } from "@/features/repl/reducer";
 import { ResultView } from "./ResultView";
 
 type Props = {

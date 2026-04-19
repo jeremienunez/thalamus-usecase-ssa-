@@ -1,4 +1,4 @@
-import { useLaunchCycle, useCycles } from "@/lib/queries";
+import { useLaunchCycle, useCycles } from "@/usecases";
 import { clsx } from "clsx";
 import { Brain, Fish, Zap } from "lucide-react";
 

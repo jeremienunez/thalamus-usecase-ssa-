@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { clsx } from "clsx";
-import { useQuery } from "@tanstack/react-query";
-import { api, type FindingDTO } from "@/lib/api";
+import { useFindingQuery } from "@/usecases/useFindingQuery";
+import type { FindingDTO } from "@/shared/types";
 
 type Props = {
   /** Numeric id stripped from `finding:NNN` (or null when nothing selected). */
@@ -22,12 +22,9 @@ export function FindingReadout({ findingId, onClose, onFocusEntity }: Props) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement | null>(null);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["finding-readout", findingId],
-    queryFn: () => api.finding(String(findingId)),
-    enabled: findingId !== null,
-    staleTime: 60_000,
-  });
+  const { data, isLoading, error } = useFindingQuery(
+    findingId !== null ? String(findingId) : null,
+  );
 
   useEffect(() => {
     if (!open) return;

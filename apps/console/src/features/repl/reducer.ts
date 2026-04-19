@@ -1,6 +1,6 @@
 import type { ReplStreamEvent } from "@interview/shared";
 import type { CycleStep } from "@/shared/ui/CycleLoader";
-import type { TurnResponse } from "@/lib/repl";
+import type { TurnResponse } from "@/features/repl/types";
 
 export type TurnPhase =
   | "classifying"

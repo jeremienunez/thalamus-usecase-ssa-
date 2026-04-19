@@ -2,8 +2,8 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useFrame, ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/lib/api";
-import { propagateSgp4 } from "@/lib/orbit";
+import type { SatelliteDTO } from "@/shared/types";
+import { propagateSgp4 } from "@/adapters/propagator/sgp4";
 
 const colorCache = new Map<string, THREE.Color>();
 function getCompanyColor(name: string): THREE.Color {

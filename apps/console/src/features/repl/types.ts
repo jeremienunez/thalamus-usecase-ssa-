@@ -1,5 +1,5 @@
 /** Mirrors apps/console-api/src/repl.ts result shapes. */
-import type { StepName } from "./steps";
+import type { StepName } from "@/shared/types/steps";
 
 export type BriefingFinding = {
   id: string;

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import type { FindingDTO, FindingStatus } from "@/lib/api";
-import { STATUS_COLOR } from "@/lib/graphColors";
+import type { FindingDTO, FindingStatus } from "@/shared/types";
+import { STATUS_COLOR } from "@/shared/types/graph-colors";
 
 const STATUSES: FindingStatus[] = ["pending", "in-review", "accepted", "rejected"];
 const STATUS_LABEL: Record<FindingStatus, string> = {

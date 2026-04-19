@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { clsx } from "clsx";
-import { useFindings } from "@/lib/queries";
+import { useFindings } from "@/usecases";
 import { FindingsGraph } from "./FindingsGraph";
 import { SweepDrawer } from "./Drawer";
 import { SweepOverview } from "./Overview";
 import { SweepStats } from "./Stats";
 import { SweepSuggestions } from "./Suggestions";
-import { useUiStore } from "@/lib/uiStore";
-import { useSweepSuggestions } from "@/lib/queries";
+import { useUiStore } from "@/shared/ui/uiStore";
+import { useSweepSuggestions } from "@/usecases";
 
 type Tab = "overview" | "suggestions" | "map" | "stats";
 

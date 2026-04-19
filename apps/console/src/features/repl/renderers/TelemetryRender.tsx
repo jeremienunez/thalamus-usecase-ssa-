@@ -1,4 +1,4 @@
-import type { DispatchResult, TelemetryEntry } from "@/lib/repl";
+import type { DispatchResult, TelemetryEntry } from "@/features/repl/types";
 
 export function TelemetryRender({ r }: { r: Extract<DispatchResult, { kind: "telemetry" }> }) {
   const max = Math.max(...r.distribution.map((d) => Math.abs(d.p95 - d.p5))) || 1;

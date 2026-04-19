@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import type { DispatchResult, WhyNode } from "@/lib/repl";
+import type { DispatchResult, WhyNode } from "@/features/repl/types";
 
 const WHY_CLASS_COLOR: Record<"field" | "osint" | "sim" | "derived", string> = {
   field: "text-cold",

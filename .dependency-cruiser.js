@@ -306,25 +306,27 @@ module.exports = {
     },
     {
       name: "console-front-no-legacy-lib",
-      severity: "info",
+      severity: "error",
       comment:
-        "lib/ is legacy and will be removed at Phase 7. New code must not import from it.",
-      from: {
-        path: "^apps/console/src/",
-        pathNot: "^apps/console/src/lib/",
-      },
+        "lib/ was deleted at Phase 7. No file under apps/console/src/ may import from it.",
+      from: { path: "^apps/console/src/" },
       to: { path: "^apps/console/src/lib/" },
     },
     {
       name: "console-front-no-legacy-modes",
-      severity: "info",
+      severity: "error",
       comment:
-        "modes/ is legacy and will be removed at Phase 7. New code must not import from it.",
-      from: {
-        path: "^apps/console/src/",
-        pathNot: "^apps/console/src/modes/",
-      },
+        "modes/ was deleted at Phase 5. No file under apps/console/src/ may import from it.",
+      from: { path: "^apps/console/src/" },
       to: { path: "^apps/console/src/modes/" },
+    },
+    {
+      name: "console-front-no-legacy-components",
+      severity: "error",
+      comment:
+        "components/ was deleted at Phase 5. UI primitives live in shared/ui; business UI lives in features/.",
+      from: { path: "^apps/console/src/" },
+      to: { path: "^apps/console/src/components/" },
     },
 
     // rules you might want to tweak for your specific situation:

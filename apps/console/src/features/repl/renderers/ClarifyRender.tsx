@@ -1,4 +1,4 @@
-import type { DispatchResult } from "@/lib/repl";
+import type { DispatchResult } from "@/features/repl/types";
 
 export function ClarifyRender({
   r,

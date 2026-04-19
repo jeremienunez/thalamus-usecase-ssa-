@@ -1,14 +1,14 @@
 import { Drawer, DrawerSection, KV } from "@/shared/ui/Drawer";
 import { Measure } from "@/shared/ui/Measure";
-import { useUiStore } from "@/lib/uiStore";
+import { useUiStore } from "@/shared/ui/uiStore";
 import { clsx } from "clsx";
 import {
   fmtAltitudeKm,
   fmtDeg,
   fmtPc,
   fmtPcCompact,
-} from "@/lib/units";
-import type { ConjunctionDTO, SatelliteDTO } from "@/lib/api";
+} from "@/shared/types/units";
+import type { ConjunctionDTO, SatelliteDTO } from "@/shared/types";
 
 export function OpsDrawer({
   satellite,

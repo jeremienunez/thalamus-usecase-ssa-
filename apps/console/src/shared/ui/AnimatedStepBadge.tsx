@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { STEP_REGISTRY, type StepName } from "@/lib/steps";
+import { STEP_REGISTRY, type StepName } from "@/shared/types/steps";
 
 export type StepPhase = "start" | "progress" | "done" | "error";
 

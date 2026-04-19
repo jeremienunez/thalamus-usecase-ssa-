@@ -11,7 +11,7 @@ import {
   MODEL_FIELD_SUPPORT_MAP,
   type DomainPayload,
   type FieldSpec,
-} from "@/lib/runtime-config";
+} from "@/features/config/runtime-config";
 
 export function ConfigEntry() {
   const { data, isLoading, error } = useRuntimeConfigList();
