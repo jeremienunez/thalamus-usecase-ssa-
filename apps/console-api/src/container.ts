@@ -461,6 +461,18 @@ export async function buildContainer(
     findingRepo: thalamus.findingRepo,
     edgeRepo,
     sim: {
+      preflight: {
+        canStartTelemetry: async (target: { satelliteId: number }) => {
+          const row = await satelliteRepo.findByIdFull(BigInt(target.satelliteId));
+          return row !== null && row.operatorId != null;
+        },
+        canStartPc: async (target: { conjunctionId: number }) => {
+          const row = await conjunctionRepo.findByIdWithSatellites(
+            BigInt(target.conjunctionId),
+          );
+          return row !== null;
+        },
+      },
       launcher: {
         startTelemetry: (opts: { satelliteId: number; fishCount?: number }) =>
           startTelemetrySwarm(

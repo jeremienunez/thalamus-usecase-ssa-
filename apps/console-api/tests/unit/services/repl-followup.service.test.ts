@@ -18,6 +18,17 @@ function buildService(edges: Array<{ finding_id: string; entity_type: string; en
     edgeRepo: {
       findByFindingIds: vi.fn(async () => edges),
     },
+    sim: {
+      preflight: {
+        canStartTelemetry: vi.fn(async () => true),
+        canStartPc: vi.fn(async () => true),
+      },
+    },
+    sweep: {
+      nanoSweepService: {
+        sweep: vi.fn(async () => ({ suggestionsStored: 1, wallTimeMs: 5 })),
+      },
+    },
   };
   return new ReplFollowUpService(
     new SsaReplFollowUpPolicy(deps),
@@ -131,6 +142,76 @@ describe("ReplFollowUpService.plan", () => {
           }),
         }),
       ]),
+    );
+  });
+
+  it("downgrades telemetry verification to proposed when the target is not launchable", async () => {
+    const deps = {
+      thalamusService: {
+        runCycle: vi.fn(async () => ({ id: "cyc:child" })),
+      },
+      findingRepo: {
+        findByCycleId: vi.fn(async () => []),
+      },
+      edgeRepo: {
+        findByFindingIds: vi.fn(async () => []),
+      },
+      sim: {
+        preflight: {
+          canStartTelemetry: vi.fn(async () => false),
+          canStartPc: vi.fn(async () => true),
+        },
+      },
+    };
+    const service = new ReplFollowUpService(
+      new SsaReplFollowUpPolicy(deps),
+      new SsaReplFollowUpExecutor(
+        deps,
+        new CycleStreamPump(),
+        {
+          summarise: vi.fn(async () => ({ text: "summary", provider: "kimi" })),
+        } as unknown as CycleSummariser,
+      ),
+    );
+
+    const plan = await service.plan({
+      query: "Analyse les trous de telemetrie",
+      parentCycleId: "418",
+      verification: {
+        needsVerification: true,
+        reasonCodes: ["data_gap", "needs_monitoring"],
+        confidence: 0.76,
+        targetHints: [
+          {
+            entityType: "satellite",
+            entityId: "27424",
+            sourceCortex: "data_auditor",
+            sourceTitle: "Telemetry gap",
+            confidence: 0.8,
+          },
+        ],
+      },
+      findings: [],
+    });
+
+    expect(
+      plan.autoLaunched.some(
+        (item) => item.kind === "sim_telemetry_verification",
+      ),
+    ).toBe(false);
+    expect(plan.proposed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "sim_telemetry_verification",
+          target: expect.objectContaining({
+            entityType: "satellite",
+            entityId: "27424",
+          }),
+        }),
+      ]),
+    );
+    expect(plan.proposed[0]?.rationale).toContain(
+      "Auto-launch held back because the target is not currently launchable.",
     );
   });
 });

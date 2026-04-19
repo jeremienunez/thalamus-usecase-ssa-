@@ -11,7 +11,9 @@ import type {
 } from "./repl-followup.types.ssa";
 
 export class SsaReplFollowUpPolicy {
-  constructor(private readonly deps: Pick<SsaReplFollowUpDeps, "edgeRepo">) {}
+  constructor(
+    private readonly deps: Pick<SsaReplFollowUpDeps, "edgeRepo" | "sim" | "sweep">,
+  ) {}
 
   async plan(input: {
     query: string;
@@ -49,12 +51,17 @@ export class SsaReplFollowUpPolicy {
     let proofPipelineUsed = false;
 
     for (const candidate of candidates) {
-      const item = toPlanItem(candidate);
+      const autoLaunchAllowed = await this.canAutoLaunch(candidate);
+      const item = toPlanItem(
+        autoLaunchAllowed
+          ? candidate
+          : downgradeAutoLaunch(candidate),
+      );
       const isDeep = candidate.kind === "deep_research_30d";
       const budgetAllows =
         autoLaunched.length < 2 &&
         (isDeep ? !deepResearchUsed : !proofPipelineUsed);
-      if (candidate.autoEligible && budgetAllows) {
+      if (candidate.autoEligible && autoLaunchAllowed && budgetAllows) {
         autoLaunched.push({ ...item, auto: true });
         if (isDeep) deepResearchUsed = true;
         else proofPipelineUsed = true;
@@ -68,6 +75,36 @@ export class SsaReplFollowUpPolicy {
     }
 
     return { autoLaunched, proposed, dropped };
+  }
+
+  private async canAutoLaunch(candidate: FollowUpCandidate): Promise<boolean> {
+    if (!candidate.autoEligible) return false;
+
+    switch (candidate.kind) {
+      case "deep_research_30d":
+        return true;
+      case "sim_pc_verification": {
+        const conjunctionId = Number(getTargetRef(candidate.target, "conjunctionId"));
+        if (!Number.isFinite(conjunctionId)) return false;
+        return (
+          (await this.deps.sim?.preflight?.canStartPc?.({ conjunctionId })) ??
+          false
+        );
+      }
+      case "sim_telemetry_verification": {
+        const satelliteId = Number(getTargetRef(candidate.target, "satelliteId"));
+        if (!Number.isFinite(satelliteId)) return false;
+        return (
+          (await this.deps.sim?.preflight?.canStartTelemetry?.({ satelliteId })) ??
+          false
+        );
+      }
+      case "sweep_targeted_audit":
+        return (
+          this.deps.sweep?.nanoSweepService != null &&
+          candidate.target?.entityType === "operator_country"
+        );
+    }
   }
 }
 
@@ -386,6 +423,16 @@ function deduplicateCandidates(
     if (!prev || candidate.score > prev.score) byKey.set(key, candidate);
   }
   return [...byKey.values()];
+}
+
+function downgradeAutoLaunch(candidate: FollowUpCandidate): FollowUpCandidate {
+  if (!candidate.autoEligible) return candidate;
+  return {
+    ...candidate,
+    autoEligible: false,
+    rationale:
+      `${candidate.rationale} Auto-launch held back because the target is not currently launchable.`,
+  };
 }
 
 function toPlanItem(candidate: FollowUpCandidate): ReplFollowUpPlanItem {

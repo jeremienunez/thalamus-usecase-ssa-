@@ -79,6 +79,10 @@ export interface SsaReplFollowUpDeps {
     findByFindingIds(ids: bigint[]): Promise<FollowUpEdgeRow[]>;
   };
   sim?: {
+    preflight?: {
+      canStartTelemetry(target: { satelliteId: number }): Promise<boolean>;
+      canStartPc(target: { conjunctionId: number }): Promise<boolean>;
+    };
     launcher: {
       startTelemetry(opts: {
         satelliteId: number;
