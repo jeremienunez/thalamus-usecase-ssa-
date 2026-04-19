@@ -42,10 +42,12 @@ export interface CortexFinding {
    */
   sourceCortex?: string;
   /**
-   * Optional satellite-bus / platform-class context attached to the finding.
-   * Carries SSA platform / bus identifiers.
+   * Generic extension point — domain-neutral bag for arbitrary metadata
+   * emitted by a cortex. The kernel never inspects its shape. Domain-
+   * specific consumers stamp their own sub-keys (e.g. SSA cortices write
+   * `extensions.busContext = { busId, busName, similarity }`).
    */
-  busContext?: { busId: number; busName: string; similarity?: number };
+  extensions?: Record<string, unknown>;
   dedupKey?: string;
   edges: Array<{
     entityType: string;

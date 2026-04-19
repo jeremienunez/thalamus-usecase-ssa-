@@ -51,7 +51,7 @@ export class FindingPersister {
             confidence: finding.confidence,
             impactScore: finding.impactScore,
             urgency: finding.urgency,
-            busContext: finding.busContext ?? null,
+            extensions: finding.extensions ?? null,
             researchCycleId: ctx.cycleId,
             reflexionNotes: null,
             iteration: ctx.iteration,

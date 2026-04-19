@@ -42,7 +42,7 @@ export function normalizeFinding(
     confidence: clamp(safeNumber(raw.confidence, 0.5), 0, 1),
     impactScore: clamp(safeNumber(raw.impactScore, 5), 0, 10),
     sourceCortex: cortexName,
-    busContext: raw.busContext ?? undefined,
+    extensions: raw.extensions ?? undefined,
     dedupKey: raw.dedupKey ?? undefined,
     edges: Array.isArray(raw.edges)
       ? raw.edges.map((e) => ({
