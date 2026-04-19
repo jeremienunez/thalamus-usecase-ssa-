@@ -41,6 +41,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 logs/
+.reports/
 
 # Local demo state
 fixtures/recorded/

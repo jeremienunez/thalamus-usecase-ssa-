@@ -6,24 +6,15 @@ Sister files: [DONE.md](DONE.md) (complete), [TODO.md](TODO.md) (open).
 
 ---
 
-## Console front 5-layer — god-components still large internally
+## ~~Console front 5-layer — god-components still large internally~~ — RESOLVED 2026-04-19 (session 4)
 
-- **Shipped**: 5-layer structure, Context-per-adapter DIP, dep-cruiser strict, 48 tests, README.
-- **Internal decomposition deferred** (the real god-component fix):
-  - `features/thalamus/Entry.tsx` — 762 LOC, should split into
-    `Canvas.tsx` + `Hud.tsx` + `Drawer.tsx` + `Ascii.tsx` +
-    `hooks/useThalamusGraph.ts` + `hooks/useThalamusLayout.ts`
-    (layoutByClass, synthLabel, ghostClassFor, Sigma init).
-  - `features/ops/Entry.tsx` — 462 LOC, should split into `Scene.tsx` +
-    `Filters.tsx` + `ThreatBoard.tsx` + `Clock.tsx` + `Search.tsx` +
-    `hooks/useOpsTime.ts` + `hooks/useOpsSelection.ts`.
-  - `features/ops/SatelliteField.tsx` — 583 LOC, should collapse to
-    ≤150 LOC shell composing `adapters/renderer/instanced-sats.ts`
-    (InstancedMesh builders), `usePropagator()`, `useRenderer()`.
-- **Reason for deferral**: each decomposition is a multi-file refactor
-  with high rewrite-risk and no behaviour change; better landed on a
-  follow-up branch with per-sub-component RTL coverage added as each
-  piece moves out.
+The 6 monoliths shrunk by 38% (3164 → 1955 LOC) via SOLID compression:
+new `adapters/graph/` port + `adapters/renderer/orbit-geometry` +
+`HudPanel`/`MetricTile`/`useDrawerA11y`/`useDraft`/`useTimeControl`/
+`useRegimeFilter`/`useThreatBoard` primitives & hooks. See
+[DONE.md](DONE.md#console-front--solid-compression--dry-pass--2026-04-19-session-4).
+No further mechanical splits planned — current sizes are coherent
+single-responsibility units.
 
 ## Console front — OpsEntry render smoke not automated
 
@@ -83,13 +74,16 @@ Sister files: [DONE.md](DONE.md) (complete), [TODO.md](TODO.md) (open).
 
 - Relocated from `features/findings/` into `features/thalamus/` and
   `features/ops/` respectively (to satisfy the no-cross-feature rule).
-- **Concern**: both render finding data with different layouts — the
-  structural drift will only grow. Consider:
-  - Extracting a `FindingCard` primitive to `shared/ui/finding/` (it's
-    genuinely presentational, safe under `shared/ui`).
-  - Keep feature-specific shells (Readout = thalamus-themed,
-    Panel = ops-themed) but share the inner payload renderer.
-- Not urgent — both files are <150 LOC today.
+- **Partially addressed (2026-04-19 session 4)**: `KV` now ships an
+  optional `color` prop (kills `FindingReadout::DataRow` dup) and
+  `FindingReadout` consumes the canonical `STATUS_COLOR` from
+  `shared/types/graph-colors`. Inner row primitives are shared.
+- **Still open**: outer card chrome (severity tile, evidence list,
+  decision footer) is duplicated. If a third consumer appears, extract
+  a `FindingCard` primitive to `shared/ui/finding/` (genuinely
+  presentational, safe under `shared/ui`); meanwhile keep
+  feature-specific shells (Readout = thalamus-themed, Panel =
+  ops-themed). Not urgent.
 
 ## REPL auto-followups — backend landed, UI pending
 

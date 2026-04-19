@@ -99,30 +99,20 @@ Phases 1-7 shipped — moved to [DONE.md](DONE.md#runtime-config-registry--4-llm
 
 ### Console front 5-layer — god-component internals (follow-up)
 
-5-layer boundary shipped — see [DONE.md](DONE.md#console-front-5-layer--2026-04-19).
-Internal decomposition of the three remaining god-components is the
-next refactor. Each one is a contained multi-file split with no
-behaviour change; good candidate for a follow-up branch with
-per-sub-component RTL coverage.
+The 3 monolith splits + DRY pass shipped in session 4 — see
+[DONE.md](DONE.md#console-front--solid-compression--dry-pass--2026-04-19-session-4).
+Three items remain open from this section.
 
-- [ ] `features/thalamus/Entry.tsx` (762 LOC) — split into
-      `Canvas.tsx` + `Hud.tsx` + `Drawer.tsx` + `Ascii.tsx` +
-      `hooks/useThalamusGraph.ts` + `hooks/useThalamusLayout.ts`
-      (layoutByClass, synthLabel, ghostClassFor, Sigma init).
-- [ ] `features/ops/Entry.tsx` (462 LOC) — split into `Scene.tsx` +
-      `Filters.tsx` + `ThreatBoard.tsx` + `Clock.tsx` + `Search.tsx` +
-      `hooks/useOpsTime.ts` + `hooks/useOpsSelection.ts`.
-- [ ] `features/ops/SatelliteField.tsx` (583 LOC) — collapse to ≤150
-      LOC shell composing a new `adapters/renderer/instanced-sats.ts`
-      (InstancedMesh builders), `usePropagator()`, `useRenderer()`.
-- [ ] OpsEntry RTL — add `@react-three/test-renderer` + drop the
-      manual-only caveat in TO-REVIEW; cover golden path + one edge
-      case per feature.
-- [ ] Bundle split — `build.rollupOptions.output.manualChunks` per
-      mode (3D libs for ops only, sigma/graphology for thalamus only);
-      lazy TanStack Router file routes per mode. Today the single
-      bundle is 1.6MB (gzip 449KB) — warning noted in TO-REVIEW.
-- [ ] SGP4 cache LRU — `adapters/propagator/sgp4.ts:121`
+- [ ] **OpsEntry RTL** — global `vi.mock("sigma")` +
+      `vi.mock("graphology-layout-forceatlas2")` already in
+      `tests/setup.ts`; need the equivalent for `@react-three/fiber`
+      (or adopt `@react-three/test-renderer`) + cover the golden path + one edge case per feature.
+- [ ] **Bundle split** — `build.rollupOptions.output.manualChunks`
+      per mode (3D libs for ops only, sigma/graphology for thalamus
+      only); lazy TanStack Router file routes per mode. Today the
+      single bundle is 1.6MB (gzip 449KB) — warning noted in
+      TO-REVIEW.
+- [ ] **SGP4 cache LRU** — `adapters/propagator/sgp4.ts:121`
       `satrecByLine1` grows unbounded; add small LRU (10_000 entries
       is ample).
 

@@ -4,6 +4,88 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Console front — SOLID compression + DRY pass + jscpd — 2026-04-19 (session 4)
+
+Two follow-up commits on `feature/console-front-5l` after the initial
+5-layer landing. Closes every "god-component internals" item from the
+earlier TODO and lands a clone-detector to keep DRY pressure ongoing.
+
+**SOLID compression** (`282c044`) — 6 monoliths shrunk by **38%**
+(3164 → 1955 LOC) without losing behaviour, by introducing 14 focused
+abstractions instead of mechanical splits:
+
+| File                               | Before | After |    Δ |
+| ---------------------------------- | -----: | ----: | ---: |
+| `features/thalamus/Entry.tsx`      |    762 |   367 | -52% |
+| `features/ops/SatelliteField.tsx`  |    583 |   378 | -35% |
+| `features/config/Entry.tsx`        |    568 |   208 | -63% |
+| `features/ops/Entry.tsx`           |    463 |   377 | -19% |
+| `features/thalamus/FindingReadout` |    428 |   367 | -14% |
+| `features/ops/OrbitTrails.tsx`     |    360 |   258 | -28% |
+
+DIP wins:
+
+- New `adapters/graph/` port (graphology + sigma + ForceAtlas2) —
+  `graph-builder.ts` + `sigma-renderer.ts` + `GraphContext.tsx`
+  exposed via `AppProviders`. Thalamus no longer imports sigma /
+  graphology directly.
+- `adapters/renderer/orbit-geometry.ts` — `buildFullRingsGeometry`,
+  `buildTailsGeometry`, `clearRingCache` extracted from
+  `SatelliteField`. THREE BufferGeometry assembly is an adapter
+  concern now, not a feature concern. 141 LOC of dedup.
+
+SRP primitives + view-model hooks:
+
+- `shared/ui/HudPanel.tsx` — 12 ad-hoc panel-chrome instances merged.
+- `shared/ui/MetricTile.tsx` — promoted from `ops/Entry`, reused by
+  thalamus.
+- `shared/util/aggregate.ts` — `countBy` / `topN` / `maxCount`
+  replaces 4 duplicated inline blocks.
+- `hooks/useDrawerA11y` — esc-to-close + focus-trap mutualised between
+  `Drawer` and `FindingReadout`.
+- `hooks/useDraft<T>` — generic form draft / dirty / errors / diff,
+  consumed by `config/Entry`.
+- `hooks/useTimeControl`, `useRegimeFilter`, `useThreatBoard` — three
+  view-model hooks lifted from `ops/Entry`.
+
+OCP widening (extending existing surfaces, not new ones):
+
+- `KV` gains optional `color` prop (kills `FindingReadout::DataRow` dup).
+- `sparkline.ts` gains `blockBar` (binary histogram next to confidence
+  sparkline).
+- `palette.ts` gains `ringColor` (trail palette distinct from regime
+  dots).
+- `STATUS_COLOR` — `FindingReadout` now consumes the canonical
+  `graph-colors` rather than re-declaring.
+
+**DRY pass** (`82f0fce`) — two near-duplicates surfaced by jscpd:
+
+- `thalamus/Entry`: finding-vs-entity drawer routing was written twice
+  (`onNodeClick` lambda + `handleFocus`). Extracted `selectKgNode(id, attrs)`;
+  `handleFocus` now composes `focusNode + selectKgNode`.
+- `shared/types/units`: `fmtPc` and `fmtPcCompact` shared the same
+  null/0/log10 parse. Extracted private `parsePc()` returning
+  `{m, e} | "zero" | "bad"`. Clone density 0.31 % → 0.11 %.
+
+**Tooling** — `jscpd` added as a devDep with three npm scripts:
+
+- `pnpm dup:report` — full report (console + json + html under
+  `.reports/jscpd/`).
+- `pnpm dup:check` — strict CI gate (threshold 3 % clone density).
+- `pnpm dup:report:full` — looser min-lines/min-tokens for exploratory
+  passes.
+
+Config in `.jscpd.json`: 10 LOC / 80 tokens minimum, strict mode,
+ignores tests, fixtures, migrations, docs. `.reports/` ignored by git.
+
+**Test infra DRY** — `apps/console/tests/setup.ts` now ships global
+`vi.mock("sigma")` + `vi.mock("graphology-layout-forceatlas2")` so
+any test that transitively pulls in the graph adapter mounts cleanly
+in jsdom. Per-file mocks removed from `thalamus/Entry.test.tsx`.
+
+**Verification**: 48/48 tests pass · 0 dep-cruiser violations · jscpd
+clone density 0.11 % (down from 0.31 %).
+
 ### Console front 5-layer architecture — 2026-04-19
 
 `apps/console/src/**` refactored into a five-layer structure mirroring the

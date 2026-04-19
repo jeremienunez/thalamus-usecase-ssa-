@@ -1,0 +1,24 @@
+{
+  "minLines": 10,
+  "minTokens": 80,
+  "mode": "strict",
+  "gitignore": true,
+  "format": ["typescript", "tsx", "javascript", "sql"],
+  "reporters": ["console", "json", "html"],
+  "output": ".reports/jscpd",
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/.*/**",
+    "**/tests/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/fixtures/**",
+    "**/migrations/**",
+    "**/docs/**",
+    "**/*.md",
+    "**/*.json"
+  ]
+}

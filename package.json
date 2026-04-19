@@ -6,6 +6,9 @@
   "scripts": {
     "arch:check": "pnpm exec depcruise --config .dependency-cruiser.js apps/console-api/src --output-type err-long",
     "arch:check:repo": "pnpm exec depcruise --config .dependency-cruiser.js apps packages --output-type err-long",
+    "dup:report": "pnpm exec jscpd --config .jscpd.json apps packages scripts",
+    "dup:check": "pnpm exec jscpd --config .jscpd.json --threshold 3 --reporters console --silent apps packages scripts",
+    "dup:report:full": "pnpm exec jscpd --gitignore --min-lines 10 --min-tokens 80 --mode strict --reporters console,json,html --output .reports/jscpd-full apps packages scripts",
     "typecheck": "pnpm -r typecheck",
     "ssa": "pnpm --filter @interview/cli start",
     "test": "vitest run",
@@ -23,6 +26,7 @@
     "@vitest/coverage-v8": "^1.6.1",
     "dependency-cruiser": "^17.3.10",
     "ioredis-mock": "^8.13.1",
+    "jscpd": "^4.0.9",
     "pg-mem": "^3.0.14",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

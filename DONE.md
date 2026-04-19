@@ -6,6 +6,52 @@ Sister files: [TODO.md](TODO.md) (open), [TO-REVIEW.md](TO-REVIEW.md) (partial).
 
 ---
 
+## Console front — SOLID compression + DRY pass — 2026-04-19 (session 4)
+
+Two follow-up commits on top of the 5-layer landing. Closes every
+"god-component internals" item from the earlier TODO. Full write-up in
+`CHANGELOG.md` top entry "Console front — SOLID compression + DRY pass +
+jscpd".
+
+- [x] **`features/thalamus/Entry.tsx`** — 762 → 367 LOC (-52%) via
+      `useThalamusGraph` + `adapters/graph/` port (graphology + sigma +
+      ForceAtlas2 extracted) + `selectKgNode` dedup.
+- [x] **`features/ops/SatelliteField.tsx`** — 583 → 378 LOC (-35%) via
+      `adapters/renderer/orbit-geometry.ts` (BufferGeometry assembly
+      promoted to adapter; 141 LOC dedup).
+- [x] **`features/ops/Entry.tsx`** — 463 → 377 LOC (-19%) via
+      `useTimeControl`, `useRegimeFilter`, `useThreatBoard` view-model
+      hooks; `MetricTile` lifted to `shared/ui`.
+- [x] **`features/config/Entry.tsx`** — 568 → 208 LOC (-63%) via generic
+      `useDraft<T>` hook absorbing form draft/dirty/errors/diff.
+- [x] **`features/thalamus/FindingReadout.tsx`** — 428 → 367 LOC (-14%);
+      consumes canonical `STATUS_COLOR` from `shared/types/graph-colors`
+      and `KV` gains optional color prop (kills DataRow dup).
+- [x] **`features/ops/OrbitTrails.tsx`** — 360 → 258 LOC (-28%) via the
+      orbit-geometry adapter.
+- [x] **DIP — graph adapter** — `adapters/graph/{graph-builder,sigma-renderer}.ts` + `GraphContext.tsx` wired through `AppProviders`. Thalamus no
+      longer touches graphology / sigma / FA2 directly.
+- [x] **DIP — renderer orbit-geometry** —
+      `adapters/renderer/orbit-geometry.ts` ships
+      `buildFullRingsGeometry`, `buildTailsGeometry`, `clearRingCache`.
+- [x] **SRP primitives** — `shared/ui/{HudPanel,MetricTile}.tsx`,
+      `shared/util/aggregate.ts` (countBy/topN/maxCount), 5 hooks
+      (`useDrawerA11y`, `useDraft`, `useTimeControl`, `useRegimeFilter`,
+      `useThreatBoard`).
+- [x] **OCP widening** — `KV.color`, `sparkline.blockBar`, `palette.ringColor`.
+- [x] **DRY** — `selectKgNode` (thalamus drawer routing), `parsePc()`
+      (units.fmtPc / fmtPcCompact). jscpd clone density 0.31 % → 0.11 %.
+- [x] **jscpd integration** — `jscpd` devDep + `.jscpd.json` (10 LOC /
+      80 tokens / strict / ignores tests-fixtures-migrations-docs) +
+      3 npm scripts (`dup:report`, `dup:check`, `dup:report:full`).
+      `.reports/` git-ignored.
+- [x] **Test infra DRY** — global `vi.mock("sigma")` +
+      `vi.mock("graphology-layout-forceatlas2")` in
+      `apps/console/tests/setup.ts`; per-file mocks removed from the
+      thalamus test.
+
+**Verification**: 48/48 tests · 0 dep-cruiser violations · jscpd 0.11 %.
+
 ## Console front 5-layer — 2026-04-19
 
 `apps/console/src/**` refactored to a 5-layer architecture on
