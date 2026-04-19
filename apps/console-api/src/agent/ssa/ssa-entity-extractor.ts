@@ -10,7 +10,7 @@
 import {
   extractSatelliteEntities,
   DATA_POINT_RE,
-} from "@interview/thalamus";
+} from "./explorer/satellite-entity-patterns";
 import type { EntityExtractorFn } from "@interview/thalamus";
 
 export const ssaEntityExtractor: EntityExtractorFn = (text) => {

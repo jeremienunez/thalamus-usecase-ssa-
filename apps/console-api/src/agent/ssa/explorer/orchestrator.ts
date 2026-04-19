@@ -1,11 +1,11 @@
 import { createLogger } from "@interview/shared/observability";
 import type { Database } from "@interview/db-schema";
 import { sql } from "drizzle-orm";
+import { NanoSwarm, type SwarmStats } from "@interview/thalamus";
 import { ExplorerScout } from "./scout";
-import { ExplorerCrawler } from "./crawler";
-import { NanoSwarm, type SwarmStats } from "./nano-swarm";
+import { ExplorerCrawler, type CrawledArticle } from "./crawler";
 import { ExplorerCurator, type CuratedItem } from "./curator";
-import { ExplorationRepository } from "../repositories/exploration.repository";
+import { ExplorationRepository } from "./exploration.repository";
 
 const logger = createLogger("explorer-orchestrator");
 
@@ -145,9 +145,15 @@ export class ExplorerOrchestrator {
       };
     }
 
-    // 3. Curator: score articles -> decide action
+    // 3. Curator: score articles -> decide action.
+    // NanoSwarm emits NanoArticle[] with opaque `entities`; the SSA curator
+    // narrows to CrawledArticle["entities"] shape at read sites. Safe here
+    // because the entity extractor (setEntityExtractor at boot) produces
+    // SSA-shaped payloads in this deployment.
     logger.info(">>> [STEP 4a] Curator scoring articles...");
-    const curated = await this.curator.curate(articles);
+    const curated = await this.curator.curate(
+      articles as unknown as CrawledArticle[],
+    );
     logger.info(
       {
         total: curated.length,

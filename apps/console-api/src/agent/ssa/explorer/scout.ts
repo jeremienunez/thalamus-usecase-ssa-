@@ -1,18 +1,15 @@
-import { createLlmTransport } from "../transports/llm-chat";
+import {
+  createLlmTransport,
+  extractJsonArray,
+  type ExplorationQuery,
+} from "@interview/thalamus";
 import { createLogger } from "@interview/shared/observability";
-import { extractJsonArray } from "../utils/llm-json-parser";
 import type { Database } from "@interview/db-schema";
 import { sql } from "drizzle-orm";
 
 const logger = createLogger("explorer-scout");
 
-export interface ExplorationQuery {
-  query: string;
-  type: "web" | "academic" | "market";
-  signal: string;
-  priority: number;
-  maxDepth: number;
-}
+export type { ExplorationQuery };
 
 interface ScoutInput {
   recentFindings: Array<{ title: string; summary: string; cortex: string }>;

@@ -1,8 +1,10 @@
-import { createLlmTransport } from "../transports/llm-chat";
+import {
+  createLlmTransport,
+  extractJsonArray,
+  DEFAULT_CURATOR_PROMPT,
+} from "@interview/thalamus";
 import { createLogger } from "@interview/shared/observability";
-import { extractJsonArray } from "../utils/llm-json-parser";
 import type { CrawledArticle } from "./crawler";
-import { DEFAULT_CURATOR_PROMPT } from "../prompts";
 
 const logger = createLogger("explorer-curator");
 

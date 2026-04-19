@@ -1,10 +1,10 @@
 import { CheerioCrawler, type CheerioCrawlerOptions } from "crawlee";
 import { createLogger } from "@interview/shared/observability";
+import { validateExternalUrl } from "@interview/shared";
 import {
   extractSatelliteEntities,
   DATA_POINT_RE,
-} from "../utils/satellite-entity-patterns";
-import { validateExternalUrl } from "../utils/ssrf-guard";
+} from "./satellite-entity-patterns";
 import type { ExplorationQuery } from "./scout";
 
 const logger = createLogger("explorer-crawler");

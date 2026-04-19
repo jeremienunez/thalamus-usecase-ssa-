@@ -22,10 +22,10 @@ import {
   setCortexConfigProvider,
   setReflexionConfigProvider,
   setNanoSwarmProfile,
-  setCuratorPrompt,
   setEntityExtractor,
   type WebSearchPort,
 } from "@interview/thalamus";
+import { setCuratorPrompt } from "./agent/ssa/explorer/curator";
 import { ssaEntityExtractor } from "./agent/ssa/ssa-entity-extractor";
 import {
   SSA_NANO_SWARM_PROFILE,

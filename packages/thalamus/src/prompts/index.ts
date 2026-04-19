@@ -20,6 +20,7 @@ export {
   DEFAULT_NANO_SWARM_PROFILE,
   type NanoSwarmProfile,
   type Lens,
+  type ExplorationQuery,
 } from "./nano-swarm.prompt";
 export { DEFAULT_CURATOR_PROMPT } from "./curator.prompt";
 export {

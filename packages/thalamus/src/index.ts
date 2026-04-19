@@ -44,8 +44,8 @@ export type {
   CandidateLookup,
 } from "./cortices/field-correlation";
 
-// Explorer
-export { ExplorerOrchestrator } from "./explorer/orchestrator";
+// Explorer (nano-caller + nano-swarm only; scout/crawler/curator/
+// orchestrator + SSA entity patterns live in apps/console-api/src/agent/ssa/explorer/).
 export {
   callNano,
   callNanoStream,
@@ -57,29 +57,28 @@ export {
 } from "./explorer/nano-caller";
 export type { NanoRequest, NanoResponse } from "./explorer/nano-caller";
 export {
+  NanoSwarm,
   setNanoSwarmConfigProvider,
   setNanoSwarmProfile,
   setEntityExtractor,
 } from "./explorer/nano-swarm";
 export type {
+  SwarmStats,
   CrawlerExtraction,
   EntityExtractorFn,
+  NanoArticle,
 } from "./explorer/nano-swarm";
-// TEMP bridge (Task 3.3d → 3.3e): kernel still hosts the SSA entity
-// patterns file (satellite-entity-patterns.ts). Export the two symbols
-// the SSA bridge needs so apps/console-api can build without reaching
-// into kernel internals. Task 3.3e moves the file and drops this export.
-export {
-  extractSatelliteEntities,
-  DATA_POINT_RE,
-} from "./utils/satellite-entity-patterns";
-export { setCuratorPrompt } from "./explorer/curator";
-export type { ExplorationQuery } from "./explorer/scout";
+
+// Curator prompt — agnostic default; SSA override lives in
+// apps/console-api/src/prompts/curator-ssa.prompt.ts and is injected via
+// setCuratorPrompt from the SSA explorer bundle.
+export { DEFAULT_CURATOR_PROMPT } from "./prompts/curator.prompt";
 
 // Domain profile types (injected from consumers at boot)
 export type {
   Lens,
   NanoSwarmProfile,
+  ExplorationQuery,
 } from "./prompts/nano-swarm.prompt";
 export { DEFAULT_NANO_SWARM_PROFILE } from "./prompts/nano-swarm.prompt";
 

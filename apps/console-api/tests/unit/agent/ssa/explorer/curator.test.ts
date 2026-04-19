@@ -8,7 +8,7 @@
  * ranking contract end-to-end.
  */
 import { describe, it, expect } from "vitest";
-import * as curatorModule from "../src/explorer/curator";
+import * as curatorModule from "../../../../../src/agent/ssa/explorer/curator";
 
 describe("SPEC-TH-012 module surface", () => {
   it("exports a Curator binding", () => {

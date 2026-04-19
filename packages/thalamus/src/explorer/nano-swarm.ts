@@ -3,7 +3,7 @@
  *
  * Decomposes scout queries into micro-queries across a set of "researcher
  * lenses", runs them in waves, deduplicates URLs, and merges the results
- * into CrawledArticle[]. The domain flavour (lens catalog, keyword map,
+ * into NanoArticle[]. The domain flavour (lens catalog, keyword map,
  * call instructions) is supplied by a `NanoSwarmProfile` — see
  * `prompts/nano-swarm.prompt.ts`. Consumers inject a domain profile via
  * `setNanoSwarmProfile()` at boot; a minimal generic default keeps the
@@ -12,7 +12,7 @@
  * Architecture:
  *   Scout queries -> Decomposer (per-profile) -> micro-queries
  *   -> Wave executor (parallel × N waves, delay between waves)
- *   -> Dedup + merge -> CrawledArticle[]
+ *   -> Dedup + merge -> NanoArticle[]
  */
 
 import { createLogger } from "@interview/shared/observability";
@@ -23,22 +23,34 @@ import {
   StaticConfigProvider,
 } from "@interview/shared/config";
 import { callNanoWithMode } from "./nano-caller";
-import type { ExplorationQuery } from "./scout";
-import type { CrawledArticle } from "./crawler";
 import {
   DEFAULT_NANO_SWARM_PROFILE,
+  type ExplorationQuery,
   type Lens,
   type NanoSwarmProfile,
 } from "../prompts";
 
 /**
+ * Kernel-generic article shape produced by the nano swarm. The `entities`
+ * slot is opaque (whatever the domain extractor returns). App-side
+ * consumers (orchestrator, curator) narrow it to their domain vocabulary.
+ */
+export interface NanoArticle {
+  url: string;
+  title: string;
+  body: string;
+  entities: unknown;
+  dataPoints: string[];
+  sourceQuery: string;
+  depth: number;
+}
+
+/**
  * Crawler-shaped extraction result produced per crawled body. The
- * `entities` slot is forwarded straight into `CrawledArticle.entities`,
- * so its shape is whatever the domain extractor returns (SSA today,
- * something else tomorrow). Kernel stays agnostic.
+ * `entities` slot is forwarded straight into `NanoArticle.entities`.
  */
 export interface CrawlerExtraction {
-  entities: CrawledArticle["entities"];
+  entities: unknown;
   dataPoints: string[];
 }
 
@@ -47,7 +59,7 @@ export type EntityExtractorFn = (text: string) => CrawlerExtraction;
 // Domain-specific entity extraction is injected at boot. Default returns
 // an empty payload so the kernel stays runnable standalone.
 const NOOP_EXTRACTION: CrawlerExtraction = {
-  entities: {} as CrawledArticle["entities"],
+  entities: {},
   dataPoints: [],
 };
 
@@ -261,12 +273,12 @@ async function executeWaves(
 // ─── Merger & dedup ──────────────────────────────────────────────────
 
 function mergeResults(results: NanoResult[]): {
-  articles: CrawledArticle[];
+  articles: NanoArticle[];
   stats: SwarmStats;
 } {
   const successful = results.filter((r) => r.ok && r.text.length > 50);
   const seenUrls = new Set<string>();
-  const articles: CrawledArticle[] = [];
+  const articles: NanoArticle[] = [];
   const allDomains = new Set<string>();
 
   for (const r of successful) {
@@ -361,7 +373,7 @@ export class NanoSwarm {
    * micro-queries, runs them in waves, merges and deduplicates results.
    */
   async crawl(scoutQueries: ExplorationQuery[]): Promise<{
-    articles: CrawledArticle[];
+    articles: NanoArticle[];
     urlsCrawled: number;
     stats: SwarmStats;
   }> {
