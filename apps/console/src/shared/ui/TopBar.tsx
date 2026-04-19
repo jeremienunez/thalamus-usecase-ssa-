@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Globe2, Network, Radar, SlidersHorizontal } from "lucide-react";
 import { clsx } from "clsx";
-import { useUtcClock } from "@/lib/useUtcClock";
+import { useUtcClock } from "@/hooks/useUtcClock";
 import { AutonomyControl } from "@/components/AutonomyControl";
 
 const modes = [

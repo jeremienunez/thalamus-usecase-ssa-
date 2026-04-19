@@ -1,24 +1,17 @@
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { ErrorBoundary } from "@/shared/ui/ErrorBoundary";
 import { FullPaneFallback } from "@/shared/ui/Skeleton";
+import { AppProviders, buildDefaultAdapters } from "@/providers/AppProviders";
 import "./styles/globals.css";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+const adapters = buildDefaultAdapters();
 
 const router = createRouter({
   routeTree,
-  context: { queryClient },
+  context: { queryClient: adapters.queryClient },
   defaultPreload: "intent",
 });
 
@@ -31,11 +24,11 @@ declare module "@tanstack/react-router" {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
+      <AppProviders adapters={adapters}>
         <Suspense fallback={<FullPaneFallback label="LOADING CONSOLE" />}>
           <RouterProvider router={router} />
         </Suspense>
-      </QueryClientProvider>
+      </AppProviders>
     </ErrorBoundary>
   </React.StrictMode>,
 );
