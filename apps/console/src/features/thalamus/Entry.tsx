@@ -8,7 +8,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { Drawer, DrawerSection, KV } from "@/shared/ui/Drawer";
 import { fmtCount } from "@/lib/units";
 import { Measure } from "@/shared/ui/Measure";
-import { FindingReadout } from "./FindingReadout";
+import { FindingReadout } from "@/features/findings/Readout";
 import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/lib/api";
 
 const CLASSES: EntityClass[] = [
@@ -51,7 +51,7 @@ function layoutByClass(nodes: KgNodeDTO[]): Map<string, { x: number; y: number }
   return out;
 }
 
-export function ThalamusMode() {
+export function ThalamusEntry() {
   const { data, isLoading } = useKg();
   const { data: findingsData } = useFindings();
   const containerRef = useRef<HTMLDivElement>(null);

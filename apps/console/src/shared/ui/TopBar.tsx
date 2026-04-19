@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Globe2, Network, Radar, SlidersHorizontal } from "lucide-react";
 import { clsx } from "clsx";
 import { useUtcClock } from "@/hooks/useUtcClock";
-import { AutonomyControl } from "@/components/AutonomyControl";
+import { AutonomyControl } from "@/features/autonomy/Control";
 
 const modes = [
   { to: "/ops", label: "OPS", icon: Globe2, hint: "⌘1" },

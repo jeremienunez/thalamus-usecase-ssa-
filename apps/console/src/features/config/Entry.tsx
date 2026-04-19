@@ -13,7 +13,7 @@ import {
   type FieldSpec,
 } from "@/lib/runtime-config";
 
-export function ConfigMode() {
+export function ConfigEntry() {
   const { data, isLoading, error } = useRuntimeConfigList();
 
   if (isLoading) {

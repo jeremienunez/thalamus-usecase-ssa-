@@ -1,10 +1,10 @@
 import { ReactNode } from "react";
 import { TopBar } from "./TopBar";
 import { LeftRail } from "./LeftRail";
-import { TelemetryStrip } from "@/components/TelemetryStrip";
+import { TelemetryStrip } from "@/features/ops/TelemetryStrip";
 import { CommandPalette } from "./CommandPalette";
-import { ReplPanel } from "@/components/repl/ReplPanel";
-import { ReplProvider } from "@/components/repl/ReplProvider";
+import { ReplPanel } from "@/features/repl/ReplPanel";
+import { ReplProvider } from "@/features/repl/ReplProvider";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 export function AppShell({ children }: { children: ReactNode }) {

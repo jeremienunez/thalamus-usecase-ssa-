@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { OpsMode } from "@/modes/ops/OpsMode";
+import { OpsEntry } from "@/features/ops";
 
 export const Route = createFileRoute("/ops")({
-  component: OpsMode,
+  component: OpsEntry,
 });

@@ -15,7 +15,7 @@ import { OpsDrawer } from "./OpsDrawer";
 import { SatelliteSearch } from "./SatelliteSearch";
 import { CameraFocus } from "./CameraFocus";
 import { CycleLaunchPanel } from "./CycleLaunchPanel";
-import { FindingsPanel } from "./FindingsPanel";
+import { FindingsPanel } from "@/features/findings/Panel";
 import { RegimeFilter, type RegimeKey, type TrailMode } from "./RegimeFilter";
 import { OrbitTrails, type RegimeFilterKey } from "./OrbitTrails";
 import { useConjunctions, useSatellites } from "@/lib/queries";
@@ -83,7 +83,7 @@ function CornerBracket({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
   return <div className={`${base} ${cls}`} />;
 }
 
-export function OpsMode() {
+export function OpsEntry() {
   const [speedIdx, setSpeedIdx] = useState(1);
   const [paused, setPaused] = useState(false);
   const prevSpeedIdx = useRef(1);

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ThalamusMode } from "@/modes/thalamus/ThalamusMode";
+import { ThalamusEntry } from "@/features/thalamus";
 
 export const Route = createFileRoute("/thalamus")({
-  component: ThalamusMode,
+  component: ThalamusEntry,
 });

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ConfigMode } from "@/modes/config/ConfigMode";
+import { ConfigEntry } from "@/features/config";
 
 export const Route = createFileRoute("/config")({
-  component: ConfigMode,
+  component: ConfigEntry,
 });
