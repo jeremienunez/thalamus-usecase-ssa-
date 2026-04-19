@@ -4,6 +4,119 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Console front 5-layer architecture — 2026-04-19
+
+`apps/console/src/**` refactored into a five-layer structure mirroring the
+backend layering vocabulary, with strict DIP via React-Context-per-adapter
+and TanStack Query. Delivered on `feature/console-front-5l` in 15 atomic
+commits; every commit passes pre-commit (arch-check + typecheck + spec-check
+
+- tests) and leaves the app buildable.
+
+**Target layout** (`apps/console/src/`):
+
+```
+routes/ → features/ → hooks/ → usecases/ → adapters/
+                                         ↘ shared/types
+shared/ui ← any layer
+providers/ wires adapters into Contexts at bootstrap
+```
+
+**Adapters (L5, `adapters/*`)** — zero UI, zero React except `*Context.tsx`
+glue. Four categories, all DIP-injectable:
+
+- `adapters/api/` — 9 typed ports (satellites, conjunctions, kg, findings,
+  stats, cycles, sweep, mission, autonomy) on top of `ApiFetcher` port +
+  fetch impl. `createApiClient()` aggregate factory.
+- `adapters/sse/` — `SseClient` wrapper over `EventSource` + the REPL stream
+  parser (moved from `lib/repl-stream.ts`).
+- `adapters/renderer/` — Three.js textures (`makeGoldBumpTexture`,
+  `makeSolarPanelTexture`, `makeHaloTexture`) + palette (`getCompanyColor`,
+  `regimeColor`, `pcColor`) + Sigma mount helper.
+- `adapters/propagator/` — SGP4 + Kepler orbital propagation (moved from
+  `lib/orbit.ts`) with `satellite.js` as the sole transport dependency.
+
+Each adapter ships a typed interface, a concrete impl, and a React Context
+
+- `useXxxClient()` hook consumed via `providers/AppProviders.tsx` cascade.
+
+**Usecases (L4, `usecases/*`)** — 16 TanStack hooks, each reading
+`useApiClient()` from Context instead of a singleton import. Legacy
+`lib/queries.ts` dissolved into one file per intent
+(`useSatellitesQuery`, `useDecisionMutation`, …) + shared `keys.ts` query-key
+factory. `usecases/index.ts` barrel exposes both canonical names and legacy
+aliases (`useSatellites` → `useSatellitesQuery`).
+
+**Shared types (`shared/types/*`)** — DTOs centralised (was inlined in
+`lib/api.ts`); added `entityKind()` single-source-of-truth replacing
+duplicated ID-prefix switches; `classifySatellite()` table-driven, replaces
+the 40-entry `startsWith` chain in `SatelliteField`.
+
+**Features (L2, `features/*`)** — six business surfaces relocated from
+`modes/`:
+
+- `features/ops/` — 13 files (Scene, Canvas, SatelliteField, Globe,
+  CameraFocus, OrbitTrails, ConjunctionArcs/Markers, Filters, Search,
+  Clock, TelemetryStrip, FindingsPanel, CycleLaunchPanel).
+- `features/thalamus/` — Entry + FindingReadout (sole cross-feature
+  import collapsed here).
+- `features/sweep/` — Entry, Suggestions, Overview, Stats, Drawer,
+  FindingsGraph.
+- `features/repl/` — Panel, Provider, Context, TurnView, ResultView,
+  reducer + 9 renderers.
+- `features/autonomy/Control.tsx`, `features/config/Entry.tsx`.
+
+Each feature owns a barrel (`index.ts`) exporting an `XxxEntry` component
+consumed by the matching route file. Cross-feature imports forbidden by
+dep-cruiser rule `console-front-no-cross-feature`.
+
+**Shared UI (`shared/ui/*`)** — 10 UI-kit primitives (Drawer, Skeleton,
+Measure, ErrorBoundary, AppShell, TopBar, LeftRail, CommandPalette,
+CycleLoader, AnimatedStepBadge) + scoped `uiStore` (rail + drawer) +
+`sparkline`. No business logic, consumable from any layer.
+
+**Bootstrap wiring (`main.tsx`)** — `AppProviders` cascade
+(`QueryClient > ApiClient > SseClient > Renderer > Propagator`) wraps the
+router; `buildDefaultAdapters()` constructs concrete impls once.
+
+**Legacy deletion** — `lib/`, `modes/`, `components/` folders removed.
+Every consumer migrated to the new paths; dep-cruiser rules
+`console-front-no-legacy-{lib,modes,components}` flipped from `info` to
+`error` so reappearance fails CI.
+
+**Testing** — `@testing-library/react` + `jsdom` + `@testing-library/jest-dom`
+added; `apps/console/vitest.config.ts` registered in the root workspace.
+48 tests across 17 files (API adapters, SSE client, client fetcher,
+ApiClientContext, satellite-classification, entity-id, SGP4 propagator,
+sweep entry RTL, thalamus entry smoke). `tests/wrap.tsx` provides a
+`WrapProviders` + `makeStubApi` test utility — zero module mocking, every
+dependency swappable via Context.
+
+**Architectural enforcement** — six dep-cruiser rules added:
+
+- `console-front-no-cross-feature` — features are islands; shared concerns go to `shared/ui`, `hooks/`, or `usecases/`.
+- `console-front-adapters-no-react` — adapters are I/O only.
+- `console-front-hooks-no-raw-io` — no `three`/`sigma`/`satellite.js`/`graphology` in hooks or usecases.
+- `console-front-features-no-raw-propagation` — features never import `satellite.js` directly.
+- `console-front-no-legacy-{lib,modes,components}` — legacy folders can never come back.
+
+Zero dependency violations (666 modules, 2094 edges cruised).
+
+**Skill** — user-global skill `coding-feature-vertical-slice`
+(`~/.claude/skills/coding-feature-vertical-slice/SKILL.md`) written as the
+frontend sibling of `coding-route-vertical-slice`: 13-step vertical slice
+(discovery → adapter port + test → usecase → view-model → feature → entry
+→ route) that LLM agents working in this codebase must invoke before any
+feature work.
+
+**Verification**:
+
+- `pnpm arch:check:repo` — 0 violations.
+- `pnpm -C apps/console typecheck` — clean.
+- `pnpm -C apps/console exec vitest run` — 48/48 pass.
+- `pnpm -C apps/console build` — 1.6MB bundle (chunk-size warning noted in
+  TO-REVIEW; not blocking).
+
 ### Generic verification contract + SSA-owned REPL follow-ups — 2026-04-19
 
 The REPL follow-up slice was re-cut so package code stays object-pure

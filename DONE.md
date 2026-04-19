@@ -6,6 +6,106 @@ Sister files: [TODO.md](TODO.md) (open), [TO-REVIEW.md](TO-REVIEW.md) (partial).
 
 ---
 
+## Console front 5-layer — 2026-04-19
+
+`apps/console/src/**` refactored to a 5-layer architecture on
+`feature/console-front-5l` (15 commits, all pre-commit gates green).
+Mirrors the backend layering vocabulary with React-idiomatic names.
+Full write-up in `CHANGELOG.md` top entry "Console front 5-layer
+architecture". Spec: `docs/superpowers/specs/2026-04-19-console-front-five-layer-design.md`.
+Plan: `docs/superpowers/plans/2026-04-19-console-front-five-layer.md`.
+
+- [x] **Phase 0** — vitest + `@testing-library/react` + jsdom infra;
+      `apps/console/vitest.config.ts` registered in workspace; 5-layer
+      folder scaffold; 6 dep-cruiser rules staged (4 error-level + 2 info).
+- [x] **Phase 1** — 9 domain API adapters (satellites, conjunctions, kg,
+      findings, stats, cycles, sweep, mission, autonomy) on top of
+      `ApiFetcher` port + fetch impl; `createApiClient()` aggregate
+      factory; 18 adapter tests.
+- [x] **Phase 2** — SSE adapter (`SseClient` + REPL stream parser moved
+      from `lib/repl-stream.ts`); renderer adapter (textures + palette
+      extracted from `SatelliteField`); propagator adapter (SGP4 + Kepler
+      moved from `lib/orbit.ts`); `shared/types/satellite-classification`
+      table-driven (replaces 40-entry `startsWith` chain).
+- [x] **Phase 3** — 4 React Contexts (`ApiClientContext`,
+      `SseClientContext`, `RendererContext`, `PropagatorContext`) + 2
+      test scenarios per; `AppProviders` cascade + `buildDefaultAdapters()`
+      bootstrap factory; `shared/types/entity-id` single-source-of-truth
+      `entityKind()`.
+- [x] **Phase 4** — 10 UI primitives moved to `shared/ui/` + barrel;
+      generic hooks to `hooks/`; `lib/queries.ts` dissolved into 16
+      `usecases/*.ts` consuming `useApiClient()` via Context; `main.tsx`
+      wraps router with `AppProviders`.
+- [x] **Phase 5** — god-components relocated to `features/*`:
+      `ThalamusMode` (763 LOC) → `features/thalamus/Entry`, `OpsMode` + `SatelliteField` + 11 siblings → `features/ops/*`, sweep 6 files
+      → `features/sweep/*`, repl → `features/repl/*`, autonomy/config
+      → own features. Routes rewired. SweepEntry RTL (3 scenarios) +
+      ThalamusEntry smoke.
+- [x] **Phase 6** — scoped `uiStore` in `shared/ui/` (rail + drawer are
+      the only genuinely cross-feature UI state); bootstrap wiring
+      verified.
+- [x] **Phase 7** — `lib/` folder deleted (4 shims + 8 utility files
+      redistributed); `modes/` and `components/` folders gone;
+      dep-cruiser rules flipped to `error` severity;
+      `apps/console/README.md` written (layer map + how-to-add guides +
+      skill reference).
+
+**Skill** — `~/.claude/skills/coding-feature-vertical-slice/SKILL.md`
+landed as the frontend sibling of `coding-route-vertical-slice` (13-step
+vertical slice). Auto-memory pointer in
+`~/.claude/projects/-home-jerem-interview-thalamus-sweep/memory/`.
+
+**Tests**: 48 passing across 17 files. Zero dep-cruiser violations (666
+modules, 2094 edges). Build clean.
+
+## Runtime config registry + 4 LLM providers — 2026-04-19
+
+Previously tracked under TODO "Runtime config registry + admin UI";
+phases 1-7 shipped. Remaining knobs tracked in TODO under the same
+heading.
+
+- [x] Phase 1 — `RuntimeConfigService` refactored to registry pattern
+      (OCP). Schemas no longer live in the service — each package ships
+      its own registrar.
+- [x] Phase 2 — 6 new domains declared (`thalamus.{planner,cortex,reflexion}`,
+      `sim.{swarm,fish,embedding}`).
+- [x] Phase 3 — all 4 LLM providers (Local, Kimi, MiniMax, OpenAI) read
+      `LlmProviderCallOpts` overrides + honour `preferredProvider` chain
+      reordering.
+- [x] Phase 4 — MiniMax provider added to the chain.
+- [x] Phase 5 — `<think>` leak closed across every provider + `callNano`.
+- [x] Phase 6 — Admin `/config` tab with typed field renderers, model
+      dropdown with provider auto-sync, left-rail jump-links, scroll
+      container.
+- [x] Phase 7 — 5 cortex skill `description:` frontmatter rewritten in
+      analyst-intent voice so the Kimi planner has a chance to dispatch
+      them (Tier 1 of planner-bias fix).
+
+## PG functions pass — 2026-04-19
+
+All 4 steps shipped. Write-up in `CHANGELOG.md` top entry "PG functions:
+4 param-drop bugs fixed + conjunction KNN + fleet rollup dedup".
+
+- [x] Step 1 — `ef_search = <ef>` wired into
+      `apps/console-api/src/repositories/satellite.repository.ts:114`
+      `knnNeighboursForField` (parity with `findKnnCandidates`).
+- [x] Step 2 — `packages/db-schema/migrations/0012_orbital_analytics_fns.sql`
+      creates `fn_plan_orbit_slots`, `fn_analyze_orbital_traffic`,
+      `fn_forecast_debris`, `fn_list_launch_manifest`. Each honest about
+      which branches honor `regimeId` via a `branch_filter_applied`
+      column. Dead params dropped from Zod + service + repo.
+- [x] Step 3 — `packages/db-schema/migrations/0013_conjunction_knn_fn.sql`
+      creates `fn_conjunction_candidates_knn` in PL/pgSQL with
+      transaction-local `set_config('hnsw.ef_search', …, true)`.
+- [x] Step 4 — shared SQL builder
+      `apps/console-api/src/repositories/queries/operator-fleet-rollup.ts`
+      backs both `FleetAnalysisRepository.analyzeOperatorFleet` and
+      `SatelliteFleetRepository.getOperatorFleetSnapshot`. Unified mix
+      shape: `Array<{key, count}>` sorted desc, top-5. Dropped dead
+      `userId` param.
+
+---
+
 ## Sweep agnostic refactor — Plan 1 — 2026-04-18
 
 23 tasks / 7 phases shipped on `refactor/sim-agnostic`. `packages/sweep/` is now a generic sweep/finding engine; all SSA business logic lives in `apps/console-api/src/agent/ssa/sweep/` + console-api's 5-layer stack.

@@ -70,29 +70,7 @@ pnpm -r typecheck && pnpm test:unit && (cd apps/console-api && npx vitest run te
 
 ### Runtime config registry + admin UI — 2026-04-19 (session 3)
 
-Third pass same day: every perf knob the kernel used to hardcode
-(planner cap, cortex model, reflexion iterations, sim fish reasoning,
-provider choice) is now runtime-tunable via `PATCH /api/config/runtime/:domain`
-and editable from the `/config` admin page. Full write-up in
-`CHANGELOG.md` top entry "Runtime config registry + 4 LLM providers".
-
-- [x] Phase 1 — `RuntimeConfigService` refactored to a registry
-      pattern (OCP). Schemas no longer live in the service — each
-      package ships its own registrar.
-- [x] Phase 2 — 6 new domains declared (`thalamus.{planner,cortex,reflexion}`,
-      `sim.{swarm,fish,embedding}`).
-- [x] Phase 3 — all 4 LLM providers (Local, Kimi, MiniMax, OpenAI)
-      read `LlmProviderCallOpts` overrides + honour `preferredProvider`
-      chain reordering.
-- [x] Phase 4 — MiniMax provider added to the chain.
-- [x] Phase 5 — `<think>` leak closed across every provider +
-      `callNano`.
-- [x] Phase 6 — Admin `/config` tab with typed field renderers,
-      model dropdown with provider auto-sync, left-rail jump-links,
-      scroll container.
-- [x] Phase 7 — 5 cortex skill `description:` frontmatter rewritten
-      in analyst-intent voice so the Kimi planner has a chance to
-      dispatch them (Tier 1 of planner-bias fix).
+Phases 1-7 shipped — moved to [DONE.md](DONE.md#runtime-config-registry--4-llm-providers--2026-04-19).
 
 **Still open from this pass**:
 
@@ -119,32 +97,40 @@ and editable from the `/config` admin page. Full write-up in
 
 ---
 
+### Console front 5-layer — god-component internals (follow-up)
+
+5-layer boundary shipped — see [DONE.md](DONE.md#console-front-5-layer--2026-04-19).
+Internal decomposition of the three remaining god-components is the
+next refactor. Each one is a contained multi-file split with no
+behaviour change; good candidate for a follow-up branch with
+per-sub-component RTL coverage.
+
+- [ ] `features/thalamus/Entry.tsx` (762 LOC) — split into
+      `Canvas.tsx` + `Hud.tsx` + `Drawer.tsx` + `Ascii.tsx` +
+      `hooks/useThalamusGraph.ts` + `hooks/useThalamusLayout.ts`
+      (layoutByClass, synthLabel, ghostClassFor, Sigma init).
+- [ ] `features/ops/Entry.tsx` (462 LOC) — split into `Scene.tsx` +
+      `Filters.tsx` + `ThreatBoard.tsx` + `Clock.tsx` + `Search.tsx` +
+      `hooks/useOpsTime.ts` + `hooks/useOpsSelection.ts`.
+- [ ] `features/ops/SatelliteField.tsx` (583 LOC) — collapse to ≤150
+      LOC shell composing a new `adapters/renderer/instanced-sats.ts`
+      (InstancedMesh builders), `usePropagator()`, `useRenderer()`.
+- [ ] OpsEntry RTL — add `@react-three/test-renderer` + drop the
+      manual-only caveat in TO-REVIEW; cover golden path + one edge
+      case per feature.
+- [ ] Bundle split — `build.rollupOptions.output.manualChunks` per
+      mode (3D libs for ops only, sigma/graphology for thalamus only);
+      lazy TanStack Router file routes per mode. Today the single
+      bundle is 1.6MB (gzip 449KB) — warning noted in TO-REVIEW.
+- [ ] SGP4 cache LRU — `adapters/propagator/sgp4.ts:121`
+      `satrecByLine1` grows unbounded; add small LRU (10_000 entries
+      is ample).
+
+---
+
 ### PG functions pass — 2026-04-19 (session 2)
 
-Second pass the same day: push compute into PG where it fixes silent
-param-drop bugs or consolidates duplicated SQL. Full write-up in
-`CHANGELOG.md` top entry "PG functions: 4 param-drop bugs fixed +
-conjunction KNN + fleet rollup dedup".
-
-- [x] Step 1 — `ef_search = <ef>` wired into
-      `apps/console-api/src/repositories/satellite.repository.ts:114`
-      `knnNeighboursForField` (parity with `findKnnCandidates`).
-- [x] Step 2 — `packages/db-schema/migrations/0012_orbital_analytics_fns.sql`
-      creates `fn_plan_orbit_slots`, `fn_analyze_orbital_traffic`,
-      `fn_forecast_debris`, `fn_list_launch_manifest`. Each honest about
-      which branches honor `regimeId` via a `branch_filter_applied`
-      column. Dead params (`horizonYears` on slots/debris, `regimeId` on
-      launch-manifest) dropped from Zod + service + repo.
-- [x] Step 3 — `packages/db-schema/migrations/0013_conjunction_knn_fn.sql`
-      creates `fn_conjunction_candidates_knn` in PL/pgSQL with
-      transaction-local `set_config('hnsw.ef_search', …, true)`. No more
-      leaking session state on the pooled connection.
-- [x] Step 4 — shared SQL builder
-      `apps/console-api/src/repositories/queries/operator-fleet-rollup.ts`
-      backs both `FleetAnalysisRepository.analyzeOperatorFleet` and
-      `SatelliteFleetRepository.getOperatorFleetSnapshot`. Unified mix
-      shape: `Array<{key, count}>` sorted desc, top-5. Dropped dead
-      `userId` param.
+Steps 1-4 shipped — moved to [DONE.md](DONE.md#pg-functions-pass--2026-04-19).
 
 **Manual apply reminder** — migrations 0012 and 0013 are raw SQL
 (functions), not drizzle-generated. Apply via:

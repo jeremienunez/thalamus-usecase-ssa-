@@ -6,6 +6,91 @@ Sister files: [DONE.md](DONE.md) (complete), [TODO.md](TODO.md) (open).
 
 ---
 
+## Console front 5-layer — god-components still large internally
+
+- **Shipped**: 5-layer structure, Context-per-adapter DIP, dep-cruiser strict, 48 tests, README.
+- **Internal decomposition deferred** (the real god-component fix):
+  - `features/thalamus/Entry.tsx` — 762 LOC, should split into
+    `Canvas.tsx` + `Hud.tsx` + `Drawer.tsx` + `Ascii.tsx` +
+    `hooks/useThalamusGraph.ts` + `hooks/useThalamusLayout.ts`
+    (layoutByClass, synthLabel, ghostClassFor, Sigma init).
+  - `features/ops/Entry.tsx` — 462 LOC, should split into `Scene.tsx` +
+    `Filters.tsx` + `ThreatBoard.tsx` + `Clock.tsx` + `Search.tsx` +
+    `hooks/useOpsTime.ts` + `hooks/useOpsSelection.ts`.
+  - `features/ops/SatelliteField.tsx` — 583 LOC, should collapse to
+    ≤150 LOC shell composing `adapters/renderer/instanced-sats.ts`
+    (InstancedMesh builders), `usePropagator()`, `useRenderer()`.
+- **Reason for deferral**: each decomposition is a multi-file refactor
+  with high rewrite-risk and no behaviour change; better landed on a
+  follow-up branch with per-sub-component RTL coverage added as each
+  piece moves out.
+
+## Console front — OpsEntry render smoke not automated
+
+- **Reason**: `@react-three/fiber` + `@react-three/drei` + `@react-three/postprocessing`
+  need WebGL contexts jsdom lacks; stubbing every transitive import
+  (`useLoader`, `useThree`, `useFrame`, `EffectComposer`, `Canvas`, …) is
+  brittle and coupled to internal `r3f` shape.
+- **Impact**: golden-path Ops behaviour (3D scene, sats, conjunctions,
+  time controls) is only covered by manual browser smoke.
+- **Fix options**:
+  - Playwright or `@playwright/test` e2e in a real browser (heavy infra).
+  - `@react-three/test-renderer` (official r3f test renderer) — drops
+    WebGL, gives a React tree we can assert on. Recommended.
+  - Lift non-3D Ops chrome (Clock, Filters, Search, ThreatBoard) into
+    separate sub-components so they can be RTL-tested even if the Canvas
+    stays un-mocked.
+
+## Console front — bundle size 1.6MB (>500KB warning)
+
+- `pnpm -C apps/console build` emits the vite chunk-size warning:
+  `dist/assets/index-*.js 1,605.22 kB │ gzip: 449.80 kB`.
+- **Suspect heavy deps**: `three` + `@react-three/*` (4 packages), `sigma`
+  - `graphology`, `satellite.js`, `@tanstack/react-router`.
+- **Fix options** (in order of ROI):
+  - `build.rollupOptions.output.manualChunks` splitting the 3D libs (ops
+    only) from the thalamus libs (sigma/graphology only) from the base
+    app shell → smaller first-paint bundle per route.
+  - Dynamic `import()` at route boundaries — TanStack Router supports
+    lazy file routes; each mode loads its adapters lazily.
+  - Tree-shake `lodash-es` or similar hidden deps (run `pnpm why` on
+    large transitive imports).
+
+## Console front — Zustand scoped store consolidation
+
+- **Shipped**: `shared/ui/uiStore.ts` scopes the 2 genuinely shared
+  fields (railCollapsed, drawerId).
+- **Concern**: `drawerId` is cross-feature (OPS opens `sat:…`, Thalamus
+  `finding:…`, Sweep `f:…`). That's navigational coupling. Review:
+  - Should the drawer be route-driven instead of store-driven? (Would
+    survive back/forward + deep-linking.)
+  - Or split per-feature drawers with a small route-level state machine?
+- **Impact**: today's behaviour is correct, but the store is a single
+  global mutable surface that any feature can reach — violates the
+  "features are islands" rule in spirit even though dep-cruiser permits
+  it via `shared/ui`.
+
+## Console front — satellite.js propagateSgp4 cache is unbounded
+
+- `adapters/propagator/sgp4.ts:121` — `satrecByLine1 = new Map<string, SatRec | null>()`
+  grows monotonically until the tab closes. With tens of thousands of
+  satellites each having a fresh TLE every 1-7 days, this leaks over
+  long sessions.
+- **Fix**: bound with an LRU (small — 10_000 entries is enough; TLE ingest
+  ≤ ~1_000/day).
+
+## Console front — FindingReadout + FindingsPanel duplicate concerns
+
+- Relocated from `features/findings/` into `features/thalamus/` and
+  `features/ops/` respectively (to satisfy the no-cross-feature rule).
+- **Concern**: both render finding data with different layouts — the
+  structural drift will only grow. Consider:
+  - Extracting a `FindingCard` primitive to `shared/ui/finding/` (it's
+    genuinely presentational, safe under `shared/ui`).
+  - Keep feature-specific shells (Readout = thalamus-themed,
+    Panel = ops-themed) but share the inner payload renderer.
+- Not urgent — both files are <150 LOC today.
+
 ## REPL auto-followups — backend landed, UI pending
 
 - **Shipped**:
