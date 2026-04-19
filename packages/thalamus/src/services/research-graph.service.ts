@@ -15,8 +15,8 @@ import type {
   NewResearchFinding,
   NewResearchEdge,
 } from "../types/research.types";
-import { ResearchEntityType, ResearchRelation } from "@interview/shared/enum";
-import type { ResearchCortex, ResearchFindingType } from "@interview/shared/enum";
+import { ResearchRelation } from "@interview/shared/enum";
+import type { ResearchFindingType } from "@interview/shared/enum";
 
 // ── Ports (structural — repos satisfy these by duck typing) ────────
 export interface FindingsGraphPort {
@@ -35,7 +35,7 @@ export interface FindingsGraphPort {
   ): Promise<void>;
   findById(id: bigint): Promise<ResearchFinding | null>;
   findByEntity(
-    entityType: ResearchEntityType,
+    entityType: string,
     entityId: bigint,
     opts?: { minConfidence?: number; limit?: number },
   ): Promise<ResearchFinding[]>;
@@ -44,7 +44,7 @@ export interface FindingsGraphPort {
     limit?: number,
   ): Promise<Array<ResearchFinding & { similarity: number }>>;
   findActive(opts?: {
-    cortex?: ResearchCortex;
+    cortex?: string;
     findingType?: ResearchFindingType;
     minConfidence?: number;
     limit?: number;
@@ -83,7 +83,7 @@ export interface StoreFindingInput {
 }
 
 export interface QueryFindingsOptions {
-  cortex?: ResearchCortex;
+  cortex?: string;
   findingType?: ResearchFindingType;
   minConfidence?: number;
   limit?: number;
@@ -245,7 +245,11 @@ export class ResearchGraphService {
         if (crossLinks.length > 0) {
           const linkEdges: NewResearchEdge[] = crossLinks.map((r) => ({
             findingId: finding.id,
-            entityType: ResearchEntityType.Finding,
+            // "finding" is a generic cross-link entityType for finding-to-finding
+            // edges — it is a protocol value shared between kernel and any domain,
+            // not SSA vocabulary. Domains that define their own entity enum must
+            // include this value in the DB enum for kernel cross-linking to work.
+            entityType: "finding",
             entityId: r.id,
             relation:
               r.similarity > 0.85
@@ -312,7 +316,7 @@ export class ResearchGraphService {
    * Query findings linked to a specific entity via knowledge graph edges
    */
   async queryByEntity(
-    entityType: ResearchEntityType,
+    entityType: string,
     entityId: bigint,
     opts?: { minConfidence?: number; limit?: number },
   ): Promise<ResearchFinding[]> {

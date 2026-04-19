@@ -15,14 +15,10 @@ import type {
   NewResearchFinding,
 } from "../types/research.types";
 import { toResearchFinding } from "../transformers/research.transformer";
-import type {
-  ResearchCortex,
-  ResearchFindingType,
-  ResearchEntityType,
-} from "@interview/shared/enum";
+import type { ResearchFindingType } from "@interview/shared/enum";
 
 export interface FindActiveOptions {
-  cortex?: ResearchCortex;
+  cortex?: string;
   findingType?: ResearchFindingType;
   minConfidence?: number;
   limit?: number;
@@ -141,7 +137,7 @@ export class ResearchFindingRepository {
    * Find findings linked to an entity via research_edge JOIN
    */
   async findByEntity(
-    entityType: ResearchEntityType,
+    entityType: string,
     entityId: bigint,
     opts?: { minConfidence?: number; limit?: number },
   ): Promise<ResearchFinding[]> {

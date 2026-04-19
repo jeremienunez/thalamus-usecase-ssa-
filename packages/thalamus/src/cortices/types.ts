@@ -3,10 +3,8 @@
  */
 
 import type {
-  ResearchCortex,
   ResearchFindingType,
   ResearchUrgency,
-  ResearchEntityType,
   ResearchRelation,
 } from "@interview/shared/enum";
 
@@ -50,7 +48,7 @@ export interface CortexFinding {
   busContext?: { busId: number; busName: string; similarity?: number };
   dedupKey?: string;
   edges: Array<{
-    entityType: ResearchEntityType;
+    entityType: string;
     entityId: number;
     relation: ResearchRelation;
     context?: Record<string, unknown>;
@@ -71,7 +69,7 @@ export interface CortexOutput {
 // ============================================================================
 
 export interface Cortex {
-  name: ResearchCortex;
+  name: string;
   execute(input: CortexInput): Promise<CortexOutput>;
 }
 

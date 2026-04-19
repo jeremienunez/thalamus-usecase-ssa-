@@ -13,7 +13,6 @@ import type {
   NewResearchEdge,
 } from "../types/research.types";
 import { toResearchEdge } from "../transformers/research.transformer";
-import type { ResearchEntityType } from "@interview/shared/enum";
 
 export class ResearchEdgeRepository {
   constructor(private db: Database) {}
@@ -45,7 +44,7 @@ export class ResearchEdgeRepository {
   }
 
   async findByEntity(
-    entityType: ResearchEntityType,
+    entityType: string,
     entityId: bigint,
   ): Promise<ResearchEdge[]> {
     const rows = await this.db

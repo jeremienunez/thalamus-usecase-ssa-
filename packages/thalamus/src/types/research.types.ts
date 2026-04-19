@@ -9,17 +9,15 @@
 import type {
   ResearchCycleTrigger,
   ResearchCycleStatus,
-  ResearchCortex,
   ResearchFindingType,
   ResearchStatus,
   ResearchUrgency,
-  ResearchEntityType,
   ResearchRelation,
 } from "@interview/shared/enum";
 
 // ── Cycle ──────────────────────────────────────────────────────────
 export interface ResearchVerificationTargetHint {
-  entityType: ResearchEntityType | null;
+  entityType: string | null;
   entityId: bigint | null;
   sourceCortex: string | null;
   sourceTitle: string | null;
@@ -70,7 +68,7 @@ export interface NewResearchCycle {
 export interface ResearchFinding {
   id: bigint;
   researchCycleId: bigint;
-  cortex: ResearchCortex;
+  cortex: string;
   findingType: ResearchFindingType;
   status: ResearchStatus;
   urgency: ResearchUrgency | null;
@@ -92,7 +90,7 @@ export interface ResearchFinding {
 
 export interface NewResearchFinding {
   researchCycleId: bigint;
-  cortex: ResearchCortex;
+  cortex: string;
   findingType: ResearchFindingType;
   status?: ResearchStatus;
   urgency?: ResearchUrgency | null;
@@ -116,7 +114,7 @@ export interface NewResearchFinding {
 export interface ResearchEdge {
   id: bigint;
   findingId: bigint;
-  entityType: ResearchEntityType;
+  entityType: string;
   entityId: bigint;
   relation: ResearchRelation;
   weight: number | null;
@@ -126,7 +124,7 @@ export interface ResearchEdge {
 
 export interface NewResearchEdge {
   findingId: bigint;
-  entityType: ResearchEntityType;
+  entityType: string;
   entityId: bigint;
   relation: ResearchRelation;
   weight?: number | null;

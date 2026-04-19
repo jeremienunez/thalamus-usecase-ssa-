@@ -36,10 +36,8 @@ import type {
   SourceResult,
 } from "../src/ports/source-fetcher.port";
 import {
-  ResearchCortex,
   ResearchFindingType,
   ResearchUrgency,
-  ResearchEntityType,
   ResearchRelation,
 } from "@interview/shared/enum";
 import { analyzeCortexData } from "../src/cortices/cortex-llm";
@@ -74,18 +72,9 @@ const fakeDb = {} as never;
 // web-enriched / relevance-filtered).
 const testDomainConfig = {
   ...noopDomainConfig,
-  userScopedCortices: new Set([
-    ResearchCortex.FleetAnalyst,
-    ResearchCortex.AdvisoryRadar,
-  ]),
-  webEnrichedCortices: new Set([
-    ResearchCortex.AdvisoryRadar,
-    ResearchCortex.DebrisForecaster,
-  ]),
-  relevanceFilteredCortices: new Set([
-    ResearchCortex.AdvisoryRadar,
-    ResearchCortex.DebrisForecaster,
-  ]),
+  userScopedCortices: new Set(["fleet_analyst", "advisory_radar"]),
+  webEnrichedCortices: new Set(["advisory_radar", "debris_forecaster"]),
+  relevanceFilteredCortices: new Set(["advisory_radar", "debris_forecaster"]),
 };
 
 // Build the default strategy list the production container also wires:
@@ -153,7 +142,7 @@ describe("SPEC-TH-003 AC-1 / AC-3 — nominal execution normalises findings", ()
         impactScore: -3,
         edges: [
           {
-            entityType: ResearchEntityType.Satellite,
+            entityType: "satellite",
             entityId: 42,
             relation: ResearchRelation.About,
           },
@@ -219,9 +208,9 @@ describe("SPEC-TH-003 AC-1 / AC-3 — nominal execution normalises findings", ()
 describe("SPEC-TH-003 AC-4 — user-scoped cortex requires userId", () => {
   it("FleetAnalyst without params.userId returns empty and does NOT call analyzeCortexData", async () => {
     const registry = fakeRegistry({
-      [ResearchCortex.FleetAnalyst]: {
+      fleet_analyst: {
         header: {
-          name: ResearchCortex.FleetAnalyst,
+          name: "fleet_analyst",
           description: "",
           sqlHelper: "listSatellitesByOperator",
           params: {},
@@ -230,7 +219,7 @@ describe("SPEC-TH-003 AC-4 — user-scoped cortex requires userId", () => {
     });
     const executor = new CortexExecutor(registry, buildTestStrategies());
 
-    const out = await executor.execute(ResearchCortex.FleetAnalyst, {
+    const out = await executor.execute("fleet_analyst", {
       query: "fleet",
       params: {}, // no userId
       cycleId: 1n,
