@@ -107,11 +107,14 @@ export function buildThalamusContainer(
 
   // Thalamus service collaborators — wired here so the service itself
   // never `new`s concrete dependencies (DIP).
-  const planner = new ThalamusPlanner(
-    registry,
-    domainConfig.daemonDags,
-    domainConfig.userScopedCortices,
-  );
+  const planner = new ThalamusPlanner(registry, {
+    daemonDags: domainConfig.daemonDags,
+    userScopedCortices: domainConfig.userScopedCortices,
+    plannerPrompt: domainConfig.plannerPrompt,
+    fallbackPlan: domainConfig.fallbackPlan,
+    fallbackCortices: domainConfig.fallbackCortices,
+    synthesisCortexName: domainConfig.synthesisCortexName,
+  });
   const dagExecutor = new ThalamusDAGExecutor(executor);
   const reflexion = new ThalamusReflexion();
   const stopCriteria = new StopCriteriaEvaluator();

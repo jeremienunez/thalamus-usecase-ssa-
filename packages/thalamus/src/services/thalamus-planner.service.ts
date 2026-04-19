@@ -25,6 +25,32 @@ const logger = createLogger("thalamus-planner");
 
 export type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 
+/**
+ * PlannerConfig — app-owned seams consumed by ThalamusPlanner. Every field
+ * optional; defaults preserve pre-agnosticity behavior (SSA planner prompt +
+ * hardcoded SSA 4-cortex fallback). Phase 5 of the agnosticity cleanup
+ * drops those legacy defaults once SSA domain-config injects both.
+ */
+export interface PlannerConfig {
+  /** Daemon-trigger DAGs. Defaults to the legacy SSA map. */
+  daemonDags?: Record<string, DAGPlan>;
+  /** Cortices requiring a userId in params (fleet-scoped work). */
+  userScopedCortices?: Set<string>;
+  /** App-owned system-prompt builder. Defaults to `buildPlannerSystemPrompt`. */
+  plannerPrompt?: (input: {
+    headers: string;
+    cortexNames: readonly string[];
+  }) => string;
+  /** App-owned fallback DAG for empty/failed plans. */
+  fallbackPlan?: (query: string) => DAGPlan;
+  /** Flat list of cortices used to synthesize a fallback DAG when no
+   *  `fallbackPlan` is provided. Higher priority than the legacy default. */
+  fallbackCortices?: string[];
+  /** Name of the synthesis cortex (clamp protection, mandatory injection).
+   *  Defaults to `"strategist"` — matches existing SSA behavior. */
+  synthesisCortexName?: string;
+}
+
 const dagPlanSchema = z.object({
   intent: z.string(),
   nodes: z.array(
@@ -49,14 +75,57 @@ export interface PlanOptions {
 export class ThalamusPlanner {
   private readonly daemonDags: Record<string, DAGPlan>;
   private readonly userScopedCortices: Set<string>;
+  private readonly plannerPromptFn: (input: {
+    headers: string;
+    cortexNames: readonly string[];
+  }) => string;
+  private readonly injectedFallbackPlan?: (query: string) => DAGPlan;
+  private readonly fallbackCortices: string[];
+  readonly synthesisCortexName: string;
 
   constructor(
     private registry: CortexRegistry,
-    daemonDags: Record<string, DAGPlan> = DEFAULT_DAEMON_DAGS,
-    userScopedCortices: Set<string> = new Set(),
+    config: PlannerConfig = {},
   ) {
-    this.daemonDags = daemonDags;
-    this.userScopedCortices = userScopedCortices;
+    this.daemonDags = config.daemonDags ?? DEFAULT_DAEMON_DAGS;
+    this.userScopedCortices = config.userScopedCortices ?? new Set();
+    this.plannerPromptFn = config.plannerPrompt ?? buildPlannerSystemPrompt;
+    this.injectedFallbackPlan = config.fallbackPlan;
+    this.fallbackCortices = config.fallbackCortices ?? [];
+    this.synthesisCortexName = config.synthesisCortexName ?? "strategist";
+  }
+
+  /**
+   * Build the planner system prompt. Uses the injected builder when
+   * provided, otherwise the legacy SSA-flavored default.
+   */
+  buildSystemPrompt(input: {
+    headers: string;
+    cortexNames: readonly string[];
+  }): string {
+    return this.plannerPromptFn(input);
+  }
+
+  /**
+   * Select the fallback DAG. Priority: injected `fallbackPlan` >
+   * flat `fallbackCortices` > legacy SSA default. Exposed for unit
+   * testing the seam selection; also called by `plan()` on empty/failed
+   * LLM output.
+   */
+  resolveFallbackPlan(query: string): DAGPlan {
+    if (this.injectedFallbackPlan) return this.injectedFallbackPlan(query);
+    if (this.fallbackCortices.length > 0) {
+      return {
+        intent: query,
+        complexity: "moderate",
+        nodes: this.fallbackCortices.map((cortex) => ({
+          cortex,
+          params: {},
+          dependsOn: [] as string[],
+        })),
+      };
+    }
+    return this.legacyFallbackPlan(query);
   }
 
   /**
@@ -73,7 +142,7 @@ export class ThalamusPlanner {
       getCortexConfig(),
     ]);
 
-    const systemPrompt = buildPlannerSystemPrompt({ headers, cortexNames });
+    const systemPrompt = this.buildSystemPrompt({ headers, cortexNames });
     const transport = createLlmTransport(systemPrompt, {
       preferredProvider:
         plannerCfg.provider === "local" ||
@@ -113,7 +182,7 @@ export class ThalamusPlanner {
 
       if (plan.nodes.length === 0) {
         logger.warn({ query }, "Planner produced empty DAG, using fallback");
-        const fallback = this.fallbackPlan(query);
+        const fallback = this.resolveFallbackPlan(query);
         stepLog(logger, "planner", "done", {
           intent: fallback.intent,
           cortices: fallback.nodes.map((n) => n.cortex),
@@ -145,7 +214,7 @@ export class ThalamusPlanner {
         err: err instanceof Error ? err.message : String(err),
         durationMs: Date.now() - plannerStartedAt,
       });
-      return this.fallbackPlan(query);
+      return this.resolveFallbackPlan(query);
     }
   }
 
@@ -268,10 +337,11 @@ export class ThalamusPlanner {
   }
 
   /**
-   * Fallback: broad 4-cortex sweep when planner LLM fails.
-   * Covers fleet + traffic + regime + synthesis.
+   * Legacy fallback: broad 4-cortex SSA sweep (fleet + conjunction + regime
+   * + strategist). Kept as the compatibility floor until SSA domain-config
+   * injects its own `fallbackPlan` (Task 1.3). Phase 5 removes this body.
    */
-  private fallbackPlan(query: string): DAGPlan {
+  private legacyFallbackPlan(query: string): DAGPlan {
     return {
       intent: query,
       complexity: "moderate",
