@@ -165,6 +165,7 @@ import { SatelliteSweepChatController } from "./controllers/satellite-sweep-chat
 import { buildCortexDataProvider } from "./agent/ssa/cortex-data-provider";
 import { buildSsaDomainConfig } from "./agent/ssa/domain-config";
 import { SsaEntityCatalogAdapter } from "./agent/ssa/ssa-entity-catalog.adapter";
+import { SsaSourceFetcherAdapter } from "./agent/ssa/ssa-source-fetcher.adapter";
 
 import type { AppServices } from "./routes";
 import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
@@ -261,6 +262,7 @@ export async function buildContainer(
     domainConfig: buildSsaDomainConfig(),
     webSearch,
     entityCatalog: new SsaEntityCatalogAdapter(db),
+    sourceFetcher: new SsaSourceFetcherAdapter(),
   });
 
   // ─── Sweep SSA port wiring (Plan 1 Task 3.1) ─────────────────────

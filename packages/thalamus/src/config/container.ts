@@ -31,6 +31,8 @@ import { ResearchEdgeRepository } from "../repositories/research-edge.repository
 import { VoyageEmbedder } from "../utils/voyage-embedder";
 import type { EntityCatalogPort } from "../ports/entity-catalog.port";
 import { NoopEntityCatalog } from "../entities/noop-entity-catalog";
+import type { SourceFetcherPort } from "../ports/source-fetcher.port";
+import { NoopSourceFetcher } from "../entities/noop-source-fetcher";
 
 export interface ThalamusContainer {
   thalamusService: ThalamusService;
@@ -77,6 +79,12 @@ export interface BuildThalamusOpts {
    * composition root (e.g. `SsaEntityCatalogAdapter` for SSA).
    */
   entityCatalog?: EntityCatalogPort;
+  /**
+   * Domain-owned source fetcher adapter. Defaults to `NoopSourceFetcher`
+   * (returns empty — StandardStrategy falls through to SQL + optional
+   * web-search only). SSA ships an adapter over its fetcher registry.
+   */
+  sourceFetcher?: SourceFetcherPort;
 }
 
 export function buildThalamusContainer(
@@ -88,6 +96,7 @@ export function buildThalamusContainer(
   const findingRepo = new ResearchFindingRepository(db);
   const edgeRepo = new ResearchEdgeRepository(db);
   const entityCatalog = opts.entityCatalog ?? new NoopEntityCatalog();
+  const sourceFetcher = opts.sourceFetcher ?? new NoopSourceFetcher();
   const embedder = new VoyageEmbedder(opts.voyageApiKey);
 
   const registry = new CortexRegistry(opts.skillsDir);
@@ -100,7 +109,12 @@ export function buildThalamusContainer(
   // (catch-all). First `canHandle` match wins.
   const strategies: CortexExecutionStrategy[] = opts.strategies ?? [
     new StrategistStrategy(domainConfig),
-    new StandardStrategy(opts.dataProvider, domainConfig, webSearch),
+    new StandardStrategy(
+      opts.dataProvider,
+      domainConfig,
+      webSearch,
+      sourceFetcher,
+    ),
   ];
 
   const executor = new CortexExecutor(registry, strategies);

@@ -19,9 +19,6 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 vi.mock("../src/cortices/cortex-llm", () => ({
   analyzeCortexData: vi.fn(),
 }));
-vi.mock("../src/cortices/sources", () => ({
-  fetchSourcesForCortex: vi.fn(async () => []),
-}));
 vi.mock("../src/transports/llm-chat", () => ({
   createLlmTransport: vi.fn(() => ({
     chat: vi.fn(async () => ({ content: "" })),
@@ -34,6 +31,10 @@ import { noopDomainConfig } from "../src/cortices/types";
 import { StandardStrategy } from "../src/cortices/strategies/standard-strategy";
 import { StrategistStrategy } from "../src/cortices/strategies/strategist-strategy";
 import { NullWebSearchAdapter } from "../src/transports/openai-web-search.adapter";
+import type {
+  SourceFetcherPort,
+  SourceResult,
+} from "../src/ports/source-fetcher.port";
 import {
   ResearchCortex,
   ResearchFindingType,
@@ -91,10 +92,19 @@ const testDomainConfig = {
 // Strategist first (specialised), Standard last (catch-all). Empty data
 // provider — tests that exercise SQL helpers point the skill at a helper
 // name absent from the map, exercising the "no data provider mapped" path.
-function buildTestStrategies() {
+function buildTestStrategies(
+  sourceFetcher: SourceFetcherPort = {
+    fetchForCortex: async () => [] as SourceResult[],
+  },
+) {
   return [
     new StrategistStrategy(testDomainConfig),
-    new StandardStrategy({}, testDomainConfig, new NullWebSearchAdapter()),
+    new StandardStrategy(
+      {},
+      testDomainConfig,
+      new NullWebSearchAdapter(),
+      sourceFetcher,
+    ),
   ];
 }
 
@@ -158,17 +168,28 @@ describe("SPEC-TH-003 AC-1 / AC-3 — nominal execution normalises findings", ()
     } as never);
 
     // Make external sources non-empty so the executor reaches the LLM path.
-    const sources = await import("../src/cortices/sources");
-    vi.mocked(sources.fetchSourcesForCortex).mockResolvedValue([
-      { type: "celestrak", source: "test", url: "x", data: { a: 1 } },
-    ] as never);
+    const sourceFetcher: SourceFetcherPort = {
+      fetchForCortex: async () => [
+        {
+          type: "celestrak",
+          source: "test",
+          url: "x",
+          data: { a: 1 },
+          fetchedAt: new Date().toISOString(),
+          latencyMs: 0,
+        },
+      ],
+    };
 
     const registry = fakeRegistry({
       catalog: {
         header: { name: "catalog", description: "", sqlHelper: "none", params: {} },
       },
     });
-    const executor = new CortexExecutor(registry, buildTestStrategies());
+    const executor = new CortexExecutor(
+      registry,
+      buildTestStrategies(sourceFetcher),
+    );
 
     const out = await executor.execute("catalog", {
       query: "screen conjunctions",
@@ -241,7 +262,24 @@ describe("SPEC-TH-003 AC-5 — helper throw is swallowed, executor keeps going",
         },
       },
     });
-    const executor = new CortexExecutor(registry, buildTestStrategies());
+    // Provide 1 source row so DATA is non-empty — the strategy's
+    // "data-gap" meta-finding emits only when DATA was non-empty.
+    const sourceFetcher: SourceFetcherPort = {
+      fetchForCortex: async () => [
+        {
+          type: "celestrak",
+          source: "test",
+          url: "x",
+          data: { a: 1 },
+          fetchedAt: new Date().toISOString(),
+          latencyMs: 0,
+        },
+      ],
+    };
+    const executor = new CortexExecutor(
+      registry,
+      buildTestStrategies(sourceFetcher),
+    );
 
     const promise = executor.execute("catalog", {
       query: "screen",
