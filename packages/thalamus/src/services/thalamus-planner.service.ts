@@ -14,8 +14,7 @@ import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJson } from "../utils/llm-json-parser";
 import type { CortexRegistry } from "../cortices/registry";
 import type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
-import { buildPlannerSystemPrompt } from "../prompts";
-import { DAEMON_DAGS as DEFAULT_DAEMON_DAGS } from "../config/daemon-dags.config";
+import { buildGenericPlannerSystemPrompt } from "../prompts";
 import {
   getPlannerConfig,
   getCortexConfig,
@@ -32,11 +31,12 @@ export type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
  * drops those legacy defaults once SSA domain-config injects both.
  */
 export interface PlannerConfig {
-  /** Daemon-trigger DAGs. Defaults to the legacy SSA map. */
+  /** Daemon-trigger DAGs. Empty object by default; domains inject their
+   *  own map (e.g. SSA_DAEMON_DAGS from apps/console-api/src/agent/ssa/daemon-dags.ts). */
   daemonDags?: Record<string, DAGPlan>;
   /** Cortices requiring a userId in params (fleet-scoped work). */
   userScopedCortices?: Set<string>;
-  /** App-owned system-prompt builder. Defaults to `buildPlannerSystemPrompt`. */
+  /** App-owned system-prompt builder. Defaults to the generic prompt. */
   plannerPrompt?: (input: {
     headers: string;
     cortexNames: readonly string[];
@@ -44,7 +44,7 @@ export interface PlannerConfig {
   /** App-owned fallback DAG for empty/failed plans. */
   fallbackPlan?: (query: string) => DAGPlan;
   /** Flat list of cortices used to synthesize a fallback DAG when no
-   *  `fallbackPlan` is provided. Higher priority than the legacy default. */
+   *  `fallbackPlan` is provided. */
   fallbackCortices?: string[];
 }
 
@@ -83,9 +83,10 @@ export class ThalamusPlanner {
     private registry: CortexRegistry,
     config: PlannerConfig = {},
   ) {
-    this.daemonDags = config.daemonDags ?? DEFAULT_DAEMON_DAGS;
+    this.daemonDags = config.daemonDags ?? {};
     this.userScopedCortices = config.userScopedCortices ?? new Set();
-    this.plannerPromptFn = config.plannerPrompt ?? buildPlannerSystemPrompt;
+    this.plannerPromptFn =
+      config.plannerPrompt ?? buildGenericPlannerSystemPrompt;
     this.injectedFallbackPlan = config.fallbackPlan;
     this.fallbackCortices = config.fallbackCortices ?? [];
   }
@@ -109,18 +110,15 @@ export class ThalamusPlanner {
    */
   resolveFallbackPlan(query: string): DAGPlan {
     if (this.injectedFallbackPlan) return this.injectedFallbackPlan(query);
-    if (this.fallbackCortices.length > 0) {
-      return {
-        intent: query,
-        complexity: "moderate",
-        nodes: this.fallbackCortices.map((cortex) => ({
-          cortex,
-          params: {},
-          dependsOn: [] as string[],
-        })),
-      };
-    }
-    return this.legacyFallbackPlan(query);
+    return {
+      intent: query,
+      complexity: "moderate",
+      nodes: this.fallbackCortices.map((cortex) => ({
+        cortex,
+        params: {},
+        dependsOn: [] as string[],
+      })),
+    };
   }
 
   /**
@@ -331,35 +329,6 @@ export class ThalamusPlanner {
     }));
   }
 
-  /**
-   * Legacy fallback: broad 4-cortex SSA sweep (fleet + conjunction + regime
-   * + strategist). Kept as the compatibility floor until SSA domain-config
-   * injects its own `fallbackPlan` (Task 1.3). Phase 5 removes this body.
-   */
-  private legacyFallbackPlan(query: string): DAGPlan {
-    return {
-      intent: query,
-      complexity: "moderate",
-      nodes: [
-        { cortex: "fleet_analyst", params: { limit: 100 }, dependsOn: [] },
-        { cortex: "conjunction_analysis", params: { window: "30d" }, dependsOn: [] },
-        {
-          cortex: "regime_profiler",
-          params: { focus: "underexplored" },
-          dependsOn: [],
-        },
-        {
-          cortex: "strategist",
-          params: {},
-          dependsOn: [
-            "fleet_analyst",
-            "conjunction_analysis",
-            "regime_profiler",
-          ],
-        },
-      ],
-    };
-  }
 }
 
 /**

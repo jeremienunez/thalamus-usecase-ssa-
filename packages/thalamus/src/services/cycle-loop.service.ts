@@ -7,7 +7,6 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import { ResearchEntityType } from "@interview/shared/enum";
 import type { IterationBudget } from "../cortices/config";
 import type { CortexFinding } from "../cortices/types";
 import type { ThalamusDAGExecutor } from "./thalamus-executor.service";
@@ -266,7 +265,7 @@ export function buildCycleVerification(
   if (matches(reflexionText, /\b(contradict|inconsisten|conflict)\b/i)) {
     reasonCodes.add("contradiction_detected");
   }
-  if (matches(reflexionText, /\b(telemetry|classification|operator|country|mass|platform|catalog|missing|gap|coverage)\b/i)) {
+  if (matches(reflexionText, /\b(missing|gap|coverage|catalog)\b/i)) {
     reasonCodes.add("data_gap");
   }
 
@@ -278,30 +277,25 @@ export function buildCycleVerification(
     if (matches(findingText, /\b(30 ?jours|30-day|30 day|week|weeks|days)\b/i)) {
       reasonCodes.add("horizon_insufficient");
     }
-    if (matches(findingText, /\b(missing|telemetry|classification|operator|country|mass|platform|catalog|coverage)\b/i)) {
+    if (matches(findingText, /\b(missing|gap|coverage|catalog)\b/i)) {
       reasonCodes.add("data_gap");
     }
 
+    // Every edge is a verification target. Domain decides via its own
+    // cortex whether a specific entity type is worth surfacing — kernel
+    // stays agnostic over SSA/threat-intel/etc. vocabulary.
     for (const edge of finding.edges) {
-      if (
-        edge.entityType === ResearchEntityType.ConjunctionEvent ||
-        edge.entityType === ResearchEntityType.Satellite ||
-        edge.entityType === ResearchEntityType.Operator ||
-        edge.entityType === ResearchEntityType.OperatorCountry ||
-        edge.entityType === ResearchEntityType.Finding
-      ) {
-        pushVerificationTarget(
-          targetKeySet,
-          targetHints,
-          {
-            entityType: edge.entityType,
-            entityId: BigInt(edge.entityId),
-            sourceCortex: finding.sourceCortex ?? null,
-            sourceTitle: finding.title,
-            confidence: finding.confidence,
-          },
-        );
-      }
+      pushVerificationTarget(
+        targetKeySet,
+        targetHints,
+        {
+          entityType: edge.entityType,
+          entityId: BigInt(edge.entityId),
+          sourceCortex: finding.sourceCortex ?? null,
+          sourceTitle: finding.title,
+          confidence: finding.confidence,
+        },
+      );
     }
   }
 

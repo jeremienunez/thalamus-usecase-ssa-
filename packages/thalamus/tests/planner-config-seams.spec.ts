@@ -46,17 +46,12 @@ describe("ThalamusPlanner.resolveFallbackPlan — selection order", () => {
     expect(plan.nodes.every((n) => n.dependsOn.length === 0)).toBe(true);
   });
 
-  it("falls back to the legacy SSA pipeline when neither fallbackPlan nor fallbackCortices provided", () => {
-    // This is the compatibility floor. Task 5 removes the legacy SSA defaults
-    // once SSA domain-config injects fallbackPlan.
+  it("returns an empty DAG when neither fallbackPlan nor fallbackCortices provided", () => {
+    // Kernel default is empty — domains must inject their own fallback.
     const planner = new ThalamusPlanner(mkRegistry());
     const plan = planner.resolveFallbackPlan("q");
-    expect(plan.nodes.map((n) => n.cortex)).toEqual([
-      "fleet_analyst",
-      "conjunction_analysis",
-      "regime_profiler",
-      "strategist",
-    ]);
+    expect(plan.intent).toBe("q");
+    expect(plan.nodes).toEqual([]);
   });
 });
 
@@ -70,15 +65,14 @@ describe("ThalamusPlanner.buildSystemPrompt — selection order", () => {
     expect(out).toBe("CUSTOM:1:H");
   });
 
-  it("falls back to the legacy SSA prompt when config.plannerPrompt absent", () => {
-    // Compatibility floor. Task 5 replaces this default with the generic
-    // prompt once SSA injects its own via domain-config.
+  it("falls back to the generic prompt (no SSA vocabulary) when config.plannerPrompt absent", () => {
     const planner = new ThalamusPlanner(mkRegistry());
     const out = planner.buildSystemPrompt({
-      headers: "fleet_analyst(): …",
-      cortexNames: ["fleet_analyst"],
+      headers: "some_cortex(): …",
+      cortexNames: ["some_cortex"],
     });
-    expect(out).toMatch(/SSA|Space Situational Awareness/);
-    expect(out).toContain("fleet_analyst");
+    expect(out).not.toMatch(/SSA|Space Situational Awareness|NORAD|fleet/i);
+    expect(out).toContain("some_cortex");
+    expect(out).toContain("DAG");
   });
 });
