@@ -17,6 +17,8 @@ import {
 import { SSA_DAEMON_DAGS } from "./daemon-dags";
 import { ssaWebSearchPrompt } from "./web-search-prompt";
 import { preSummarize } from "./pre-summarize";
+import { buildSsaPlannerSystemPrompt } from "../../prompts/planner-ssa.prompt";
+import { ssaFallbackPlan } from "./fallback-plan";
 
 /**
  * SSA-specific finding / edge vocabulary. Swapping this list to another
@@ -84,5 +86,8 @@ export function buildSsaDomainConfig(): DomainConfig {
     preSummarize,
     sourcingRules: SSA_SOURCING_RULES,
     entityTypes: SSA_ENTITY_TYPES,
+    plannerPrompt: buildSsaPlannerSystemPrompt,
+    fallbackPlan: ssaFallbackPlan,
+    synthesisCortexName: "strategist",
   };
 }
