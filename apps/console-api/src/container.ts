@@ -119,6 +119,11 @@ import { IntentClassifier } from "./services/intent-classifier.service";
 import { ChatReplyService } from "./services/chat-reply.service";
 import { CycleStreamPump } from "./services/cycle-stream-pump.service";
 import { CycleSummariser } from "./services/cycle-summariser.service";
+import { ReplFollowUpService } from "./services/repl-followup.service";
+import {
+  SsaReplFollowUpExecutor,
+  SsaReplFollowUpPolicy,
+} from "./agent/ssa/followup";
 import { thalamusLlmTransportFactory } from "./services/llm-transport.adapter";
 import { ReplTurnService } from "./services/repl-turn.service";
 import { SweepSuggestionsService } from "./services/sweep-suggestions.service";
@@ -427,13 +432,6 @@ export async function buildContainer(
   const chatReplyService = new ChatReplyService(llmFactory);
   const cycleStreamPump = new CycleStreamPump();
   const cycleSummariser = new CycleSummariser(llmFactory);
-  const replChat = new ReplChatService(
-    thalamus,
-    intentClassifier,
-    chatReplyService,
-    cycleStreamPump,
-    cycleSummariser,
-  );
 
   const simGodChannelService = new SimGodChannelService(
     simRunRepo,
@@ -458,6 +456,47 @@ export async function buildContainer(
     swarmRepo: simSwarmRepo,
     embed: thalamus.embedder.embedQuery.bind(thalamus.embedder),
   });
+  const replFollowUpDeps = {
+    thalamusService: thalamus.thalamusService,
+    findingRepo: thalamus.findingRepo,
+    edgeRepo,
+    sim: {
+      launcher: {
+        startTelemetry: (opts: { satelliteId: number; fishCount?: number }) =>
+          startTelemetrySwarm(
+            { satelliteRepo, swarmService: sweep.sim!.swarmService },
+            opts,
+          ),
+        startPc: (opts: { conjunctionId: number; fishCount?: number }) =>
+          startPcEstimatorSwarm(
+            { conjunctionRepo, swarmService: sweep.sim!.swarmService },
+            opts,
+          ),
+      },
+      swarm: simSwarmService,
+    },
+    sweep: {
+      nanoSweepService: sweep.nanoSweepService,
+    },
+  };
+  const replFollowUpPolicy = new SsaReplFollowUpPolicy(replFollowUpDeps);
+  const replFollowUpExecutor = new SsaReplFollowUpExecutor(
+    replFollowUpDeps,
+    cycleStreamPump,
+    cycleSummariser,
+  );
+  const replFollowUps = new ReplFollowUpService(
+    replFollowUpPolicy,
+    replFollowUpExecutor,
+  );
+  const replChat = new ReplChatService(
+    thalamus,
+    intentClassifier,
+    chatReplyService,
+    cycleStreamPump,
+    cycleSummariser,
+    replFollowUps,
+  );
 
   // Satellite sweep chat — per-satellite LLM chat with SSE streaming + HITL
   // finding extraction. Consumes stubbed Viz/Satellite services + dedicated

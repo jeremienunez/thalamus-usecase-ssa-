@@ -27,6 +27,7 @@ import {
 import type { ResearchGraphService } from "./research-graph.service";
 import type {
   ResearchCycle,
+  ResearchCycleRunResult,
   NewResearchCycle,
 } from "../types/research.types";
 import type { ThalamusPlanner, DAGPlan } from "./thalamus-planner.service";
@@ -76,7 +77,7 @@ export class ThalamusService {
    * Run a full research cycle: plan → loop (execute + reflect) → store.
    * Returns the cycle record with findings count.
    */
-  async runCycle(input: RunCycleInput): Promise<ResearchCycle> {
+  async runCycle(input: RunCycleInput): Promise<ResearchCycleRunResult> {
     const cycleStartedAt = Date.now();
     stepLog(logger, "cycle", "start", {
       query: input.query,
@@ -146,7 +147,8 @@ export class ThalamusService {
       );
 
       // 4. Run recursive research loop
-      const { allFindings, totalCost, iterations } = await this.cycleLoop.run(
+      const { allFindings, totalCost, iterations, verification } =
+        await this.cycleLoop.run(
         plan,
         cycle.id,
         { maxIter, maxCost, budget },
@@ -198,7 +200,10 @@ export class ThalamusService {
       });
 
       // Refresh cycle with updated counts
-      return (await this.cycleRepo.findById(cycle.id))!;
+      return {
+        ...(await this.cycleRepo.findById(cycle.id))!,
+        verification,
+      };
     } catch (err) {
       await this.cycleRepo.updateStatus(cycle.id, ResearchCycleStatus.Failed, {
         error: err instanceof Error ? err.message : String(err),
@@ -216,7 +221,7 @@ export class ThalamusService {
   /**
    * Run daemon job by name (predefined DAG, no reflexion).
    */
-  async runDaemonJob(jobName: string): Promise<ResearchCycle> {
+  async runDaemonJob(jobName: string): Promise<ResearchCycleRunResult> {
     return this.runCycle({
       query: `Daemon job: ${jobName}`,
       triggerType: ResearchCycleTrigger.Daemon,

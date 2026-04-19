@@ -23,6 +23,18 @@ export interface AuditCycleContext {
    * Batch / wave limit passed by the caller. Pack decides how to honor it.
    */
   limit: number;
+
+  /**
+   * Optional targeted follow-up scope. Used by REPL verification children to
+   * constrain the audit wave to a specific entity / hypothesis.
+   */
+  target?: {
+    entityType?: string;
+    entityIds?: string[];
+    columnHints?: string[];
+    reasonCodes?: string[];
+    parentCycleId?: string;
+  };
 }
 
 export interface AuditCandidate {

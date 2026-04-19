@@ -130,12 +130,21 @@ export class SsaAuditProvider implements DomainAuditProvider {
 
   async runAudit(ctx: AuditCycleContext): Promise<AuditCandidate[]> {
     const cfg = await this.config.get();
+    const targetOperatorCountryIds = parseTargetOperatorCountryIds(ctx);
 
     if (ctx.mode === "nullScan") {
-      return this.nullScan(ctx.limit, cfg.nullScanMaxIdsPerSuggestion);
+      return this.nullScan(
+        ctx.limit,
+        cfg.nullScanMaxIdsPerSuggestion,
+        targetOperatorCountryIds,
+        ctx.target?.columnHints,
+      );
     }
 
-    const operatorCountries = await this.gatherOperatorCountryData(ctx.limit);
+    const operatorCountries = await this.gatherOperatorCountryData(
+      ctx.limit,
+      targetOperatorCountryIds,
+    );
     logger.info(
       { cycleId: ctx.cycleId, count: operatorCountries.length, mode: ctx.mode },
       "ssa audit: operator-countries gathered",
@@ -195,10 +204,22 @@ export class SsaAuditProvider implements DomainAuditProvider {
   private async nullScan(
     maxOperatorCountries: number | undefined,
     maxIdsPerSuggestion: number,
+    targetOperatorCountryIds?: bigint[],
+    columnHints?: string[],
   ): Promise<AuditCandidate[]> {
-    const rows = await this.deps.satelliteRepo.nullScanByColumn({
-      maxOperatorCountries,
-    });
+    const rows = (await this.deps.satelliteRepo.nullScanByColumn({
+      maxOperatorCountries:
+        targetOperatorCountryIds && targetOperatorCountryIds.length > 0
+          ? 500
+          : maxOperatorCountries,
+      columns:
+        columnHints && columnHints.length > 0 ? columnHints : undefined,
+    })).filter((row) =>
+      targetOperatorCountryIds && targetOperatorCountryIds.length > 0
+        ? row.operatorCountryId !== null &&
+          targetOperatorCountryIds.some((id) => id === row.operatorCountryId)
+        : true,
+    );
     const out: AuditCandidate[] = [];
     for (const r of rows) {
       const satelliteIds = await this.deps.satelliteRepo
@@ -251,12 +272,19 @@ export class SsaAuditProvider implements DomainAuditProvider {
 
   private async gatherOperatorCountryData(
     maxOperatorCountries?: number,
+    targetOperatorCountryIds?: bigint[],
   ): Promise<OperatorCountryBatch["operatorCountries"]> {
     const allStats =
       await this.deps.satelliteRepo.getOperatorCountrySweepStats();
+    const filtered =
+      targetOperatorCountryIds && targetOperatorCountryIds.length > 0
+        ? allStats.filter((row) =>
+            targetOperatorCountryIds.some((id) => id === row.operatorCountryId),
+          )
+        : allStats;
     const limited = maxOperatorCountries
-      ? allStats.slice(0, maxOperatorCountries)
-      : allStats;
+      ? filtered.slice(0, maxOperatorCountries)
+      : filtered;
     return limited.map((a) => ({
       id: a.operatorCountryId,
       name: a.operatorCountryName,
@@ -384,6 +412,20 @@ export class SsaAuditProvider implements DomainAuditProvider {
         };
       });
   }
+}
+
+function parseTargetOperatorCountryIds(ctx: AuditCycleContext): bigint[] | undefined {
+  if (ctx.target?.entityType !== "operator_country") return undefined;
+  const ids = (ctx.target.entityIds ?? [])
+    .map((id) => {
+      try {
+        return BigInt(id);
+      } catch {
+        return null;
+      }
+    })
+    .filter((id): id is bigint => id !== null);
+  return ids.length > 0 ? ids : undefined;
 }
 
 function toPastFeedback(entry: SuggestionFeedbackRow): PastFeedback {

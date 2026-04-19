@@ -39,9 +39,21 @@ import {
   fieldKindOf,
 } from "@interview/shared/config";
 import { createLogger } from "@interview/shared/observability";
-import type { RuntimeConfigRepository } from "../repositories/runtime-config.repository";
 
 const logger = createLogger("runtime-config");
+
+/**
+ * Port — storage backend for runtime config. The concrete
+ * `RuntimeConfigRepository` (Redis-backed) satisfies this by duck typing
+ * and is wired at the container level. Keeping the service ignorant of
+ * the repo concrete type upholds the "services never import
+ * repositories" rule (DIP).
+ */
+export interface RuntimeConfigStorePort {
+  read(domain: string): Promise<Record<string, string>>;
+  write(domain: string, patch: Record<string, string>): Promise<void>;
+  clear(domain: string): Promise<void>;
+}
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -117,7 +129,7 @@ export class RuntimeConfigService implements RuntimeConfigRegistrar {
     DomainSpec<RuntimeConfigDomain>
   >();
 
-  constructor(private readonly repo: RuntimeConfigRepository) {}
+  constructor(private readonly repo: RuntimeConfigStorePort) {}
 
   registerDomain<D extends RuntimeConfigDomain>(
     domain: D,

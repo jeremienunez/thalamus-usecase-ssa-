@@ -39,6 +39,7 @@ import { thalamusLlmTransportFactory } from "../../../src/services/llm-transport
 
 function buildReplChat(
   deps: ConstructorParameters<typeof ReplChatService>[0],
+  followUps?: ConstructorParameters<typeof ReplChatService>[5],
 ): ReplChatService {
   const factory = thalamusLlmTransportFactory;
   return new ReplChatService(
@@ -47,6 +48,7 @@ function buildReplChat(
     new ChatReplyService(factory),
     new CycleStreamPump(),
     new CycleSummariser(factory),
+    followUps,
   );
 }
 
@@ -172,5 +174,67 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       summary: "Pc=1.2e-08 for AQUA and BEESAT-1",
       findingType: "alert",
     });
+  });
+
+  it("emits followup.plan after the parent summary when a follow-up service is wired", async () => {
+    const runCycle = vi.fn(async () => ({
+      id: "cyc:42",
+      verification: {
+        needsVerification: true,
+        reasonCodes: ["needs_monitoring"],
+        confidence: 0.7,
+        targetHints: [],
+      },
+    }));
+
+    const followUps = {
+      plan: vi.fn(async () => ({
+        autoLaunched: [
+          {
+            followupId: "fu:1",
+            kind: "deep_research_30d",
+            auto: true,
+            title: "Extend verification horizon to 30 days",
+            rationale: "Needs monitoring",
+            score: 0.8,
+            gateScore: 0.7,
+            costClass: "medium",
+            reasonCodes: ["needs_monitoring"],
+            target: null,
+          },
+        ],
+        proposed: [],
+        dropped: [],
+      })),
+      async *executeAutoLaunched() {
+        return;
+      },
+    } as const;
+
+    const svc = buildReplChat(
+      {
+        thalamusService: { runCycle } as never,
+        findingRepo: {
+          findByCycleId: async () => [
+            {
+              id: "f:1",
+              title: "Conjonction serrée",
+              summary: "Pc=1.2e-08 for AQUA and BEESAT-1",
+              cortex: "catalog",
+              findingType: "alert",
+              urgency: "medium",
+              confidence: 0.82,
+            },
+          ],
+        },
+      },
+      followUps as never,
+    );
+
+    const events = await drain(svc.handleStream("scan conjonctions", 7n));
+    expect(events.map((evt) => evt.event)).toEqual(
+      expect.arrayContaining(["summary.complete", "followup.plan", "done"]),
+    );
+    expect(followUps.plan).toHaveBeenCalledOnce();
   });
 });

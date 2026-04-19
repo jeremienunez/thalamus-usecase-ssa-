@@ -7,12 +7,20 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
+import { ResearchEntityType } from "@interview/shared/enum";
 import type { IterationBudget } from "../cortices/config";
 import type { CortexFinding } from "../cortices/types";
 import type { ThalamusDAGExecutor } from "./thalamus-executor.service";
-import type { ThalamusReflexion } from "./thalamus-reflexion.service";
+import type {
+  ReflexionResult,
+  ThalamusReflexion,
+} from "./thalamus-reflexion.service";
 import type { ThalamusPlanner, DAGPlan } from "./thalamus-planner.service";
 import type { StopCriteriaEvaluator } from "./stop-criteria.service";
+import type {
+  ResearchCycleVerification,
+  ResearchVerificationTargetHint,
+} from "../types/research.types";
 
 const logger = createLogger("cycle-loop");
 
@@ -39,6 +47,7 @@ export interface CycleLoopResult {
   totalCost: number;
   iterations: number;
   finalPlan: DAGPlan;
+  verification: ResearchCycleVerification;
 }
 
 export class CycleLoopRunner {
@@ -67,6 +76,10 @@ export class CycleLoopRunner {
     let consecutiveZeroRuns = 0;
     let consecutiveIdenticalGaps = 0;
     let lastGapSignature: string | null = null;
+    let lastReflexion: ReflexionResult | null = null;
+    let lowConfidenceRounds = 0;
+    let replanCount = 0;
+    let stopReason = "completed";
     let currentPlan = initialPlan;
 
     while (iteration < maxIter) {
@@ -108,6 +121,7 @@ export class CycleLoopRunner {
       // 3. Track consecutive zero-finding runs
       if (kept.length === 0) {
         consecutiveZeroRuns++;
+        if (newFindings.length > 0) lowConfidenceRounds++;
       } else {
         consecutiveZeroRuns = 0;
       }
@@ -140,6 +154,7 @@ export class CycleLoopRunner {
       }
 
       if (decision.stop) {
+        stopReason = decision.reason;
         logger.info({ iteration, reason: decision.reason }, "Stopping loop");
         break;
       }
@@ -157,14 +172,17 @@ export class CycleLoopRunner {
             maxIterations: maxIter,
           },
         );
+        lastReflexion = reflexionResult;
 
         if (!reflexionResult.replan) {
+          stopReason = "reflexion_sufficient";
           logger.info(
             { iteration, notes: reflexionResult.notes },
             "Reflexion: sufficient",
           );
           break;
         }
+        replanCount++;
 
         // Plateau detection — if reflexion keeps asking for the same gaps
         // two rounds in a row, the next iteration will not help.
@@ -196,6 +214,129 @@ export class CycleLoopRunner {
       totalCost,
       iterations: iteration,
       finalPlan: currentPlan,
+      verification: buildCycleVerification({
+        allFindings,
+        finalReflexion: lastReflexion,
+        lowConfidenceRounds,
+        replanCount,
+        stopReason,
+      }),
     };
   }
+}
+
+interface VerificationBuildInput {
+  allFindings: CortexFinding[];
+  finalReflexion: ReflexionResult | null;
+  lowConfidenceRounds: number;
+  replanCount: number;
+  stopReason: string;
+}
+
+export function buildCycleVerification(
+  input: VerificationBuildInput,
+): ResearchCycleVerification {
+  const reasonCodes = new Set<string>();
+  const targetKeySet = new Set<string>();
+  const targetHints: ResearchVerificationTargetHint[] = [];
+  const avgConfidence =
+    input.allFindings.length === 0
+      ? 0
+      : input.allFindings.reduce((sum, f) => sum + f.confidence, 0) /
+        input.allFindings.length;
+  const confidence = clamp01(
+    input.finalReflexion?.overallConfidence ?? avgConfidence,
+  );
+
+  if (input.replanCount > 0) reasonCodes.add("replan_requested");
+  if (input.lowConfidenceRounds > 0) reasonCodes.add("low_confidence_round");
+  if (input.stopReason === "cost-exhausted") reasonCodes.add("budget_exhausted");
+  if (input.stopReason === "max-iterations") reasonCodes.add("iteration_limit_reached");
+  if (confidence < 0.65) reasonCodes.add("low_overall_confidence");
+
+  const gapText = (input.finalReflexion?.gaps ?? []).join(" | ");
+  const notesText = input.finalReflexion?.notes ?? "";
+  const reflexionText = `${gapText} | ${notesText}`;
+  if (matches(reflexionText, /\b(horizon|window|30 ?jours|30-day|30 day|week|weeks|days)\b/i)) {
+    reasonCodes.add("horizon_insufficient");
+  }
+  if (matches(reflexionText, /\b(monitor|surveil|follow[- ]?up|continue|corroborat|widen|verify|recheck)\b/i)) {
+    reasonCodes.add("needs_monitoring");
+  }
+  if (matches(reflexionText, /\b(contradict|inconsisten|conflict)\b/i)) {
+    reasonCodes.add("contradiction_detected");
+  }
+  if (matches(reflexionText, /\b(telemetry|classification|operator|country|mass|platform|catalog|missing|gap|coverage)\b/i)) {
+    reasonCodes.add("data_gap");
+  }
+
+  for (const finding of input.allFindings) {
+    const findingText = `${finding.title} ${finding.summary}`;
+    if (matches(findingText, /\b(monitor|surveil|follow[- ]?up|continue|corroborat|widen)\b/i)) {
+      reasonCodes.add("needs_monitoring");
+    }
+    if (matches(findingText, /\b(30 ?jours|30-day|30 day|week|weeks|days)\b/i)) {
+      reasonCodes.add("horizon_insufficient");
+    }
+    if (matches(findingText, /\b(missing|telemetry|classification|operator|country|mass|platform|catalog|coverage)\b/i)) {
+      reasonCodes.add("data_gap");
+    }
+
+    for (const edge of finding.edges) {
+      if (
+        edge.entityType === ResearchEntityType.ConjunctionEvent ||
+        edge.entityType === ResearchEntityType.Satellite ||
+        edge.entityType === ResearchEntityType.Operator ||
+        edge.entityType === ResearchEntityType.OperatorCountry ||
+        edge.entityType === ResearchEntityType.Finding
+      ) {
+        pushVerificationTarget(
+          targetKeySet,
+          targetHints,
+          {
+            entityType: edge.entityType,
+            entityId: BigInt(edge.entityId),
+            sourceCortex: finding.sourceCortex ?? null,
+            sourceTitle: finding.title,
+            confidence: finding.confidence,
+          },
+        );
+      }
+    }
+  }
+
+  const needsVerification =
+    reasonCodes.size > 0 || targetHints.length > 0;
+
+  return {
+    needsVerification,
+    reasonCodes: [...reasonCodes],
+    targetHints,
+    confidence,
+  };
+}
+
+function pushVerificationTarget(
+  seen: Set<string>,
+  acc: ResearchVerificationTargetHint[],
+  hint: ResearchVerificationTargetHint,
+): void {
+  const key = [
+    hint.entityType ?? "none",
+    hint.entityId?.toString() ?? "none",
+  ].join(":");
+  if (seen.has(key)) return;
+  seen.add(key);
+  acc.push(hint);
+}
+
+function matches(text: string, pattern: RegExp): boolean {
+  return text.trim().length > 0 && pattern.test(text);
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
 }

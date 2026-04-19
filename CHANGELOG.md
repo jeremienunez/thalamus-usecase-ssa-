@@ -4,6 +4,52 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Generic verification contract + SSA-owned REPL follow-ups — 2026-04-19
+
+The REPL follow-up slice was re-cut so package code stays object-pure
+and all SSA semantics remain app-owned.
+
+**Packages are generic again**
+
+- `packages/thalamus/src/types/research.types.ts`
+  - removed `ResearchVerificationKind`
+  - `ResearchVerificationTargetHint` now carries only generic entity
+    hints: `entityType`, `entityId`, `sourceCortex`, `sourceTitle`,
+    `confidence`
+- `packages/thalamus/src/services/cycle-loop.service.ts`
+  - `buildCycleVerification()` no longer emits business follow-up kinds
+  - it emits only `reasonCodes` plus generic entity hints inferred from
+    findings and edges
+- `packages/shared/src/types/repl-stream.ts`
+  - follow-up stream events keep a generic `kind: string`
+  - `ReplFollowUpTarget` no longer exposes `conjunctionId` /
+    `satelliteId`; app-specific refs travel in an opaque `refs` bag
+
+**SSA policy/execution is app-owned**
+
+- `apps/console-api/src/agent/ssa/followup/repl-followup.types.ssa.ts`
+  now defines the local SSA follow-up union:
+  - `deep_research_30d`
+  - `sim_pc_verification`
+  - `sim_telemetry_verification`
+  - `sweep_targeted_audit`
+- `apps/console-api/src/agent/ssa/followup/repl-followup-policy.ssa.ts`
+  maps generic verification signals to SSA follow-ups
+- `apps/console-api/src/agent/ssa/followup/repl-followup-executor.ssa.ts`
+  is the only layer that knows how to interpret sim/sweep refs
+
+**Effect**
+
+- no follow-up business taxonomy leaks from `packages/thalamus`
+- no SSA target fields leak from `packages/shared`
+- `apps/console-api` owns all follow-up semantics, budgeting, and execution
+
+**Verification**
+
+- `pnpm -r typecheck`
+- `pnpm arch:check`
+- `pnpm vitest run packages/thalamus/tests/cycle-verification.spec.ts apps/console-api/tests/unit/services/repl-followup.service.test.ts apps/console-api/tests/unit/services/repl-chat.service.test.ts`
+
 ### Adaptive cortex timeout + cycle budget override + reasoning-token auto-provision — 2026-04-19
 
 Follow-up after observing 3 cortex timeouts on a `gpt-5.4-nano` +

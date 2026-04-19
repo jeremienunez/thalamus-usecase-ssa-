@@ -191,6 +191,26 @@ tracked separately.
 
 ---
 
+## REPL verification / follow-up — 2026-04-19
+
+- [x] **Package de-domainization landed** — `packages/thalamus` now emits
+      only generic verification signals (`reasonCodes` + entity hints),
+      and `packages/shared` no longer exposes SSA-specific follow-up
+      target fields. SSA follow-up kinds live only in
+      `apps/console-api/src/agent/ssa/followup/`.
+- [ ] **Front render of `followup.*` events** — wire the console REPL UI to
+      attach child follow-ups under the parent turn and render
+      `followup.plan`, `followup.started`, `followup.step`,
+      `followup.finding`, `followup.summary`, `followup.done`.
+- [ ] **Live browser SSE sanity check** — record one end-to-end REPL run
+      where the parent summary is emitted first, then child follow-up
+      events, with no stream contract mismatch in the UI.
+- [ ] **Keep the kernel generic** — if follow-up logic expands, extend
+      generic contracts only; do not move SSA policy/execution back into
+      a package unless a second pack genuinely needs the same semantics.
+
+---
+
 ## 🚨 Architecture audit 2026-04-19 — CLAUDE.md breaches
 
 Full details + file:line refs in [docs/refactor/architecture-audit-2026-04-19.md](docs/refactor/architecture-audit-2026-04-19.md). Ordered by impact ÷ effort.
@@ -205,7 +225,15 @@ Full details + file:line refs in [docs/refactor/architecture-audit-2026-04-19.md
   - Fix option A: delete app-parallel repos; route through kernel repos via `ThalamusContainer`.
   - Fix option B (preferred per §1): expose `POST /api/findings`, `PATCH /api/findings/:id/status`, `POST /api/research-edges`; kernel + app + CLI all go through HTTP.
 - [ ] **C2 — refactor `apps/console-api/src/services/sim-promotion.service.ts` (511 L)**. Takes `db: NodePgDatabase<typeof schema>` directly (L52) and does `.insert(researchCycle|researchFinding|researchEdge)` inline. Split into `SwarmOutcomePromoter` + `ModalPromotionComposer` + `TelemetryScalarPromoter`. Inject `CyclesPort`, `FindingsWritePort`, `EdgesWritePort`, `SuggestionsPort`. No raw `db` handle.
-- [ ] **C4 — make thalamus kernel domain-agnostic**. Move `packages/thalamus/src/utils/satellite-entity-patterns.ts`, all `packages/thalamus/src/cortices/sources/fetcher-*.ts`, and `packages/thalamus/src/prompts/opacity-scout.prompt.ts` into `apps/console-api/src/agent/ssa/thalamus-pack/`. Introduce `EntityExtractorPort` in thalamus; inject from console-api at boot (same pattern as `setNanoSwarmProfile`). Replace direct calls in `packages/thalamus/src/explorer/nano-swarm.ts:279,304`.
+- [ ] **C4 — finish thalamus kernel de-domainization**. The REPL verification
+      contract is now generic again; remaining SSA leakage is elsewhere.
+      Move `packages/thalamus/src/utils/satellite-entity-patterns.ts`,
+      all `packages/thalamus/src/cortices/sources/fetcher-*.ts`, and
+      `packages/thalamus/src/prompts/opacity-scout.prompt.ts` into
+      `apps/console-api/src/agent/ssa/thalamus-pack/`. Introduce
+      `EntityExtractorPort` in thalamus; inject from console-api at boot
+      (same pattern as `setNanoSwarmProfile`). Replace direct calls in
+      `packages/thalamus/src/explorer/nano-swarm.ts:279,304`.
 
 ### Important
 

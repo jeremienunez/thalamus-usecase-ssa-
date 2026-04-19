@@ -173,7 +173,7 @@ export class ThalamusPlanner {
    * Order matters: disable first to free budget, then force, then clamp,
    * then mandatory strategist (so it survives the clamp).
    */
-  private applyRuntimeFilters(
+  applyRuntimeFilters(
     nodes: DAGNode[],
     plannerCfg: {
       maxCortices: number;

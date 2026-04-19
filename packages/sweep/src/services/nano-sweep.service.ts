@@ -62,6 +62,13 @@ export class NanoSweepService {
   async sweep(
     limit = 0,
     mode = "dataQuality",
+    target?: {
+      entityType?: string;
+      entityIds?: string[];
+      columnHints?: string[];
+      reasonCodes?: string[];
+      parentCycleId?: string;
+    },
   ): Promise<SweepResult> {
     const cycleId = randomUUID();
     const start = Date.now();
@@ -69,6 +76,7 @@ export class NanoSweepService {
       cycleId,
       mode,
       limit,
+      target,
     });
 
     let stored = 0;

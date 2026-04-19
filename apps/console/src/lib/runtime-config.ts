@@ -65,16 +65,23 @@ export const MODEL_PRESETS: ModelPreset[] = [
       topP: true,
     },
   },
+  // Moonshot K2 family — canonical ids per api.moonshot.ai/v1 docs.
+  // Bare "kimi-k2" is not a valid model id.
   {
-    value: "kimi-k2",
+    value: "kimi-k2.5",
     provider: "kimi",
-    label: "Kimi · K2 (non-thinking)",
-    supports: { maxOutputTokens: true, temperature: true, topP: true },
+    label: "Kimi · K2.5 (thinking toggle, 256k)",
+    supports: {
+      thinking: true,
+      maxOutputTokens: true,
+      temperature: true,
+      topP: true,
+    },
   },
   {
     value: "kimi-k2-thinking",
     provider: "kimi",
-    label: "Kimi · K2-thinking",
+    label: "Kimi · K2-thinking (256k)",
     supports: {
       thinking: true,
       maxOutputTokens: true,
@@ -83,15 +90,27 @@ export const MODEL_PRESETS: ModelPreset[] = [
     },
   },
   {
-    value: "kimi-k2.5",
+    value: "kimi-k2-thinking-turbo",
     provider: "kimi",
-    label: "Kimi · K2.5 (thinking toggle)",
+    label: "Kimi · K2-thinking-turbo (256k, fast)",
     supports: {
       thinking: true,
       maxOutputTokens: true,
       temperature: true,
       topP: true,
     },
+  },
+  {
+    value: "kimi-k2-turbo-preview",
+    provider: "kimi",
+    label: "Kimi · K2 turbo-preview (non-thinking, 256k)",
+    supports: { maxOutputTokens: true, temperature: true, topP: true },
+  },
+  {
+    value: "kimi-k2-0905-preview",
+    provider: "kimi",
+    label: "Kimi · K2 0905-preview (256k)",
+    supports: { maxOutputTokens: true, temperature: true, topP: true },
   },
   {
     value: "MiniMax-M2.7",

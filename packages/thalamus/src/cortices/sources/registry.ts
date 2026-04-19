@@ -42,7 +42,12 @@ export async function fetchSourcesForCortex(
   const fetchers = CORTEX_SOURCE_MAP[cortexName];
   if (!fetchers || fetchers.length === 0) return [];
 
-  const cacheKey = `${cortexName}:${JSON.stringify(params)}`;
+  // JSON.stringify throws on bigint — params sometimes carry bigint ids
+  // (operatorId, noradId) passed through from DB repos. Coerce bigint to
+  // string so the cache key is stable AND the stringify doesn't blow up.
+  const cacheKey = `${cortexName}:${JSON.stringify(params, (_k, v) =>
+    typeof v === "bigint" ? v.toString() : v,
+  )}`;
   const cached = CACHE.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     logger.debug(

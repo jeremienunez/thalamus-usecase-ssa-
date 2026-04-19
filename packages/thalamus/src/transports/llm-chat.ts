@@ -79,10 +79,23 @@ export class LlmChatTransport {
       }
 
       try {
+        // Model override only applies to the preferred provider — when
+        // the chain falls through to a different backend, reusing e.g.
+        // `kimi-k2-turbo-preview` on OpenAI yields a guaranteed 404.
+        // The non-model overrides (reasoning effort, thinking, etc.)
+        // are still forwarded; each provider ignores what it doesn't
+        // natively understand.
+        const isPreferred =
+          !this.config.preferredProvider ||
+          provider.name === this.config.preferredProvider;
+        const overrides = this.config.overrides ?? {};
+        const callOverrides = isPreferred
+          ? overrides
+          : (({ model: _drop, ...rest }) => rest)(overrides);
         const content = await retry(
           () =>
             provider.call(this.config.systemPrompt, userPrompt, {
-              ...(this.config.overrides ?? {}),
+              ...callOverrides,
               enableWebSearch: this.config.enableWebSearch,
             }),
           {

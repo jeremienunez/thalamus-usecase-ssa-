@@ -97,7 +97,7 @@ export const DEFAULT_THALAMUS_PLANNER_CONFIG: ThalamusPlannerConfig = {
   maxCortices: 5,
   mandatoryStrategist: true,
   provider: "kimi",
-  model: "kimi-k2",
+  model: "kimi-k2-turbo-preview",
   callTimeoutMs: 45_000,
   maxCostUsd: 0.5,
   cortexTimeoutMs: 90_000,
@@ -368,16 +368,24 @@ export const MODEL_PRESETS: Array<{
       topP: true,
     },
   },
+  // Moonshot K2 family — canonical ids per
+  // https://api.moonshot.ai/v1 docs. Bare "kimi-k2" is not a valid
+  // model; these 5 ids are the ones the API resolves.
   {
-    value: "kimi-k2",
+    value: "kimi-k2.5",
     provider: "kimi",
-    label: "Kimi · K2 (non-thinking)",
-    supports: { maxOutputTokens: true, temperature: true, topP: true },
+    label: "Kimi · K2.5 (thinking toggle, 256k)",
+    supports: {
+      thinking: true,
+      maxOutputTokens: true,
+      temperature: true,
+      topP: true,
+    },
   },
   {
     value: "kimi-k2-thinking",
     provider: "kimi",
-    label: "Kimi · K2-thinking",
+    label: "Kimi · K2-thinking (256k)",
     supports: {
       thinking: true,
       maxOutputTokens: true,
@@ -386,15 +394,27 @@ export const MODEL_PRESETS: Array<{
     },
   },
   {
-    value: "kimi-k2.5",
+    value: "kimi-k2-thinking-turbo",
     provider: "kimi",
-    label: "Kimi · K2.5 (thinking toggle)",
+    label: "Kimi · K2-thinking-turbo (256k, fast)",
     supports: {
       thinking: true,
       maxOutputTokens: true,
       temperature: true,
       topP: true,
     },
+  },
+  {
+    value: "kimi-k2-turbo-preview",
+    provider: "kimi",
+    label: "Kimi · K2 turbo-preview (non-thinking, 256k)",
+    supports: { maxOutputTokens: true, temperature: true, topP: true },
+  },
+  {
+    value: "kimi-k2-0905-preview",
+    provider: "kimi",
+    label: "Kimi · K2 0905-preview (256k)",
+    supports: { maxOutputTokens: true, temperature: true, topP: true },
   },
   {
     value: "MiniMax-M2.7",

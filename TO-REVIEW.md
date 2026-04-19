@@ -6,6 +6,24 @@ Sister files: [DONE.md](DONE.md) (complete), [TODO.md](TODO.md) (open).
 
 ---
 
+## REPL auto-followups — backend landed, UI pending
+
+- **Shipped**:
+  - `packages/thalamus` returns a generic `verification` block with
+    `needsVerification`, `reasonCodes`, `targetHints`, `confidence`
+  - `packages/shared` streams generic `followup.*` events
+  - `apps/console-api/src/agent/ssa/followup/` owns SSA-specific
+    follow-up policy and execution (`30d`, `sim_pc`, `sim_telemetry`,
+    `sweep_targeted_audit`)
+  - `apps/console-api/src/services/repl-chat.service.ts` emits the
+    parent summary first, then `followup.plan`, then any auto-launched
+    child streams
+- **Missing**:
+  - front consumption/rendering of `followup.*`
+  - one explicit browser sanity-check recorded in docs
+  - broader targeted sweep auto-run beyond the current narrow
+    `operator_country` path
+
 ## Plan 5 — Sim five-layer integration
 
 Spec: [docs/superpowers/plans/2026-04-18-plan5-sim-five-layer.md](docs/superpowers/plans/2026-04-18-plan5-sim-five-layer.md)

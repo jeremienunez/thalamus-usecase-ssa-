@@ -18,6 +18,21 @@ import type {
 } from "@interview/shared/enum";
 
 // ── Cycle ──────────────────────────────────────────────────────────
+export interface ResearchVerificationTargetHint {
+  entityType: ResearchEntityType | null;
+  entityId: bigint | null;
+  sourceCortex: string | null;
+  sourceTitle: string | null;
+  confidence: number | null;
+}
+
+export interface ResearchCycleVerification {
+  needsVerification: boolean;
+  reasonCodes: string[];
+  targetHints: ResearchVerificationTargetHint[];
+  confidence: number;
+}
+
 export interface ResearchCycle {
   id: bigint;
   triggerType: ResearchCycleTrigger;
@@ -31,6 +46,10 @@ export interface ResearchCycle {
   error: string | null;
   startedAt: Date;
   completedAt: Date | null;
+}
+
+export interface ResearchCycleRunResult extends ResearchCycle {
+  verification: ResearchCycleVerification;
 }
 
 export interface NewResearchCycle {

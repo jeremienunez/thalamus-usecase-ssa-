@@ -21,6 +21,7 @@ import type { IntentClassifier } from "./intent-classifier.service";
 import type { ChatReplyService } from "./chat-reply.service";
 import type { CycleStreamPump } from "./cycle-stream-pump.service";
 import type { CycleSummariser } from "./cycle-summariser.service";
+import type { ReplFollowUpService } from "./repl-followup.service";
 
 export interface ThalamusChatDep {
   thalamusService: {
@@ -29,7 +30,21 @@ export interface ThalamusChatDep {
       userId?: bigint;
       triggerType: ResearchCycleTrigger;
       triggerSource: string;
-    }): Promise<{ id: bigint | string }>;
+    }): Promise<{
+      id: bigint | string;
+      verification?: {
+        needsVerification: boolean;
+        reasonCodes: string[];
+        confidence: number;
+        targetHints?: Array<{
+          entityType: string | null;
+          entityId: bigint | string | null;
+          sourceCortex: string | null;
+          sourceTitle: string | null;
+          confidence: number | null;
+        }>;
+      };
+    }>;
   };
   findingRepo: {
     findByCycleId(
@@ -55,6 +70,7 @@ export class ReplChatService {
     private readonly chatReply: ChatReplyService,
     private readonly pump: CycleStreamPump,
     private readonly summariser: CycleSummariser,
+    private readonly followUps?: ReplFollowUpService,
   ) {}
 
   async *handleStream(
@@ -111,13 +127,33 @@ export class ReplChatService {
     // cycle's terminal state ({result, err}). Stop early if the client
     // disconnected — further LLM/cortex work would be pure token waste.
     let cycleResultId: string | bigint = cycleId;
+    let cycleResult:
+      | {
+          id: bigint | string;
+          verification?: {
+            needsVerification: boolean;
+            reasonCodes: string[];
+            confidence: number;
+            targetHints?: Array<{
+              entityType: string | null;
+              entityId: bigint | string | null;
+              sourceCortex: string | null;
+              sourceTitle: string | null;
+              confidence: number | null;
+            }>;
+          };
+        }
+      | null = null;
     let cycleErr: Error | null = null;
     for (;;) {
       if (aborted()) return;
       const next = await pumpGen.next();
       if (next.done === true) {
         cycleErr = next.value.err;
-        if (next.value.result) cycleResultId = next.value.result.id;
+        if (next.value.result) {
+          cycleResult = next.value.result;
+          cycleResultId = next.value.result.id;
+        }
         break;
       }
       const stepData = next.value;
@@ -163,6 +199,34 @@ export class ReplChatService {
       event: "summary.complete",
       data: { text: summary.text, provider: summary.provider },
     };
+
+    if (this.followUps && cycleResult) {
+      const plan = await this.followUps.plan({
+        query,
+        parentCycleId: String(cycleResultId),
+        verification: cycleResult.verification,
+        findings: findings.map(toReplFindingSummaryView),
+      });
+      yield {
+        event: "followup.plan",
+        data: {
+          parentCycleId: String(cycleResultId),
+          autoLaunched: plan.autoLaunched,
+          proposed: plan.proposed,
+          dropped: plan.dropped,
+        },
+      };
+      for await (const evt of this.followUps.executeAutoLaunched({
+        plan,
+        query,
+        userId,
+        parentCycleId: String(cycleResultId),
+        signal,
+      })) {
+        if (aborted()) return;
+        yield evt;
+      }
+    }
 
     yield {
       event: "done",
