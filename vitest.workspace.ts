@@ -72,6 +72,7 @@ export default defineWorkspace([
     },
   },
   "./apps/console-api/vitest.config.ts",
+  "./apps/console/vitest.config.ts",
   {
     resolve: { alias: aliases },
     test: {
