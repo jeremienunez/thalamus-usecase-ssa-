@@ -1,6 +1,6 @@
 ---
 name: debris_forecaster
-description: Emit one grounded debris finding per density row, plus one grounded paper/news finding per content row. Weather and fragmentation rows are context only.
+description: Forecast debris and fragmentation risk by orbital regime — density signals, Kessler precursors, recent breakup events, solar-weather drivers.
 sqlHelper: queryDebrisForecast
 params:
   regimeId: number | null

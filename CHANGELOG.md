@@ -4,6 +4,140 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Runtime config registry + 4 LLM providers + /config admin UI — 2026-04-19
+
+Large session: kernel knobs (planner, cortex, reflexion, sim fish,
+sim swarm, sim embedding) are now runtime-tunable via a single
+polymorphic HTTP endpoint and an admin-facing frontend. LLM transport
+rewired to honour per-call overrides (model, reasoning effort, thinking,
+verbosity, max tokens, temperature) across every provider. MiniMax
+added to the chain. `<think>` leaks closed across all providers.
+
+**Architectural shift — registry pattern (OCP)**
+
+- `RuntimeConfigService` no longer hardcodes a `SCHEMAS` table. Added
+  `registerDomain<D>(spec)` — each package ships its own registrar and
+  wires at boot. Console-api never touches its service when a new
+  domain arrives. `RuntimeConfigRegistrar` port lives in
+  `packages/shared/src/config/types.ts`.
+- Packages (`@interview/thalamus`, `@interview/sweep`) expose
+  `registerThalamusConfigDomains` / `registerSweepConfigDomains` at
+  `packages/*/src/config/register-runtime-config.ts`.
+- Container wires the registrars + per-consumer `ConfigProvider<T>`
+  setters (nano, nanoSwarm, planner, cortex, reflexion, sim fish).
+- `FieldKind` extended to `string | number | boolean | string[] | json`.
+  `FieldSpec` supports `{kind, choices}` for enum fields (UI dropdown).
+
+**6 new config domains (9 total)**
+
+| Domain               | Knobs                                                                                                                                                                                                            | Backed by                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `thalamus.planner`   | 15 fields — cortex caps, mandatory strategist, provider, model, reasoning effort, max output tokens, temperature, verbosity, thinking, reasoning format, reasoning split, max cost USD, forced/disabled cortices | `thalamus-planner.service.ts::applyRuntimeFilters` + `createLlmTransport({preferredProvider, overrides})` |
+| `thalamus.cortex`    | `overrides: Record<cortex, CortexOverride>` with 12 LLM knobs per cortex + `enabled` kill switch                                                                                                                 | `cortex-llm.ts::analyzeCortexData` reads per-cortex override with planner fallback                        |
+| `thalamus.reflexion` | `maxIterations`, `minConfidenceToStop`, `stopOnNoNewFindings`                                                                                                                                                    | `thalamus.service.ts:114` clamps cycle loop                                                               |
+| `sim.swarm`          | `defaultFishConcurrency`, `defaultQuorumPct`                                                                                                                                                                     | declared; not yet consumed by swarm-service — follow-up                                                   |
+| `sim.fish`           | `model`, `reasoningEffort`, `maxOutputTokens`, `temperature`, `thinking`                                                                                                                                         | `turn-runner-{sequential,dag}.ts` thread into `NanoRequest.overrides`                                     |
+| `sim.embedding`      | `embedConcurrency`                                                                                                                                                                                               | declared; not yet consumed by memory/aggregator — follow-up                                               |
+
+**LLM provider layer rewired**
+
+Every provider reads `LlmProviderCallOpts` (extended with `model`,
+`maxOutputTokens`, `temperature`, `reasoningEffort`, `verbosity`,
+`thinking`, `reasoningFormat`, `reasoningSplit`) and maps to its
+native API. Field mappings confirmed via Codex web-search pass.
+
+| Provider                    | Reasoning                   | Max tokens                                              | Thinking                               | Other             |
+| --------------------------- | --------------------------- | ------------------------------------------------------- | -------------------------------------- | ----------------- |
+| `OpenAIProvider`            | `reasoning.effort` (nested) | `max_output_tokens`                                     | —                                      | `text.verbosity`  |
+| `KimiProvider`              | —                           | `max_completion_tokens` (was `max_tokens` — deprecated) | `thinking: {type: enabled\|disabled}`  | —                 |
+| `LocalProvider` (llama.cpp) | `reasoning_format`          | `max_tokens`                                            | `chat_template_kwargs.enable_thinking` | —                 |
+| `MiniMaxProvider` **NEW**   | —                           | `max_completion_tokens`                                 | —                                      | `reasoning_split` |
+
+`REASONING_EFFORT_CHOICES = ["none","low","medium","high","xhigh"]`
+(GPT-5.4 enum; `minimal` is gpt-5-only).
+`REASONING_FORMAT_CHOICES = ["none","deepseek","deepseek-legacy"]`.
+
+`createLlmTransport` accepts `{preferredProvider, overrides}`; the
+orchestrator reorders the chain so the preferred provider runs first
+(fallback preserved). Chain order:
+`[Local, Kimi, MiniMax, OpenAI]`.
+
+**Call-site wiring**
+
+- `ThalamusPlanner.plan` — reads `thalamus.planner` + `thalamus.cortex`,
+  passes overrides, applies `applyRuntimeFilters` (disabled first,
+  forced injection, maxCortices clamp with strategist-last, mandatory
+  strategist guarantee).
+- `analyzeCortexData` — per-cortex override merge over planner defaults,
+  honours `enabled:false` as kill switch.
+- Sim turn runners — read `sim.fish` via `getSimFishConfig()`, pass as
+  `NanoRequest.overrides`.
+- `callNano` — `reasoning.effort` no longer hardcoded to `"low"`; reads
+  `req.overrides`.
+
+**`<think>` leakage closed everywhere**
+
+`stripThinkingChannels` extended to catch `<think>…</think>` (DeepSeek
+/ Kimi K2.5 / MiniMax inline), `<thinking>…</thinking>`, and
+`<|channel>…<channel|>` (Gemma 4 GGUF). Applied in all 4 providers and
+`callNano`. Previously only `LocalProvider` stripped.
+
+**Planner bias fix — 5 cortex descriptions rewritten (Tier 1)**
+
+Pre-session planner systematically skipped `conjunction_candidate_knn`,
+`debris_forecaster`, `orbit_slot_optimizer`, `launch_scout`,
+`traffic_spotter`. Root cause: frontmatter led with implementation-
+emitter language (`"Emit one grounded X finding per Y row"`). Rewrote
+to analyst-intent voice (`"Forecast…"`, `"Scout…"`, `"Spot…"`,
+`"Plan…"`, `"Propose new…"`). Kimi planner now has a chance to pick
+them when user intent matches.
+
+**Admin config UI (`/config`)**
+
+- Route: `apps/console/src/routes/config.tsx`
+- Page: `apps/console/src/modes/config/ConfigMode.tsx`
+- Lib: `apps/console/src/lib/runtime-config.ts` (react-query hooks)
+- Top-bar tab: CONFIG (SlidersHorizontal icon)
+- Left rail: DOMAINS · CONFIG — jump-links grouped by namespace
+  (THALAMUS / SIM / SWEEP), field counts, amber indicator on active
+  overrides
+- Scrollable main pane (was overflow-hidden, caused ~50% of fields
+  invisible on first ship)
+- Fields render typed: `number` → number input, `boolean` → checkbox,
+  `string[]` → chip input, `json` → textarea, `{kind,choices}` →
+  `<select>` dropdown
+- **Model dropdown**: `<optgroup>` by provider, custom-id fallback,
+  **auto-syncs the `provider` field** when selecting a preset
+  (prevents the `MiniMax-M2.7 sent to Kimi` footgun)
+- **Per-model support matrix**: `MODEL_PRESETS[i].supports` drives UI
+  greying — selecting Kimi K2 greys `reasoningEffort`/`verbosity` with
+  tooltip "Ignored by Kimi · K2 (non-thinking)"
+- Save/Reset buttons, dirty-state per domain card
+
+**Breaking changes**
+
+- Kimi body now sends `max_completion_tokens` instead of `max_tokens`.
+  Moonshot accepts both but `max_tokens` is deprecated per their docs.
+- OpenAIProvider `reasoning.effort` default remains `"minimal"` when
+  no override supplied (back-compat); new planner config default is
+  `"medium"`.
+
+**Verification**
+
+- `pnpm -r typecheck` clean on all 7 packages
+- `pnpm test` — **674/674 pass**, 42 todo, 3 skipped (baseline preserved)
+- Live `PATCH /api/config/runtime/:domain` round-trip verified on all
+  new domains + new field kinds (boolean, string[], json)
+
+**Known remaining debt** (tracked in TODO):
+
+1. `sim.swarm` + `sim.embedding` declared but not yet consumed by their
+   target services.
+2. Per-query cortex filter UI (REPL-level checkboxes) — backend extends
+   nothing yet.
+3. MiniMax + local providers need env keys (`MINIMAX_API_KEY`,
+   `LOCAL_LLM_URL`); `isEnabled()` falls through to fallback if missing.
+
 ### PG functions: 4 param-drop bugs fixed + conjunction KNN + fleet rollup dedup — 2026-04-19
 
 Pushes compute closer to the data and makes four previously-silent HTTP

@@ -13,6 +13,8 @@ import {
   DEFAULT_NANO_SWEEP_CONFIG,
   type RuntimeConfigDomain,
 } from "@interview/shared/config";
+import { registerThalamusConfigDomains } from "@interview/thalamus";
+import { registerSweepConfigDomains } from "@interview/sweep";
 
 function makeRepo(): RuntimeConfigRepository {
   const store = new Map<string, Record<string, string>>();
@@ -35,6 +37,8 @@ describe("RuntimeConfigService", () => {
 
   beforeEach(() => {
     service = new RuntimeConfigService(makeRepo());
+    registerThalamusConfigDomains(service);
+    registerSweepConfigDomains(service);
   });
 
   it("returns defaults when no override is persisted", async () => {
@@ -69,7 +73,7 @@ describe("RuntimeConfigService", () => {
         // @ts-expect-error — callTimeoutMs is number
         callTimeoutMs: "not-a-number",
       }),
-    ).rejects.toThrow(/must be a number/);
+    ).rejects.toThrow(/expected finite number/);
   });
 
   it("reset restores defaults", async () => {

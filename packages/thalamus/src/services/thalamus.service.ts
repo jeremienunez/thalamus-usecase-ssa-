@@ -16,6 +16,7 @@ import {
   THALAMUS_CONFIG,
   ITERATION_BUDGETS,
 } from "../cortices/config";
+import { getReflexionConfig } from "../config/runtime-config";
 import {
   ResearchCycleTrigger,
   ResearchCycleStatus,
@@ -108,12 +109,16 @@ export class ThalamusService {
     );
 
     try {
-      // 3. Compute loop budget (complexity-aware, clamped by global caps)
+      // 3. Compute loop budget (complexity-aware, clamped by global caps
+      //    AND by runtime-tunable thalamus.reflexion.maxIterations — the
+      //    operator knob wins when lower than the complexity default).
       const budget =
         ITERATION_BUDGETS[plan.complexity] ?? ITERATION_BUDGETS.moderate;
+      const reflexionCfg = await getReflexionConfig();
       const maxIter = Math.min(
         budget.maxIterations,
         THALAMUS_CONFIG.loop.maxIterationsPerChain,
+        reflexionCfg.maxIterations,
       );
       const maxCost = Math.min(
         budget.maxCost,

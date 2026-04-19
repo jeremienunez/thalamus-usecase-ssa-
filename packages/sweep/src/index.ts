@@ -1,6 +1,13 @@
 // Ports — kernel ↔ pack contracts
 export * from "./ports";
 
+// Runtime config registrar + per-consumer providers
+export { registerSweepConfigDomains } from "./config/register-runtime-config";
+export {
+  setSimFishConfigProvider,
+  getSimFishConfig,
+} from "./config/sim-fish-config";
+
 // Services
 export { NanoSweepService } from "./services/nano-sweep.service";
 export { SweepResolutionService } from "./services/sweep-resolution.service";

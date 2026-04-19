@@ -19,6 +19,7 @@ import type { LlmChatConfig, LlmResponse, LlmTransport } from "./types";
 import {
   KimiProvider,
   LocalProvider,
+  MiniMaxProvider,
   OpenAIProvider,
   type LlmProvider,
 } from "./providers";
@@ -52,7 +53,20 @@ export class LlmChatTransport {
    * when every enabled provider errors out.
    */
   async call(userPrompt: string): Promise<LlmResponse> {
-    for (const provider of this.providers) {
+    // Reorder chain so the preferred provider (if set and enabled) is
+    // tried first. Fallback order preserved for the rest.
+    const ordered = this.config.preferredProvider
+      ? [
+          ...this.providers.filter(
+            (p) => p.name === this.config.preferredProvider,
+          ),
+          ...this.providers.filter(
+            (p) => p.name !== this.config.preferredProvider,
+          ),
+        ]
+      : this.providers;
+
+    for (const provider of ordered) {
       if (!provider.isEnabled()) continue;
 
       // Circuit breaker: skip Kimi after N consecutive failures
@@ -68,6 +82,7 @@ export class LlmChatTransport {
         const content = await retry(
           () =>
             provider.call(this.config.systemPrompt, userPrompt, {
+              ...(this.config.overrides ?? {}),
               enableWebSearch: this.config.enableWebSearch,
             }),
           {
@@ -135,14 +150,26 @@ export class LlmChatTransport {
  */
 export function createLlmTransport(
   systemPrompt: string,
-  opts?: { maxRetries?: number; enableWebSearch?: boolean },
+  opts?: {
+    maxRetries?: number;
+    enableWebSearch?: boolean;
+    preferredProvider?: LlmChatConfig["preferredProvider"];
+    overrides?: LlmChatConfig["overrides"];
+  },
 ): LlmChatTransport {
   return new LlmChatTransport(
     {
       systemPrompt,
       maxRetries: opts?.maxRetries ?? 2,
       enableWebSearch: opts?.enableWebSearch,
+      preferredProvider: opts?.preferredProvider,
+      overrides: opts?.overrides,
     },
-    [new LocalProvider(), new KimiProvider(), new OpenAIProvider()],
+    [
+      new LocalProvider(),
+      new KimiProvider(),
+      new MiniMaxProvider(),
+      new OpenAIProvider(),
+    ],
   );
 }

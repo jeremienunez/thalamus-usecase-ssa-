@@ -6,6 +6,11 @@
  * back to the concrete LlmChatTransport class.
  */
 
+import type {
+  LlmProviderCallOpts,
+  ProviderName,
+} from "./providers/types";
+
 export interface LlmChatConfig {
   /** System prompt sent as first message */
   systemPrompt: string;
@@ -13,11 +18,17 @@ export interface LlmChatConfig {
   maxRetries?: number;
   /** Enable Kimi web search tool ($0.005/call) */
   enableWebSearch?: boolean;
+  /** Preferred provider — orchestrator tries this one first. Others still
+   *  run as fallback if the preferred provider errors or is disabled. */
+  preferredProvider?: ProviderName;
+  /** Runtime per-call overrides forwarded to every provider (each reads
+   *  only what it natively supports). */
+  overrides?: Omit<LlmProviderCallOpts, "enableWebSearch">;
 }
 
 export interface LlmResponse {
   content: string;
-  provider: "local" | "kimi" | "openai" | "none";
+  provider: "local" | "kimi" | "openai" | "minimax" | "none";
 }
 
 /** Generic LLM transport — `call(userPrompt) → LlmResponse`. */

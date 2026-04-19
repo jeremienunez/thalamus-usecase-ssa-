@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Globe2, Network, Radar } from "lucide-react";
+import { Globe2, Network, Radar, SlidersHorizontal } from "lucide-react";
 import { clsx } from "clsx";
 import { useUtcClock } from "@/lib/useUtcClock";
 import { AutonomyControl } from "./AutonomyControl";
@@ -8,6 +8,7 @@ const modes = [
   { to: "/ops", label: "OPS", icon: Globe2, hint: "⌘1" },
   { to: "/thalamus", label: "THALAMUS", icon: Network, hint: "⌘2" },
   { to: "/sweep", label: "SWEEP", icon: Radar, hint: "⌘3" },
+  { to: "/config", label: "CONFIG", icon: SlidersHorizontal, hint: "⌘4" },
 ] as const;
 
 export function TopBar() {

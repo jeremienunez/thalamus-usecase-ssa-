@@ -8,6 +8,7 @@
 
 import { createLogger } from "@interview/shared/observability";
 import { enrichmentConfig, isKimiEnabled } from "../../config/enrichment";
+import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
 const logger = createLogger("llm-provider-kimi");
@@ -47,19 +48,36 @@ export class KimiProvider implements LlmProvider {
       ? [{ type: "builtin_function", function: { name: "$web_search" } }]
       : undefined;
 
+    const model = opts.model ?? enrichmentConfig.model;
+    // Moonshot prefers `max_completion_tokens` (max_tokens is deprecated).
+    const maxTokens =
+      opts.maxOutputTokens && opts.maxOutputTokens > 0
+        ? opts.maxOutputTokens
+        : enrichmentConfig.maxTokens;
+    const temperature =
+      typeof opts.temperature === "number" ? opts.temperature : 1.0;
+
+    const body: Record<string, unknown> = {
+      model,
+      messages,
+      max_completion_tokens: maxTokens,
+      temperature,
+      ...(tools ? { tools } : {}),
+    };
+
+    // Kimi K2.5 / K2-thinking thinking toggle. Omit when undefined so
+    // non-thinking K2 doesn't receive an unexpected param.
+    if (typeof opts.thinking === "boolean") {
+      body.thinking = { type: opts.thinking ? "enabled" : "disabled" };
+    }
+
     const response = await fetch(enrichmentConfig.url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${enrichmentConfig.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: enrichmentConfig.model,
-        messages,
-        max_tokens: enrichmentConfig.maxTokens,
-        temperature: 1.0, // Required for thinking models (kimi-k2.5)
-        ...(tools ? { tools } : {}),
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -101,6 +119,6 @@ export class KimiProvider implements LlmProvider {
       );
     }
 
-    return msg.content ?? "";
+    return stripThinkingChannels(msg.content ?? "");
   }
 }

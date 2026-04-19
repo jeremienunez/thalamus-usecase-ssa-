@@ -42,3 +42,19 @@ export const localLlmConfig = {
 } as const;
 
 export const isLocalLlmEnabled = (): boolean => Boolean(localLlmConfig.url);
+
+/**
+ * MiniMax (M-series) — OpenAI-compatible endpoint.
+ * Returned reasoning lives in `message.reasoning_content`; runtime knob is
+ * `reasoning_split` (boolean) on the request.
+ */
+export const minimaxConfig = {
+  url:
+    process.env.MINIMAX_API_URL ??
+    "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+  apiKey: process.env.MINIMAX_API_KEY ?? "",
+  model: process.env.MINIMAX_MODEL ?? "MiniMax-M2.7",
+  maxTokens: Number(process.env.MINIMAX_MAX_TOKENS ?? 8192),
+} as const;
+
+export const isMinimaxEnabled = (): boolean => Boolean(minimaxConfig.apiKey);

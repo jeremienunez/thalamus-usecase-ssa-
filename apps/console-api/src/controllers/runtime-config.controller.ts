@@ -24,7 +24,13 @@ export function listRuntimeConfigController(service: RuntimeConfigService) {
   return async (_req: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const out: Record<string, unknown> = {};
     for (const domain of RUNTIME_CONFIG_DOMAINS) {
-      out[domain] = await service.get(domain);
+      const { schema, defaults } = service.describe(domain);
+      out[domain] = {
+        value: await service.get(domain),
+        defaults,
+        schema,
+        hasOverrides: await service.hasOverrides(domain),
+      };
     }
     reply.send({ domains: out });
   };
@@ -40,8 +46,14 @@ export function getRuntimeConfigController(service: RuntimeConfigService) {
       reply.code(404).send({ error: `unknown domain: ${domain}` });
       return;
     }
-    const value = await service.get(domain);
-    reply.send({ domain, value });
+    const { schema, defaults } = service.describe(domain);
+    reply.send({
+      domain,
+      value: await service.get(domain),
+      defaults,
+      schema,
+      hasOverrides: await service.hasOverrides(domain),
+    });
   };
 }
 

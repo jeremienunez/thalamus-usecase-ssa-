@@ -14,6 +14,7 @@ import {
   DEFAULT_NANO_CONFIG,
   StaticConfigProvider,
 } from "@interview/shared/config";
+import { stripThinkingChannels } from "../transports/providers/strip-thinking";
 
 const logger = createLogger("nano-caller");
 
@@ -61,6 +62,15 @@ export interface NanoRequest {
   enableWebSearch?: boolean;
   responseFormat?: NanoResponseFormat;
   logitBias?: Record<number, number>;
+  /** Per-call overrides that win over the NanoConfig defaults. Used by sim
+   *  fish turns (read from sim.fish) and future per-call tuning. Empty or
+   *  undefined fields fall back to NanoConfig / hardcoded defaults. */
+  overrides?: {
+    model?: string;
+    reasoningEffort?: string;
+    maxOutputTokens?: number;
+    temperature?: number;
+  };
 }
 
 function sortForHash(value: unknown): unknown {
@@ -206,7 +216,26 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
   }
 
   const cfg = await nanoConfigProvider.get();
+  const ov = req.overrides ?? {};
+  const model = ov.model && ov.model !== "" ? ov.model : cfg.model;
+  const effort = ov.reasoningEffort ?? "low";
   const start = Date.now();
+  const bodyBase: Record<string, unknown> = {
+    model,
+    instructions: req.instructions,
+    input: req.input,
+    reasoning: { effort },
+  };
+  if (req.responseFormat) bodyBase.text = { format: req.responseFormat };
+  if (ov.maxOutputTokens && ov.maxOutputTokens > 0) {
+    bodyBase.max_output_tokens = ov.maxOutputTokens;
+  }
+  if (typeof ov.temperature === "number") {
+    bodyBase.temperature = ov.temperature;
+  }
+  if (req.enableWebSearch !== false) {
+    bodyBase.tools = [{ type: "web_search_preview" }];
+  }
   try {
     const res = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -214,21 +243,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
         Authorization: `Bearer ${openaiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: cfg.model,
-        instructions: req.instructions,
-        input: req.input,
-        reasoning: { effort: "low" },
-        ...(req.responseFormat
-          ? { text: { format: req.responseFormat } }
-          : {}),
-        // NOTE: OpenAI Responses API does NOT support logit_bias (Chat
-        // Completions only). The strict JSON schema is the effective
-        // decode-time guardrail — no prose slot = no hedging possible.
-        ...(req.enableWebSearch !== false
-          ? { tools: [{ type: "web_search_preview" }] }
-          : {}),
-      }),
+      body: JSON.stringify(bodyBase),
       signal: AbortSignal.timeout(cfg.callTimeoutMs),
     });
 
@@ -245,7 +260,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
     }
 
     const data = (await res.json()) as Record<string, unknown>;
-    const text = extractResponseText(data);
+    const text = stripThinkingChannels(extractResponseText(data));
     const urls = extractUrls(text);
 
     return { ok: true, text, urls, latencyMs };

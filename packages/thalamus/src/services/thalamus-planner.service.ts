@@ -16,6 +16,10 @@ import type { CortexRegistry } from "../cortices/registry";
 import type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 import { buildPlannerSystemPrompt } from "../prompts";
 import { DAEMON_DAGS as DEFAULT_DAEMON_DAGS } from "../config/daemon-dags.config";
+import {
+  getPlannerConfig,
+  getCortexConfig,
+} from "../config/runtime-config";
 
 const logger = createLogger("thalamus-planner");
 
@@ -64,9 +68,31 @@ export class ThalamusPlanner {
     const plannerStartedAt = Date.now();
     const headers = this.registry.getHeadersForPlanner();
     const cortexNames = this.registry.names();
+    const [plannerCfg, cortexCfg] = await Promise.all([
+      getPlannerConfig(),
+      getCortexConfig(),
+    ]);
 
     const systemPrompt = buildPlannerSystemPrompt({ headers, cortexNames });
-    const transport = createLlmTransport(systemPrompt);
+    const transport = createLlmTransport(systemPrompt, {
+      preferredProvider:
+        plannerCfg.provider === "local" ||
+        plannerCfg.provider === "kimi" ||
+        plannerCfg.provider === "openai" ||
+        plannerCfg.provider === "minimax"
+          ? plannerCfg.provider
+          : undefined,
+      overrides: {
+        model: plannerCfg.model,
+        maxOutputTokens: plannerCfg.maxOutputTokens,
+        temperature: plannerCfg.temperature,
+        reasoningEffort: plannerCfg.reasoningEffort,
+        verbosity: plannerCfg.verbosity,
+        thinking: plannerCfg.thinking,
+        reasoningFormat: plannerCfg.reasoningFormat,
+        reasoningSplit: plannerCfg.reasoningSplit,
+      },
+    });
 
     try {
       const response = await transport.call(
@@ -76,6 +102,10 @@ export class ThalamusPlanner {
 
       // Validate cortex names
       plan.nodes = plan.nodes.filter((n) => this.registry.has(n.cortex));
+
+      // Apply runtime-config post-filters (OCP: the prompt rubric is a
+      // soft hint; the filters are the hard contract).
+      plan.nodes = this.applyRuntimeFilters(plan.nodes, plannerCfg, cortexCfg);
 
       // Drop user-scoped cortices when running without a user context —
       // they'd short-circuit to empty output and burn a DAG slot.
@@ -128,6 +158,82 @@ export class ThalamusPlanner {
     if (!base) return null;
     const nodes = this.stripUserScoped(base.nodes, { hasUser: false }, jobName);
     return { ...base, nodes };
+  }
+
+  /**
+   * Apply runtime-config knobs from `thalamus.planner` and `thalamus.cortex`:
+   *
+   *   1. Strip `disabledCortices` + cortex-level `enabled: false` overrides
+   *   2. Clamp to `maxCortices` — drops tail nodes past the cap (strategist
+   *      is preserved if present, bumped out last)
+   *   3. Inject `forcedCortices` not already in the plan (empty dependsOn)
+   *   4. Ensure `strategist` exists when `mandatoryStrategist` is true,
+   *      with dependsOn set to all other nodes
+   *
+   * Order matters: disable first to free budget, then force, then clamp,
+   * then mandatory strategist (so it survives the clamp).
+   */
+  private applyRuntimeFilters(
+    nodes: DAGNode[],
+    plannerCfg: {
+      maxCortices: number;
+      mandatoryStrategist: boolean;
+      forcedCortices: string[];
+      disabledCortices: string[];
+    },
+    cortexCfg: {
+      overrides: Record<string, { enabled?: boolean }>;
+    },
+  ): DAGNode[] {
+    let kept = nodes;
+
+    // 1. disable filters
+    const disabled = new Set<string>(plannerCfg.disabledCortices);
+    for (const [name, ovr] of Object.entries(cortexCfg.overrides)) {
+      if (ovr.enabled === false) disabled.add(name);
+    }
+    if (disabled.size > 0) {
+      kept = kept.filter((n) => !disabled.has(n.cortex));
+    }
+
+    // 2. force-inject (skip any that are disabled or already present)
+    const present = new Set(kept.map((n) => n.cortex));
+    for (const name of plannerCfg.forcedCortices) {
+      if (!this.registry.has(name)) continue;
+      if (disabled.has(name)) continue;
+      if (present.has(name)) continue;
+      kept.push({ cortex: name, params: {}, dependsOn: [] });
+      present.add(name);
+    }
+
+    // 3. clamp to maxCortices (strategist, if present, is held out + re-appended last)
+    if (kept.length > plannerCfg.maxCortices) {
+      const strategist = kept.find((n) => n.cortex === "strategist");
+      const nonStrat = kept.filter((n) => n.cortex !== "strategist");
+      const budget = strategist
+        ? Math.max(0, plannerCfg.maxCortices - 1)
+        : plannerCfg.maxCortices;
+      kept = nonStrat.slice(0, budget);
+      if (strategist) kept.push(strategist);
+    }
+
+    // 4. mandatory strategist — inject if missing and not disabled
+    if (
+      plannerCfg.mandatoryStrategist &&
+      !disabled.has("strategist") &&
+      this.registry.has("strategist") &&
+      !kept.some((n) => n.cortex === "strategist")
+    ) {
+      const others = kept.map((n) => n.cortex);
+      kept.push({ cortex: "strategist", params: {}, dependsOn: others });
+    }
+
+    // Prune any dependsOn pointing at dropped nodes.
+    const finalNames = new Set(kept.map((n) => n.cortex));
+    return kept.map((n) => ({
+      ...n,
+      dependsOn: n.dependsOn.filter((d) => finalNames.has(d)),
+    }));
   }
 
   /**

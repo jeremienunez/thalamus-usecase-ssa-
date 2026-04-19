@@ -68,6 +68,57 @@ Audit + quick-wins landed. All changes non-destructive, typecheck 7/7, 652 unit 
 pnpm -r typecheck && pnpm test:unit && (cd apps/console-api && npx vitest run tests/unit)
 ```
 
+### Runtime config registry + admin UI — 2026-04-19 (session 3)
+
+Third pass same day: every perf knob the kernel used to hardcode
+(planner cap, cortex model, reflexion iterations, sim fish reasoning,
+provider choice) is now runtime-tunable via `PATCH /api/config/runtime/:domain`
+and editable from the `/config` admin page. Full write-up in
+`CHANGELOG.md` top entry "Runtime config registry + 4 LLM providers".
+
+- [x] Phase 1 — `RuntimeConfigService` refactored to a registry
+      pattern (OCP). Schemas no longer live in the service — each
+      package ships its own registrar.
+- [x] Phase 2 — 6 new domains declared (`thalamus.{planner,cortex,reflexion}`,
+      `sim.{swarm,fish,embedding}`).
+- [x] Phase 3 — all 4 LLM providers (Local, Kimi, MiniMax, OpenAI)
+      read `LlmProviderCallOpts` overrides + honour `preferredProvider`
+      chain reordering.
+- [x] Phase 4 — MiniMax provider added to the chain.
+- [x] Phase 5 — `<think>` leak closed across every provider +
+      `callNano`.
+- [x] Phase 6 — Admin `/config` tab with typed field renderers,
+      model dropdown with provider auto-sync, left-rail jump-links,
+      scroll container.
+- [x] Phase 7 — 5 cortex skill `description:` frontmatter rewritten
+      in analyst-intent voice so the Kimi planner has a chance to
+      dispatch them (Tier 1 of planner-bias fix).
+
+**Still open from this pass**:
+
+- [ ] Wire `sim.swarm` into `packages/sweep/src/sim/swarm.service.ts`
+      (`defaultFishConcurrency`, `defaultQuorumPct` currently ignored
+      — only the zod schema on swarmConfigSchema reads analogous
+      defaults). Touch point: `sim-orchestrator.service.ts:100-104`
+      where `quorumPct: 1.0` / `fishConcurrency: 1` are hardcoded.
+- [ ] Wire `sim.embedding.embedConcurrency` into
+      `packages/sweep/src/sim/memory.service.ts:21` and
+      `aggregator.service.ts:23` where `const EMBED_CONCURRENCY = 8`
+      is still hardcoded.
+- [ ] Per-query cortex filter UI — REPL-level checkbox panel
+      (include/exclude per turn) + extend `POST /api/repl/turn` body
+      with `{cortexFilter?: {include?: [], exclude?: []}}`. Backend
+      already supports it at config level (`forcedCortices` /
+      `disabledCortices`); per-query just needs the plumbing.
+- [ ] Tier 2 planner-bias fix — bucketed catalog + few-shots in
+      `planner.prompt.ts` if the Tier 1 description rewrite proves
+      insufficient after live testing.
+- [ ] Env keys — document `MINIMAX_API_KEY`, `MINIMAX_API_URL`,
+      `MINIMAX_MODEL`, `LOCAL_LLM_URL`, `LOCAL_LLM_MODEL` in
+      `.env.example`.
+
+---
+
 ### PG functions pass — 2026-04-19 (session 2)
 
 Second pass the same day: push compute into PG where it fixes silent

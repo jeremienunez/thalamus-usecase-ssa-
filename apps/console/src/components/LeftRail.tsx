@@ -3,6 +3,7 @@ import { ReactNode, useState } from "react";
 import { useUiStore } from "@/lib/uiStore";
 import { clsx } from "clsx";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useRuntimeConfigList } from "@/lib/runtime-config";
 
 export function LeftRail() {
   const { location } = useRouterState();
@@ -19,7 +20,11 @@ export function LeftRail() {
       )}
     >
       <div className="flex h-10 items-center justify-between border-b border-hairline px-3">
-        {!collapsed && <span className="label">FILTERS · {mode.toUpperCase()}</span>}
+        {!collapsed && (
+          <span className="label">
+            {mode === "config" ? "DOMAINS" : "FILTERS"} · {mode.toUpperCase()}
+          </span>
+        )}
         <button
           onClick={toggle}
           aria-label={collapsed ? "Expand rail" : "Collapse rail"}
@@ -43,7 +48,70 @@ function RailContent({ mode }: { mode: string }): ReactNode {
   if (mode === "ops") return <OpsFilters />;
   if (mode === "thalamus") return <ThalamusFilters />;
   if (mode === "sweep") return <SweepFilters />;
+  if (mode === "config") return <ConfigJumpLinks />;
   return null;
+}
+
+function ConfigJumpLinks() {
+  const { data, isLoading } = useRuntimeConfigList();
+  if (isLoading || !data) {
+    return <div className="p-3 text-caption text-muted">Loading…</div>;
+  }
+  const grouped = Object.entries(data.domains).reduce<Record<string, string[]>>(
+    (acc, [domain]) => {
+      const ns = domain.split(".")[0] ?? "other";
+      (acc[ns] ??= []).push(domain);
+      return acc;
+    },
+    {},
+  );
+  const order = ["thalamus", "sim", "sweep"];
+  const ordered = [
+    ...order.filter((n) => grouped[n]),
+    ...Object.keys(grouped).filter((n) => !order.includes(n)).sort(),
+  ];
+
+  function jump(domain: string) {
+    const el = document.getElementById(`domain-${domain}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  return (
+    <div className="space-y-4 p-3">
+      {ordered.map((ns) => (
+        <section key={ns}>
+          <div className="label mb-2">{ns.toUpperCase()}</div>
+          <div className="space-y-0.5">
+            {grouped[ns]!
+              .sort()
+              .map((d) => {
+                const payload = data.domains[d];
+                const nFields = payload
+                  ? Object.keys(payload.schema).length
+                  : 0;
+                const dirty = payload?.hasOverrides;
+                const shortName = d.split(".").slice(1).join(".");
+                return (
+                  <button
+                    key={d}
+                    onClick={() => jump(d)}
+                    className={clsx(
+                      "flex w-full items-center justify-between gap-2 px-2 py-1 text-caption mono hover:bg-hairline/40 cursor-pointer text-left",
+                      dirty ? "text-amber" : "text-muted hover:text-primary",
+                    )}
+                  >
+                    <span className="truncate">{shortName}</span>
+                    <span className="shrink-0 text-numeric opacity-60">
+                      {nFields}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
 }
 
 const SUPERSCRIPT: Record<string, string> = {

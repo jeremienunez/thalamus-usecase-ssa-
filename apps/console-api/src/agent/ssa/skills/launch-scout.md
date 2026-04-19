@@ -1,6 +1,6 @@
 ---
 name: launch_scout
-description: Emit one grounded launch finding per manifest or ITU row in DATA, and only emit news rows when they add a concrete launch hook not already covered by a manifest row. NOTAM rows are context only.
+description: Scout upcoming launches and ITU filings — manifests, NOTAMs, operator activity, horizon of N days.
 sqlHelper: queryLaunchManifest
 params:
   horizonDays: number

@@ -1,6 +1,6 @@
 ---
 name: conjunction_candidate_knn
-description: Propose conjunction candidates for a target satellite via KNN semantic proximity on the Voyage-embedded catalog, filtered by radial altitude overlap. Produces broad-phase findings only; never asserts collision probability.
+description: Propose new conjunction candidates for a target satellite — KNN over embeddings, altitude-overlap gating, regime classification.
 sqlHelper: queryConjunctionCandidatesKnn
 params:
   targetNoradId: number

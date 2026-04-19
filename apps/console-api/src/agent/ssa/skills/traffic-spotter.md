@@ -1,6 +1,6 @@
 ---
 name: traffic_spotter
-description: Emit one grounded traffic finding per regime-density row, plus one grounded news finding per concrete orbital-traffic news row. No generic meta findings.
+description: Spot orbital traffic congestion by regime — density, conjunction pressure, recent close-approach news.
 sqlHelper: queryOrbitalTraffic
 params:
   windowDays: number

@@ -1,11 +1,13 @@
 /**
- * OpenAIProvider — GPT-5 family via the Responses API (fallback).
+ * OpenAIProvider — GPT-5 family via the Responses API.
  *
- * Uses `reasoning.effort: "minimal"` because Kimi does the deep thinking;
- * OpenAI's role here is a fast last-resort response.
+ * Honours runtime overrides (model / reasoning.effort / text.verbosity /
+ * max_output_tokens / temperature) when the planner config supplies them.
+ * Falls back to enrichment env config when a knob is unset.
  */
 
 import { enrichmentFallbackConfig } from "../../config/enrichment";
+import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
 export class OpenAIProvider implements LlmProvider {
@@ -18,24 +20,38 @@ export class OpenAIProvider implements LlmProvider {
   async call(
     systemPrompt: string,
     userPrompt: string,
-    _opts: LlmProviderCallOpts,
+    opts: LlmProviderCallOpts,
   ): Promise<string> {
-    // GPT-5 series: use Responses API (not Chat Completions)
-    // Reasoning effort "minimal" for fast fallback — Kimi does the deep thinking
+    const model = opts.model ?? enrichmentFallbackConfig.model;
+    // Responses API uses nested reasoning.effort; valid for gpt-5.4 family
+    // is none|low|medium|high|xhigh. "minimal" was gpt-5-only.
+    const effort = opts.reasoningEffort ?? "minimal";
+    const verbosity = opts.verbosity;
+
+    const body: Record<string, unknown> = {
+      model,
+      instructions: systemPrompt,
+      input: userPrompt,
+      reasoning: { effort },
+      text: verbosity
+        ? { format: { type: "text" }, verbosity }
+        : { format: { type: "text" } },
+      store: true,
+    };
+    if (opts.maxOutputTokens && opts.maxOutputTokens > 0) {
+      body.max_output_tokens = opts.maxOutputTokens;
+    }
+    if (typeof opts.temperature === "number") {
+      body.temperature = opts.temperature;
+    }
+
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${enrichmentFallbackConfig.openaiApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: enrichmentFallbackConfig.model,
-        instructions: systemPrompt,
-        input: userPrompt,
-        reasoning: { effort: "minimal" },
-        text: { format: { type: "text" } },
-        store: true,
-      }),
+      body: JSON.stringify(body),
     });
 
     const rawBody = await response.text();
@@ -50,7 +66,6 @@ export class OpenAIProvider implements LlmProvider {
       }>;
     };
 
-    // Extract text from response output items
     const text = data.output
       ?.filter((o) => o.type === "message")
       .flatMap((o) => o.content ?? [])
@@ -58,6 +73,6 @@ export class OpenAIProvider implements LlmProvider {
       .map((c) => c.text ?? "")
       .join("");
 
-    return text;
+    return stripThinkingChannels(text);
   }
 }

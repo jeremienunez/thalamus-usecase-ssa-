@@ -10,9 +10,14 @@
  */
 
 import { createLlmTransport } from "../transports/llm-chat";
+import type { ProviderName } from "../transports/providers";
 import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJsonObject } from "../utils/llm-json-parser";
 import type { CortexFinding } from "./types";
+import {
+  getCortexConfig,
+  getPlannerConfig,
+} from "../config/runtime-config";
 
 const logger = createLogger("cortex-llm");
 
@@ -45,8 +50,54 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
 }> {
   const start = Date.now();
 
+  // Per-cortex runtime override > planner default > provider env.
+  const [cortexCfg, plannerCfg] = await Promise.all([
+    getCortexConfig(),
+    getPlannerConfig(),
+  ]);
+  const override = cortexCfg.overrides[input.cortexName] ?? {};
+  if (override.enabled === false) {
+    logger.info(
+      { cortex: input.cortexName },
+      "cortex disabled via thalamus.cortex.overrides — returning zero findings",
+    );
+    stepLog(logger, "nano.call", "done", {
+      cortex: input.cortexName,
+      provider: "disabled",
+      findings: 0,
+      tokensEstimate: 0,
+      durationMs: 0,
+    });
+    return { findings: [], model: "disabled", tokensEstimate: 0 };
+  }
+
+  const pickProvider = (v: string | undefined): ProviderName | undefined => {
+    if (v === "local" || v === "kimi" || v === "openai" || v === "minimax") {
+      return v;
+    }
+    return undefined;
+  };
+
   const transport = createLlmTransport(input.systemPrompt, {
     enableWebSearch: input.enableWebSearch,
+    preferredProvider:
+      pickProvider(override.provider) ?? pickProvider(plannerCfg.provider),
+    overrides: {
+      model: override.model ?? plannerCfg.model,
+      maxOutputTokens: override.maxOutputTokens ?? plannerCfg.maxOutputTokens,
+      temperature: override.temperature ?? plannerCfg.temperature,
+      reasoningEffort: override.reasoningEffort ?? plannerCfg.reasoningEffort,
+      verbosity: override.verbosity ?? plannerCfg.verbosity,
+      thinking:
+        typeof override.thinking === "boolean"
+          ? override.thinking
+          : plannerCfg.thinking,
+      reasoningFormat: override.reasoningFormat ?? plannerCfg.reasoningFormat,
+      reasoningSplit:
+        typeof override.reasoningSplit === "boolean"
+          ? override.reasoningSplit
+          : plannerCfg.reasoningSplit,
+    },
   });
 
   const langInstruction =

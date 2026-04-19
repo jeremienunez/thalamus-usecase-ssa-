@@ -15,8 +15,12 @@ import type * as schema from "@interview/db-schema";
 import type { FastifyBaseLogger } from "fastify";
 import {
   buildThalamusContainer,
+  registerThalamusConfigDomains,
   setNanoConfigProvider,
   setNanoSwarmConfigProvider,
+  setPlannerConfigProvider,
+  setCortexConfigProvider,
+  setReflexionConfigProvider,
   setNanoSwarmProfile,
   setCuratorPrompt,
   type WebSearchPort,
@@ -31,6 +35,8 @@ import {
   createIngestionWorker,
   ingestionQueue,
   registerSchedulers,
+  registerSweepConfigDomains,
+  setSimFishConfigProvider,
   SimSubjectHttpAdapter,
   SimHttpClient,
   type SimHttpTransport,
@@ -217,10 +223,25 @@ export async function buildContainer(
   const runtimeConfigService = new RuntimeConfigService(
     new RuntimeConfigRepository(redis),
   );
+  // Each package ships its own registrar — service stays closed to
+  // modification when a new domain is added (OCP).
+  registerThalamusConfigDomains(runtimeConfigService);
+  registerSweepConfigDomains(runtimeConfigService);
+
   setNanoConfigProvider(runtimeConfigService.provider("thalamus.nano"));
   setNanoSwarmConfigProvider(
     runtimeConfigService.provider("thalamus.nanoSwarm"),
   );
+  setPlannerConfigProvider(
+    runtimeConfigService.provider("thalamus.planner"),
+  );
+  setCortexConfigProvider(
+    runtimeConfigService.provider("thalamus.cortex"),
+  );
+  setReflexionConfigProvider(
+    runtimeConfigService.provider("thalamus.reflexion"),
+  );
+  setSimFishConfigProvider(runtimeConfigService.provider("sim.fish"));
 
   // Inject SSA domain profile into the (agnostic) thalamus package.
   // Package ships generic defaults; console-api owns the métier.

@@ -10,6 +10,7 @@
 import type { TurnAction } from "./types";
 import type { CortexRegistry } from "@interview/thalamus";
 import { callNanoWithMode, extractJsonObject } from "@interview/thalamus";
+import { getSimFishConfig } from "../config/sim-fish-config";
 import { createLogger, stepLog } from "@interview/shared/observability";
 import type { AgentContext, TurnResponse } from "./types";
 import { buildTurnResponseSchema } from "./schema";
@@ -215,12 +216,19 @@ export class SequentialTurnRunner {
     }
     const instructions = skill.body;
 
+    const fishCfg = await getSimFishConfig();
     let lastError: Error | null = null;
     for (let attempt = 0; attempt <= MAX_JSON_RETRIES; attempt++) {
       const res = await callNanoWithMode({
         instructions,
         input: userPrompt,
         enableWebSearch: false,
+        overrides: {
+          model: fishCfg.model || undefined,
+          reasoningEffort: fishCfg.reasoningEffort,
+          maxOutputTokens: fishCfg.maxOutputTokens,
+          temperature: fishCfg.temperature,
+        },
       });
       if (!res.ok) {
         lastError = new Error(res.error ?? "nano call failed");

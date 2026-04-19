@@ -1,6 +1,6 @@
 ---
 name: orbit_slot_optimizer
-description: Recommend orbital-slot allocations and station-keeping strategy for a planned or existing fleet. Balance coverage, conjunction exposure, delta-v budget, and regulatory slot filings.
+description: Plan orbital slot saturation per operator and regime — share of regime, free slots, operator concentration risk.
 sqlHelper: queryOrbitSlotPlan
 params:
   operatorId: number

@@ -2,6 +2,17 @@
 export { buildThalamusContainer } from "./config/container";
 export type { ThalamusContainer, BuildThalamusOpts } from "./config/container";
 
+// Runtime config — registrar + per-consumer provider setters
+export { registerThalamusConfigDomains } from "./config/register-runtime-config";
+export {
+  setPlannerConfigProvider,
+  setCortexConfigProvider,
+  setReflexionConfigProvider,
+  getPlannerConfig,
+  getCortexConfig,
+  getReflexionConfig,
+} from "./config/runtime-config";
+
 // Services
 export { ThalamusService } from "./services/thalamus.service";
 export { ThalamusPlanner } from "./services/thalamus-planner.service";
