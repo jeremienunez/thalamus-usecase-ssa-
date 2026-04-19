@@ -54,4 +54,14 @@ design-system/
 # Local AI assistant working dirs
 .claude/
 .codex
-.playwright-mcp/page-2026-04-18T23-54-22-505Z.yml
+.playwright-mcp/
+
+# Local UI capture artifacts
+/drawer-*.png
+/ops-*.png
+/palette-*.png
+/repl-*.png
+/sweep-*.png
+/thalamus-*.png
+/ops-snapshot-*.md
+/palette-snapshot*.md
