@@ -2,16 +2,16 @@ import { useState } from "react";
 import { clsx } from "clsx";
 import { useFindings } from "@/lib/queries";
 import { FindingsGraph } from "./FindingsGraph";
-import { SweepDrawer } from "./SweepDrawer";
-import { SweepOverview } from "./SweepOverview";
-import { SweepStats } from "./SweepStats";
-import { SweepSuggestions } from "./SweepSuggestions";
+import { SweepDrawer } from "./Drawer";
+import { SweepOverview } from "./Overview";
+import { SweepStats } from "./Stats";
+import { SweepSuggestions } from "./Suggestions";
 import { useUiStore } from "@/lib/uiStore";
 import { useSweepSuggestions } from "@/lib/queries";
 
 type Tab = "overview" | "suggestions" | "map" | "stats";
 
-export function SweepMode() {
+export function SweepEntry() {
   const [tab, setTab] = useState<Tab>("map");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const openDrawer = useUiStore((s) => s.openDrawer);

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { SweepMode } from "@/modes/sweep/SweepMode";
+import { SweepEntry } from "@/features/sweep";
 
 export const Route = createFileRoute("/sweep")({
-  component: SweepMode,
+  component: SweepEntry,
 });
