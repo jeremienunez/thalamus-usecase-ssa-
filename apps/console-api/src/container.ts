@@ -23,8 +23,10 @@ import {
   setReflexionConfigProvider,
   setNanoSwarmProfile,
   setCuratorPrompt,
+  setEntityExtractor,
   type WebSearchPort,
 } from "@interview/thalamus";
+import { ssaEntityExtractor } from "./agent/ssa/ssa-entity-extractor";
 import {
   SSA_NANO_SWARM_PROFILE,
   SSA_CURATOR_PROMPT,
@@ -254,6 +256,7 @@ export async function buildContainer(
   // Package ships generic defaults; console-api owns the métier.
   setNanoSwarmProfile(SSA_NANO_SWARM_PROFILE);
   setCuratorPrompt(SSA_CURATOR_PROMPT);
+  setEntityExtractor(ssaEntityExtractor);
 
   const thalamus = buildThalamusContainer({
     db,

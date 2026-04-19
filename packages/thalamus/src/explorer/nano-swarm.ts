@@ -22,10 +22,6 @@ import {
   DEFAULT_NANO_SWARM_CONFIG,
   StaticConfigProvider,
 } from "@interview/shared/config";
-import {
-  extractSatelliteEntities,
-  DATA_POINT_RE,
-} from "../utils/satellite-entity-patterns";
 import { callNanoWithMode } from "./nano-caller";
 import type { ExplorationQuery } from "./scout";
 import type { CrawledArticle } from "./crawler";
@@ -34,6 +30,32 @@ import {
   type Lens,
   type NanoSwarmProfile,
 } from "../prompts";
+
+/**
+ * Crawler-shaped extraction result produced per crawled body. The
+ * `entities` slot is forwarded straight into `CrawledArticle.entities`,
+ * so its shape is whatever the domain extractor returns (SSA today,
+ * something else tomorrow). Kernel stays agnostic.
+ */
+export interface CrawlerExtraction {
+  entities: CrawledArticle["entities"];
+  dataPoints: string[];
+}
+
+export type EntityExtractorFn = (text: string) => CrawlerExtraction;
+
+// Domain-specific entity extraction is injected at boot. Default returns
+// an empty payload so the kernel stays runnable standalone.
+const NOOP_EXTRACTION: CrawlerExtraction = {
+  entities: {} as CrawledArticle["entities"],
+  dataPoints: [],
+};
+
+let entityExtractor: EntityExtractorFn = () => NOOP_EXTRACTION;
+
+export function setEntityExtractor(fn: EntityExtractorFn): void {
+  entityExtractor = fn;
+}
 
 const logger = createLogger("nano-swarm");
 
@@ -276,11 +298,7 @@ function mergeResults(results: NanoResult[]): {
           ? (domainContext + "\n" + cleanText).slice(0, 3000)
           : cleanText.slice(0, 3000);
 
-      const entities = extractSatelliteEntities(cleanText);
-      const dpRe = new RegExp(DATA_POINT_RE.source, DATA_POINT_RE.flags);
-      const dataPoints: string[] = [];
-      let m: RegExpExecArray | null;
-      while ((m = dpRe.exec(cleanText)) !== null) dataPoints.push(m[0]);
+      const { entities, dataPoints } = entityExtractor(cleanText);
 
       const titleLine = lines.find((l: string) =>
         l.toLowerCase().includes(domainKey),
@@ -301,11 +319,7 @@ function mergeResults(results: NanoResult[]): {
     }
 
     if (cleanText.length > 200 && r.urls.length === 0) {
-      const entities = extractSatelliteEntities(cleanText);
-      const dpRe = new RegExp(DATA_POINT_RE.source, DATA_POINT_RE.flags);
-      const dataPoints: string[] = [];
-      let m: RegExpExecArray | null;
-      while ((m = dpRe.exec(cleanText)) !== null) dataPoints.push(m[0]);
+      const { entities, dataPoints } = entityExtractor(cleanText);
 
       articles.push({
         url: `nano://${r.researcherId}`,

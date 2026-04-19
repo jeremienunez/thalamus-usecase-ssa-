@@ -59,7 +59,20 @@ export type { NanoRequest, NanoResponse } from "./explorer/nano-caller";
 export {
   setNanoSwarmConfigProvider,
   setNanoSwarmProfile,
+  setEntityExtractor,
 } from "./explorer/nano-swarm";
+export type {
+  CrawlerExtraction,
+  EntityExtractorFn,
+} from "./explorer/nano-swarm";
+// TEMP bridge (Task 3.3d → 3.3e): kernel still hosts the SSA entity
+// patterns file (satellite-entity-patterns.ts). Export the two symbols
+// the SSA bridge needs so apps/console-api can build without reaching
+// into kernel internals. Task 3.3e moves the file and drops this export.
+export {
+  extractSatelliteEntities,
+  DATA_POINT_RE,
+} from "./utils/satellite-entity-patterns";
 export { setCuratorPrompt } from "./explorer/curator";
 export type { ExplorationQuery } from "./explorer/scout";
 
