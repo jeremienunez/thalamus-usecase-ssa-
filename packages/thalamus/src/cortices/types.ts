@@ -188,4 +188,42 @@ export interface DomainConfig {
     rows: Record<string, unknown>[],
     cortexName: string,
   ) => Record<string, unknown>[];
+
+  // ── Phase 1 seams (agnosticity cleanup 2026-04-19) ──────────────────
+  /**
+   * Planner system-prompt builder. Kernel passes `{ headers, cortexNames }`;
+   * receives the full system prompt string. If omitted, kernel falls back
+   * to `buildGenericPlannerSystemPrompt`. Domains ship their flavored copy
+   * here (e.g. SSA planner mentioning NORAD / fleet conventions).
+   */
+  plannerPrompt?: (input: {
+    headers: string;
+    cortexNames: readonly string[];
+  }) => string;
+  /**
+   * Fallback DAG when planner LLM returns empty or fails outright. If
+   * omitted, kernel flattens `fallbackCortices` into parallel no-dep nodes.
+   */
+  fallbackPlan?: (query: string) => DAGPlan;
+  /**
+   * Name of the synthesis cortex that must run last in every plan.
+   * `StrategistStrategy.canHandle` compares cortex name against this.
+   * Default when consumed: `"strategist"`.
+   */
+  synthesisCortexName?: string;
+  /**
+   * Optional entity-extraction hook used by nano-swarm when building
+   * follow-up queries. If omitted, nano-swarm runs text-only grounding.
+   */
+  extractEntities?: (text: string) => {
+    primary: string[];
+    secondary?: string[];
+    hasContent: boolean;
+  };
+  /**
+   * Predicate: is a given entityType verification-relevant? Used by
+   * `cycle-loop.service` to gate the `needsVerification` heuristic. If
+   * omitted, the kernel defaults to "every type is verification-relevant".
+   */
+  isVerificationRelevantEntityType?: (entityType: string) => boolean;
 }
