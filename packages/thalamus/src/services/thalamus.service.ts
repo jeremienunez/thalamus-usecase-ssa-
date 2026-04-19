@@ -140,6 +140,7 @@ export class ThalamusService {
           minConfidence: input.minConfidence,
           lang: input.lang,
           mode: input.mode,
+          userId: input.userId,
           hasUser: input.userId !== undefined && input.userId !== null,
         },
       );

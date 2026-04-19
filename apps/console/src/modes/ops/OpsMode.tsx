@@ -2,10 +2,15 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stars, Environment } from "@react-three/drei";
 import { useRef, useState, useEffect, useMemo } from "react";
 import { Pause, Play } from "lucide-react";
+import { useAnimatedNumber } from "@/lib/useAnimatedNumber";
+import { useUtcClock } from "@/lib/useUtcClock";
+import { fmtPcCompact, fmtRangeKm, fmtVelocity } from "@/lib/units";
+import { Measure } from "@/components/Measure";
 import { Globe } from "./Globe";
 import { SatelliteField } from "./SatelliteField";
 import { ConjunctionArcs } from "./ConjunctionArcs";
 import { ConjunctionMarkers } from "./ConjunctionMarkers";
+import { PostFx } from "./PostFx";
 import { OpsDrawer } from "./OpsDrawer";
 import { SatelliteSearch } from "./SatelliteSearch";
 import { CameraFocus } from "./CameraFocus";
@@ -21,12 +26,7 @@ const SPEEDS = [1, 60, 600, 3600];
 const SPEED_LABELS = ["1×", "1m", "10m", "1h"];
 const SPEED_FULL = ["REAL-TIME", "1 MIN / S", "10 MIN / S", "1 H / S"];
 
-function fmtPc(pc: number): string {
-  if (pc <= 0) return "0";
-  const e = Math.floor(Math.log10(pc));
-  const m = pc / Math.pow(10, e);
-  return `${m.toFixed(2)}e${e}`;
-}
+const fmtPcInline = (pc: number) => fmtPcCompact(pc)[0];
 
 function severityOf(pc: number): "hot" | "amber" | "dim" {
   if (pc >= 1e-4) return "hot";
@@ -34,24 +34,18 @@ function severityOf(pc: number): "hot" | "amber" | "dim" {
   return "dim";
 }
 
-function useUtcClock() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
-
 function MetricTile({
   label,
   value,
+  display,
   accent,
 }: {
   label: string;
-  value: string;
+  value: number;
+  display?: (v: number) => string;
   accent?: "primary" | "hot" | "amber" | "cyan";
 }) {
+  const animated = useAnimatedNumber(Number.isFinite(value) ? value : 0, 420);
   const color =
     accent === "hot"
       ? "text-hot"
@@ -60,10 +54,20 @@ function MetricTile({
         : accent === "cyan"
           ? "text-cyan"
           : "text-primary";
+  const rendered = display ? display(animated) : Math.round(animated).toString();
   return (
     <div className="flex flex-col gap-0.5 px-3 py-2 border-l border-hairline first:border-l-0">
-      <div className="label text-[10px]">{label}</div>
-      <div className={`mono text-h2 leading-none ${color} tabular-nums`}>{value}</div>
+      <div className="label text-nano">{label}</div>
+      <div className={`mono text-h2 leading-none ${color} tabular-nums`}>{rendered}</div>
+    </div>
+  );
+}
+
+function MetricTilePlaceholder({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 px-3 py-2 border-l border-hairline first:border-l-0">
+      <div className="label text-nano">{label}</div>
+      <div className="mono text-h2 leading-none text-dim tabular-nums">…</div>
     </div>
   );
 }
@@ -84,19 +88,12 @@ export function OpsMode() {
   const [paused, setPaused] = useState(false);
   const prevSpeedIdx = useRef(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [arcTick, setArcTick] = useState(0);
-  const tRef = useRef(0);
 
   const openDrawer = useUiStore((s) => s.openDrawer);
-  const now = useUtcClock();
+  const { utc, date } = useUtcClock();
 
   const { data: satData, isLoading: loadingSats } = useSatellites();
   const { data: cjData } = useConjunctions(1e-8);
-
-  useEffect(() => {
-    const id = setInterval(() => setArcTick((t) => t + 1), 2000);
-    return () => clearInterval(id);
-  }, []);
 
   const satellites = satData?.items ?? [];
   const conjunctions = cjData?.items ?? [];
@@ -115,11 +112,12 @@ export function OpsMode() {
     const top: ConjunctionDTO[] = sorted.slice(0, 5);
     const high = conjunctions.filter((c) => c.probabilityOfCollision >= 1e-4).length;
     const peak = sorted[0]?.probabilityOfCollision ?? 0;
+    // Limit world-space labels to the top-3 conjunctions (≤6 sats) to keep the
+    // 3D scene legible — denser sets cause label collisions like POISK vs (ZARYA).
     const ids = new Set<number>();
-    for (const c of sorted.slice(0, 6)) {
+    for (const c of sorted.slice(0, 3)) {
       ids.add(c.primaryId);
       ids.add(c.secondaryId);
-      if (ids.size >= 10) break;
     }
     return { threats: top, highCount: high, peakPc: peak, labelIds: Array.from(ids) };
   }, [conjunctions]);
@@ -170,8 +168,6 @@ export function OpsMode() {
     setFocusId(sat.id);
   };
 
-  tRef.current += 0;
-  const currentT = Date.now() / 1000 + arcTick * 0;
   const effectiveSpeed = paused ? 0 : SPEEDS[speedIdx];
 
   const togglePause = () => {
@@ -185,9 +181,6 @@ export function OpsMode() {
     setPaused(false);
     prevSpeedIdx.current = i;
   };
-
-  const utc = now.toISOString().slice(11, 19);
-  const date = now.toISOString().slice(0, 10);
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -248,6 +241,7 @@ export function OpsMode() {
           timeScale={effectiveSpeed ?? 1}
           onDone={() => setFocusId(null)}
         />
+        <PostFx />
       </Canvas>
 
       {/* Vignette + scanline atmosphere */}
@@ -264,7 +258,7 @@ export function OpsMode() {
       <CornerBracket pos="br" />
 
       {/* Top-left: live telemetry card */}
-      <div className="pointer-events-none absolute left-4 top-4 border border-hairline bg-panel/90 backdrop-blur-sm">
+      <div className="pointer-events-none absolute left-4 top-4 z-hud border border-hairline bg-panel/90 backdrop-blur-md shadow-hud">
         <div className="flex items-center gap-2 border-b border-hairline px-3 py-1.5">
           <span className="relative flex h-1.5 w-1.5">
             <span
@@ -274,37 +268,38 @@ export function OpsMode() {
               className={`relative inline-flex h-1.5 w-1.5 ${paused ? "bg-amber" : "bg-cold"}`}
             />
           </span>
-          <div className="label text-[10px]">
+          <div className="label text-nano">
             {paused ? "TELEMETRY · PAUSED" : "LIVE TELEMETRY"}
           </div>
-          <span className="ml-auto mono text-[10px] text-dim">SSA / OPS</span>
+          <span className="ml-auto mono text-nano text-dim">SSA / OPS</span>
         </div>
         <div className="flex">
-          <MetricTile
-            label="TRACKED"
-            value={loadingSats ? "…" : String(satellites.length)}
-            accent="primary"
-          />
+          {loadingSats ? (
+            <MetricTilePlaceholder label="TRACKED" />
+          ) : (
+            <MetricTile label="TRACKED" value={satellites.length} accent="primary" />
+          )}
           <MetricTile
             label="CONJUNCTIONS"
-            value={String(conjunctions.length)}
+            value={conjunctions.length}
             accent="cyan"
           />
           <MetricTile
             label="≥ 1e-4"
-            value={String(highCount)}
+            value={highCount}
             accent={highCount > 0 ? "hot" : "primary"}
           />
           <MetricTile
             label="PEAK PC"
-            value={fmtPc(peakPc)}
+            value={peakPc}
+            display={fmtPcInline}
             accent={peakPc >= 1e-4 ? "hot" : peakPc >= 1e-6 ? "amber" : "primary"}
           />
         </div>
       </div>
 
       {/* Top-center: satellite search + regime filter */}
-      <div className="absolute left-1/2 top-4 flex -translate-x-1/2 flex-col items-center gap-2">
+      <div className="absolute left-1/2 top-4 z-hud flex -translate-x-1/2 flex-col items-center gap-2">
         <SatelliteSearch satellites={satellites} onPick={handleSearchPick} />
         <RegimeFilter
           visible={regimeVisible}
@@ -316,11 +311,11 @@ export function OpsMode() {
       </div>
 
       {/* Top-right: threat board */}
-      <div className="pointer-events-none absolute right-4 top-4 w-72 border border-hairline bg-panel/90 backdrop-blur-sm">
+      <div className="pointer-events-none absolute right-4 top-4 z-hud w-[22rem] border border-hairline bg-panel/90 backdrop-blur-md shadow-hud">
         <div className="flex items-center gap-2 border-b border-hairline px-3 py-1.5">
           <div className="h-1.5 w-1.5 bg-hot" />
-          <div className="label text-[10px]">THREAT BOARD</div>
-          <span className="ml-auto mono text-[10px] text-dim">TOP {threats.length}</span>
+          <div className="label text-nano">THREAT BOARD</div>
+          <span className="ml-auto mono text-nano text-dim">TOP {threats.length}</span>
         </div>
         {threats.length === 0 ? (
           <div className="px-3 py-3 text-caption text-dim">— no events —</div>
@@ -341,15 +336,17 @@ export function OpsMode() {
                       <span className="text-dim">→</span>
                       <span className="truncate">{c.secondaryName}</span>
                     </div>
-                    <div className="mono text-[10px] text-dim tabular-nums">
-                      {c.minRangeKm.toFixed(2)} km · {c.relativeVelocityKmps.toFixed(1)} km/s
+                    <div className="mono flex items-center gap-2 text-nano text-dim tabular-nums">
+                      <Measure value={fmtRangeKm(c.minRangeKm)} className="text-nano" />
+                      <span className="text-hairline-hot">·</span>
+                      <Measure value={fmtVelocity(c.relativeVelocityKmps)} className="text-nano" />
                     </div>
-                    <div className="mono text-[9px] text-dim">
+                    <div className="mono text-nano text-dim">
                       {c.regime} · σ{c.covarianceQuality} · {c.action.replace(/_/g, " ")}
                     </div>
                   </div>
-                  <span className={`mono text-[11px] tabular-nums ${pcColorCls}`}>
-                    {fmtPc(c.probabilityOfCollision)}
+                  <span className={`mono text-micro tabular-nums ${pcColorCls}`}>
+                    {fmtPcInline(c.probabilityOfCollision)}
                   </span>
                 </li>
               );
@@ -358,33 +355,33 @@ export function OpsMode() {
         )}
       </div>
 
-      {/* Bottom-left: UTC clock + legend */}
-      <div className="pointer-events-none absolute bottom-4 left-4 flex flex-col gap-2">
-        <div className="border border-hairline bg-panel/90 px-3 py-2 backdrop-blur-sm">
-          <div className="label text-[10px]">UTC</div>
+      {/* Bottom-left: UTC clock + legend + cycle launcher (stacked) */}
+      <div className="pointer-events-none absolute bottom-4 left-4 z-hud flex max-h-[calc(100vh-8rem)] flex-col gap-2 overflow-y-auto">
+        <div className="border border-hairline bg-panel/90 px-3 py-2 shadow-hud backdrop-blur-md">
+          <div className="label text-nano">UTC</div>
           <div className="mono text-h1 leading-none text-primary tabular-nums">{utc}</div>
-          <div className="mono text-[10px] text-dim tabular-nums">{date}</div>
+          <div className="mono text-nano text-dim tabular-nums">{date}</div>
         </div>
-        <div className="border border-hairline bg-panel/90 px-3 py-2 backdrop-blur-sm">
-          <div className="label mb-1 text-[10px]">LEGEND</div>
-          <div className="mono mb-0.5 text-[9px] uppercase tracking-widest text-dim">
+        <div className="border border-hairline bg-panel/90 px-3 py-2 shadow-hud backdrop-blur-md">
+          <div className="label mb-1 text-nano">LEGEND</div>
+          <div className="mono mb-0.5 text-nano uppercase tracking-widest text-dim">
             arcs · P(C)
           </div>
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2">
               <span className="h-[2px] w-5 bg-hot" />
-              <span className="mono text-[10px] text-muted">≥ 1e-4 high</span>
+              <span className="mono text-nano text-muted">≥ 1e-4 high</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="h-[2px] w-5 bg-amber" />
-              <span className="mono text-[10px] text-muted">≥ 1e-6 watch</span>
+              <span className="mono text-nano text-muted">≥ 1e-6 watch</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="h-[2px] w-5 bg-dim" />
-              <span className="mono text-[10px] text-muted">&lt; 1e-6 nominal</span>
+              <span className="mono text-nano text-muted">&lt; 1e-6 nominal</span>
             </div>
           </div>
-          <div className="mono mb-0.5 mt-1.5 text-[9px] uppercase tracking-widest text-dim">
+          <div className="mono mb-0.5 mt-1.5 text-nano uppercase tracking-widest text-dim">
             dots · regime
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
@@ -396,18 +393,21 @@ export function OpsMode() {
             ].map((r) => (
               <div key={r.k} className="flex items-center gap-2">
                 <span className={`h-1.5 w-1.5 ${r.c}`} />
-                <span className="mono text-[10px] text-muted">{r.k}</span>
+                <span className="mono text-nano text-muted">{r.k}</span>
               </div>
             ))}
           </div>
         </div>
+        <div className="pointer-events-auto">
+          <CycleLaunchPanel />
+        </div>
       </div>
 
       {/* Bottom-center: segmented time controller */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 border border-hairline bg-panel/90 backdrop-blur-sm">
+      <div className="absolute bottom-4 left-1/2 z-hud -translate-x-1/2 border border-hairline bg-panel/90 backdrop-blur-md shadow-hud">
         <div className="flex items-center gap-2 border-b border-hairline px-3 py-1">
-          <div className="label text-[10px]">TIME CONTROL</div>
-          <span className="ml-2 mono text-[10px] text-cyan tabular-nums">
+          <div className="label text-nano">TIME CONTROL</div>
+          <span className="ml-2 mono text-nano text-cyan tabular-nums">
             {paused ? "PAUSED" : SPEED_FULL[speedIdx]}
           </span>
         </div>
@@ -440,13 +440,8 @@ export function OpsMode() {
         </div>
       </div>
 
-      {/* Bottom-left: cycle launcher */}
-      <div className="absolute bottom-4 left-4">
-        <CycleLaunchPanel />
-      </div>
-
       {/* Bottom-right: findings stream */}
-      <div className="absolute bottom-4 right-4">
+      <div className="absolute bottom-4 right-4 z-hud">
         <FindingsPanel
           satellites={satellites}
           selectedSatellite={

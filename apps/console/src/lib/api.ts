@@ -37,6 +37,10 @@ export type SatelliteDTO = {
    * Drawer renders them as-is. UI never shows `"classified"`.
    */
   opacityDeficitReasons?: string[];
+  /** TLE line 1 (when ingested from CelesTrak). Enables SGP4 propagation. */
+  tleLine1?: string | null;
+  /** TLE line 2 (when ingested from CelesTrak). Enables SGP4 propagation. */
+  tleLine2?: string | null;
 };
 
 export type ConjunctionDTO = {

@@ -22,7 +22,6 @@ export type RegimeQuery = z.infer<typeof RegimeQuerySchema>;
 
 export const SlotsQuerySchema = z.object({
   operatorId: z.string().regex(/^\d+$/, "operatorId must be numeric").optional(),
-  horizonYears: clampedInt(1, 50, 5),
   limit: clampedInt(1, 500, 20),
 });
 export type SlotsQuery = z.infer<typeof SlotsQuerySchema>;
@@ -36,14 +35,12 @@ export type TrafficQuery = z.infer<typeof TrafficQuerySchema>;
 
 export const DebrisForecastQuerySchema = z.object({
   regimeId: z.string().regex(/^\d+$/).optional(),
-  horizonYears: clampedInt(1, 100, 10),
   limit: clampedInt(1, 200, 20),
 });
 export type DebrisForecastQuery = z.infer<typeof DebrisForecastQuerySchema>;
 
 export const LaunchManifestQuerySchema = z.object({
   horizonDays: clampedInt(1, 3650, 365),
-  regimeId: z.string().regex(/^\d+$/).optional(),
   limit: clampedInt(1, 200, 30),
 });
 export type LaunchManifestQuery = z.infer<typeof LaunchManifestQuerySchema>;

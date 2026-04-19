@@ -231,7 +231,7 @@ export function SweepSuggestions() {
       </ul>
 
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 border border-hairline-hot bg-elevated px-4 py-2 mono text-caption text-primary shadow-lg">
+        <div className="fixed bottom-6 right-6 z-toast border border-hairline-hot bg-elevated px-4 py-2 mono text-caption text-primary shadow-pop animate-fade-in" role="status" aria-live="polite">
           {toast}
         </div>
       )}

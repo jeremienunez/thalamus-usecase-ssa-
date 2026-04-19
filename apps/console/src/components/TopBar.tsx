@@ -11,7 +11,7 @@ const modes = [
 ] as const;
 
 export function TopBar() {
-  const utc = useUtcClock();
+  const { utc } = useUtcClock();
   const { location } = useRouterState();
 
   return (

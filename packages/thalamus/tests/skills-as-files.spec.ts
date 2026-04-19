@@ -127,3 +127,100 @@ describe("SPEC-TH-031 sha256 determinism (AC-5)", () => {
     for (const h of hashes) expect(h).toHaveLength(64);
   });
 });
+
+describe("SSA prompt contracts", () => {
+  it("uses the runtime custom-format marker on the audited SSA skills", () => {
+    for (const filename of [
+      "conjunction-analysis.md",
+      "launch-scout.md",
+      "traffic-spotter.md",
+      "debris-forecaster.md",
+      "apogee-tracker.md",
+      "conjunction-candidate-knn.md",
+    ]) {
+      const body = readFileSync(join(SKILLS_DIR, filename), "utf8");
+      expect(body).toContain("## Output Format");
+      expect(body).not.toContain("\n## Output\n");
+    }
+  });
+
+  it("keeps the strategist prompt on a strict JSON-only contract", () => {
+    const body = readFileSync(join(SKILLS_DIR, "strategist.md"), "utf8");
+    expect(body).toContain("Return exactly one JSON object and nothing else");
+    expect(body.match(/\{"findings":\[\]\}/g)?.length).toBe(1);
+    expect(body).not.toMatch(/\{\s*source:/);
+  });
+
+  it("keeps the audited high-risk SSA skills off stale runtime-contract tokens", () => {
+    for (const filename of [
+      "fleet-analyst.md",
+      "advisory-radar.md",
+      "replacement-cost-analyst.md",
+      "orbit-slot-optimizer.md",
+      "conjunction-analysis.md",
+      "conjunction-candidate-knn.md",
+      "debris-forecaster.md",
+      "launch-scout.md",
+      "apogee-tracker.md",
+      "traffic-spotter.md",
+      "maneuver-planning.md",
+      "research-loop.md",
+      "opacity-scout.md",
+    ]) {
+      const body = readFileSync(join(SKILLS_DIR, filename), "utf8");
+      expect(body, `${filename} still references entityRef`).not.toContain(
+        "entityRef",
+      );
+      expect(
+        body,
+        `${filename} still references invalid edge relations`,
+      ).not.toMatch(
+        /relation:\s*"(?:owned-by|affected-by|impacts|targets|mitigates|conjunction_candidate)"/,
+      );
+      expect(
+        body,
+        `${filename} still references invalid finding types`,
+      ).not.toMatch(
+        /findingType[^.\n]*"(?:proposal|advisory|blocked|data_quality)"/,
+      );
+      expect(
+        body,
+        `${filename} still references a stale array-only contract`,
+      ).not.toContain("JSON array of findings per SPEC-TH-030");
+    }
+  });
+
+  it("keeps the sim-specialized prompts on explicit JSON-only contracts", () => {
+    const researchLoop = readFileSync(
+      join(SKILLS_DIR, "research-loop.md"),
+      "utf8",
+    );
+    expect(researchLoop).toContain(
+      'Return exactly one JSON object and nothing else.',
+    );
+    expect(researchLoop).toContain('"findings": [');
+    expect(researchLoop).not.toContain("LOOP:");
+
+    const pcEstimator = readFileSync(
+      join(SKILLS_DIR, "pc-estimator-agent.md"),
+      "utf8",
+    );
+    expect(pcEstimator).toContain("Return exactly one JSON object");
+    expect(pcEstimator).toContain('"kind": "estimate_pc"');
+
+    const telemetry = readFileSync(
+      join(SKILLS_DIR, "telemetry-inference-agent.md"),
+      "utf8",
+    );
+    expect(telemetry).toContain("Return exactly one JSON object");
+    expect(telemetry).toContain('"kind": "infer_telemetry"');
+    expect(telemetry).toContain('"unit": "dBW"');
+    expect(telemetry).toContain('"unit": "fraction"');
+
+    const opacity = readFileSync(join(SKILLS_DIR, "opacity-scout.md"), "utf8");
+    expect(opacity).toContain("Return exactly one JSON object and nothing else.");
+    expect(opacity).toContain('"findings": [');
+    expect(opacity).not.toContain("writeOpacityScore");
+    expect(opacity).not.toContain("source_class");
+  });
+});

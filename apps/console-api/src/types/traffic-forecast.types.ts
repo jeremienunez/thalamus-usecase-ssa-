@@ -9,6 +9,10 @@ export type OrbitalTrafficRow = {
   url: string | null;
   publishedAt: string | null;
   baselines: Record<string, unknown> | null;
+  // True when the row came through a branch that honored the regimeId filter
+  // (density). False when the branch is free-text / global and cannot filter
+  // by regime (news). Null when no regimeId was provided.
+  branchFilterApplied: boolean | null;
 };
 
 export type DebrisForecastRow = {
@@ -35,6 +39,9 @@ export type DebrisForecastRow = {
   fragmentParentMassKg: number | null;
   fragmentEventType: string | null;
   fragmentCause: string | null;
+  // True on density/fragmentation branches when regimeId was provided;
+  // false on paper/news/weather (free-text / global signals).
+  branchFilterApplied: boolean | null;
 };
 
 export type LaunchManifestRow = {
@@ -101,6 +108,7 @@ export type OrbitalTrafficView = {
   url: string | null;
   publishedAt: string | null;
   baselines: Record<string, unknown> | null;
+  branchFilterApplied: boolean | null;
 };
 
 export type DebrisForecastView = {
@@ -126,6 +134,7 @@ export type DebrisForecastView = {
   fragmentParentMassKg: number | null;
   fragmentEventType: string | null;
   fragmentCause: string | null;
+  branchFilterApplied: boolean | null;
 };
 
 export type LaunchManifestView = {

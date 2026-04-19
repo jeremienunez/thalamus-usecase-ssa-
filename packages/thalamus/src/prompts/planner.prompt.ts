@@ -25,8 +25,11 @@ Rules:
 - If a cortex needs results from another, add it to dependsOn
 - Use 2-5 cortices per query. Don't activate every cortex unless the query truly requires it.
 - Fleet-scoped cortices (fleet_analyst) require an operator / fleet identifier in params.
+- Never activate the same cortex twice in one DAG. Duplicate cortex names collide in execution outputs.
 - strategist should always be last with dependsOn set to all other activated cortices.
 - Valid cortex names: ${input.cortexNames.join(", ")}
+- Params must come only from explicit query text or obvious header defaults. Never invent operator ids, fleet ids, satellite ids, dates, or thresholds.
+- If a cortex requires a missing identifier, omit that cortex or plan a discovery-oriented alternative instead of fabricating params.
 - Classify query complexity:
   - "simple": single satellite / regime question, 1-2 cortices (e.g. "next GEO conjunction for Intelsat 901")
   - "moderate": multi-factor analysis, 2-3 cortices (e.g. "debris risk for Starlink shell 1")

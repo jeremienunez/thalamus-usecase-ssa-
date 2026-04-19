@@ -53,7 +53,7 @@ import type {
 import {
   callNano,
   callNanoStream,
-} from "@interview/thalamus/explorer/nano-caller";
+} from "@interview/thalamus";
 import type {
   SweepFinding,
   SweepChatMessage,
@@ -91,7 +91,10 @@ export class SatelliteSweepChatService {
     satelliteId: string,
     userId: string,
     message: string,
+    signal?: AbortSignal,
   ): AsyncGenerator<ChatStreamEvent> {
+    const aborted = (): boolean => signal?.aborted === true;
+
     // Rate limit check
     const allowed = await this.sweepRepo.checkRateLimit(userId);
     if (!allowed) {
@@ -101,6 +104,7 @@ export class SatelliteSweepChatService {
       };
       return;
     }
+    if (aborted()) return;
 
     // 1. Load ALL satellite data (dump everything into 400k context)
     const satellite = await this.satelliteRepo.findByIdFull(BigInt(satelliteId));
@@ -108,6 +112,7 @@ export class SatelliteSweepChatService {
       yield { type: "error", data: { error: "Satellite not found" } };
       return;
     }
+    if (aborted()) return;
 
     // Load lifetime curve + ephemeris history + chat context in parallel
     const [lifetimeCurve, ephemerisHistory, history, pastFindings] =
@@ -121,6 +126,7 @@ export class SatelliteSweepChatService {
         this.sweepRepo.getHistory(satelliteId, userId),
         this.sweepRepo.getFindings(satelliteId),
       ]);
+    if (aborted()) return;
 
     // 3. Build prompt with ALL data
     const instructions = this.buildSystemPrompt(
@@ -137,8 +143,10 @@ export class SatelliteSweepChatService {
       content: message,
       timestamp: new Date().toISOString(),
     });
+    if (aborted()) return;
 
-    // 5. Stream response
+    // 5. Stream response — break out of the nano stream as soon as the
+    // caller disconnects so we don't keep buffering tokens we'll never write.
     let fullResponse = "";
     try {
       for await (const event of callNanoStream({
@@ -147,16 +155,19 @@ export class SatelliteSweepChatService {
         enableWebSearch: true,
         enableCodeInterpreter: true,
       })) {
+        if (aborted()) return;
         if (event.type === "delta") {
           fullResponse += event.text;
           yield { type: "delta", data: { text: event.text } };
         }
       }
     } catch (err) {
+      if (aborted()) return;
       logger.error({ err, satelliteId }, "Nano stream error");
       yield { type: "error", data: { error: "Analysis failed" } };
       return;
     }
+    if (aborted()) return;
 
     // 6. Store assistant message
     await this.sweepRepo.appendMessage(satelliteId, userId, {
@@ -164,10 +175,13 @@ export class SatelliteSweepChatService {
       content: fullResponse,
       timestamp: new Date().toISOString(),
     });
+    if (aborted()) return;
 
     // 7. Extract and store findings
     const findings = await this.extractFindings(satelliteId, fullResponse);
+    if (aborted()) return;
     for (const f of findings) {
+      if (aborted()) return;
       const stored = await this.sweepRepo.storeFinding(satelliteId, f);
       yield { type: "finding", data: stored };
     }

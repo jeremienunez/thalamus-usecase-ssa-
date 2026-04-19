@@ -1,6 +1,13 @@
 import { Drawer, DrawerSection, KV } from "@/components/Drawer";
+import { Measure } from "@/components/Measure";
 import { useUiStore } from "@/lib/uiStore";
 import { clsx } from "clsx";
+import {
+  fmtAltitudeKm,
+  fmtDeg,
+  fmtPc,
+  fmtPcCompact,
+} from "@/lib/units";
 import type { ConjunctionDTO, SatelliteDTO } from "@/lib/api";
 
 export function OpsDrawer({
@@ -47,10 +54,19 @@ export function OpsDrawer({
 
       <DrawerSection title="ORBITAL ELEMENTS">
         <KV k="Regime" v={<span className="mono text-cyan">{satellite.regime}</span>} />
-        <KV k="SMA" v={`${satellite.semiMajorAxisKm.toFixed(1)} km`} mono />
-        <KV k="Inc" v={`${satellite.inclinationDeg.toFixed(2)}°`} mono />
-        <KV k="Ecc" v={satellite.eccentricity.toFixed(4)} mono />
-        <KV k="Mean motion" v={`${satellite.meanMotionRevPerDay.toFixed(4)} rev/day`} mono />
+        <KV k="SMA" v={<Measure value={fmtAltitudeKm(satellite.semiMajorAxisKm)} />} />
+        <KV k="Altitude" v={<Measure value={fmtAltitudeKm(satellite.semiMajorAxisKm - 6371)} />} />
+        <KV k="Inc" v={<Measure value={fmtDeg(satellite.inclinationDeg)} />} />
+        <KV k="Ecc" v={<span className="mono tabular-nums">{satellite.eccentricity.toFixed(4)}</span>} />
+        <KV
+          k="Mean motion"
+          v={
+            <span className="mono tabular-nums">
+              {satellite.meanMotionRevPerDay.toFixed(4)}
+              <span className="ml-1 text-dim">rev/day</span>
+            </span>
+          }
+        />
         <KV k="Epoch" v={satellite.epoch.slice(0, 19) + "Z"} mono />
       </DrawerSection>
 
@@ -68,7 +84,7 @@ export function OpsDrawer({
             </span>
             <span
               className={clsx(
-                "mono text-caption",
+                "mono text-caption tabular-nums",
                 c.probabilityOfCollision >= 1e-4
                   ? "text-hot"
                   : c.probabilityOfCollision >= 1e-6
@@ -76,7 +92,7 @@ export function OpsDrawer({
                     : "text-muted",
               )}
             >
-              Pc {c.probabilityOfCollision.toExponential(2)}
+              Pc <span className="text-dim">{fmtPc(c.probabilityOfCollision)[0]}</span>
             </span>
           </div>
         ))}

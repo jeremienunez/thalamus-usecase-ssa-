@@ -47,11 +47,11 @@ export function FindingsPanel({
     : "RECENT FINDINGS";
 
   return (
-    <div className="pointer-events-auto w-80 border border-hairline bg-panel/90 backdrop-blur-sm">
+    <div className="pointer-events-auto relative z-hud w-80 border border-hairline bg-panel/95 shadow-hud backdrop-blur-md">
       <div className="flex items-center gap-2 border-b border-hairline px-3 py-1.5">
         <span className="h-1.5 w-1.5 bg-cyan" />
-        <div className="label text-[10px]">{headerLabel}</div>
-        <span className="ml-auto mono text-[10px] text-dim">
+        <div className="label text-nano">{headerLabel}</div>
+        <span className="ml-auto mono text-nano text-dim">
           {isLoading ? "…" : `${items.length}${satKey ? "" : ` / ${data?.count ?? 0}`}`}
         </span>
       </div>
@@ -89,7 +89,7 @@ function FindingRow({
   const satId = satLink ? Number(satLink.slice(4)) : null;
 
   const cortexColor = clsx(
-    "mono text-[10px]",
+    "mono text-nano",
     finding.cortex === "opacity-scout"
       ? "text-cyan"
       : finding.cortex === "conjunction-analysis"
@@ -99,7 +99,7 @@ function FindingRow({
           : "text-dim",
   );
   const statusColor = clsx(
-    "mono text-[10px]",
+    "mono text-nano",
     finding.status === "pending"
       ? "text-amber"
       : finding.status === "accepted"
@@ -113,9 +113,13 @@ function FindingRow({
     <button
       type="button"
       onClick={() => satId && onClickSat(satId)}
+      disabled={!satId}
+      aria-label={satId ? `Focus satellite ${satId}` : undefined}
       className={clsx(
-        "flex w-full flex-col gap-0.5 border-b border-hairline/50 px-3 py-1.5 text-left last:border-0",
-        satId ? "hover:bg-hairline/30" : "cursor-default",
+        "flex w-full flex-col gap-0.5 border-b border-hairline/50 px-3 py-1.5 text-left transition-colors duration-fast ease-palantir last:border-0",
+        satId
+          ? "cursor-pointer hover:bg-hairline/30"
+          : "cursor-default opacity-80",
       )}
     >
       <div className="flex items-baseline justify-between gap-2">

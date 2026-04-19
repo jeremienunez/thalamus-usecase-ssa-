@@ -54,7 +54,7 @@ export function TelemetryStrip() {
   }, []);
 
   return (
-    <footer className="h-30 shrink-0 border-t border-hairline bg-panel">
+    <footer className="h-[120px] shrink-0 border-t border-hairline bg-panel">
       <div className="flex h-8 items-center justify-between border-b border-hairline px-3">
         <span className="label">TELEMETRY</span>
         <span className="mono text-caption text-dim">

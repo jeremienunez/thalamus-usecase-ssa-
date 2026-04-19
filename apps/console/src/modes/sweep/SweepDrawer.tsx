@@ -49,7 +49,7 @@ export function SweepDrawer({ findingId }: { findingId: string | null }) {
           <div key={i} className="border-b border-hairline py-2 last:border-0">
             <div className="flex items-center gap-2">
               <span
-                className="inline-flex h-4 items-center border px-1.5 text-[10px] uppercase tracking-widest"
+                className="inline-flex h-4 items-center border px-1.5 text-nano uppercase tracking-widest"
                 style={{
                   color: SOURCE_COLOR[e.kind],
                   borderColor: SOURCE_COLOR[e.kind] + "66",

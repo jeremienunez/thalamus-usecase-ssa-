@@ -7,9 +7,9 @@ export type FleetAnalysisRow = {
   country: string | null;
   satelliteCount: number;
   avgAgeYears: number | null;
-  regimeMix: Record<string, number>;
-  platformMix: Record<string, number>;
-  busMix: Record<string, number>;
+  regimeMix: Array<{ regime: string; count: number }>;
+  platformMix: Array<{ platform: string; count: number }>;
+  busMix: Array<{ bus: string; count: number }>;
 };
 
 export type RegimeProfileRow = {
@@ -41,9 +41,9 @@ export type FleetAnalysisView = {
   country: string | null;
   satelliteCount: number;
   avgAgeYears: number | null;
-  regimeMix: Record<string, number>;
-  platformMix: Record<string, number>;
-  busMix: Record<string, number>;
+  regimeMix: Array<{ regime: string; count: number }>;
+  platformMix: Array<{ platform: string; count: number }>;
+  busMix: Array<{ bus: string; count: number }>;
 };
 
 export type RegimeProfileView = {

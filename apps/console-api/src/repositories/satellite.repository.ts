@@ -115,6 +115,7 @@ export class SatelliteRepository {
     targetId: bigint,
     field: string,
     k: number,
+    efSearch = 100,
   ): Promise<
     Array<{
       id: string;
@@ -124,6 +125,8 @@ export class SatelliteRepository {
     }>
   > {
     const col = fieldSqlFor(field);
+    const ef = Math.max(10, Math.min(1000, Math.floor(efSearch)));
+    await this.db.execute(sql.raw(`SET hnsw.ef_search = ${ef}`));
     const rows = await this.db.execute<{
       id: string;
       noradId: number | null;

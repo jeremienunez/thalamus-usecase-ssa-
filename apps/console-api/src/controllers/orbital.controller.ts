@@ -47,7 +47,6 @@ export function slotsController(service: OrbitalAnalysisService) {
       if (q === null) return;
       return service.planSlots({
         operatorId: q.operatorId,
-        horizonYears: q.horizonYears,
         limit: q.limit,
       });
     },
@@ -75,7 +74,6 @@ export function debrisForecastController(service: OrbitalAnalysisService) {
       if (q === null) return;
       return service.forecastDebris({
         regimeId: q.regimeId,
-        horizonYears: q.horizonYears,
         limit: q.limit,
       });
     },
@@ -89,7 +87,6 @@ export function launchManifestController(service: OrbitalAnalysisService) {
       if (q === null) return;
       return service.launchManifest({
         horizonDays: q.horizonDays,
-        regimeId: q.regimeId,
         limit: q.limit,
       });
     },

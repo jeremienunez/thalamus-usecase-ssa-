@@ -36,6 +36,7 @@ export class ThalamusDAGExecutor {
     cycleId: bigint,
     lang?: "fr" | "en",
     mode?: "investment" | "audit",
+    userId?: bigint,
   ): Promise<DAGExecutionResult> {
     const start = Date.now();
     const outputs = new Map<string, CortexOutput>();
@@ -60,7 +61,15 @@ export class ThalamusDAGExecutor {
       // Run all nodes in this level in parallel
       const results = await Promise.allSettled(
         level.map((node) =>
-          this.executeNode(node, cycleId, plan.intent, outputs, lang, mode),
+          this.executeNode(
+            node,
+            cycleId,
+            plan.intent,
+            outputs,
+            lang,
+            mode,
+            userId,
+          ),
         ),
       );
 
@@ -107,6 +116,7 @@ export class ThalamusDAGExecutor {
     upstreamOutputs: Map<string, CortexOutput>,
     lang?: "fr" | "en",
     mode?: "investment" | "audit",
+    userId?: bigint,
   ): Promise<CortexOutput> {
     // Build context from upstream dependencies
     const previousFindings = node.dependsOn.flatMap((dep) => {
@@ -121,7 +131,10 @@ export class ThalamusDAGExecutor {
 
     const input: CortexInput = {
       query,
-      params: node.params,
+      params:
+        userId !== undefined && node.params.userId === undefined
+          ? { ...node.params, userId }
+          : node.params,
       cycleId,
       lang,
       mode,

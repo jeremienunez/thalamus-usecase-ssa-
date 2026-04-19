@@ -44,9 +44,9 @@ Each finding:
 - **summary** — instrument class, band, resolution, swath, power, bus heritage. Every number cites DATA.
 - **findingType** — "insight" (profile), "anomaly" (bus-payload mismatch), "opportunity" (notable capability positioning)
 - **urgency** — "low" for baseline profile, "medium" for mismatches
-- **confidence** — high for manufacturer-declared, medium for inferred-from-telemetry, low for rumored
+- **confidence** — 0.9 for manufacturer-declared, 0.6 for inferred-from-telemetry, 0.3 when only weak catalog context exists
 - **evidence** — `[{ source: "payload_registry"|"bus_registry"|"comparison", data: {...}, weight: 1.0 }]`
-- **edges** — `[{ entityType: "payload", entityId: N, relation: "about" }, { entityType: "satellite", entityId: N, relation: "carries" }]`
+- **edges** — `[{ entityType: "payload", entityId: N, relation: "about" }, { entityType: "satellite", entityId: N, relation: "about" }]`
 
 ## Hand-off
 

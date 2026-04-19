@@ -22,6 +22,8 @@ export const SatelliteViewSchema = z.object({
   massKg: z.number(),
   classificationTier: ClassificationTierSchema,
   opacityScore: z.number().nullable(),
+  tleLine1: z.string().nullable().optional(),
+  tleLine2: z.string().nullable().optional(),
 });
 export type SatelliteView = z.infer<typeof SatelliteViewSchema>;
 

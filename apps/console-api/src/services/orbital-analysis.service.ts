@@ -32,7 +32,6 @@ import type {
 export interface FleetAnalysisReadPort {
   analyzeOperatorFleet(opts: {
     operatorId?: string | number | bigint;
-    userId?: string | number | bigint;
     limit?: number;
   }): Promise<FleetAnalysisRow[]>;
   profileOrbitRegime(opts: {
@@ -43,7 +42,6 @@ export interface FleetAnalysisReadPort {
   }): Promise<RegimeProfileRow[]>;
   planOrbitSlots(opts: {
     operatorId?: string | number | bigint;
-    horizonYears?: number;
     limit?: number;
   }): Promise<OrbitSlotRow[]>;
 }
@@ -56,12 +54,10 @@ export interface TrafficForecastReadPort {
   }): Promise<OrbitalTrafficRow[]>;
   forecastDebris(opts: {
     regimeId?: string | number | bigint;
-    horizonYears?: number;
     limit?: number;
   }): Promise<DebrisForecastRow[]>;
   listLaunchManifest(opts: {
     horizonDays?: number;
-    regimeId?: string | number | bigint;
     limit?: number;
   }): Promise<LaunchManifestRow[]>;
   getLaunchEpochWeather(opts: {
@@ -111,12 +107,10 @@ export class OrbitalAnalysisService {
 
   async planSlots(opts: {
     operatorId?: string;
-    horizonYears: number;
     limit: number;
   }): Promise<ListResult<OrbitSlotView>> {
     const rows = await this.fleetRepo.planOrbitSlots({
       operatorId: opts.operatorId,
-      horizonYears: opts.horizonYears,
       limit: opts.limit,
     });
     const items = rows.map(toOrbitSlotView);
@@ -139,12 +133,10 @@ export class OrbitalAnalysisService {
 
   async forecastDebris(opts: {
     regimeId?: string;
-    horizonYears: number;
     limit: number;
   }): Promise<ListResult<DebrisForecastView>> {
     const rows = await this.trafficRepo.forecastDebris({
       regimeId: opts.regimeId,
-      horizonYears: opts.horizonYears,
       limit: opts.limit,
     });
     const items = rows.map((r, i) => toDebrisForecastView(r, i));
@@ -153,12 +145,10 @@ export class OrbitalAnalysisService {
 
   async launchManifest(opts: {
     horizonDays: number;
-    regimeId?: string;
     limit: number;
   }): Promise<ListResult<LaunchManifestView>> {
     const rows = await this.trafficRepo.listLaunchManifest({
       horizonDays: opts.horizonDays,
-      regimeId: opts.regimeId,
       limit: opts.limit,
     });
     const items = rows.map((r, i) => toLaunchManifestView(r, i));

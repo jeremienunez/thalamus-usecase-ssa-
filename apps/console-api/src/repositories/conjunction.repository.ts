@@ -97,7 +97,10 @@ export class ConjunctionRepository {
     return results.rows;
   }
 
-  /** KNN candidate proposer using Voyage halfvec HNSW + altitude overlap. */ // ← absorbed from cortices/queries/conjunction-candidates.ts
+  /** KNN candidate proposer using Voyage halfvec HNSW + altitude overlap.
+   *  Wraps fn_conjunction_candidates_knn which sets hnsw.ef_search
+   *  transaction-locally so the pool connection's session state is not
+   *  polluted between calls. */
   async findKnnCandidates(opts: {
     targetNoradId: number;
     knnK?: number;
@@ -107,74 +110,30 @@ export class ConjunctionRepository {
     excludeSameFamily?: boolean;
     efSearch?: number;
   }): Promise<KnnCandidateRow[]> {
-    const knnK = opts.knnK ?? 200;
-    const limit = opts.limit ?? 50;
-    const marginKm = opts.marginKm ?? 20;
-    const efSearch = opts.efSearch ?? 100;
-
-    const ef = Math.max(10, Math.min(1000, Math.floor(efSearch)));
-    await this.db.execute(sql.raw(`SET hnsw.ef_search = ${ef}`));
-
     const rows = await this.db.execute<KnnCandidateRow>(sql`
-      WITH target AS (
-        SELECT
-          id, name, norad_id, embedding,
-          (metadata->>'apogeeKm')::numeric::float  AS apogee,
-          (metadata->>'perigeeKm')::numeric::float AS perigee
-        FROM satellite
-        WHERE norad_id = ${opts.targetNoradId}
-          AND embedding IS NOT NULL
-        LIMIT 1
-      ),
-      knn AS (
-        SELECT
-          s.id, s.name, s.norad_id, s.object_class,
-          (s.metadata->>'apogeeKm')::numeric::float         AS apogee,
-          (s.metadata->>'perigeeKm')::numeric::float        AS perigee,
-          (s.metadata->>'inclinationDeg')::numeric::float   AS inc,
-          (s.embedding <=> t.embedding)::float              AS cos_distance
-        FROM satellite s, target t
-        WHERE s.id != t.id
-          AND s.embedding IS NOT NULL
-          ${opts.objectClass ? sql`AND s.object_class = ${opts.objectClass}` : sql``}
-        ORDER BY s.embedding <=> t.embedding
-        LIMIT ${knnK}
-      )
       SELECT
-        t.norad_id::int                     AS "targetNoradId",
-        t.name                              AS "targetName",
-        k.id::int                           AS "candidateId",
-        k.name                              AS "candidateName",
-        k.norad_id::int                     AS "candidateNoradId",
-        k.object_class                      AS "candidateClass",
-        k.cos_distance                      AS "cosDistance",
-        k.apogee                            AS "apogeeKm",
-        k.perigee                           AS "perigeeKm",
-        k.inc                               AS "inclinationDeg",
-        (LEAST(t.apogee, k.apogee) - GREATEST(t.perigee, k.perigee) + 2 * ${marginKm})::float AS "overlapKm",
-        CASE
-          WHEN (k.apogee + k.perigee) / 2 < 2000  THEN 'leo'
-          WHEN (k.apogee + k.perigee) / 2 < 35000 THEN 'meo'
-          WHEN (k.apogee + k.perigee) / 2 < 36500 THEN 'geo'
-          WHEN k.apogee IS NOT NULL               THEN 'heo'
-          ELSE 'unknown'
-        END AS "regime"
-      FROM knn k, target t
-      WHERE k.apogee IS NOT NULL AND k.perigee IS NOT NULL
-        AND t.apogee IS NOT NULL AND t.perigee IS NOT NULL
-        AND (LEAST(t.apogee, k.apogee) - GREATEST(t.perigee, k.perigee) + 2 * ${marginKm}) > 0
-        ${
-          opts.excludeSameFamily
-            ? sql`AND NOT (
-                split_part(t.name, ' ', 1) = split_part(k.name, ' ', 1)
-                AND t.name ~ '[A-Z]+-?[0-9]+$'
-              )`
-            : sql``
-        }
-      ORDER BY k.cos_distance ASC
-      LIMIT ${limit}
+        target_norad_id    AS "targetNoradId",
+        target_name        AS "targetName",
+        candidate_id       AS "candidateId",
+        candidate_name     AS "candidateName",
+        candidate_norad_id AS "candidateNoradId",
+        candidate_class    AS "candidateClass",
+        cos_distance       AS "cosDistance",
+        apogee_km          AS "apogeeKm",
+        perigee_km         AS "perigeeKm",
+        inclination_deg    AS "inclinationDeg",
+        overlap_km         AS "overlapKm",
+        regime
+      FROM fn_conjunction_candidates_knn(
+        ${opts.targetNoradId}::int,
+        ${opts.knnK ?? 200}::int,
+        ${opts.limit ?? 50}::int,
+        ${opts.marginKm ?? 20}::real,
+        ${opts.objectClass ?? null}::text,
+        ${opts.excludeSameFamily ?? false}::boolean,
+        ${opts.efSearch ?? 100}::int
+      )
     `);
-
     return rows.rows;
   }
 

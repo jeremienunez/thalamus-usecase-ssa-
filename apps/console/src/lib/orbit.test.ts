@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { satellitePosition, orbitRing, SCENE_SCALE } from "./orbit";
+import {
+  satellitePosition,
+  satellitePositionAt,
+  propagateSgp4,
+  orbitRing,
+  SCENE_SCALE,
+  EARTH_KM,
+} from "./orbit";
 
 const MU = 398600.4418;
 
@@ -62,5 +69,45 @@ describe("orbit", () => {
     // a=7000 km → scene ≈ 7000/3000 ≈ 2.33 units
     const r = Math.sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
     expect(r).toBeCloseTo(leo.semiMajorAxisKm * (1 - leo.eccentricity) * SCENE_SCALE, 2);
+  });
+
+  it("satellitePositionAt anchors on TLE epoch (t=epoch ≈ Kepler t=0)", () => {
+    const epoch = "2026-04-19T00:00:00.000Z";
+    const sAt = { ...leo, epoch };
+    const p0Kepler = satellitePosition(leo, 0, new THREE.Vector3());
+    const pAtEpoch = satellitePositionAt(sAt, Date.parse(epoch), new THREE.Vector3());
+    expect(pAtEpoch.x).toBeCloseTo(p0Kepler.x, 6);
+    expect(pAtEpoch.y).toBeCloseTo(p0Kepler.y, 6);
+    expect(pAtEpoch.z).toBeCloseTo(p0Kepler.z, 6);
+  });
+
+  it("propagateSgp4 falls back to Kepler when TLE lines are absent", () => {
+    const epoch = "2026-04-19T00:00:00.000Z";
+    const sNoTle = { ...leo, epoch, tleLine1: null, tleLine2: null };
+    const nowMs = Date.parse(epoch) + 600_000; // +10 min
+    const sgp4Result = propagateSgp4(sNoTle, nowMs, new THREE.Vector3());
+    const keplerResult = satellitePositionAt(sNoTle, nowMs, new THREE.Vector3());
+    expect(sgp4Result.x).toBeCloseTo(keplerResult.x, 8);
+    expect(sgp4Result.y).toBeCloseTo(keplerResult.y, 8);
+    expect(sgp4Result.z).toBeCloseTo(keplerResult.z, 8);
+  });
+
+  it("propagateSgp4 returns ~LEO-radius ECI position for a valid ISS TLE", () => {
+    // ISS TLE (2023-11-15, CelesTrak archive). Deterministic — no network.
+    const tleLine1 =
+      "1 25544U 98067A   23319.56666667  .00012345  00000-0  22789-3 0  9998";
+    const tleLine2 =
+      "2 25544  51.6400 123.4567 0001234 234.5678 125.4321 15.50123456456789";
+    const iss = {
+      ...leo,
+      epoch: "2023-11-15T13:36:00.000Z",
+      tleLine1,
+      tleLine2,
+    };
+    const p = propagateSgp4(iss, Date.parse(iss.epoch), new THREE.Vector3());
+    const rKm = Math.sqrt(p.x * p.x + p.y * p.y + p.z * p.z) / SCENE_SCALE;
+    // ISS altitude ~410 km → geocentric radius ≈ 6781 km. Allow wide band.
+    expect(rKm).toBeGreaterThan(EARTH_KM + 200);
+    expect(rKm).toBeLessThan(EARTH_KM + 1000);
   });
 });

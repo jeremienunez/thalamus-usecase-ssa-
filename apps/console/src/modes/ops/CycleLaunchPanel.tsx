@@ -29,10 +29,10 @@ export function CycleLaunchPanel() {
             launch.isPending ? "animate-pulse bg-amber" : "bg-cold",
           )}
         />
-        <div className="label text-[10px]">
+        <div className="label text-nano">
           {launch.isPending ? "CYCLE · RUNNING" : "CYCLE LAUNCHER"}
         </div>
-        <span className="ml-auto mono text-[10px] text-dim">
+        <span className="ml-auto mono text-nano text-dim">
           {latest
             ? `last ${latest.kind.toUpperCase()} · +${latest.findingsEmitted}`
             : "no cycle yet"}
@@ -94,9 +94,9 @@ function LaunchButton({
     >
       <div className="flex items-center gap-1.5">
         {icon}
-        <span className="label text-[10px]">{label}</span>
+        <span className="label text-nano">{label}</span>
       </div>
-      <span className="mono text-[10px] text-dim">{hint}</span>
+      <span className="mono text-nano text-dim">{hint}</span>
     </button>
   );
 }

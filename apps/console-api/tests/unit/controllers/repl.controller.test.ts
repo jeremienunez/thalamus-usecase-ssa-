@@ -5,6 +5,7 @@ import {
   replChatStreamController,
   replTurnController,
 } from "../../../src/controllers/repl.controller";
+import { registerReplRoutes } from "../../../src/routes/repl.routes";
 
 describe("replChatStreamController", () => {
   it("returns 400 on invalid body and does not call the service", async () => {
@@ -46,7 +47,11 @@ describe("replChatStreamController", () => {
       payload: { input: "bonjour" },
     });
 
-    expect(service.handleStream).toHaveBeenCalledWith("bonjour");
+    expect(service.handleStream).toHaveBeenCalledWith(
+      "bonjour",
+      undefined,
+      expect.any(AbortSignal),
+    );
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("text/event-stream");
     const body = res.body;
@@ -75,6 +80,37 @@ describe("replChatStreamController", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("event: error");
     expect(res.body).toContain('"message":"boom"');
+    await app.close();
+  });
+});
+
+describe("registerReplRoutes", () => {
+  it("authenticates /api/repl/chat and forwards the request user id", async () => {
+    async function* gen(): AsyncGenerator<ReplStreamEvent> {
+      yield { event: "classified", data: { action: "chat" } };
+      yield {
+        event: "done",
+        data: { provider: "mock", costUsd: 0, tookMs: 1, findingsCount: 0 },
+      };
+    }
+
+    const chat = { handleStream: vi.fn(() => gen()) };
+    const turn = { handle: vi.fn() };
+    const app = Fastify({ logger: false });
+    registerReplRoutes(app, chat as never, turn as never);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/repl/chat",
+      payload: { input: "bonjour" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(chat.handleStream).toHaveBeenCalledWith(
+      "bonjour",
+      1n,
+      expect.any(AbortSignal),
+    );
     await app.close();
   });
 });

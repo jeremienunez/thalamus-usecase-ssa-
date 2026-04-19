@@ -40,4 +40,4 @@ Each finding:
 - **confidence** — 0.95 for SQL-verified geometry mismatches, 0.7 for heuristic class signals
 - **impactScore** — affected count / 50, capped at 10
 - **evidence** — `[{ source: "classification_audit", data: { issue_type, affected_count, examples }, weight: 1.0 }]`
-- **edges** — `[{ entityType: "satellite"|"orbitRegime", entityId: N, relation: "about" }]`
+- **edges** — `[{ entityType: "satellite"|"orbit_regime", entityId: N, relation: "about" }]`

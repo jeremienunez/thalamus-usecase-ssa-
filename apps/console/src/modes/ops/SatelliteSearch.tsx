@@ -110,12 +110,12 @@ export function SatelliteSearch({
           onFocus={() => query && setOpen(true)}
           onKeyDown={onKeyDown}
           placeholder="search satellite / norad ( / )"
-          className="mono h-5 w-full bg-transparent text-[11px] text-numeric placeholder-dim outline-none"
+          className="mono h-5 w-full bg-transparent text-micro text-numeric placeholder-dim outline-none"
           spellCheck={false}
           autoComplete="off"
         />
         {query && (
-          <span className="mono text-[10px] text-dim">{matches.length}</span>
+          <span className="mono text-nano text-dim">{matches.length}</span>
         )}
       </div>
 
@@ -132,10 +132,10 @@ export function SatelliteSearch({
                 i === activeIdx ? "bg-hairline/50" : "hover:bg-hairline/30",
               )}
             >
-              <span className="mono truncate text-[11px] text-numeric">
+              <span className="mono truncate text-micro text-numeric">
                 {sat.name}
               </span>
-              <span className="mono flex-shrink-0 text-[10px] text-dim">
+              <span className="mono flex-shrink-0 text-nano text-dim">
                 NORAD {sat.noradId} · {sat.regime}
                 {typeof sat.opacityScore === "number" && sat.opacityScore > 0 && (
                   <span className="ml-1 text-cyan">

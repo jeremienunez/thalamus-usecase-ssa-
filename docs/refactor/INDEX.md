@@ -6,6 +6,7 @@ Generated 2026-04-14. Rule: **l'abstraction s'arrête toujours au métier.**
 
 Surface these FIRST in the interview — they are production blockers, not nice-to-haves.
 
+0. **Architecture audit 2026-04-19** — [architecture-audit-2026-04-19.md](./architecture-audit-2026-04-19.md). Pass 1: 4 CLAUDE.md breaches (triple-write path on thalamus tables, 511-L `sim-promotion.service.ts` god-service, thalamus ships dead Fastify routes [FIXED], thalamus kernel not domain-agnostic). Pass 2: 3 more Critical (639-LOC `satellite-sweep-chat` stack silently dead since `1ccc31b`, SSE disconnect leak in `repl.controller.ts`, setInterval timers never cleaned on Fastify close). C3+I4 landed; C5 needs remount-or-delete decision.
 1. **Admin auth is fake** — [sweep/middleware/auth.middleware.ts](../../packages/sweep/src/middleware/auth.middleware.ts#L1) + [routes/admin.routes.ts](../../packages/sweep/src/routes/admin.routes.ts#L18). `authenticate` hardcodes an admin user; `requireRoles` / `requireTier` are no-ops. `/admin/sweep/*` is effectively public. Source: [codex-security.md](./codex-security.md).
 2. **Drizzle migration is broken / drifted** — [migrations/0000_flawless_dorian_gray.sql#L1](../../packages/db-schema/migrations/0000_flawless_dorian_gray.sql) only creates a partial `research_cycle` (just `photo_url`) vs the rich schema at [schema/research.ts](../../packages/db-schema/src/schema/research.ts); migration adds FKs to `orbit_regime`, `operator_country`, `payload`, `operator` tables that are **never created** by SQL migrations. Fresh `drizzle migrate` will fail. Source: [codex-dx-correctness.md](./codex-dx-correctness.md).
 3. **Swarm aggregate can be silently dropped** — [swarm-fish.worker.ts#L122-126](../../packages/sweep/src/jobs/workers/swarm-fish.worker.ts#L122-L126) enqueues `swarmAggregateQueue.add()` in `finally` with `attempts: 1` + no error recovery. One transient Redis blip → aggregate never runs → suggestions never promote. Source: [codex-type-safety.md](./codex-type-safety.md).
@@ -43,6 +44,10 @@ Surface these FIRST in the interview — they are production blockers, not nice-
 - [codex-audit-duplication.md](./codex-audit-duplication.md) — CONFIRM with off-by-one line counts
 - [codex-audit-god-files.md](./codex-audit-god-files.md)
 - [codex-audit-graph-health.md](./codex-audit-graph-health.md)
+
+### Architecture audit (Claude code-reviewer, CLAUDE.md contract check)
+
+- [architecture-audit-2026-04-19.md](./architecture-audit-2026-04-19.md) — 4 Critical / 6 Important / 4 Minor findings against single-contract, no-bypass, kernel-agnosticity, SOLID
 
 ### Layer audits (Codex xhigh, fresh eyes — finds what Claude missed)
 

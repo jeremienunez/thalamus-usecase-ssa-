@@ -44,10 +44,10 @@ export function FindingsGraph({
           >
             <div className="flex items-center gap-2 border-b border-hairline bg-panel px-3 py-1.5">
               <span className="h-1.5 w-1.5" style={{ backgroundColor: color }} />
-              <span className="label text-[10px]" style={{ color }}>
+              <span className="label text-nano" style={{ color }}>
                 {STATUS_LABEL[status]}
               </span>
-              <span className="ml-auto mono text-[10px] text-dim tabular-nums">
+              <span className="ml-auto mono text-nano text-dim tabular-nums">
                 {list.length}
               </span>
             </div>
@@ -72,10 +72,10 @@ export function FindingsGraph({
                               className="h-1 w-1 shrink-0"
                               style={{ backgroundColor: color }}
                             />
-                            <span className="mono truncate text-[10px] uppercase tracking-widest text-dim">
+                            <span className="mono truncate text-nano uppercase tracking-widest text-dim">
                               {f.cortex}
                             </span>
-                            <span className="ml-auto mono text-[10px] text-dim tabular-nums">
+                            <span className="ml-auto mono text-nano text-dim tabular-nums">
                               {f.id}
                             </span>
                           </div>
@@ -92,11 +92,11 @@ export function FindingsGraph({
                                 }}
                               />
                             </div>
-                            <span className="mono w-8 shrink-0 text-right text-[10px] text-muted tabular-nums">
+                            <span className="mono w-8 shrink-0 text-right text-nano text-muted tabular-nums">
                               p{f.priority}
                             </span>
                             {f.swarmConsensus && (
-                              <span className="mono text-[10px] text-dim tabular-nums">
+                              <span className="mono text-nano text-dim tabular-nums">
                                 {f.swarmConsensus.accept}/{f.swarmConsensus.k}
                               </span>
                             )}

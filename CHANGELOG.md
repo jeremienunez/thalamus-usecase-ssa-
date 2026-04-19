@@ -4,6 +4,240 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### PG functions: 4 param-drop bugs fixed + conjunction KNN + fleet rollup dedup — 2026-04-19
+
+Pushes compute closer to the data and makes four previously-silent HTTP
+params first-class. Two new migrations, eight TS files touched, 674/674
+tests pass.
+
+**New migrations** (applied manually against live PG via
+`psql "$DATABASE_URL" -f ...`; drizzle-kit push does not pick up
+functions):
+
+- `packages/db-schema/migrations/0012_orbital_analytics_fns.sql` — 4
+  SQL functions, `LANGUAGE sql STABLE`:
+  - `fn_plan_orbit_slots(p_operator_id, p_limit)` — dropped the
+    `horizonYears` param (no SQL meaning without a
+    `safe_mission_window` UDF, which doesn't exist yet; tracked
+    separately).
+  - `fn_analyze_orbital_traffic(p_window_days, p_regime_id, p_limit)`
+    — density branch honors `regimeId`; news branch cannot
+    (free-text). Each row now carries `branch_filter_applied boolean`
+    so callers see which rows the regime filter actually touched.
+  - `fn_forecast_debris(p_regime_id, p_limit)` — density +
+    fragmentation branches filter; paper/news/weather don't. Dropped
+    `horizonYears` (same reason as slots). Includes a `LEO ↔ Low
+Earth Orbit` LATERAL mapping so `fragmentation_event.regime_name`
+    (short codes) actually matches `orbit_regime.name` (long form);
+    previously the fragmentation filter returned 0 rows even when
+    applied.
+  - `fn_list_launch_manifest(p_horizon_days, p_limit)` — dropped
+    `regimeId` (no branch has structured regime linkage;
+    `launch.orbit_name`, `itu_filing.orbit_class` are free text).
+    `horizonDays` already worked and is preserved.
+- `packages/db-schema/migrations/0013_conjunction_knn_fn.sql` —
+  `fn_conjunction_candidates_knn(...)` in `LANGUAGE plpgsql` so
+  `set_config('hnsw.ef_search', ..., true)` can run inside the body.
+  Transaction-local scope: the recall knob can no longer leak onto
+  the pooled connection. Verified: `current_setting('hnsw.ef_search')`
+  reverts to pgvector's default (40) on commit. Old TS pattern
+  (`SET hnsw.ef_search = N` without `LOCAL`) was sticky per
+  connection — fixed.
+
+**HTTP contract changes (breaking)**:
+
+- `GET /api/orbital/slots` — `horizonYears` removed from
+  `SlotsQuerySchema`. Zod `.strip()` default swallows it silently
+  for legacy clients; no 400.
+- `GET /api/orbital/debris` — `horizonYears` removed from
+  `DebrisForecastQuerySchema`. Response rows gain
+  `branchFilterApplied: boolean | null`.
+- `GET /api/orbital/traffic` — response rows gain
+  `branchFilterApplied`.
+- `GET /api/orbital/launch-manifest` — `regimeId` removed from
+  `LaunchManifestQuerySchema`.
+- `GET /api/orbital/fleet` — `regimeMix` / `platformMix` / `busMix`
+  shape flipped from `Record<string, number>` to
+  `Array<{key, count}>` sorted desc, top-5. Array preserves
+  ordering; old object shape lost it.
+
+**Fleet rollup dedup**:
+
+- `apps/console-api/src/repositories/queries/operator-fleet-rollup.ts`
+  — single drizzle `sql` builder now backs both
+  `FleetAnalysisRepository.analyzeOperatorFleet` (HTTP, N rows) and
+  `SatelliteFleetRepository.getOperatorFleetSnapshot` (sim, 1 row).
+  Neither repo depends on the other; they share the template via
+  pure import. Removed ~142 LOC of duplicated SQL, consolidated into
+  ~80 LOC in one place. `userId` param dropped (was on the port but
+  had no consumers; target table doesn't exist in the schema).
+
+**KNN ef_search parity fix**:
+
+- `apps/console-api/src/repositories/satellite.repository.ts` —
+  `knnNeighboursForField` now issues
+  `SET hnsw.ef_search = <ef>` before the cosine query, matching the
+  pattern `findKnnCandidates` had (and now does via the fn). `ef`
+  added as an optional param with a default of `100`, clamped
+  `[10, 1000]`.
+
+**Skill prompt doc updates**:
+
+- `apps/console-api/src/agent/ssa/skills/fleet-analyst.md` — updated
+  the DATA-shape section to describe `*Mix` as arrays of
+  `{key, count}` sorted by count desc.
+
+**Param-propagation proof** (live DB, `fn_forecast_debris`):
+
+| branch        | no filter | regimeId=1 (LEO) | regimeId=3 (GEO) |
+| ------------- | --------- | ---------------- | ---------------- |
+| density       | 6         | 1                | 1                |
+| fragmentation | 3         | 8                | 1                |
+| paper         | 10        | 10               | 10               |
+| news          | 1         | 1                | 1                |
+| weather       | 10        | 10               | 10               |
+
+Structured branches now honor the filter; free-text/global branches
+pass through unfiltered with `branch_filter_applied = false` so the
+contract is honest.
+
+**Still open** (from the ordered plan):
+
+- Step 5 — view extraction for `satellite-audit` /
+  `classification-flags` (pure views, low risk).
+- Step 6 — `user-fleet.repository.ts` → `jsonb`-returning SQL
+  functions.
+- HNSW index on `satellite_enrichment.telemetry_14d` — skipped:
+  column doesn't exist (seed-data / schema gap, separate concern).
+- Skill prompts (`debris-forecaster.md`, `orbit-slot-optimizer.md`,
+  `fleet-analyst.md` still mention `horizonYears` in some examples)
+  — left untouched; Zod strips unknowns so no crash, cortex-provider
+  normalisation absorbs drift.
+
+### Architecture audit 2026-04-19 + 9 fixes landed — 2026-04-19
+
+Deep audit (Claude code-reviewer subagent + manual passes) of the codebase
+against `CLAUDE.md` invariants (single-contract, no private bypass, kernel
+agnosticity, SOLID). Full report with file:line refs in
+`docs/refactor/architecture-audit-2026-04-19.md` (indexed in
+`docs/refactor/INDEX.md` entry #0 + new "Architecture audit" section).
+
+**Audit outcome:** 7 Critical + 12 Important + 10 Minor findings. 4 Critical
+and 5 Important closed this session; 3 Critical + 7 Important remain open
+(tracked in `TODO.md` with file:line fixes). All fixes non-destructive.
+
+**C3 — dead thalamus HTTP surface deleted.**
+
+- Removed `packages/thalamus/src/controllers/thalamus.controller.ts` (188 L)
+  and `packages/thalamus/src/routes/thalamus.routes.ts` (81 L); removed
+  `ThalamusController` + `thalamusRoutes` exports from the package barrel.
+  Those symbols duplicated the app-owned HTTP surface (CLAUDE.md §1-2) and
+  were never mounted. Zero consumers, zero behaviour change.
+
+**C5 — `satellite-sweep-chat` stack (639 LOC) remounted.**
+
+- 7-file stack had been moved from `packages/sweep/` to `apps/console-api/`
+  in commit `1ccc31b` but never wired: `routes/satellite-sweep-chat.routes.ts`,
+  `controllers/`, `services/`, `repositories/`, `transformers/`, `types/`,
+  `prompts/`. Feature had been silently disabled since the move.
+- `apps/console-api/src/container.ts`: constructs
+  `SatelliteSweepChatRepository` (redis) → `SatelliteSweepChatService`
+  (depends on `SatelliteRepository` + stubbed `VizService` +
+  `SatelliteService`) → `SatelliteSweepChatController`.
+- `apps/console-api/src/routes/index.ts`: mounts via `app.register(async
+scope => satelliteSweepChatRoutes(scope, s.satelliteSweepChat), {prefix:
+"/api/satellites"})` — auth (`authenticate` + `requireTier`) scoped to the
+  sub-plugin, no leakage onto sibling routes.
+- Routes now live: `POST /api/satellites/:id/sweep-chat` (SSE stream) +
+  `GET /api/satellites/:id/sweep-chat/state`. Front-end UI still TODO.
+
+**C6 — SSE controllers don't leak tokens on client disconnect.**
+
+- `apps/console-api/src/controllers/repl.controller.ts` and
+  `.../satellite-sweep-chat.controller.ts`: both create an `AbortController`
+  subscribed to `reply.raw.on("close")` so a browser navigation aborts the
+  service stream.
+- `ReplChatService.handleStream()` and `SatelliteSweepChatService.chat()`
+  accept `signal?: AbortSignal` and check `aborted()` before every new LLM
+  call (intent classify, chat reply, nano stream, findings extract) and at
+  every yield boundary. Result: a disconnect stops new token spend within
+  one generator step (in-flight calls still finish; the next one doesn't
+  start).
+- Updated `tests/unit/controllers/repl.controller.test.ts` to assert the
+  3rd `AbortSignal` argument.
+
+**C7 — interval timers cleaned on Fastify shutdown.**
+
+- `apps/console-api/src/server.ts`: new `app.addHook("onClose", async () =>
+{ container.services.mission.stop(); container.services.autonomy.stop(); })`
+  after `registerAllRoutes`. Stops the Vitest "hanging-process" warnings
+  and hot-reload timer leaks that fired `tick()` against torn-down infra.
+
+**I3 — no more post-build type cast in the composition root.**
+
+- `apps/console-api/src/container.ts`: replaced the
+  `(ssaAuditProvider as unknown as {...}).deps.sweepRepo.loadPastFeedback
+= ...` patch with a typed shared `sweepRepoHolder: { loadPastFeedback:
+() => Promise<SuggestionFeedbackRow[]> }`. Same object reference is
+  passed into `SsaAuditProvider` and rebound once `buildSweepContainer`
+  resolves. No private-field reach, no `as unknown as` casts. Pre-wire
+  calls throw a clear error so future wiring mistakes are loud in dev.
+
+**I4 — thalamus barrel promotion; deep-path imports deleted.**
+
+- `packages/thalamus/src/index.ts`: added `setNanoConfigProvider`,
+  `setNanoSwarmConfigProvider`, `setNanoSwarmProfile`, `setCuratorPrompt`,
+  `DEFAULT_NANO_SWARM_PROFILE`, `Lens`, `NanoSwarmProfile`,
+  `ExplorationQuery`, `NanoRequest`, `NanoResponse`.
+- `apps/console-api/src/container.ts`, `services/satellite-sweep-chat.service.ts`,
+  `prompts/nano-swarm-ssa.prompt.ts`, `agent/ssa/sweep/audit-provider.ssa.ts`:
+  all migrated from `@interview/thalamus/explorer/{nano-caller,nano-swarm,curator}`
+  - `@interview/thalamus/prompts/nano-swarm.prompt` + `.../explorer/scout`
+    deep-paths to the public barrel. Zero `@interview/thalamus/...` deep-path
+    imports remaining in `**/src/**`.
+
+**I7 — `MissionService.tick()` no longer throws unhandled rejections.**
+
+- `apps/console-api/src/services/mission.service.ts`: added a `catch (err)`
+  block around `runTask` that increments `errorCount` and logs
+  `{err, suggestionId, satelliteId}` via the injected Fastify logger.
+  Mirrors the `autonomy.service.ts` pattern. Prevents Node ≥ 15 from
+  crashing the process on per-task failures.
+
+**I10 — embed fan-out bounded with `mapWithConcurrency`.**
+
+- New generic helper at `packages/shared/src/utils/concurrency.ts`:
+  `mapWithConcurrency<T,R>(items, limit, fn)` preserves input order, caps
+  workers at `min(limit, items.length)`, propagates the first rejection.
+  6 unit tests at `packages/shared/tests/concurrency.spec.ts` cover empty
+  input, order preservation, concurrency cap, overflow cap, rejection
+  propagation, and invalid limits.
+- `packages/sweep/src/sim/memory.service.ts:writeMany` and
+  `packages/sweep/src/sim/aggregator.service.ts` batch-embed path now
+  route through `mapWithConcurrency(..., 8, ...)`. A 50-row turn batch no
+  longer bursts 50 concurrent Voyage/OpenAI embed calls. No new npm dep.
+
+**I12 — frontend polls only when the job is running.**
+
+- `apps/console/src/lib/queries.ts`: `useMissionStatus` and
+  `useAutonomyStatus` now use `refetchInterval: (q) =>
+q.state.data?.running ? <ms> : false`. Idle dashboards poll zero times
+  per minute (was 24 + 20).
+
+**Verification.** `pnpm -r typecheck` green across all 7 packages after
+every step. Unit tests: 338 in workspace packages (+6 new concurrency
+specs, was 332) + 314 in console-api = **652 unit tests passing**. Two
+repl controller assertions were updated to accept the new `AbortSignal`
+argument; no other test changes.
+
+**Still open (tracked in `TODO.md`):** Critical C1 (triple-write path on
+thalamus tables), C2 (`sim-promotion.service.ts` god-service with raw DB
+handle), C4 (thalamus kernel still hard-codes SSA via
+`utils/satellite-entity-patterns.ts` + 13 `cortices/sources/fetcher-*.ts`
+
+- `prompts/opacity-scout.prompt.ts`). Important I1, I2, I5, I6, I8, I9,
+  I11 + 10 Minor items.
+
 ### Sim 5-layer + HTTP boundary + Thalamus domain-agnostic — 2026-04-18 (evening)
 
 Branch `refactor/sim-agnostic`, on top of Plan 1 (sweep-agnostic) and Plan 2

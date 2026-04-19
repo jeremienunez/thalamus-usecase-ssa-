@@ -3,7 +3,9 @@ import { TopBar } from "./TopBar";
 import { LeftRail } from "./LeftRail";
 import { TelemetryStrip } from "./TelemetryStrip";
 import { CommandPalette } from "./CommandPalette";
-import { ReplPanel, ReplProvider } from "./ReplPanel";
+import { ReplPanel } from "./repl/ReplPanel";
+import { ReplProvider } from "./repl/ReplProvider";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -12,11 +14,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         <TopBar />
         <div className="flex min-h-0 flex-1">
           <LeftRail />
-          <main className="relative min-w-0 flex-1 overflow-hidden">{children}</main>
+          <main className="relative min-w-0 flex-1 overflow-hidden">
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </main>
         </div>
-        <TelemetryStrip />
+        <ErrorBoundary fallback={null}>
+          <TelemetryStrip />
+        </ErrorBoundary>
         <CommandPalette />
-        <ReplPanel />
+        <ErrorBoundary fallback={null}>
+          <ReplPanel />
+        </ErrorBoundary>
       </div>
     </ReplProvider>
   );

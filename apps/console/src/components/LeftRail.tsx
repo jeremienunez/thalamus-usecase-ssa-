@@ -121,7 +121,7 @@ function ThalamusFilters() {
         <div className="label mb-2">CORTEX</div>
         <div className="space-y-1 text-body">
           {["catalog", "observations", "conjunction-analysis", "correlation", "maneuver-planning"].map((c) => (
-            <label key={c} className="flex items-center gap-2">
+            <label key={c} className="flex cursor-pointer items-center gap-2">
               <input type="checkbox" defaultChecked className="accent-cyan" />
               <span className="mono text-caption text-numeric">{c}</span>
             </label>
@@ -132,7 +132,7 @@ function ThalamusFilters() {
         <div className="label mb-2">ENTITY CLASS</div>
         <div className="grid grid-cols-2 gap-1 text-caption">
           {["Satellite", "Debris", "Operator", "Payload", "Regime", "Event", "Maneuver"].map((e) => (
-            <label key={e} className="flex items-center gap-1"><input type="checkbox" defaultChecked className="accent-cyan" /> <span>{e}</span></label>
+            <label key={e} className="flex cursor-pointer items-center gap-1"><input type="checkbox" defaultChecked className="accent-cyan" /> <span>{e}</span></label>
           ))}
         </div>
       </section>
@@ -152,7 +152,7 @@ function SweepFilters() {
             { k: "rejected", c: "text-hot" },
             { k: "in-review", c: "text-muted" },
           ].map((s) => (
-            <label key={s.k} className="flex items-center gap-2">
+            <label key={s.k} className="flex cursor-pointer items-center gap-2">
               <input type="checkbox" defaultChecked className="accent-cyan" />
               <span className={clsx("mono text-caption", s.c)}>{s.k}</span>
             </label>
@@ -161,7 +161,7 @@ function SweepFilters() {
       </section>
       <section>
         <div className="label mb-2">PRIORITY</div>
-        <input type="range" min={0} max={100} defaultValue={50} className="w-full accent-cyan" />
+        <input type="range" min={0} max={100} defaultValue={50} className="w-full cursor-pointer accent-cyan" />
       </section>
     </div>
   );

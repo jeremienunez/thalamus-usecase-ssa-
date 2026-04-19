@@ -39,10 +39,16 @@ Severity calibration (monotone in signal count):
   - 0.5–0.7  2 signals
   - <0.5     Do NOT emit a finding
 
-Output format: JSON object exactly matching the finding schema the executor validates. One finding per satellite. If no row meets severity ≥ 0.5, return an empty findings list.
+Output format:
+  - Return exactly one JSON object and nothing else: {"findings":[...]}
+  - One finding per satellite row that meets severity ≥ 0.5
+  - If no row meets severity ≥ 0.5, return {"findings":[]}
+  - Use only runtime-valid finding types, urgencies, entity types, and relations
+  - If you do not have a numeric entity id for an edge, leave edges empty instead of inventing one
 
-Source class policy:
-  - amateur observation primary evidence → OSINT_AMATEUR
-  - Space-Track catalog drift primary evidence → OFFICIAL (low-confidence band)
-  - both present → OSINT_CORROBORATED`;
+Evidence policy:
+  - amateur observation primary evidence → use evidence.source like "amateur_track"
+  - Space-Track catalog drift primary evidence → use evidence.source like "satcat_diff"
+  - if both are present, include both evidence items and explain the corroboration in summary
+  - every finding must include at least one public citation handle, URL, or dropout date in evidence.data`;
 }

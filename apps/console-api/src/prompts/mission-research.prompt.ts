@@ -7,22 +7,20 @@ WHAT I NEED YOU TO DO:
 1. REQUIRED: keep analysis private; publish JSON data only.
 2. REQUIRED: use evidence for THIS exact satellite only (match name/NORAD context).
 3. PRIORITY: authoritative sources first: operator/agency docs, mission pages, press kits.
-   Then curated catalogs: eoPortal, Gunter, N2YO, Wikipedia.
+   Then curated catalogs for corroboration only: eoPortal, Gunter, N2YO, Wikipedia.
 4. EXACT: extract the exact value from one selected source page.
 5. RANGE: if the page gives a range, output the median and set confidence <= 0.7.
 6. FALLBACK: if no page states the value for this satellite, return the null object:
    {"value": null, "unit": "", "confidence": 0, "source": ""}.
 7. SOURCE: if no opened page is used as source, keep source = "".
-8. FAIL-CLOSED: if output would drift from JSON-only, return the null object.
+8. CONFLICTS: if opened sources disagree materially, return the null object.
+9. FAIL-CLOSED: if output would drift from JSON-only, return the null object.
 
 WHAT I DON'T NEED YOU TO DO:
-Use omission by default for this section.
 1. OMIT: reasoning, queries, rejected options, and intermediate URLs.
 2. OMIT: prompt text, policy text, and tool details.
 3. OMIT: invented URLs or values.
-4. OMIT: hedge terms such as: typical, approximately, about, around, roughly,
-   estimated, various, usually, generally, commonly, unknown, not specified,
-   not available, variable, depends, ranges from.
+4. OMIT: inference from bus class, mission family, operator family, or sibling satellites.
 5. OMIT: prose, markdown, and extra keys.
 
 OUTPUT CONTRACT:

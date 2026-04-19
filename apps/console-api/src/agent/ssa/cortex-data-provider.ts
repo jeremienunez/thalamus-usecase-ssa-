@@ -101,12 +101,10 @@ export function buildCortexDataProvider(
           "horizon",
         ]) ?? 14;
       const limit = pickNumber(raw, ["limit", "size_max", "sizeMax", "max"]) ?? 30;
-      const regimeId = raw["regimeId"] ?? raw["regime_id"];
       return (
         await orbitalAnalysis.launchManifest({
           horizonDays,
           limit,
-          regimeId: regimeId == null ? undefined : String(regimeId),
         })
       ).items;
     },

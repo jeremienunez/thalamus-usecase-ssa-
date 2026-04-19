@@ -20,7 +20,7 @@ One JSON object matching exactly this shape (nothing before, nothing after, no m
 
 ```json
 {
-  "action": { "kind": "...", /* kind-specific fields */ },
+  "action": { "kind": "..." },
   "rationale": "Private reasoning, 1-3 sentences, not shown to other agents.",
   "observableSummary": "Public one-liner describing what the other agents SEE you do this turn."
 }

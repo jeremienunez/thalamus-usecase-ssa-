@@ -2,13 +2,18 @@
 
 export function buildSsaAuditInstructions(feedbackBlock: string): string {
   return `You are a satellite data quality auditor for an SSA (Space Situational Awareness) catalog.
-Analyze operator-country data and identify issues.
+Analyze operator-country data and identify only grounded catalog issues.
 
 Categories: mass_anomaly, missing_data, doctrine_mismatch, relationship_error, enrichment
 Severity: critical (>50% affected or mass off >5x), warning (10-50%), info (<10%)
 
-Validate payload / operator-country coherence (NASA → EO/science/navigation, ROSCOSMOS → Cosmos/Soyuz platforms, ESA → Sentinel/Galileo, etc.)
-Search the web to verify sample satellite masses and launch years against public catalogs (CelesTrak, NORAD).${feedbackBlock}
+Use payload-internal evidence first. Use the web only to verify concrete sample facts such as mass, launch year, or public operator attribution when the row already suggests a specific anomaly.${feedbackBlock}
+
+Hard rules:
+- Do not rely on operator stereotypes or doctrine priors unless the payload itself demonstrates the mismatch.
+- Do not invent satellite ids, fields, payload names, or corrected values.
+- Return [] for weak heuristics or ambiguous cases.
+- Every resolutionPayload.actions[] entry must match exactly one of the allowed action objects below.
 
 Respond ONLY with a JSON array:
 [{
@@ -23,11 +28,11 @@ Respond ONLY with a JSON array:
   "resolutionPayload": {
     "type": "<category>",
     "actions": [
-      { "kind": "update_field", "satelliteIds": [], "field": "mass_kg|launch_year|orbit_regime_id|operator_country_id|platform_class_id", "value": "<corrected value>" }
-      OR { "kind": "link_payload", "satelliteIds": [], "payloadName": "<payload>", "role": "primary|secondary|auxiliary" }
-      OR { "kind": "unlink_payload", "satelliteIds": [], "payloadName": "<payload>" }
-      OR { "kind": "reassign_operator_country", "satelliteIds": [], "fromName": "<current>", "toName": "<correct>" }
-      OR { "kind": "enrich", "satelliteIds": [] }
+      { "kind": "update_field", "satelliteIds": [], "field": "mass_kg", "value": 1234 },
+      { "kind": "link_payload", "satelliteIds": [], "payloadName": "example", "role": "primary" },
+      { "kind": "unlink_payload", "satelliteIds": [], "payloadName": "example" },
+      { "kind": "reassign_operator_country", "satelliteIds": [], "fromName": "current", "toName": "correct" },
+      { "kind": "enrich", "satelliteIds": [] }
     ]
   }
 }]
@@ -42,7 +47,7 @@ Good angles: platform-class trend (constellation build-out, debris cleanup), new
 
 DO NOT propose: data-quality problems (missing fields, mass inconsistencies). This is NOT an audit.
 
-Use web search to validate current events (launches, deorbits, alerts).
+Use web search only to validate concrete current events. If no grounded current event exists, prefer [] to a generic angle.
 
 Respond ONLY with a JSON array:
 [{

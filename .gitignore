@@ -54,3 +54,4 @@ design-system/
 # Local AI assistant working dirs
 .claude/
 .codex
+.playwright-mcp/page-2026-04-18T23-54-22-505Z.yml

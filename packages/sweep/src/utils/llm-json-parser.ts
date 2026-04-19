@@ -24,6 +24,62 @@ function cleanLlmOutput(raw: string): string {
 }
 
 /**
+ * Extract the first balanced top-level JSON value from free-form text.
+ *
+ * This recovers common LLM failure cases such as two JSON objects emitted back
+ * to back. Example: `{"findings":[]}\n{"findings":[]}`.
+ */
+function extractFirstBalancedJson(text: string): string | null {
+  for (let start = 0; start < text.length; start += 1) {
+    const opener = text[start];
+    if (opener !== "{" && opener !== "[") continue;
+
+    const stack: string[] = [opener];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start + 1; i < text.length; i += 1) {
+      const ch = text[i];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (ch === "\\") {
+          escaped = true;
+        } else if (ch === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (ch === "{" || ch === "[") {
+        stack.push(ch);
+        continue;
+      }
+
+      if (ch === "}" || ch === "]") {
+        const last = stack[stack.length - 1];
+        const matches =
+          (last === "{" && ch === "}") || (last === "[" && ch === "]");
+        if (!matches) break;
+
+        stack.pop();
+        if (stack.length === 0) {
+          return text.slice(start, i + 1);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Repair truncated JSON by balancing brackets.
  */
 function repairTruncated(text: string): string {
@@ -40,15 +96,16 @@ function repairTruncated(text: string): string {
 /**
  * Extract JSON (object or array) from LLM text output.
  *
- * Tries 8 strategies from least to most aggressive:
+ * Tries 9 strategies from least to most aggressive:
  * 1. Direct parse
  * 2. Prepend "{" (Partial Mode leftover)
- * 3. Extract outermost {...}
- * 4. Extract outermost [...]
- * 5. Extract {...} with repair
- * 6. Extract [...] with repair
- * 7. Prepend "{" + repair
- * 8. Extract from code block
+ * 3. Extract the first balanced top-level JSON value
+ * 4. Extract outermost {...}
+ * 5. Extract outermost [...]
+ * 6. Extract {...} with repair
+ * 7. Extract [...] with repair
+ * 8. Prepend "{" + repair
+ * 9. Extract from code block
  *
  * @returns Parsed JSON value (object, array, etc.) or null if all fail.
  */
@@ -64,38 +121,45 @@ export function extractJson(raw: string): unknown | null {
     // 2. Partial Mode leftover — missing opening brace
     () => JSON.parse("{" + content),
 
-    // 3. Outermost JSON object
+    // 3. First balanced JSON value
+    () => {
+      const extracted = extractFirstBalancedJson(content);
+      if (!extracted) throw new Error("no match");
+      return JSON.parse(extracted);
+    },
+
+    // 4. Outermost JSON object
     () => {
       const m = content.match(/\{[\s\S]*\}/);
       if (!m) throw new Error("no match");
       return JSON.parse(m[0]);
     },
 
-    // 4. Outermost JSON array
+    // 5. Outermost JSON array
     () => {
       const m = content.match(/\[\s*[\[{][\s\S]*[\]}]\s*\]/);
       if (!m) throw new Error("no match");
       return JSON.parse(m[0]);
     },
 
-    // 5. Object with bracket repair (truncated output)
+    // 6. Object with bracket repair (truncated output)
     () => {
       const m = content.match(/\{[\s\S]*$/);
       if (!m) throw new Error("no match");
       return JSON.parse(repairTruncated(m[0]));
     },
 
-    // 6. Array with bracket repair
+    // 7. Array with bracket repair
     () => {
       const m = content.match(/\[[\s\S]*$/);
       if (!m) throw new Error("no match");
       return JSON.parse(repairTruncated(m[0]));
     },
 
-    // 7. Partial Mode leftover + repair
+    // 8. Partial Mode leftover + repair
     () => JSON.parse(repairTruncated("{" + content)),
 
-    // 8. Code block extraction (```json ... ```)
+    // 9. Code block extraction (```json ... ```)
     () => {
       const m = content.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (!m) throw new Error("no match");

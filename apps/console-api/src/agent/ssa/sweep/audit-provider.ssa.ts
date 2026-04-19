@@ -9,7 +9,7 @@ import {
 import {
   callNanoWaves,
   type NanoRequest,
-} from "@interview/thalamus/explorer/nano-caller";
+} from "@interview/thalamus";
 import type {
   AuditCycleContext,
   AuditCandidate,

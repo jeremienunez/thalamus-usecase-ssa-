@@ -21,6 +21,7 @@ export interface IterationContext {
   minConfidence?: number;
   lang?: "fr" | "en";
   mode?: "investment" | "audit";
+  userId?: bigint;
   /** Original user query — used to build replan prompts. */
   query: string;
   /** Whether a user is in scope — drives filtering of user-scoped cortices. */
@@ -77,6 +78,7 @@ export class CycleLoopRunner {
         cycleId,
         ctx.lang,
         ctx.mode,
+        ctx.userId,
       );
       const newFindings = [...outputs.values()].flatMap((o) => o.findings);
       const iterationCost = [...outputs.values()].reduce(

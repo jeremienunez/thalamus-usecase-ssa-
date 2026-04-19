@@ -18,6 +18,7 @@ type FindingRow = {
   title?: string;
   summary?: string;
   cortex?: string;
+  findingType?: string;
   urgency?: string;
   confidence?: number | null;
 };
@@ -43,7 +44,9 @@ export function toReplFindingSummaryView(
   return {
     id: String(f.id),
     title: resolveTitle(f),
+    summary: f.summary?.slice(0, 300) ?? null,
     cortex: f.cortex ?? null,
+    findingType: f.findingType ?? null,
     urgency: f.urgency ?? null,
     confidence: Number(f.confidence ?? 0),
   };

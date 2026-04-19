@@ -3,7 +3,7 @@ import { useFrame, ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { SatelliteDTO } from "@/lib/api";
-import { regimeColor, satellitePosition } from "@/lib/orbit";
+import { propagateSgp4 } from "@/lib/orbit";
 
 const colorCache = new Map<string, THREE.Color>();
 function getCompanyColor(name: string): THREE.Color {
@@ -253,15 +253,21 @@ export function SatelliteField({ satellites, selectedId, onSelect, timeScale, la
   useEffect(() => {
     if (satellites.length === 0) return;
     const interval = setInterval(() => {
+      // Pick 2 floating decorative labels; never collide with priority labels.
+      const skip = new Set([selectedId, ...labelIds]);
       const randoms: number[] = [];
-      for (let i = 0; i < 4; i++) {
+      let attempts = 0;
+      while (randoms.length < 2 && attempts < 12) {
+        attempts++;
         const pick = satellites[Math.floor(Math.random() * satellites.length)];
-        if (pick) randoms.push(pick.id);
+        if (pick && !skip.has(pick.id) && !randoms.includes(pick.id)) {
+          randoms.push(pick.id);
+        }
       }
       setFloatingIds(randoms);
     }, 5000);
     return () => clearInterval(interval);
-  }, [satellites]);
+  }, [satellites, selectedId, labelIds]);
 
   const positions = useMemo(
     () => new Array(satellites.length).fill(0).map(() => new THREE.Vector3()),
@@ -379,8 +385,9 @@ export function SatelliteField({ satellites, selectedId, onSelect, timeScale, la
       if (mesh) mesh.setMatrixAt(i, hideTmp.matrixWorld);
     };
 
+    const nowMs = Date.now() + tRef.current * 1000;
     satellites.forEach((s, i) => {
-      const p = satellitePosition(s, tRef.current, positions[i]);
+      const p = propagateSgp4(s, nowMs, positions[i]);
       const isSelected = selectedId === s.id;
       const type = getModelType(s);
       
@@ -531,22 +538,40 @@ export function SatelliteField({ satellites, selectedId, onSelect, timeScale, la
             key={s.id}
             position={[p.x, p.y, p.z]}
             center={false}
-            distanceFactor={8}
             zIndexRange={[10, 0]}
             pointerEvents="none"
-            style={{ pointerEvents: "none", opacity: isFloat ? 0.8 : 1, transition: "opacity 1s ease" }}
+            style={{
+              pointerEvents: "none",
+              opacity: isFloat ? 0.8 : 1,
+              transition: "opacity 1s ease",
+            }}
           >
             <div className="flex flex-col gap-0.5" style={{ transform: "translate(12px, -12px)" }}>
-              <div className="flex items-center gap-1 whitespace-nowrap border-l-2 border-cyan bg-panel/80 pl-1.5 pr-2 py-0.5 backdrop-blur-md">
-                <span className="h-1.5 w-1.5" style={{ backgroundColor: `#${getCompanyColor(s.name).getHexString()}` }} />
-                <span className={isSel ? "mono text-caption text-cyan font-bold" : "mono text-caption text-primary"}>{s.name}</span>
+              <div className="flex max-w-[12rem] items-center gap-1 whitespace-nowrap border-l-2 border-cyan bg-panel/95 pl-1.5 pr-2 py-0.5 shadow-hud backdrop-blur-md">
+                <span className="h-1.5 w-1.5 shrink-0" style={{ backgroundColor: `#${getCompanyColor(s.name).getHexString()}` }} />
+                <span
+                  title={s.name}
+                  className={
+                    isSel
+                      ? "mono truncate text-caption text-cyan font-bold"
+                      : "mono truncate text-caption text-primary"
+                  }
+                >
+                  {s.name}
+                </span>
               </div>
               
               {(isSel || isFloat) && (
-                <div className="flex flex-col gap-0.5 border-l-2 border-hairline bg-panel/60 pl-2 pr-2 py-1 backdrop-blur-sm shadow-xl">
-                  <span className="mono text-[9px] text-muted tracking-widest uppercase">REGIME: <strong className="text-primary">{s.regime}</strong></span>
-                  <span className="mono text-[9px] text-muted tracking-widest uppercase">INC: <strong className="text-primary">{s.inclinationDeg.toFixed(1)}°</strong></span>
-                  <span className="mono text-[9px] text-muted tracking-widest uppercase">A: <strong className="text-primary">{s.semiMajorAxisKm.toFixed(0)}km</strong></span>
+                <div className="flex flex-col gap-0.5 border-l-2 border-hairline bg-panel/95 pl-2 pr-2 py-1 backdrop-blur-md shadow-elevated">
+                  <span className="mono text-nano text-muted tracking-widest">
+                    REGIME <strong className="ml-1 text-primary">{s.regime}</strong>
+                  </span>
+                  <span className="mono text-nano text-muted tracking-widest">
+                    INC <strong className="ml-1 text-primary tabular-nums">{s.inclinationDeg.toFixed(1)}°</strong>
+                  </span>
+                  <span className="mono text-nano text-muted tracking-widest">
+                    ALT <strong className="ml-1 text-primary tabular-nums">{Math.round(s.semiMajorAxisKm - 6371).toLocaleString()}<span className="ml-0.5 text-dim">km</span></strong>
+                  </span>
                 </div>
               )}
             </div>

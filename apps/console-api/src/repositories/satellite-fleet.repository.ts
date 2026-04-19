@@ -11,6 +11,10 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import {
+  operatorFleetRollupSql,
+  type OperatorFleetRollupRow,
+} from "./queries/operator-fleet-rollup";
 
 export interface OperatorFleetSnapshot {
   operatorName: string;
@@ -25,75 +29,31 @@ export class SatelliteFleetRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
   /**
-   * One aggregate query: operator + country + satellite count + avg launch
-   * year + top-5 regime mix + top-5 platform mix. Consumed by SimFleetProvider
-   * (apps/console-api/src/agent/ssa/sim/fleet-provider.ts).
+   * Single-operator fleet snapshot for the sim flow. Backed by the shared
+   * operatorFleetRollupSql builder — same SQL as the HTTP /api/fleet route,
+   * just scoped to one operator. Drops busMix (not consumed by sim).
    *
    * Throws if the operator row is missing.
    */
-  async getOperatorFleetSnapshot(operatorId: number): Promise<OperatorFleetSnapshot> {
-    const result = await this.db.execute(sql`
-      WITH fleet AS (
-        SELECT
-          s.id,
-          s.launch_year,
-          orr.name AS regime_name,
-          pc.name AS platform_name
-        FROM satellite s
-        LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
-        LEFT JOIN orbit_regime orr    ON orr.id = oc.orbit_regime_id
-        LEFT JOIN platform_class pc   ON pc.id = s.platform_class_id
-        WHERE s.operator_id = ${BigInt(operatorId)}
-      )
-      SELECT
-        op.name AS operator_name,
-        oc.name AS country_name,
-        (SELECT count(*)::int FROM fleet) AS satellite_count,
-        (SELECT avg(launch_year)::int FROM fleet WHERE launch_year IS NOT NULL) AS avg_launch_year,
-        COALESCE(
-          (SELECT jsonb_agg(jsonb_build_object('regime', regime_name, 'count', c))
-           FROM (SELECT regime_name, count(*)::int AS c FROM fleet
-                 WHERE regime_name IS NOT NULL
-                 GROUP BY regime_name ORDER BY c DESC LIMIT 5) r),
-          '[]'::jsonb
-        ) AS regime_mix,
-        COALESCE(
-          (SELECT jsonb_agg(jsonb_build_object('platform', platform_name, 'count', c))
-           FROM (SELECT platform_name, count(*)::int AS c FROM fleet
-                 WHERE platform_name IS NOT NULL
-                 GROUP BY platform_name ORDER BY c DESC LIMIT 5) p),
-          '[]'::jsonb
-        ) AS platform_mix
-      FROM operator op
-      LEFT JOIN satellite s2          ON s2.operator_id = op.id
-      LEFT JOIN operator_country oc   ON oc.id = s2.operator_country_id
-      WHERE op.id = ${BigInt(operatorId)}
-      GROUP BY op.name, oc.name
-      LIMIT 1
-    `);
-
-    const row = result.rows[0] as
-      | {
-          operator_name: string;
-          country_name: string | null;
-          satellite_count: number | null;
-          avg_launch_year: number | null;
-          regime_mix: Array<{ regime: string; count: number }> | null;
-          platform_mix: Array<{ platform: string; count: number }> | null;
-        }
-      | undefined;
-
+  async getOperatorFleetSnapshot(
+    operatorId: number,
+  ): Promise<OperatorFleetSnapshot> {
+    const result = await this.db.execute<OperatorFleetRollupRow>(
+      operatorFleetRollupSql({ operatorId: BigInt(operatorId), limit: 1 }),
+    );
+    const row = result.rows[0];
     if (!row) {
-      throw new Error(`SatelliteFleetRepository: operator ${operatorId} not found`);
+      throw new Error(
+        `SatelliteFleetRepository: operator ${operatorId} not found`,
+      );
     }
-
     return {
-      operatorName: row.operator_name,
-      operatorCountry: row.country_name,
-      satelliteCount: row.satellite_count ?? 0,
-      regimeMix: row.regime_mix ?? [],
-      platformMix: row.platform_mix ?? [],
-      avgLaunchYear: row.avg_launch_year,
+      operatorName: row.operatorName,
+      operatorCountry: row.country,
+      satelliteCount: row.satelliteCount,
+      regimeMix: row.regimeMix,
+      platformMix: row.platformMix,
+      avgLaunchYear: row.avgLaunchYear,
     };
   }
 

@@ -13,9 +13,14 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
+import { mapWithConcurrency } from "@interview/shared/utils";
 import type { EmbedFn } from "./memory.service";
 import type { TurnAction } from "./types";
 import type { SimAggregationStrategy, SimSwarmStore } from "./ports";
+
+// Same budget as memory.service — swarms of ~20 fish produce aggregator
+// batches around that size; 8 concurrent embeds keeps us off rate limits.
+const EMBED_CONCURRENCY = 8;
 
 const logger = createLogger("sim-aggregator");
 
@@ -180,12 +185,15 @@ export class AggregatorService {
       }
     }
 
-    // Batch-embed in parallel (bounded), filling terminal.embedding in place.
+    // Batch-embed with bounded concurrency, filling terminal.embedding in
+    // place. Each embed is already `.catch`-wrapped so one bad row can't
+    // abort the rest.
     if (this.deps.embed && textsToEmbed.length > 0) {
-      const vectors = await Promise.all(
-        textsToEmbed.map((t) =>
-          this.deps.embed!(t).catch((): number[] | null => null),
-        ),
+      const embed = this.deps.embed;
+      const vectors = await mapWithConcurrency(
+        textsToEmbed,
+        EMBED_CONCURRENCY,
+        (t) => embed(t).catch((): number[] | null => null),
       );
       for (let i = 0; i < vectors.length; i++) {
         terminals[embedTargets[i]].embedding = vectors[i];

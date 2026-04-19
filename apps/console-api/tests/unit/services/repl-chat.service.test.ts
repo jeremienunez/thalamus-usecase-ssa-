@@ -5,6 +5,8 @@ import type { ReplStreamEvent } from "@interview/shared";
 let classifierContent = JSON.stringify({ action: "chat" });
 let summariserContent = "summary";
 let chatContent = "chat-reply";
+let lastSystemPrompt = "";
+let lastSummariserPayload = "";
 
 vi.mock("@interview/thalamus", async () => {
   const actual = await vi.importActual<typeof import("@interview/thalamus")>(
@@ -13,11 +15,14 @@ vi.mock("@interview/thalamus", async () => {
   return {
     ...actual,
     createLlmTransportWithMode: (sys: string) => ({
-      call: async (_input: string) => {
+      call: async (input: string) => {
+        lastSystemPrompt = sys;
         if (sys.includes("intent router"))
           return { content: classifierContent, provider: "kimi" };
-        if (sys.includes("briefing writer"))
+        if (sys.includes("final synthesis briefer")) {
+          lastSummariserPayload = input;
           return { content: summariserContent, provider: "kimi" };
+        }
         return { content: chatContent, provider: "kimi" };
       },
     }),
@@ -58,6 +63,8 @@ describe("ReplChatService.handleStream — chat branch", () => {
     classifierContent = JSON.stringify({ action: "chat" });
     summariserContent = "summary";
     chatContent = "echo:bonjour";
+    lastSystemPrompt = "";
+    lastSummariserPayload = "";
   });
 
   it("emits classified → chat.complete → done when classifier routes to chat", async () => {
@@ -96,6 +103,8 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
     });
     summariserContent = "n=1 finding resume";
     chatContent = "chat unused";
+    lastSystemPrompt = "";
+    lastSummariserPayload = "";
   });
 
   it("emits classified → cycle.start → step* → finding* → summary.complete → done", async () => {
@@ -118,7 +127,9 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
           {
             id: "f:1",
             title: "Conjonction serrée",
+            summary: "Pc=1.2e-08 for AQUA and BEESAT-1",
             cortex: "catalog",
+            findingType: "alert",
             urgency: "medium",
             confidence: 0.82,
           },
@@ -126,7 +137,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       },
     });
 
-    const events = await drain(svc.handleStream("scan conjonctions"));
+    const events = await drain(svc.handleStream("scan conjonctions", 7n));
     const types = events.map((e) => e.event);
     expect(types[0]).toBe("classified");
     expect(types[1]).toBe("cycle.start");
@@ -136,5 +147,30 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
     expect(types.at(-1)).toBe("done");
 
     expect(runCycle).toHaveBeenCalledOnce();
+    expect(runCycle).toHaveBeenCalledWith({
+      query: "conjonctions",
+      userId: 7n,
+      triggerType: "user",
+      triggerSource: "console-chat",
+    });
+    expect(lastSystemPrompt).toContain('Executed research query: "conjonctions"');
+    expect(lastSystemPrompt).toContain(
+      'Every bullet must include citations in the exact form "#id: title".',
+    );
+    expect(lastSystemPrompt).toContain("Do not infer chronology");
+    expect(lastSystemPrompt).toContain(
+      "Never mention an operator, satellite name, NORAD id, Pc, date, or action unless it appears verbatim in the payload.",
+    );
+
+    const payload = JSON.parse(lastSummariserPayload) as {
+      cycleId: string;
+      findings: Array<{ summary: string | null; findingType: string | null }>;
+    };
+    expect(payload.cycleId).toBe("cyc:42");
+    expect(payload.findings).toHaveLength(1);
+    expect(payload.findings[0]).toMatchObject({
+      summary: "Pc=1.2e-08 for AQUA and BEESAT-1",
+      findingType: "alert",
+    });
   });
 });

@@ -48,7 +48,7 @@ Each finding:
 - **urgency** — "low" for baseline profiles, "medium" for anomalies, "high" for density-threshold proximity
 - **confidence** — based on population completeness in DATA
 - **evidence** — `[{ source: "catalog_population"|"operator_registry"|"payload_registry", data: {...}, weight: 1.0 }]`
-- **edges** — `[{ entityType: "orbitRegime", entityId: N, relation: "about" }]`
+- **edges** — `[{ entityType: "orbit_regime", entityId: N, relation: "about" }]`
 
 ## Hand-off
 

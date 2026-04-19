@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import * as satelliteJs from "satellite.js";
 import type { SatelliteDTO } from "./api";
 
 /** Earth radius in km (scene uses km → units / 1000 for display). */
@@ -88,6 +89,82 @@ export function orbitRing(
     out[3 * k + 2] = v.z;
   }
   return out;
+}
+
+/**
+ * Keplerian fallback anchored on the TLE epoch: advance mean anomaly from the
+ * element epoch to `nowMs` (wall-clock), then delegate to the two-body solver.
+ * Safe to call without tleLine1/tleLine2 — only needs s.epoch.
+ */
+export function satellitePositionAt(
+  s: Pick<
+    SatelliteDTO,
+    | "semiMajorAxisKm"
+    | "eccentricity"
+    | "inclinationDeg"
+    | "raanDeg"
+    | "argPerigeeDeg"
+    | "meanAnomalyDeg"
+    | "meanMotionRevPerDay"
+    | "epoch"
+  >,
+  nowMs: number = Date.now(),
+  out = new THREE.Vector3(),
+): THREE.Vector3 {
+  const epochMs = Date.parse(s.epoch);
+  const dtSec = Number.isFinite(epochMs) ? (nowMs - epochMs) / 1000 : 0;
+  return satellitePosition(s, dtSec, out);
+}
+
+// satrec init is not cheap (≈ms for each TLE); cache by line1 since TLEs are
+// immutable per ingestion and we rebuild every animation frame.
+const satrecByLine1 = new Map<string, satelliteJs.SatRec | null>();
+
+/**
+ * Real-time SGP4/SDP4 propagation from TLE line1/line2 when available,
+ * otherwise falls back to the epoch-anchored Keplerian solver.
+ * Returns position in scene units (three.js y-up).
+ */
+export function propagateSgp4(
+  s: Pick<
+    SatelliteDTO,
+    | "semiMajorAxisKm"
+    | "eccentricity"
+    | "inclinationDeg"
+    | "raanDeg"
+    | "argPerigeeDeg"
+    | "meanAnomalyDeg"
+    | "meanMotionRevPerDay"
+    | "epoch"
+    | "tleLine1"
+    | "tleLine2"
+  >,
+  nowMs: number = Date.now(),
+  out = new THREE.Vector3(),
+): THREE.Vector3 {
+  const l1 = s.tleLine1;
+  const l2 = s.tleLine2;
+  if (l1 && l2) {
+    let satrec = satrecByLine1.get(l1);
+    if (satrec === undefined) {
+      try {
+        satrec = satelliteJs.twoline2satrec(l1, l2);
+      } catch {
+        satrec = null;
+      }
+      satrecByLine1.set(l1, satrec);
+    }
+    if (satrec && satrec.error === 0) {
+      const pv = satelliteJs.propagate(satrec, new Date(nowMs));
+      const pos = pv.position;
+      if (pos && typeof pos !== "boolean" && satrec.error === 0) {
+        // TEME ≈ ECI at visualization scale; map ECI (x,y,z) → scene (x, z, -y).
+        out.set(pos.x * SCENE_SCALE, pos.z * SCENE_SCALE, -pos.y * SCENE_SCALE);
+        return out;
+      }
+    }
+  }
+  return satellitePositionAt(s, nowMs, out);
 }
 
 export function regimeColor(regime: "LEO" | "MEO" | "GEO" | "HEO"): THREE.Color {

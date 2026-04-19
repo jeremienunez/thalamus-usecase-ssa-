@@ -12,11 +12,11 @@ export class CycleSummariser {
   constructor(private readonly llm: LlmTransportFactory) {}
 
   async summarise(
-    input: string,
+    query: string,
     cycleId: string,
     findings: ReplFindingSummaryView[],
   ): Promise<{ text: string; provider: string }> {
-    const summariser = this.llm.create(summariserPrompt(input));
+    const summariser = this.llm.create(summariserPrompt(query));
     const payload = JSON.stringify({ cycleId, findings }, null, 2);
     const summary = await summariser.call(payload);
     return { text: summary.content, provider: summary.provider };

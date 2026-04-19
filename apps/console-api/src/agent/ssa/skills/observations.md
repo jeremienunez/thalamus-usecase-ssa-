@@ -41,11 +41,11 @@ Return JSON: `{ "findings": [...] }`
 Each finding:
 - **title** — e.g. "Track 8821 associated to NORAD 44714, d_M=1.8, residual 310 m"
 - **summary** — station, sensor class, epoch, associated satellite (or UCT), residuals, covariance quality. Every field cites DATA.
-- **findingType** — "association" (linked), "uct" (uncorrelated), "anomaly" (calibration or covariance fail)
+- **findingType** — "insight" (linked), "alert" (uncorrelated track / UCT), "anomaly" (calibration or covariance fail)
 - **urgency** — "low" for nominal, "medium" for UCTs, "high" for station calibration faults
-- **confidence** — driven by `sourceClass`, covariance quality, and Mahalanobis distance
+- **confidence** — 0.8-0.95 for well-associated field tracks, 0.4-0.7 for OSINT or calibration-suspect tracks, lower for UCTs
 - **evidence** — `[{ source: "radar"|"optical"|"rf", data: { stationId, dM, residualKm, covCond }, weight: 1.0 }]`
-- **edges** — `[{ entityType: "satellite", entityId: N, relation: "observed-by" }]`
+- **edges** — `[{ entityType: "satellite", entityId: N, relation: "about" }]`
 
 ## Hand-off to the core loop
 

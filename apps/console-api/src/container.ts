@@ -15,14 +15,12 @@ import type * as schema from "@interview/db-schema";
 import type { FastifyBaseLogger } from "fastify";
 import {
   buildThalamusContainer,
-  type WebSearchPort,
-} from "@interview/thalamus";
-import { setNanoConfigProvider } from "@interview/thalamus/explorer/nano-caller";
-import {
+  setNanoConfigProvider,
   setNanoSwarmConfigProvider,
   setNanoSwarmProfile,
-} from "@interview/thalamus/explorer/nano-swarm";
-import { setCuratorPrompt } from "@interview/thalamus/explorer/curator";
+  setCuratorPrompt,
+  type WebSearchPort,
+} from "@interview/thalamus";
 import {
   SSA_NANO_SWARM_PROFILE,
   SSA_CURATOR_PROMPT,
@@ -43,6 +41,7 @@ import {
   simTurnQueue,
   swarmAggregateQueue,
   swarmFishQueue,
+  type SuggestionFeedbackRow,
 } from "@interview/sweep";
 import { IngestionService } from "./services/ingestion.service";
 
@@ -146,6 +145,11 @@ import { SimMemoryService } from "./services/sim-memory.service";
 import { SimTerminalService } from "./services/sim-terminal.service";
 import { SimPromotionService } from "./services/sim-promotion.service";
 import { RuntimeConfigService } from "./services/runtime-config.service";
+import { SatelliteSweepChatRepository } from "./repositories/satellite-sweep-chat.repository";
+import { SatelliteSweepChatService } from "./services/satellite-sweep-chat.service";
+import { VizService } from "./services/viz.service";
+import { SatelliteService } from "./services/satellite-ephemeris.service";
+import { SatelliteSweepChatController } from "./controllers/satellite-sweep-chat.controller";
 
 import { buildCortexDataProvider } from "./agent/ssa/cortex-data-provider";
 import { buildSsaDomainConfig } from "./agent/ssa/domain-config";
@@ -256,14 +260,23 @@ export async function buildContainer(
     db,
     satelliteRepo,
   });
+  // `SsaAuditProvider` needs `sweep.sweepRepo.loadPastFeedback`, but the
+  // sweep container is built after the audit provider (which itself feeds
+  // into `buildSweepContainer` as a port). A shared holder closes the
+  // wiring cycle without post-build casts: the same object reference is
+  // passed to the provider and mutated below once `sweep` resolves.
+  const sweepRepoHolder: {
+    loadPastFeedback: () => Promise<SuggestionFeedbackRow[]>;
+  } = {
+    loadPastFeedback: async () => {
+      throw new Error(
+        "sweepRepoHolder: sweep container not yet wired — audit called too early",
+      );
+    },
+  };
   const ssaAuditProvider = new SsaAuditProvider({
     satelliteRepo,
-    sweepRepo: {
-      // loadPastFeedback is the only sweepRepo surface the provider uses;
-      // we forward to the one built inside the sweep container below via
-      // a post-build patch (see below).
-      loadPastFeedback: async () => [],
-    },
+    sweepRepo: sweepRepoHolder,
     feedbackRepo: sweepFeedbackRepo,
     config: runtimeConfigService.provider("sweep.nanoSweep"),
   });
@@ -334,12 +347,12 @@ export async function buildContainer(
     throw new Error("sweep sim services failed to initialize");
   }
 
-  // Post-build patch: the audit provider needs a real loadPastFeedback
-  // reader. The sweep container owns the SweepRepository, so we bind it
-  // here now that sweep is constructed.
-  (ssaAuditProvider as unknown as {
-    deps: { sweepRepo: { loadPastFeedback: () => Promise<unknown[]> } };
-  }).deps.sweepRepo.loadPastFeedback = () => sweep.sweepRepo.loadPastFeedback();
+  // Rebind the shared holder to the real repo now that sweep is built.
+  // `ssaAuditProvider.deps.sweepRepo` === `sweepRepoHolder` (same reference),
+  // so assigning the method here flows through without reaching into private
+  // fields or casting.
+  sweepRepoHolder.loadPastFeedback = () =>
+    sweep.sweepRepo.loadPastFeedback();
 
   // services
   const enrichmentFinding = new EnrichmentFindingService(
@@ -425,6 +438,20 @@ export async function buildContainer(
     embed: thalamus.embedder.embedQuery.bind(thalamus.embedder),
   });
 
+  // Satellite sweep chat — per-satellite LLM chat with SSE streaming + HITL
+  // finding extraction. Consumes stubbed Viz/Satellite services + dedicated
+  // Redis repo (keys: satellite-sweep:{id}:messages|findings:...).
+  const satelliteSweepChatRepo = new SatelliteSweepChatRepository(redis);
+  const satelliteSweepChatService = new SatelliteSweepChatService(
+    satelliteRepo,
+    satelliteSweepChatRepo,
+    new VizService(),
+    new SatelliteService(),
+  );
+  const satelliteSweepChatController = new SatelliteSweepChatController(
+    satelliteSweepChatService,
+  );
+
   const services: AppServices = {
     satelliteView: new SatelliteViewService(satelliteRepo),
     conjunctionView: conjunctionViewService,
@@ -508,6 +535,7 @@ export async function buildContainer(
       promotion: simPromotionService,
     },
     runtimeConfig: runtimeConfigService,
+    satelliteSweepChat: satelliteSweepChatController,
   };
 
   const snapshot = await snapshotHealth(db, redis, thalamus.registry.size());

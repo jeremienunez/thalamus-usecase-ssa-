@@ -74,7 +74,7 @@ export const useMissionStatus = () =>
   useQuery({
     queryKey: ["sweep-mission-status"] as const,
     queryFn: () => api.missionStatus(),
-    refetchInterval: 2500,
+    refetchInterval: (q) => (q.state.data?.running ? 2500 : false),
   });
 
 export const useMissionStart = () => {
@@ -102,7 +102,7 @@ export const useAutonomyStatus = () =>
   useQuery({
     queryKey: ["autonomy-status"] as const,
     queryFn: () => api.autonomyStatus(),
-    refetchInterval: 3000,
+    refetchInterval: (q) => (q.state.data?.running ? 3000 : false),
   });
 
 export const useAutonomyStart = () => {

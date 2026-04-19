@@ -109,6 +109,12 @@ export class MissionService {
       if (task.status === "filled") this.state.filledCount++;
       else if (task.status === "unobtainable") this.state.unobtainableCount++;
       else if (task.status === "error") this.state.errorCount++;
+    } catch (err) {
+      this.state.errorCount++;
+      this.logger.error(
+        { err, suggestionId: task.suggestionId, satelliteId: task.satelliteId },
+        "mission tick: runTask failed",
+      );
     } finally {
       this.state.busy = false;
     }

@@ -41,7 +41,7 @@ Return JSON: `{ "findings": [...] }`
 Each finding:
 - **title** — e.g. "Operator brief draft: conjunction event 881"
 - **summary** — the drafted prose, with inline citations back to source finding titles
-- **findingType** — "copy-draft"
+- **findingType** — "insight"
 - **urgency** — inherited from cited findings
 - **confidence** — weighted average of cited findings
 - **evidence** — `[{ source: "copy_draft", data: { sourceFindingIds: [...], register }, weight: 1.0 }]`

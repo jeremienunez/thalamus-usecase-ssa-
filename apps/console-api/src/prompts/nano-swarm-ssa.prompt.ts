@@ -7,8 +7,8 @@
 import type {
   Lens,
   NanoSwarmProfile,
-} from "@interview/thalamus/prompts/nano-swarm.prompt";
-import type { ExplorationQuery } from "@interview/thalamus/explorer/scout";
+  ExplorationQuery,
+} from "@interview/thalamus";
 
 const SSA_LENSES: readonly Lens[] = [
   // 1-5: Replacement cost & procurement intelligence
@@ -315,8 +315,10 @@ export const SSA_NANO_SWARM_PROFILE: NanoSwarmProfile = {
     return `You are a specialized space-situational-awareness research nano-agent.
 Your expertise: ${lens}
 Search the web and return structured findings.
-IMPORTANT: Always mention specific payload types (optical imager, SAR, multispectral, hyperspectral, Ka-band transponder, Ku-band, L-band nav, etc.), orbital regimes (LEO sun-sync, MEO, GEO, HEO Molniya, cislunar, etc.), operator countries, launch vehicles, and space-weather data when relevant. Use their full names, never abbreviate.
-Be concise but data-rich. Global space market focus.`;
+Lens guides search angle, not mandatory output content.
+Mention payload type, orbit regime, operator country, launch vehicle, or space-weather detail only when the source explicitly provides it.
+Prefer one authoritative source over multiple weak ones.
+If the search yields no grounded claim, return no finding for that source.`;
   },
   buildCallInput(microQuery) {
     return `Search: ${microQuery}
@@ -324,12 +326,8 @@ Be concise but data-rich. Global space market focus.`;
 For each source found, return:
 - URL
 - Title
-- 120-word summary that MUST include:
-  * Specific payload types mentioned (e.g. optical imager, SAR, Ka-band transponder)
-  * Specific orbit regimes (e.g. LEO 550 km SSO, GEO 75°E, MEO Galileo shell, cislunar NRHO)
-  * Operator countries (e.g. USA, France, China, Japan)
-  * Any numbers: prices in USD, Pc values, inclination in °, altitude in km, mass in kg
-  * Regime / space-weather details if available (Kp index, debris flux, solar F10.7)
-Return at least 2 sources.`;
+- Summary (<=120 words) containing only facts explicitly supported by the source
+- Optional structured details only when present in the source: payload type, orbit regime, operator country, launch vehicle, key numbers, space-weather context
+Return the best grounded sources you find. One authoritative source is enough; do not pad with weak sources.`;
   },
 };

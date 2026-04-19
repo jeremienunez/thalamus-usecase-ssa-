@@ -56,4 +56,4 @@ Each finding is an operator task:
 - **confidence** — 1.0 for SQL-verified issues, 0.8 for heuristics
 - **impactScore** — affected count / 100, capped at 10
 - **evidence** — `[{ source: "sql_audit", data: { issue_type, affected_count, examples }, weight: 1.0 }]`
-- **edges** — `[{ entityType: "orbitRegime", entityId: N, relation: "about" }]`
+- **edges** — `[{ entityType: "orbit_regime", entityId: N, relation: "about" }]`

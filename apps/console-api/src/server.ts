@@ -234,6 +234,14 @@ export async function createApp(
   const simTransport = createSimRouteTransport(app);
   const container = await buildContainer(infra.config, app.log, simTransport);
   registerAllRoutes(app, container.services);
+
+  // Clear interval-driven services on Fastify shutdown so tests (and hot-
+  // reload) don't leak timers that tick against torn-down infra.
+  app.addHook("onClose", async () => {
+    container.services.mission.stop();
+    container.services.autonomy.stop();
+  });
+
   return {
     app,
     info: { ...infra.redactedUrls, cortices: container.info.cortices },

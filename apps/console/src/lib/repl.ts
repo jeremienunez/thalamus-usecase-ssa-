@@ -98,7 +98,11 @@ export function isSlashCommand(input: string): boolean {
  * Slash-command path only. Free-text chat now streams through
  * postChatStream (see ./repl-stream) — do not call postTurn for it.
  */
-export async function postTurn(input: string, sessionId: string): Promise<TurnResponse> {
+export async function postTurn(
+  input: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<TurnResponse> {
   if (!looksLikeCommand(input)) {
     throw new Error(
       "postTurn handles slash-commands only; use postChatStream for free-text",
@@ -108,6 +112,7 @@ export async function postTurn(input: string, sessionId: string): Promise<TurnRe
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ input, sessionId }),
+    signal,
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return (await res.json()) as TurnResponse;

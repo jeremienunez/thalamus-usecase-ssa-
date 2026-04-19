@@ -43,7 +43,7 @@ Return JSON: `{ "findings": [...] }`
 Each finding:
 - **title** — e.g. "NORAD 58762: new LEO object, i=97.4 deg, hp=522 km"
 - **summary** — source, epoch, regime bucket, propagation residuals, provenance. Every number cites a DATA field.
-- **findingType** — "ingestion" (new/updated), "anomaly" (parse or delta flag)
+- **findingType** — "insight" (new/updated), "anomaly" (parse or delta flag), "alert" (suspected decay or maneuver)
 - **urgency** — "low" for normal upserts, "medium" for large deltas, "high" for suspected decay or maneuver
 - **confidence** — 0.5–0.9 depending on source class and epoch freshness
 - **evidence** — `[{ source: "celestrak"|"operator-x"|"spacetrack", data: { noradId, epoch, deltaN, residualKm }, weight: 1.0 }]`

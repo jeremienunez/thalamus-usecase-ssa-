@@ -38,10 +38,10 @@ export function RegimeFilter({
     <div className="pointer-events-auto border border-hairline bg-panel/90 backdrop-blur-sm">
       <div className="flex items-center gap-2 border-b border-hairline px-3 py-1.5">
         <div className="h-1.5 w-1.5 bg-cyan" />
-        <div className="label text-[10px]">REGIMES</div>
+        <div className="label text-nano">REGIMES</div>
         {trailMode !== undefined && onTrailMode && (
           <>
-            <span className="ml-3 label text-[10px] text-dim">TRAILS</span>
+            <span className="ml-3 label text-nano text-dim">TRAILS</span>
             <div className="flex">
               {TRAIL_OPTIONS.map((opt) => {
                 const on = trailMode === opt.key;
@@ -51,7 +51,7 @@ export function RegimeFilter({
                     type="button"
                     onClick={() => onTrailMode(opt.key)}
                     className={clsx(
-                      "border-l border-hairline px-2 py-0.5 mono text-[10px] first:border-l-0",
+                      "border-l border-hairline px-2 py-0.5 mono text-nano first:border-l-0",
                       on ? "bg-active text-cyan" : "text-muted hover:bg-hairline/40",
                     )}
                   >
@@ -76,8 +76,8 @@ export function RegimeFilter({
                 !on && "opacity-40",
               )}
             >
-              <span className={clsx("label text-[10px]", tone)}>{label}</span>
-              <span className="mono text-[10px] text-dim">
+              <span className={clsx("label text-nano", tone)}>{label}</span>
+              <span className="mono text-nano text-dim">
                 {counts[key] ?? 0}
               </span>
             </button>

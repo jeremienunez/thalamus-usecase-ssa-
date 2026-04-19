@@ -35,5 +35,7 @@ export function toSatelliteView(r: SatelliteOrbitalRow): SatelliteView {
     massKg: r.mass_kg ?? 0,
     classificationTier: classificationTier(r.classification_tier),
     opacityScore,
+    tleLine1: typeof ts.tleLine1 === "string" ? ts.tleLine1 : null,
+    tleLine2: typeof ts.tleLine2 === "string" ? ts.tleLine2 : null,
   };
 }

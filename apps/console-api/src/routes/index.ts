@@ -20,6 +20,7 @@ import type { OrbitalAnalysisService } from "../services/orbital-analysis.servic
 import type { OpacityService } from "../services/opacity.service";
 import type { IngestionService } from "../services/ingestion.service";
 import type { RuntimeConfigService } from "../services/runtime-config.service";
+import type { SatelliteSweepChatController } from "../controllers/satellite-sweep-chat.controller";
 
 import { registerHealthRoutes } from "./health.routes";
 import { registerSatelliteRoutes } from "./satellites.routes";
@@ -41,6 +42,7 @@ import { registerOpacityRoutes } from "./opacity.routes";
 import { registerIngestionRoutes } from "./ingestion.routes";
 import { registerSimRoutes, type SimRouteServices } from "./sim.routes";
 import { registerRuntimeConfigRoutes } from "./runtime-config.routes";
+import { satelliteSweepChatRoutes } from "./satellite-sweep-chat.routes";
 
 export type { SweepSuggestionsDeps } from "../services/sweep-suggestions.service";
 
@@ -66,6 +68,7 @@ export type AppServices = {
   ingestion: IngestionService;
   sim: SimRouteServices;
   runtimeConfig: RuntimeConfigService;
+  satelliteSweepChat: SatelliteSweepChatController;
 };
 
 export function registerAllRoutes(
@@ -92,4 +95,14 @@ export function registerAllRoutes(
   registerIngestionRoutes(app, s.ingestion);
   registerSimRoutes(app, s.sim);
   registerRuntimeConfigRoutes(app, s.runtimeConfig);
+
+  // Per-satellite chat with its own auth scope (authenticate + requireTier).
+  // Mounted via app.register so the preHandlers installed inside the plugin
+  // stay scoped and don't leak onto neighbouring routes.
+  app.register(
+    async (scope) => {
+      await satelliteSweepChatRoutes(scope, s.satelliteSweepChat);
+    },
+    { prefix: "/api/satellites" },
+  );
 }

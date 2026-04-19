@@ -26,7 +26,7 @@ least one concrete datum from the findings.
   confidence, impactScore, evidence[], source_class?, edges[] }`
 - **cycleMetadata** — `{ iterations, cost, corticesUsed[], elapsedMs }`
 
-## Output format
+## Output Format
 
 Return JSON: `{ "findings": [...] }` where the single returned finding is
 the briefing itself, of type `insight` and urgency equal to the max

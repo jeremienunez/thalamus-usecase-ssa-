@@ -17,9 +17,9 @@ export function toFleetAnalysisView(r: FleetAnalysisRow): FleetAnalysisView {
     country: r.country ?? null,
     satelliteCount: r.satelliteCount,
     avgAgeYears: r.avgAgeYears ?? null,
-    regimeMix: r.regimeMix ?? {},
-    platformMix: r.platformMix ?? {},
-    busMix: r.busMix ?? {},
+    regimeMix: r.regimeMix ?? [],
+    platformMix: r.platformMix ?? [],
+    busMix: r.busMix ?? [],
   };
 }
 

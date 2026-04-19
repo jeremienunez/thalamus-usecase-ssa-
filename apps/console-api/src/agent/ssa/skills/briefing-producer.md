@@ -42,7 +42,7 @@ Return JSON: `{ "findings": [...] }`
 Each briefing section is one finding:
 - **title** — e.g. "Briefing section: conjunction events this week"
 - **summary** — composed text for the section, with inline citations to source finding titles
-- **findingType** — "briefing-section"
+- **findingType** — "insight"
 - **urgency** — inherited from the highest urgency among cited findings
 - **confidence** — weighted average of cited findings
 - **evidence** — `[{ source: "finding_synthesis", data: { sourceFindingIds: [...], audience, auditState }, weight: 1.0 }]`

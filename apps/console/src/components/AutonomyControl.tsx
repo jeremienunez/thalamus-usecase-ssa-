@@ -84,7 +84,7 @@ export function AutonomyControl() {
       </button>
 
       {open && (
-        <div className="absolute right-3 top-11 z-50 w-[480px] border border-hairline-hot bg-elevated shadow-lg">
+        <div className="absolute right-3 top-11 z-palette w-[480px] border border-hairline-hot bg-elevated shadow-pop animate-fade-in">
           <div className="flex h-8 items-center justify-between border-b border-hairline px-3">
             <span className="label text-primary">AUTONOMY FEED</span>
             <span className="mono text-caption text-dim tabular-nums">

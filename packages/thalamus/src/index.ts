@@ -40,9 +40,24 @@ export {
   callNanoStream,
   callNanoWaves,
   callNanoWithMode,
+  setNanoConfigProvider,
   BAS_NIVEAU_LOGIT_BIAS,
   NANO_MODEL,
 } from "./explorer/nano-caller";
+export type { NanoRequest, NanoResponse } from "./explorer/nano-caller";
+export {
+  setNanoSwarmConfigProvider,
+  setNanoSwarmProfile,
+} from "./explorer/nano-swarm";
+export { setCuratorPrompt } from "./explorer/curator";
+export type { ExplorationQuery } from "./explorer/scout";
+
+// Domain profile types (injected from consumers at boot)
+export type {
+  Lens,
+  NanoSwarmProfile,
+} from "./prompts/nano-swarm.prompt";
+export { DEFAULT_NANO_SWARM_PROFILE } from "./prompts/nano-swarm.prompt";
 
 // Transports
 export { createLlmTransport } from "./transports/llm-chat";
@@ -67,10 +82,6 @@ export type { CortexExecutionStrategy } from "./cortices/strategies";
 export { ResearchFindingRepository } from "./repositories/research-finding.repository";
 export { ResearchEdgeRepository } from "./repositories/research-edge.repository";
 export { ResearchCycleRepository } from "./repositories/research-cycle.repository";
-
-// Controllers/routes
-export { ThalamusController } from "./controllers/thalamus.controller";
-export { thalamusRoutes } from "./routes/thalamus.routes";
 
 // Utils
 export { VoyageEmbedder } from "./utils/voyage-embedder";

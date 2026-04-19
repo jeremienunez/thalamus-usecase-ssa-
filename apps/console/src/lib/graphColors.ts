@@ -20,10 +20,11 @@ export const ENTITY_SHAPE: Record<EntityClass, "circle" | "square"> = {
   Maneuver: "square",
 };
 
-export const SOURCE_COLOR: Record<SourceClass, string> = {
+export const SOURCE_COLOR: Record<SourceClass | "sim", string> = {
   osint: "#60A5FA",
   field: "#A78BFA",
   derived: "#8B949E",
+  sim: "#F59E0B",
 };
 
 export const STATUS_COLOR = {

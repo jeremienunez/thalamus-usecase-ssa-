@@ -6,6 +6,10 @@ import type {
   RegimeProfileRow,
   OrbitSlotRow,
 } from "../types/fleet-analysis.types";
+import {
+  operatorFleetRollupSql,
+  type OperatorFleetRollupRow,
+} from "./queries/operator-fleet-rollup";
 
 export type {
   FleetAnalysisRow,
@@ -16,85 +20,31 @@ export type {
 export class FleetAnalysisRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
-  // ← absorbed from cortices/queries/operator-fleet.ts
   async analyzeOperatorFleet(
     opts: {
       operatorId?: string | number | bigint;
-      userId?: string | number | bigint;
       limit?: number;
     } = {},
   ): Promise<FleetAnalysisRow[]> {
-    const opFilter = opts.operatorId
-      ? sql`WHERE op.id = ${BigInt(opts.operatorId as string | number)}`
-      : sql``;
-
-    const results = await this.db.execute<FleetAnalysisRow>(sql`
-      WITH base AS (
-        SELECT
-          op.id AS operator_id,
-          op.name AS operator_name,
-          oc.name AS country,
-          s.id AS sat_id,
-          s.launch_year,
-          orr.name AS regime,
-          pc.name AS platform,
-          sb.name AS bus
-        FROM operator op
-        LEFT JOIN satellite s          ON s.operator_id         = op.id
-        LEFT JOIN operator_country oc  ON oc.id                 = s.operator_country_id
-        LEFT JOIN orbit_regime orr     ON orr.id                = oc.orbit_regime_id
-        LEFT JOIN platform_class pc    ON pc.id                 = s.platform_class_id
-        LEFT JOIN satellite_bus sb     ON sb.id                 = s.satellite_bus_id
-        ${opFilter}
-      ),
-      mix AS (
-        SELECT
-          operator_id,
-          operator_name,
-          (array_agg(country) FILTER (WHERE country IS NOT NULL))[1] AS country,
-          count(sat_id)::int AS satellite_count,
-          (extract(year from now())::int - avg(launch_year))::real AS avg_age_years,
-          COALESCE(
-            jsonb_object_agg(regime, regime_count)
-              FILTER (WHERE regime IS NOT NULL),
-            '{}'::jsonb
-          ) AS regime_mix,
-          COALESCE(
-            jsonb_object_agg(platform, platform_count)
-              FILTER (WHERE platform IS NOT NULL),
-            '{}'::jsonb
-          ) AS platform_mix,
-          COALESCE(
-            jsonb_object_agg(bus, bus_count)
-              FILTER (WHERE bus IS NOT NULL),
-            '{}'::jsonb
-          ) AS bus_mix
-        FROM (
-          SELECT
-            operator_id, operator_name, country, sat_id, launch_year,
-            regime, count(*) OVER (PARTITION BY operator_id, regime) AS regime_count,
-            platform, count(*) OVER (PARTITION BY operator_id, platform) AS platform_count,
-            bus, count(*) OVER (PARTITION BY operator_id, bus) AS bus_count
-          FROM base
-        ) d
-        GROUP BY operator_id, operator_name
-      )
-      SELECT
-        operator_id::int AS "operatorId",
-        operator_name AS "operatorName",
-        country,
-        satellite_count AS "satelliteCount",
-        avg_age_years AS "avgAgeYears",
-        regime_mix AS "regimeMix",
-        platform_mix AS "platformMix",
-        bus_mix AS "busMix"
-      FROM mix
-      WHERE satellite_count > 0
-      ORDER BY satellite_count DESC
-      LIMIT ${opts.limit ?? 10}
-    `);
-
-    return results.rows;
+    const operatorId =
+      opts.operatorId == null
+        ? null
+        : BigInt(opts.operatorId as string | number);
+    const results = await this.db.execute<OperatorFleetRollupRow>(
+      operatorFleetRollupSql({ operatorId, limit: opts.limit ?? 10 }),
+    );
+    const currentYear = new Date().getUTCFullYear();
+    return results.rows.map((r) => ({
+      operatorId: r.operatorId,
+      operatorName: r.operatorName,
+      country: r.country,
+      satelliteCount: r.satelliteCount,
+      avgAgeYears:
+        r.avgLaunchYear == null ? null : currentYear - r.avgLaunchYear,
+      regimeMix: r.regimeMix ?? [],
+      platformMix: r.platformMix ?? [],
+      busMix: r.busMix ?? [],
+    }));
   }
 
   // ← absorbed from cortices/queries/orbit-regime.ts
@@ -200,45 +150,26 @@ export class FleetAnalysisRepository {
     }));
   }
 
-  // ← absorbed from cortices/queries/orbit-slot.ts
   async planOrbitSlots(
     opts: {
       operatorId?: string | number | bigint;
-      horizonYears?: number;
       limit?: number;
     } = {},
   ): Promise<OrbitSlotRow[]> {
-    const opFilter = opts.operatorId
-      ? sql`AND op.id = ${BigInt(opts.operatorId as string | number)}`
-      : sql``;
-
+    const operatorId =
+      opts.operatorId == null
+        ? null
+        : BigInt(opts.operatorId as string | number);
     const results = await this.db.execute<OrbitSlotRow>(sql`
-      WITH regime_totals AS (
-        SELECT oc.orbit_regime_id AS rid, count(s.id)::int AS total
-        FROM satellite s
-        JOIN operator_country oc ON oc.id = s.operator_country_id
-        WHERE oc.orbit_regime_id IS NOT NULL
-        GROUP BY oc.orbit_regime_id
-      )
       SELECT
-        orr.id::int AS "regimeId",
-        orr.name   AS "regimeName",
-        op.id::int AS "operatorId",
-        op.name    AS "operatorName",
-        count(s.id)::int AS "satellitesInRegime",
-        (count(s.id) * 100.0 / NULLIF(rt.total, 0))::real AS "shareOfRegimePct"
-      FROM satellite s
-      JOIN operator_country oc  ON oc.id = s.operator_country_id
-      JOIN orbit_regime orr     ON orr.id = oc.orbit_regime_id
-      LEFT JOIN operator op     ON op.id = s.operator_id
-      JOIN regime_totals rt     ON rt.rid = orr.id
-      WHERE 1 = 1
-        ${opFilter}
-      GROUP BY orr.id, orr.name, op.id, op.name, rt.total
-      ORDER BY "shareOfRegimePct" DESC NULLS LAST
-      LIMIT ${opts.limit ?? 20}
+        regime_id            AS "regimeId",
+        regime_name          AS "regimeName",
+        operator_id          AS "operatorId",
+        operator_name        AS "operatorName",
+        satellites_in_regime AS "satellitesInRegime",
+        share_of_regime_pct  AS "shareOfRegimePct"
+      FROM fn_plan_orbit_slots(${operatorId}::bigint, ${opts.limit ?? 20}::int)
     `);
-
     return results.rows;
   }
 }

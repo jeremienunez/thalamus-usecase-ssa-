@@ -11,8 +11,14 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
+import { mapWithConcurrency } from "@interview/shared/utils";
 import type { MemoryKind } from "./types";
 import type { SimRuntimeStore, SimSubjectProvider } from "./ports";
+
+// Cap embed fan-out so a 50-row turn batch doesn't burst 50 concurrent
+// Voyage/OpenAI calls. Embeds are I/O-bound; 8 is a good balance between
+// throughput and provider rate limits.
+const EMBED_CONCURRENCY = 8;
 
 const logger = createLogger("sim-memory");
 
@@ -81,7 +87,9 @@ export class MemoryService {
 
   async writeMany(rows: WriteMemoryInput[]): Promise<number[]> {
     if (rows.length === 0) return [];
-    const vectors = await Promise.all(rows.map((r) => this.safelyEmbed(r.content)));
+    const vectors = await mapWithConcurrency(rows, EMBED_CONCURRENCY, (r) =>
+      this.safelyEmbed(r.content),
+    );
     return this.store.writeMemoryBatch(
       rows.map((r, i) => ({
         simRunId: r.simRunId,

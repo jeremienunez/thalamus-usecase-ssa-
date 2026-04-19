@@ -8,6 +8,7 @@ export * from "./json";
 export * from "./string";
 export * from "./collection";
 export * from "./completeness-scorer";
+export * from "./concurrency";
 export * from "./domain-normalizer";
 
 export function formatDate(date: Date): string {

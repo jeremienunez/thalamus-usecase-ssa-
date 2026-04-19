@@ -23,6 +23,13 @@ export class SatelliteSweepChatController {
       return;
     }
 
+    // Stop burning nano tokens if the browser navigates away mid-stream.
+    const abort = new AbortController();
+    const onClose = (): void => {
+      if (!reply.raw.writableEnded) abort.abort();
+    };
+    reply.raw.on("close", onClose);
+
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
@@ -30,20 +37,24 @@ export class SatelliteSweepChatController {
     });
 
     try {
-      const stream = this.service.chat(id, userId, parsed.data.message);
+      const stream = this.service.chat(id, userId, parsed.data.message, abort.signal);
       for await (const event of stream) {
+        if (abort.signal.aborted) break;
         reply.raw.write(
           `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`,
         );
       }
     } catch (error: unknown) {
-      logger.error({ err: error }, "SSE stream error");
-      reply.raw.write(
-        `event: error\ndata: ${JSON.stringify({ error: "An unexpected error occurred" })}\n\n`,
-      );
+      if (!abort.signal.aborted) {
+        logger.error({ err: error }, "SSE stream error");
+        reply.raw.write(
+          `event: error\ndata: ${JSON.stringify({ error: "An unexpected error occurred" })}\n\n`,
+        );
+      }
+    } finally {
+      reply.raw.off("close", onClose);
+      if (!reply.raw.writableEnded) reply.raw.end();
     }
-
-    reply.raw.end();
   }
 
   async getState(request: FastifyRequest, reply: FastifyReply): Promise<void> {

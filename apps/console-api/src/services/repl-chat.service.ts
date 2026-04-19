@@ -26,6 +26,7 @@ export interface ThalamusChatDep {
   thalamusService: {
     runCycle(args: {
       query: string;
+      userId?: bigint;
       triggerType: ResearchCycleTrigger;
       triggerSource: string;
     }): Promise<{ id: bigint | string }>;
@@ -39,6 +40,7 @@ export interface ThalamusChatDep {
         title?: string;
         summary?: string;
         cortex?: string;
+        findingType?: string;
         urgency?: string;
         confidence?: number | null;
       }>
@@ -55,10 +57,16 @@ export class ReplChatService {
     private readonly summariser: CycleSummariser,
   ) {}
 
-  async *handleStream(input: string): AsyncGenerator<ReplStreamEvent> {
+  async *handleStream(
+    input: string,
+    userId?: bigint,
+    signal?: AbortSignal,
+  ): AsyncGenerator<ReplStreamEvent> {
     const t0 = Date.now();
+    const aborted = (): boolean => signal?.aborted === true;
 
     const intent = await this.classifier.classify(input);
+    if (aborted()) return;
 
     yield {
       event: "classified",
@@ -69,7 +77,9 @@ export class ReplChatService {
     };
 
     if (intent.action === "chat") {
+      if (aborted()) return;
       const { text, provider } = await this.chatReply.reply(input);
+      if (aborted()) return;
       yield { event: "chat.complete", data: { text, provider } };
       yield {
         event: "done",
@@ -91,16 +101,19 @@ export class ReplChatService {
     const pumpGen = this.pump.pump(() =>
       this.deps.thalamusService.runCycle({
         query,
+        userId,
         triggerType: ResearchCycleTrigger.User,
         triggerSource: "console-chat",
       }),
     );
 
     // Relay each step event; the generator's final `return` carries the
-    // cycle's terminal state ({result, err}).
+    // cycle's terminal state ({result, err}). Stop early if the client
+    // disconnected — further LLM/cortex work would be pure token waste.
     let cycleResultId: string | bigint = cycleId;
     let cycleErr: Error | null = null;
     for (;;) {
+      if (aborted()) return;
       const next = await pumpGen.next();
       if (next.done === true) {
         cycleErr = next.value.err;
@@ -110,6 +123,7 @@ export class ReplChatService {
       const stepData = next.value;
       yield { event: "step", data: stepData };
     }
+    if (aborted()) return;
 
     if (cycleErr) {
       yield { event: "error", data: { message: cycleErr.message } };
@@ -126,20 +140,22 @@ export class ReplChatService {
     }
 
     const findings = await this.deps.findingRepo.findByCycleId(cycleResultId);
-    // Pass the full cycle to the summariser. Slicing at 8 by confidence DESC
-    // was excluding briefing_producer findings (the ones that actually answer
-    // the user's query) when strategist self-rated higher. The summariser LLM
-    // is responsible for relevance — give it the full picture.
+    if (aborted()) return;
+    // Keep the payload bounded while preserving the repo's confidence-sorted
+    // cycle view. The summariser prompt treats these findings as unordered.
     const top = findings.slice(0, 25);
     for (const f of top) {
+      if (aborted()) return;
       yield { event: "finding", data: toReplFindingStreamView(f) };
     }
 
+    if (aborted()) return;
     const summary = await this.summariser.summarise(
-      input,
+      query,
       String(cycleResultId),
       top.map(toReplFindingSummaryView),
     );
+    if (aborted()) return;
     yield {
       event: "summary.complete",
       data: { text: summary.text, provider: summary.provider },

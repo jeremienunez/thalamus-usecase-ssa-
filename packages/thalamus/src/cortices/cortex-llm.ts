@@ -81,7 +81,7 @@ ${domainRules}
 DATA:
 ${input.dataPayload}
 
-Respond with a JSON object: { "findings": [...] } as described in your Output Format section.
+Respond only with the JSON object described in your Output Format section.
 Max ${input.maxFindings ?? 3} findings.`
     : `Analyze the following data and produce up to ${input.maxFindings ?? 3} findings.
 ${langInstruction}

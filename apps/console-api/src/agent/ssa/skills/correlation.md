@@ -43,7 +43,7 @@ Return JSON: `{ "findings": [...] }`
 Each finding:
 - **title** — e.g. "ConjunctionEvent 881 corroborated by field radar (2 tracks, residuals 240/410 m)"
 - **summary** — OSINT source, field tracks used, residuals, covariance quality, new confidence band, provenance breakdown. Every number cites DATA.
-- **findingType** — "corroboration", "contradiction", "uncorroborated"
+- **findingType** — "alert" (corroborated and action-changing), "anomaly" (contradicted), "insight" (uncorroborated watch-state)
 - **urgency** — inherited from the underlying conjunction severity
 - **confidence** — new band after fusion (0.85-1.0 corroborated, 0.2-0.5 uncorroborated, 0.0-0.15 contradicted)
 - **evidence** — `[{ source: "osint_catalog", ... }, { source: "field_radar", ... }]` with per-source weights

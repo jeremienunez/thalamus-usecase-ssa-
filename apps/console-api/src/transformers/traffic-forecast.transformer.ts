@@ -30,6 +30,7 @@ export function toOrbitalTrafficView(
     url: r.url ?? null,
     publishedAt: toIso(r.publishedAt),
     baselines: r.baselines ?? null,
+    branchFilterApplied: r.branchFilterApplied ?? null,
   };
 }
 
@@ -60,6 +61,7 @@ export function toDebrisForecastView(
     fragmentParentMassKg: r.fragmentParentMassKg ?? null,
     fragmentEventType: r.fragmentEventType ?? null,
     fragmentCause: r.fragmentCause ?? null,
+    branchFilterApplied: r.branchFilterApplied ?? null,
   };
 }
 

@@ -13,6 +13,15 @@ export function replChatStreamController(service: ReplChatService) {
   ): Promise<void> => {
     const body = parseOrReply(req.body, ReplChatBodySchema, reply);
     if (body === null) return;
+    const userId = req.user ? BigInt(req.user.id) : undefined;
+
+    // Abort the service stream when the client disconnects so cortex/LLM
+    // calls stop burning tokens after the browser navigates away.
+    const abort = new AbortController();
+    const onClose = (): void => {
+      if (!reply.raw.writableEnded) abort.abort();
+    };
+    reply.raw.on("close", onClose);
 
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -21,18 +30,26 @@ export function replChatStreamController(service: ReplChatService) {
     });
 
     try {
-      for await (const evt of service.handleStream(body.input)) {
+      for await (const evt of service.handleStream(
+        body.input,
+        userId,
+        abort.signal,
+      )) {
+        if (abort.signal.aborted) break;
         reply.raw.write(
           `event: ${evt.event}\ndata: ${JSON.stringify(evt.data)}\n\n`,
         );
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      reply.raw.write(
-        `event: error\ndata: ${JSON.stringify({ message })}\n\n`,
-      );
+      if (!abort.signal.aborted) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.raw.write(
+          `event: error\ndata: ${JSON.stringify({ message })}\n\n`,
+        );
+      }
     } finally {
-      reply.raw.end();
+      reply.raw.off("close", onClose);
+      if (!reply.raw.writableEnded) reply.raw.end();
     }
   };
 }
