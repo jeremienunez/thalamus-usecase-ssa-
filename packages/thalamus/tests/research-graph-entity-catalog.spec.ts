@@ -17,15 +17,12 @@ import type {
   EntityCatalogPort,
   EntityRef,
 } from "../src/ports/entity-catalog.port";
-import type { VoyageEmbedder } from "../src/utils/voyage-embedder";
+import { NullEmbedder } from "../src/entities/null-embedder";
 
-// Minimal embedder stub — these tests never embed anything; a shape cast
-// avoids loading the real Voyage adapter (Phase 4 replaces it with a port).
-const nullEmbedder = {
-  isAvailable: () => false,
-  embedQuery: async () => null,
-  embedDocuments: async () => [] as (number[] | null)[],
-} as unknown as VoyageEmbedder;
+// Phase 4 · Task 4.1: the kernel ships NullEmbedder as the default port
+// implementation, so tests can use it directly instead of shape-casting
+// a concrete adapter.
+const nullEmbedder = new NullEmbedder();
 
 function mkFindingRepo(overrides: Partial<FindingsGraphPort> = {}): FindingsGraphPort {
   return {

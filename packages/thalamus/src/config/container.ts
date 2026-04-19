@@ -28,7 +28,8 @@ import { StopCriteriaEvaluator } from "../services/stop-criteria.service";
 import { ResearchCycleRepository } from "../repositories/research-cycle.repository";
 import { ResearchFindingRepository } from "../repositories/research-finding.repository";
 import { ResearchEdgeRepository } from "../repositories/research-edge.repository";
-import { VoyageEmbedder } from "../utils/voyage-embedder";
+import type { EmbedderPort } from "../ports/embedder.port";
+import { NullEmbedder } from "../entities/null-embedder";
 import type { EntityCatalogPort } from "../ports/entity-catalog.port";
 import { NoopEntityCatalog } from "../entities/noop-entity-catalog";
 import type { SourceFetcherPort } from "../ports/source-fetcher.port";
@@ -42,7 +43,7 @@ export interface ThalamusContainer {
   cycleRepo: ResearchCycleRepository;
   findingRepo: ResearchFindingRepository;
   edgeRepo: ResearchEdgeRepository;
-  embedder: VoyageEmbedder;
+  embedder: EmbedderPort;
 }
 
 export interface BuildThalamusOpts {
@@ -70,8 +71,14 @@ export interface BuildThalamusOpts {
    * pipelines without touching the kernel.
    */
   strategies?: CortexExecutionStrategy[];
-  /** Optional Voyage API key override */
-  voyageApiKey?: string;
+  /**
+   * Domain-owned embedder adapter. Defaults to `NullEmbedder` which
+   * returns `null` for every query — `ResearchGraphService` then skips
+   * semantic dedup and cross-linking. Apps ship a real adapter (e.g.
+   * `SsaVoyageEmbedderAdapter`) at their composition root so the kernel
+   * never learns which provider or API key powers embeddings.
+   */
+  embedder?: EmbedderPort;
   /**
    * Domain-owned entity catalog adapter. Defaults to `NoopEntityCatalog`
    * which returns empty resolutions and cleans 0 rows — enough for tests
@@ -97,7 +104,7 @@ export function buildThalamusContainer(
   const edgeRepo = new ResearchEdgeRepository(db);
   const entityCatalog = opts.entityCatalog ?? new NoopEntityCatalog();
   const sourceFetcher = opts.sourceFetcher ?? new NoopSourceFetcher();
-  const embedder = new VoyageEmbedder(opts.voyageApiKey);
+  const embedder = opts.embedder ?? new NullEmbedder();
 
   const registry = new CortexRegistry(opts.skillsDir);
   registry.discover();

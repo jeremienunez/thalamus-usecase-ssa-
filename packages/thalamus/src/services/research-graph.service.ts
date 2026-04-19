@@ -5,7 +5,7 @@
 
 import { createLogger } from "@interview/shared/observability";
 import { createHash } from "node:crypto";
-import type { VoyageEmbedder } from "../utils/voyage-embedder";
+import type { EmbedderPort } from "../ports/embedder.port";
 import type {
   EntityCatalogPort,
 } from "../ports/entity-catalog.port";
@@ -99,7 +99,7 @@ export class ResearchGraphService {
     private findingRepo: FindingsGraphPort,
     private edgeRepo: EdgesGraphPort,
     private cycleRepo: CyclesGraphPort,
-    private embedder: VoyageEmbedder,
+    private embedder: EmbedderPort,
     private entityCatalog: EntityCatalogPort,
   ) {}
 

@@ -85,6 +85,12 @@ export interface ContainerConfig {
   webSearch: WebSearchPort;
   simLlmMode?: "cloud" | "fixtures" | "record";
   simKernelSharedSecret?: string;
+  /**
+   * Voyage API key for the SSA embedder adapter. When undefined, the
+   * adapter reports `isAvailable()=false` and the kernel falls through
+   * to the non-semantic path — no runtime error.
+   */
+  voyageApiKey?: string;
   /** Optional override; defaults to bundled SSA skill pack */
   skillsDir?: string;
 }
@@ -168,6 +174,7 @@ import { buildCortexDataProvider } from "./agent/ssa/cortex-data-provider";
 import { buildSsaDomainConfig } from "./agent/ssa/domain-config";
 import { SsaEntityCatalogAdapter } from "./agent/ssa/ssa-entity-catalog.adapter";
 import { SsaSourceFetcherAdapter } from "./agent/ssa/ssa-source-fetcher.adapter";
+import { SsaVoyageEmbedderAdapter } from "./agent/ssa/ssa-voyage-embedder.adapter";
 
 import type { AppServices } from "./routes";
 import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
@@ -266,6 +273,7 @@ export async function buildContainer(
     webSearch,
     entityCatalog: new SsaEntityCatalogAdapter(db),
     sourceFetcher: new SsaSourceFetcherAdapter(),
+    embedder: new SsaVoyageEmbedderAdapter(config.voyageApiKey),
   });
 
   // ─── Sweep SSA port wiring (Plan 1 Task 3.1) ─────────────────────

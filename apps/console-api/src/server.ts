@@ -27,6 +27,7 @@ export interface ServerEnv {
   databaseUrl: string;
   redisUrl: string;
   openaiApiKey?: string;
+  voyageApiKey?: string;
   simLlmMode?: "cloud" | "fixtures" | "record";
   simKernelSharedSecret?: string;
 }
@@ -47,6 +48,7 @@ export function readServerEnv(): ServerEnv {
       "postgres://thalamus:thalamus@localhost:5433/thalamus",
     redisUrl: process.env.REDIS_URL ?? "redis://localhost:6380",
     openaiApiKey: process.env.OPENAI_API_KEY,
+    voyageApiKey: process.env.VOYAGE_API_KEY,
     simLlmMode: readSimLlmMode(process.env.SIM_LLM_MODE),
     simKernelSharedSecret: process.env.SIM_KERNEL_SHARED_SECRET,
   };
@@ -70,6 +72,7 @@ function buildInfra(env: ServerEnv): {
       db,
       redis,
       webSearch,
+      voyageApiKey: env.voyageApiKey,
       simLlmMode: env.simLlmMode,
       simKernelSharedSecret: env.simKernelSharedSecret,
     },

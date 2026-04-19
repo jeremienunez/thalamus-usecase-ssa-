@@ -1,14 +1,18 @@
 /**
- * Voyage Embedder Service — Query-time embedding for satellite / SSA matching.
+ * SSA Voyage Embedder Adapter — concrete `EmbedderPort` for the SSA pack.
  *
  * Uses voyage-4-lite (shared embedding space with voyage-4-large) to generate
  * query embeddings for pgvector ANN search against the satellite catalog.
+ * Lives on the app side since Voyage is a domain-specific provider choice;
+ * the kernel (`packages/thalamus`) ships only the `EmbedderPort` interface
+ * and a `NullEmbedder` default.
  *
  * Cost: ~$0.02 per 1M tokens (voyage-4-lite).
  * A single catalog query ≈ 15 tokens → ~$0.0000003 per query.
  */
 
 import { createLogger } from "@interview/shared/observability";
+import type { EmbedderPort } from "@interview/thalamus";
 
 const logger = createLogger("voyage-embedder");
 
@@ -20,7 +24,7 @@ const DOCUMENT_MODEL = "voyage-4-large";
 const DIMENSIONS = 2048;
 const MAX_BATCH_SIZE = 128;
 
-export class VoyageEmbedder {
+export class SsaVoyageEmbedderAdapter implements EmbedderPort {
   private apiKey: string;
 
   constructor(apiKey?: string) {

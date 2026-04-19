@@ -103,6 +103,8 @@ export type {
   SourceResult,
 } from "./ports/source-fetcher.port";
 export { NoopSourceFetcher } from "./entities/noop-source-fetcher";
+export type { EmbedderPort } from "./ports/embedder.port";
+export { NullEmbedder } from "./entities/null-embedder";
 
 // Cortex execution strategies (extension points)
 export {
@@ -117,5 +119,4 @@ export { ResearchEdgeRepository } from "./repositories/research-edge.repository"
 export { ResearchCycleRepository } from "./repositories/research-cycle.repository";
 
 // Utils
-export { VoyageEmbedder } from "./utils/voyage-embedder";
 export * from "./utils/llm-json-parser";
