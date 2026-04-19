@@ -6,9 +6,12 @@
  * Falls back to enrichment env config when a knob is unset.
  */
 
+import { createLogger } from "@interview/shared/observability";
 import { enrichmentFallbackConfig } from "../../config/enrichment";
 import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
+
+const logger = createLogger("llm-provider-openai");
 
 export class OpenAIProvider implements LlmProvider {
   readonly name = "openai" as const;
@@ -38,18 +41,13 @@ export class OpenAIProvider implements LlmProvider {
         : { format: { type: "text" } },
       store: true,
     };
-    // Reasoning tokens (GPT-5.4) count against max_output_tokens. With
-    // effort=xhigh the reasoning alone can burn 10–20k tokens — if the
-    // caller didn't set a cap, auto-provision a generous budget so the
-    // completion isn't truncated before the actual answer is emitted.
-    let maxOut = opts.maxOutputTokens ?? 0;
-    if (maxOut <= 0) {
-      if (effort === "xhigh") maxOut = 32_000;
-      else if (effort === "high") maxOut = 16_000;
-      else if (effort === "medium") maxOut = 8_000;
-    }
-    if (maxOut > 0) {
-      body.max_output_tokens = maxOut;
+    // Only set max_output_tokens when the caller explicitly provided a
+    // positive value. Leaving it unset lets the OpenAI server use its
+    // own default, which is what we want for benchmarking — the bench
+    // pass needs to see where truncation naturally occurs before we
+    // decide on a heuristic cap.
+    if (opts.maxOutputTokens && opts.maxOutputTokens > 0) {
+      body.max_output_tokens = opts.maxOutputTokens;
     }
     if (typeof opts.temperature === "number") {
       body.temperature = opts.temperature;
@@ -70,6 +68,13 @@ export class OpenAIProvider implements LlmProvider {
     }
 
     const data = JSON.parse(rawBody) as {
+      status?: string;
+      incomplete_details?: { reason?: string };
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        output_tokens_details?: { reasoning_tokens?: number };
+      };
       output: Array<{
         type: string;
         content?: Array<{ type: string; text?: string }>;
@@ -82,6 +87,28 @@ export class OpenAIProvider implements LlmProvider {
       .filter((c) => c.type === "output_text")
       .map((c) => c.text ?? "")
       .join("");
+
+    // Bench signal: log when the response came back incomplete so we
+    // can correlate truncation with reasoning_effort + prompt size.
+    // OpenAI sets status="incomplete" and incomplete_details.reason
+    // (e.g. "max_output_tokens") when the cap hit before the model
+    // finished emitting.
+    if (data.status === "incomplete" || data.incomplete_details?.reason) {
+      logger.warn(
+        {
+          reason: data.incomplete_details?.reason ?? data.status,
+          model,
+          effort,
+          verbosity,
+          maxOutputTokens: opts.maxOutputTokens ?? null,
+          inputTokens: data.usage?.input_tokens,
+          outputTokens: data.usage?.output_tokens,
+          reasoningTokens: data.usage?.output_tokens_details?.reasoning_tokens,
+          completionChars: text.length,
+        },
+        "OpenAI response incomplete — completion truncated",
+      );
+    }
 
     return stripThinkingChannels(text);
   }

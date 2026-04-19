@@ -227,16 +227,11 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
     reasoning: { effort },
   };
   if (req.responseFormat) bodyBase.text = { format: req.responseFormat };
-  // Auto-provision max_output_tokens when unset so reasoning tokens don't
-  // starve the completion (same rationale as OpenAIProvider).
-  let maxOut = ov.maxOutputTokens ?? 0;
-  if (maxOut <= 0) {
-    if (effort === "xhigh") maxOut = 32_000;
-    else if (effort === "high") maxOut = 16_000;
-    else if (effort === "medium") maxOut = 8_000;
-  }
-  if (maxOut > 0) {
-    bodyBase.max_output_tokens = maxOut;
+  // Only set max_output_tokens when the caller explicitly provided one;
+  // leaving it unset uses the OpenAI default so we can benchmark the
+  // natural truncation point before deciding on a heuristic.
+  if (ov.maxOutputTokens && ov.maxOutputTokens > 0) {
+    bodyBase.max_output_tokens = ov.maxOutputTokens;
   }
   if (typeof ov.temperature === "number") {
     bodyBase.temperature = ov.temperature;
@@ -270,6 +265,37 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
     const data = (await res.json()) as Record<string, unknown>;
     const text = stripThinkingChannels(extractResponseText(data));
     const urls = extractUrls(text);
+
+    // Bench signal: flag truncation so we can correlate it with
+    // reasoning_effort + prompt size in the logs.
+    if (
+      data.status === "incomplete" ||
+      (data.incomplete_details as { reason?: string } | undefined)?.reason
+    ) {
+      const usage = data.usage as
+        | {
+            input_tokens?: number;
+            output_tokens?: number;
+            output_tokens_details?: { reasoning_tokens?: number };
+          }
+        | undefined;
+      const details = data.incomplete_details as
+        | { reason?: string }
+        | undefined;
+      logger.warn(
+        {
+          reason: details?.reason ?? data.status,
+          model,
+          effort,
+          maxOutputTokens: ov.maxOutputTokens ?? null,
+          inputTokens: usage?.input_tokens,
+          outputTokens: usage?.output_tokens,
+          reasoningTokens: usage?.output_tokens_details?.reasoning_tokens,
+          completionChars: text.length,
+        },
+        "nano call incomplete — completion truncated",
+      );
+    }
 
     return { ok: true, text, urls, latencyMs };
   } catch (err: unknown) {
