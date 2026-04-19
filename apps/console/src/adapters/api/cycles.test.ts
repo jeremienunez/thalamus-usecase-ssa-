@@ -1,0 +1,24 @@
+import { describe, it, expect, vi } from "vitest";
+import { createCyclesApi } from "./cycles";
+
+describe("createCyclesApi", () => {
+  it("list hits /api/cycles; run posts /api/cycles/run", async () => {
+    const calls: Array<[string, "GET" | "POST", unknown?]> = [];
+    const api = createCyclesApi({
+      getJson: vi.fn(async (p: string) => {
+        calls.push([p, "GET"]);
+        return { items: [] } as never;
+      }),
+      postJson: vi.fn(async (p: string, b: unknown) => {
+        calls.push([p, "POST", b]);
+        return { cycle: {} } as never;
+      }),
+    });
+    await api.list();
+    await api.run("thalamus");
+    expect(calls).toEqual([
+      ["/api/cycles", "GET"],
+      ["/api/cycles/run", "POST", { kind: "thalamus" }],
+    ]);
+  });
+});

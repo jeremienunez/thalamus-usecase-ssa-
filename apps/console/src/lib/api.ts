@@ -1,4 +1,4 @@
-/** Legacy shim. DTOs live in shared/types; keep re-exports until all consumers migrate (Phase 7 deletes this file). */
+/** Legacy shim. DTOs live in shared/types; runtime delegates to adapters/api/*. Phase 7 deletes this file. */
 export type {
   Regime,
   SourceClass,
@@ -17,113 +17,48 @@ export type {
   CycleDTO,
 } from "@/shared/types";
 
-import type {
-  Regime,
-  FindingStatus,
-  ConjunctionDTO,
-  KgNodeDTO,
-  KgEdgeDTO,
-  FindingDTO,
-  SweepSuggestionDTO,
-  MissionStateDTO,
-  AutonomyStateDTO,
-  CycleDTO,
-} from "@/shared/types";
+import type { Regime, FindingStatus } from "@/shared/types";
 import { createFetchApiClient } from "@/adapters/api/client";
 import { createSatellitesApi } from "@/adapters/api/satellites";
+import { createConjunctionsApi } from "@/adapters/api/conjunctions";
+import { createKgApi } from "@/adapters/api/kg";
+import { createFindingsApi } from "@/adapters/api/findings";
+import { createStatsApi } from "@/adapters/api/stats";
+import { createCyclesApi, type CycleKind } from "@/adapters/api/cycles";
+import { createSweepApi } from "@/adapters/api/sweep";
+import { createMissionApi } from "@/adapters/api/mission";
+import { createAutonomyApi } from "@/adapters/api/autonomy";
 
 const _fetcher = createFetchApiClient();
 const _satellites = createSatellitesApi(_fetcher);
-
-async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return (await res.json()) as T;
-}
+const _conjunctions = createConjunctionsApi(_fetcher);
+const _kg = createKgApi(_fetcher);
+const _findings = createFindingsApi(_fetcher);
+const _stats = createStatsApi(_fetcher);
+const _cycles = createCyclesApi(_fetcher);
+const _sweep = createSweepApi(_fetcher);
+const _mission = createMissionApi(_fetcher);
+const _autonomy = createAutonomyApi(_fetcher);
 
 export const api = {
   satellites: (regime?: Regime) => _satellites.list(regime),
-  conjunctions: (minPc = 0) =>
-    getJson<{ items: ConjunctionDTO[]; count: number }>(`/api/conjunctions?minPc=${minPc}`),
-  kgNodes: () => getJson<{ items: KgNodeDTO[] }>(`/api/kg/nodes`),
-  kgEdges: () => getJson<{ items: KgEdgeDTO[] }>(`/api/kg/edges`),
-  findings: (params?: { status?: FindingStatus; cortex?: string }) => {
-    const qs = new URLSearchParams();
-    if (params?.status) qs.set("status", params.status);
-    if (params?.cortex) qs.set("cortex", params.cortex);
-    return getJson<{ items: FindingDTO[]; count: number }>(
-      `/api/findings${qs.toString() ? `?${qs}` : ""}`,
-    );
-  },
-  finding: (id: string) => getJson<FindingDTO>(`/api/findings/${encodeURIComponent(id)}`),
-  decision: async (id: string, decision: FindingStatus, reason?: string) => {
-    const res = await fetch(`/api/findings/${encodeURIComponent(id)}/decision`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ decision, reason }),
-    });
-    if (!res.ok) throw new Error(`${res.status}`);
-    return (await res.json()) as { ok: boolean; finding: FindingDTO };
-  },
-  stats: () =>
-    getJson<{
-      satellites: number;
-      conjunctions: number;
-      kgNodes: number;
-      kgEdges: number;
-      findings: number;
-      byStatus: Record<string, number>;
-      byCortex: Record<string, number>;
-    }>(`/api/stats`),
-  runCycle: async (kind: "thalamus" | "fish" | "both") => {
-    const res = await fetch(`/api/cycles/run`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind }),
-    });
-    if (!res.ok) throw new Error(`${res.status}`);
-    return (await res.json()) as { cycle: CycleDTO };
-  },
-  cycles: () => getJson<{ items: CycleDTO[] }>(`/api/cycles`),
-  sweepSuggestions: () =>
-    getJson<{ items: SweepSuggestionDTO[]; count: number }>(`/api/sweep/suggestions`),
-  missionStatus: () => getJson<MissionStateDTO>(`/api/sweep/mission/status`),
-  missionStart: async () => {
-    const res = await fetch(`/api/sweep/mission/start`, { method: "POST" });
-    if (!res.ok) throw new Error(`${res.status}`);
-    return (await res.json()) as { ok: boolean; state: MissionStateDTO };
-  },
-  missionStop: async () => {
-    const res = await fetch(`/api/sweep/mission/stop`, { method: "POST" });
-    if (!res.ok) throw new Error(`${res.status}`);
-    return (await res.json()) as { ok: boolean; state: MissionStateDTO };
-  },
-  autonomyStatus: () => getJson<AutonomyStateDTO>(`/api/autonomy/status`),
-  autonomyStart: async (intervalSec?: number) => {
-    const res = await fetch(`/api/autonomy/start`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ intervalSec }),
-    });
-    if (!res.ok) throw new Error(`${res.status}`);
-    return (await res.json()) as { ok: boolean; state: AutonomyStateDTO };
-  },
-  autonomyStop: async () => {
-    const res = await fetch(`/api/autonomy/stop`, { method: "POST" });
-    if (!res.ok) throw new Error(`${res.status}`);
-    return (await res.json()) as { ok: boolean; state: AutonomyStateDTO };
-  },
-  reviewSuggestion: async (id: string, accept: boolean, reason?: string) => {
-    const res = await fetch(`/api/sweep/suggestions/${encodeURIComponent(id)}/review`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ accept, reason }),
-    });
-    if (!res.ok) throw new Error(`${res.status}`);
-    return (await res.json()) as {
-      ok: boolean;
-      reviewed: boolean;
-      resolution: { status: string; affectedRows: number; errors?: string[] } | null;
-    };
-  },
+  conjunctions: (minPc = 0) => _conjunctions.list(minPc),
+  kgNodes: () => _kg.listNodes(),
+  kgEdges: () => _kg.listEdges(),
+  findings: (params?: { status?: FindingStatus; cortex?: string }) => _findings.list(params),
+  finding: (id: string) => _findings.findById(id),
+  decision: (id: string, decision: FindingStatus, reason?: string) =>
+    _findings.decide(id, decision, reason),
+  stats: () => _stats.get(),
+  runCycle: (kind: CycleKind) => _cycles.run(kind),
+  cycles: () => _cycles.list(),
+  sweepSuggestions: () => _sweep.listSuggestions(),
+  missionStatus: () => _mission.status(),
+  missionStart: () => _mission.start(),
+  missionStop: () => _mission.stop(),
+  autonomyStatus: () => _autonomy.status(),
+  autonomyStart: (intervalSec?: number) => _autonomy.start(intervalSec),
+  autonomyStop: () => _autonomy.stop(),
+  reviewSuggestion: (id: string, accept: boolean, reason?: string) =>
+    _sweep.review(id, accept, reason),
 };
