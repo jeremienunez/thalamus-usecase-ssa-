@@ -86,6 +86,11 @@ export type {
   EntityRef,
 } from "./ports/entity-catalog.port";
 export { NoopEntityCatalog } from "./entities/noop-entity-catalog";
+export type {
+  SourceFetcherPort,
+  SourceResult,
+} from "./ports/source-fetcher.port";
+export { NoopSourceFetcher } from "./entities/noop-source-fetcher";
 
 // Cortex execution strategies (extension points)
 export {
