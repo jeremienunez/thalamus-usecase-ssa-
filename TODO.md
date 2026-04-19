@@ -1,6 +1,6 @@
 # TODO
 
-Interview-readiness checklist for Thalamus + Sweep — **target interview: CortAIx (Thales AI division)**.
+Portfolio-readiness checklist for Thalamus + Sweep.
 
 **Audited 2026-04-19** — the old 823-line list was split three ways:
 
@@ -379,84 +379,6 @@ Discovered cycle 264 diagnostic. Three root causes: dedup tax (~40%), web-search
 
 - [ ] Enrich the seed so `data_auditor` stops dominating. Join more CelesTrak SATCAT fields (`operator`, `mass`, `country`, `platform_class`) into `seed/populate-space-catalog.ts`.
 
----
+### Repo hygiene — conditional
 
-## Interview prep — CortAIx / Thales
-
-_Non-code tasks, not auditable by grep. Kept in TODO as personal prep._
-
-### Narrative
-
-- [ ] Write first-person pitch (5–7 min): problem → system shape → why cortex → why nano swarm → guardrails → transposition → tradeoffs.
-- [ ] Open with honest framing: "built on a commercial domain, pattern is domain-agnostic, here's the mapping".
-- [ ] Close with "what I'd change to ship this at Thales" (sovereign models, STIX/TAXII fetchers, CERT-FR/ANSSI feeds).
-
-### Code walkthrough
-
-- [ ] One file per package picked and rehearsed:
-  - [ ] `thalamus/src/orchestrators/executor.ts` — orchestration + guardrails
-  - [ ] `sweep/src/services/nano-sweep.service.ts` — swarm + finding routing
-  - [ ] `db-schema/src/schema/` — typed repo contract
-  - [ ] `shared/src/utils/try-async.ts` — error discipline
-- [ ] Diagram ready for each (whiteboard-able).
-
-### Anticipated questions
-
-- [ ] **Sovereignty**: classified-data deployment (sovereign models per cortex, air-gapped fetchers, on-prem pgvector).
-- [ ] **Cost control**: runaway-agent cap (budget per cortex, depth cap, partial-result surfacing).
-- [ ] **Hallucination on IOCs**: structured-only Zod outputs, source-reliability scoring, reviewer gate.
-- [ ] **Multi-provider**: per-step model config, nano swarm as the only OpenAI-leaning layer.
-- [ ] **Human-in-the-loop**: Sweep never writes into source-of-truth; pending Redis buffer until reviewer accepts.
-- [ ] **Observability**: Prometheus counters per cortex/source/skill; query → histogram.
-- [ ] **Testability**: mock at `nano-caller` / `SourceFetcher` boundary; unit + integration + e2e.
-- [ ] **Failure modes**: Redis memory, rate-limit contention on nano swarm, audit-row volume — one answer each.
-
-### Use cases — Factory framing
-
-- [ ] **SSA (primary)**: dual-stream OSINT × classified radar, HITL operator, P≥10⁻⁴, `Maneuver` audit ledger.
-- [ ] **Threat Intel (one-step transposition)**: schema rename + fetcher swap. Live mapping table.
-- [ ] Plan B: pharmacovigilance / IUU fishing / regulatory & export-control (reserve).
-
-### Opening pitch (30 sec)
-
-> "J'ai bâti un **pattern** d'agent multi-cortex avec swarm parallèle et sweep HITL audité. Le domaine du build initial est commercial — ce qui compte c'est que la même plateforme produit 11 cortices aujourd'hui, et que n'importe quelle BL Thales peut brancher son domaine sans toucher l'orchestrateur, les guardrails, ni le workflow HITL. Je vous montre le pattern sur un cas d'usage critique — **évitement de collision orbitale** — puis je le transpose en une étape au Threat Intelligence. C'est une **Factory d'agents**, pas un agent."
-
-### SSA build — talking points (3 min)
-
-- [ ] Draw the loop: OSINT → catalog → correlation ← Field → ConjunctionEvent → seuil P ≥ 10⁻⁴ → Sweep finding → operator accept → Maneuver + audit.
-- [ ] Show cortices: `catalog`, `observations`, `conjunction-analysis`, `correlation`, `maneuver-planning`.
-- [ ] Confidence bands: OSINT [0.2–0.5], field-corroborated [0.85–1.0], uncorroborated flagged with provenance.
-- [ ] Guardrail in code: hypothesis conjunction cannot promote without field corroboration (SPEC-TH-040).
-- [ ] Economic framing: false positive = delta-v burned; false negative = Kessler-class incident.
-
-### Transposition to Threat Intel (1 min, whiteboard)
-
-- [ ] `catalog` → `vulnerability-catalog`, `observations` → `ioc-normalization`, `correlation` → `dual-stream-correlation`.
-- [ ] TLE / radar → NVD / STIX / CERT-FR / tactical data-link.
-- [ ] `ConjunctionEvent` → `ThreatEvent`, `Maneuver` → `Response`.
-- [ ] Stay generic — "tactical data-link", "sensor-fusion bus", "mission debrief", "C2 feed".
-- [ ] Land the punch: "**same code, new domain**".
-
-### Architecture additions to prototype (post-interview)
-
-- [ ] `thalamus/src/cortices/{catalog,observations,conjunction-analysis,correlation,maneuver-planning}/` — SSA cortex stubs.
-- [ ] `thalamus/src/cortices/sources/osint/` — `TLEFetcher`, `AmateurObsFetcher`, `SpacePressFetcher`.
-- [ ] `thalamus/src/cortices/sources/field/` — generic `ClassifiedRadarFetcher`, `OperatorTelemetryFetcher` (stubbed).
-- [ ] `thalamus/src/transports/tactical-bus.ts` — Kafka / ZeroMQ / MQTT abstraction.
-- [ ] `db-schema` — `Satellite`, `Debris`, `Observation`, `ConjunctionEvent`, `Maneuver` entities; edge tables carry `confidence` + `source_class`.
-- [ ] Sweep rule: `ConjunctionEvent` P ≥ 10⁻⁴ + no field corroboration > N hours → priority finding.
-- [ ] End-to-end demo script: synthetic TLE + radar → conjunction → Playwright operator accept → `Maneuver` row.
-
-### The 4 interview axes
-
-- [ ] **Souveraineté** — multi-provider, per-step model selection.
-- [ ] **Contrôle** — bounded agents, guardrails in code, cost/depth caps.
-- [ ] **Human-in-the-loop** — Sweep never writes blind, auditable + reversible.
-- [ ] **Testabilité** — 5-layer arch, typed repos, vitest workspace.
-
-### Live-demo readiness
-
-- [ ] `pnpm -r typecheck` green
-- [ ] `pnpm test` green
-- [ ] Repo browsable with clickable file links in README
-- [ ] One cortex skill file opened and explained (`cortices/skills/*.md`)
+- [ ] **If sharing repo externally**: purge git history of earlier framing refs via `git filter-repo` + force-push all 7 branches. Only needed before making repo public or inviting external collaborators. HEAD is already clean; private-repo browsing by owner alone doesn't require this.
