@@ -19,7 +19,8 @@
 
 import type { TurnAction } from "./types";
 import type { CortexRegistry } from "@interview/thalamus";
-import { callNanoWithMode, extractJsonObject } from "@interview/thalamus";
+import { callNanoWithMode } from "@interview/thalamus";
+import { extractJsonObject } from "@interview/shared/utils";
 import { getSimFishConfig } from "../config/sim-fish-config";
 import { createLogger, stepLog } from "@interview/shared/observability";
 import type { AgentContext, TurnResponse } from "./types";

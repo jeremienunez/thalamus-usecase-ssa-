@@ -12,7 +12,7 @@
 import { createLlmTransport } from "../transports/llm-chat";
 import type { ProviderName } from "../transports/providers";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import { extractJsonObject } from "../utils/llm-json-parser";
+import { extractJsonObject } from "@interview/shared/utils";
 import type { CortexFinding } from "./types";
 import {
   getCortexConfig,

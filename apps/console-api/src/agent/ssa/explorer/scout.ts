@@ -1,8 +1,8 @@
 import {
   createLlmTransport,
-  extractJsonArray,
   type ExplorationQuery,
 } from "@interview/thalamus";
+import { extractJsonArray } from "@interview/shared/utils";
 import { createLogger } from "@interview/shared/observability";
 import type { Database } from "@interview/db-schema";
 import { sql } from "drizzle-orm";

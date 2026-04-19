@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { safeParseJson } from "../src/cortices/cortex-llm";
-import { extractJsonObject } from "../src/utils/llm-json-parser";
+import { extractJsonObject } from "@interview/shared/utils";
 
 describe("llm-json-parser", () => {
   it("recovers the first balanced JSON object from concatenated outputs", () => {

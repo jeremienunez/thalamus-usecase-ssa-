@@ -118,5 +118,3 @@ export { ResearchFindingRepository } from "./repositories/research-finding.repos
 export { ResearchEdgeRepository } from "./repositories/research-edge.repository";
 export { ResearchCycleRepository } from "./repositories/research-cycle.repository";
 
-// Utils
-export * from "./utils/llm-json-parser";

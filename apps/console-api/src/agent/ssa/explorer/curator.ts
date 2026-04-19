@@ -1,8 +1,8 @@
 import {
   createLlmTransport,
-  extractJsonArray,
   DEFAULT_CURATOR_PROMPT,
 } from "@interview/thalamus";
+import { extractJsonArray } from "@interview/shared/utils";
 import { createLogger } from "@interview/shared/observability";
 import type { CrawledArticle } from "./crawler";
 

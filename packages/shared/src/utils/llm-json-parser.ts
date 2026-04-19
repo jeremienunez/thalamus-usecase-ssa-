@@ -8,7 +8,7 @@
  * Returns the first valid parse, or null.
  */
 
-import { createLogger } from "@interview/shared/observability";
+import { createLogger } from "../observability";
 
 const logger = createLogger("llm-json-parser");
 
@@ -162,7 +162,7 @@ export function extractJson(raw: string): unknown | null {
     // 9. Code block extraction (```json ... ```)
     () => {
       const m = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (!m) throw new Error("no match");
+      if (!m || !m[1]) throw new Error("no match");
       return JSON.parse(m[1].trim());
     },
   ];

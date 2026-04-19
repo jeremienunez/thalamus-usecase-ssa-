@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { createLlmTransport } from "../transports/llm-chat";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import { extractJson } from "../utils/llm-json-parser";
+import { extractJson } from "@interview/shared/utils";
 import type { CortexRegistry } from "../cortices/registry";
 import type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 import { buildGenericPlannerSystemPrompt } from "../prompts";
