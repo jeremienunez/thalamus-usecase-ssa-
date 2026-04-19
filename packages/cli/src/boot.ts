@@ -1,8 +1,7 @@
 import React from "react";
 import { render } from "ink";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import pino from "pino";
 import { Pool } from "pg";
 import IORedis from "ioredis";
@@ -11,16 +10,13 @@ import { eq, sql } from "drizzle-orm";
 
 import { App } from "./app";
 import { LogsAdapter } from "./adapters";
+import { ThalamusHttpClient } from "./adapters/thalamus.http";
 import { EtaStore } from "./util/etaStore";
 import { PinoRingBuffer } from "./util/pinoRingBuffer";
 import { interpret } from "./router/interpreter";
 import type { Adapters } from "./router/dispatch";
 
-import {
-  CortexRegistry,
-  buildThalamusContainer,
-  callNanoWithMode,
-} from "@interview/thalamus";
+import { callNanoWithMode } from "@interview/thalamus";
 import {
   buildSweepContainer,
   type DomainAuditProvider,
@@ -37,7 +33,6 @@ import {
   sourceItem,
   type Database,
 } from "@interview/db-schema";
-import { ResearchCycleTrigger } from "@interview/shared/enum";
 
 export interface BootDeps {
   adapters: Adapters;
@@ -56,11 +51,15 @@ export interface BootDeps {
  * When `deps.wiring` is provided, main() uses those deps instead of opening
  * its own Pool/Redis — this is how the e2e spec shares a DB connection with
  * the test fixture seed/teardown.
+ *
+ * The thalamus kernel is no longer built here: cycles are consumed through
+ * `POST /api/cycles/run` via {@link ThalamusHttpClient}. The CLI only needs
+ * Postgres/Redis for local read-only adapters (graph neighbourhood, why-tree,
+ * logs ring-buffer) and for sweep resolution.
  */
 export interface BootWiring {
   pool: Pool;
   redis: IORedis;
-  registry: CortexRegistry;
 }
 
 const disabledAuditProvider: DomainAuditProvider = {
@@ -110,15 +109,7 @@ export async function main(
     const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6380";
     ownedPool = new Pool({ connectionString: databaseUrl });
     ownedRedis = new IORedis(redisUrl, { maxRetriesPerRequest: null });
-    // SSA cortex skill pack lives in console-api. Until the CLI moves under
-    // apps/ssa-cli, walk up to the shared path.
-    const skillsDir = resolve(
-      fileURLToPath(new URL(".", import.meta.url)),
-      "../../../apps/console-api/src/agent/ssa/skills",
-    );
-    const registry = new CortexRegistry(skillsDir);
-    registry.discover();
-    wiring = { pool: ownedPool, redis: ownedRedis, registry };
+    wiring = { pool: ownedPool, redis: ownedRedis };
   }
 
   const adapters: Adapters =
@@ -128,7 +119,6 @@ export async function main(
       ring,
       pool: wiring!.pool,
       redis: wiring!.redis,
-      registry: wiring!.registry,
     }));
   const nano = deps?.nano ?? makeFixtureAwareNano();
 
@@ -163,36 +153,41 @@ export interface RealAdapterDeps {
   ring: PinoRingBuffer;
   pool: Pool;
   redis: IORedis;
-  registry: CortexRegistry;
+  /**
+   * Override of the console-api base URL. Defaults to
+   * `process.env.CONSOLE_API_URL ?? "http://localhost:4000"` — same fallback
+   * as the candidates adapter. Kept optional so tests can point at an
+   * ephemeral Fastify instance without touching env.
+   */
+  apiBaseUrl?: string;
+  /**
+   * Bearer token for privileged CLI calls. Optional — most dev setups run
+   * the CLI against a locally-running console-api with open auth.
+   */
+  cliAuth?: string;
 }
 
 /**
- * Wire real thalamus + sweep services against a live Postgres + Redis pair.
+ * Wire real adapters against live Postgres + Redis + console-api HTTP.
  *
- * 1. thalamus.runCycle   — ThalamusService.runCycle + graphService.listFindings
- * 2. telemetry.start     — startTelemetrySwarm (UC_TELEMETRY swarm launch)
+ * 1. thalamus.runCycle   — POST /api/cycles/run via {@link ThalamusHttpClient}
+ * 2. telemetry.start     — disabled pending Plan 3 (POST /api/sim/telemetry/start)
  * 3. logs.tail           — pino ring buffer (unchanged)
  * 4. graph.neighbourhood — inline SQL over research_edge
  * 5. resolution.accept   — SweepResolutionService.resolve (accept then resolve)
  * 6. why.build           — compose from research_finding + research_edge + source_item
+ *
+ * The thalamus kernel is no longer built in-process: CLI consumes the HTTP
+ * contract instead (CLAUDE.md §1 "one public contract, not two").
  */
 export async function buildRealAdapters(
   ctx: RealAdapterDeps,
 ): Promise<Adapters> {
   const db: Database = drizzle(ctx.pool);
 
-  // Thalamus DI — full container against the live DB.
-  // CLI doesn't run cycles in-process (it routes via console-api HTTP),
-  // so domainConfig defaults to noopDomainConfig inside the kernel.
-  const skillsDir = resolve(
-    fileURLToPath(new URL(".", import.meta.url)),
-    "../../../apps/console-api/src/agent/ssa/skills",
-  );
-  const thalamusC = buildThalamusContainer({
-    db,
-    skillsDir,
-    dataProvider: {},
-  });
+  const apiBaseUrl =
+    ctx.apiBaseUrl ?? process.env.CONSOLE_API_URL ?? "http://localhost:4000";
+  const thalamusHttp = new ThalamusHttpClient(apiBaseUrl, ctx.cliAuth);
 
   // Sweep DI — resolution path only. Plan 2 · B.11 made sim ports
   // required; CLI drops the sim block entirely until Plan 3 rewires
@@ -208,34 +203,12 @@ export async function buildRealAdapters(
 
   return {
     // --- 1. thalamus.runCycle -------------------------------------------
+    //
+    // The CLI is an HTTP client of console-api's `/api/cycles/run`. The
+    // kernel container lives server-side; this block owns only transport.
     thalamus: {
       runCycle: async ({ query, cycleId }) => {
-        const cycle = await thalamusC.thalamusService.runCycle({
-          query,
-          triggerType: ResearchCycleTrigger.User,
-          triggerSource: `cli:${cycleId}`,
-          lang: "en",
-          mode: "audit",
-          minConfidence: 0.5,
-        });
-        const findings = await thalamusC.graphService.listFindings({
-          limit: 5,
-          minConfidence: 0.5,
-        });
-        const scoped = findings.filter(
-          (f) => String(f.researchCycleId) === String(cycle.id),
-        );
-        return {
-          findings: (scoped.length > 0 ? scoped : findings).map((f) => ({
-            id: String(f.id),
-            summary: f.summary,
-            title: f.title,
-            sourceClass: "KG",
-            confidence: f.confidence,
-            evidenceRefs: [] as string[],
-          })),
-          costUsd: cycle.totalCost ?? 0,
-        };
+        return thalamusHttp.runCycle({ query, traceId: cycleId });
       },
     },
 
