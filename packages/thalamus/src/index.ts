@@ -91,11 +91,6 @@ export type {
   SourceResult,
 } from "./ports/source-fetcher.port";
 export { NoopSourceFetcher } from "./entities/noop-source-fetcher";
-// TEMP bridge (Task 3.3b → 3.3c): kernel still hosts the SSA fetcher
-// registry. Export the registry entrypoint so apps/console-api can wrap
-// it in SsaSourceFetcherAdapter without importing kernel internals.
-// Task 3.3c moves the registry out and removes this export.
-export { fetchSourcesForCortex } from "./cortices/sources";
 
 // Cortex execution strategies (extension points)
 export {

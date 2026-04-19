@@ -17,7 +17,7 @@ import {
   writeSnapshot,
   diffSnapshots,
   buildVanishedTracks,
-} from "../src/cortices/sources/spacetrack-diff";
+} from "../../../../../src/agent/ssa/sources/spacetrack-diff";
 
 describe("Space-Track diff — key formatting", () => {
   it("YYYY-MM-DD in UTC, regardless of local time", () => {

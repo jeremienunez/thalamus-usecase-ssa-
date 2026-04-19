@@ -10,8 +10,8 @@ import type {
   SourceFetcher,
   SourceResult,
   SourceKind,
-} from "../src/cortices/sources/types";
-import * as sourcesIndex from "../src/cortices/sources";
+} from "../../../../../src/agent/ssa/sources/types";
+import * as sourcesIndex from "../../../../../src/agent/ssa/sources";
 
 describe("SPEC-TH-011 SourceFetcher contract", () => {
   it("SourceResult has the documented shape", () => {

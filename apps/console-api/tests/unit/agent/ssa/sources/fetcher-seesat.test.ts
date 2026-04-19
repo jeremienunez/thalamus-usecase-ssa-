@@ -11,7 +11,7 @@ import {
   extractTleTriplets,
   parseSeesatMessage,
   extractMessageLinks,
-} from "../src/cortices/sources/fetcher-seesat";
+} from "../../../../../src/agent/ssa/sources/fetcher-seesat";
 
 describe("SeeSat — TLE triplet extraction", () => {
   it("pulls TLE triplets out of prose", () => {

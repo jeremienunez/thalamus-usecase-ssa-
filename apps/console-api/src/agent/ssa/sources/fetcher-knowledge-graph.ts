@@ -9,7 +9,7 @@
 import { createLogger } from "@interview/shared/observability";
 import type { SourceResult } from "./types";
 import { registerSource } from "./registry";
-import type { ResearchGraphService } from "../../services/research-graph.service";
+import type { ResearchGraphService } from "@interview/thalamus";
 import { ResearchEntityType } from "@interview/shared/enum";
 
 const logger = createLogger("source-knowledge-graph");

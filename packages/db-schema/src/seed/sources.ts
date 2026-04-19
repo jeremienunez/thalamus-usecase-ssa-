@@ -145,7 +145,7 @@ export const SOURCE_SEEDS: SourceSeed[] = [
   },
 ];
 
-// ─── Lightweight fetchers (keep in sync with thalamus/cortices/sources) ─────
+// ─── Lightweight fetchers (keep in sync with apps/console-api/src/agent/ssa/sources) ─────
 
 const decodeEntities = (s: string): string =>
   s
