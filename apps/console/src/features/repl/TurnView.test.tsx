@@ -57,6 +57,7 @@ describe("TurnView follow-up rendering", () => {
       <TurnView
         turn={turn}
         onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
         onRunFollowUp={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -111,6 +112,7 @@ describe("TurnView follow-up rendering", () => {
       <TurnView
         turn={turn}
         onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
         onRunFollowUp={onRunFollowUp}
         onCancel={vi.fn()}
       />,

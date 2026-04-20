@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import type { ReplFollowUpPlanItem } from "@interview/shared";
 import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
 import { CycleLoader } from "@/shared/ui/CycleLoader";
+import type { BriefingUiAction } from "@/features/repl/types";
 import type { Turn } from "@/features/repl/reducer";
 import { FollowUpPlanView } from "./FollowUpPlanView";
 import { FollowUpTurnView } from "./FollowUpTurnView";
@@ -10,6 +11,7 @@ import { ResultView } from "./ResultView";
 type Props = {
   turn: Turn;
   onFollowUp: (input: string) => void;
+  onUiAction: (action: BriefingUiAction) => void;
   onRunFollowUp: (
     turnId: string,
     query: string,
@@ -22,6 +24,7 @@ type Props = {
 export function TurnView({
   turn,
   onFollowUp,
+  onUiAction,
   onRunFollowUp,
   onCancel,
 }: Props) {
@@ -93,7 +96,12 @@ export function TurnView({
       {turn.phase === "done" && turn.response && (
         <div className="flex flex-col gap-2">
           {turn.response.results.map((r, i) => (
-            <ResultView key={i} result={r} onFollowUp={onFollowUp} />
+            <ResultView
+              key={i}
+              result={r}
+              onFollowUp={onFollowUp}
+              onUiAction={onUiAction}
+            />
           ))}
           <div className="mono text-caption text-dim">
             cost=${turn.response.costUsd.toFixed(4)} · {turn.response.tookMs}ms

@@ -31,6 +31,7 @@ export function FieldRow({
   const kind = fieldKindOf(spec);
   const choices = fieldChoices(spec);
   const isDefault = JSON.stringify(value) === JSON.stringify(defaultValue);
+  const kindLabel = choices && kind === "string" ? "enum" : kind;
 
   return (
     <div
@@ -45,7 +46,7 @@ export function FieldRow({
           {keyName}
         </div>
         <div className="label text-muted">
-          {choices ? "enum" : kind}
+          {kindLabel}
           {unsupported && <span className="ml-1 text-amber">· N/A</span>}
         </div>
       </div>

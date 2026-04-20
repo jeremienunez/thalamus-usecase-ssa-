@@ -125,7 +125,15 @@ export function heuristicRoute(input: string): RouterPlan {
 
 // ---------- Dispatch results ----------
 export type DispatchResult =
-  | { kind: "briefing"; executiveSummary: string; findings: BriefingFinding[]; recommendedActions: string[]; followUpPrompts: string[]; costUsd: number }
+  | {
+      kind: "briefing";
+      executiveSummary: string;
+      findings: BriefingFinding[];
+      recommendedActions: string[];
+      followUpPrompts: string[];
+      uiActions: BriefingUiAction[];
+      costUsd: number;
+    }
   | { kind: "telemetry"; satId: string; satName: string; distribution: TelemetryEntry[] }
   | { kind: "logs"; events: LogEvent[] }
   | { kind: "graph"; root: string; tree: GraphNode }
@@ -133,6 +141,18 @@ export type DispatchResult =
   | { kind: "why"; findingId: string; tree: WhyNode; stats: WhyStats }
   | { kind: "pc"; conjunctionId: string; estimate: PcEstimate }
   | { kind: "clarify"; question: string; options: string[] };
+
+export type BriefingUiAction =
+  | {
+      kind: "open_feed";
+      target: "autonomy";
+      label: string;
+    }
+  | {
+      kind: "open_config";
+      domain: "console.autonomy" | "thalamus.budgets";
+      label: string;
+    };
 
 export type PcCluster = {
   mode: string;
@@ -301,8 +321,17 @@ export function makeAdapters(fx: Fixtures) {
         `telemetry for top linked satellite`,
         `graph neighbourhood around ${top?.id ?? "f:1"}`,
       ];
+      const uiActions = buildBriefingUiActions(step.q);
       const costUsd = 0.01 + rnd() * 0.04;
-      return { kind: "briefing", executiveSummary, findings, recommendedActions, followUpPrompts, costUsd };
+      return {
+        kind: "briefing",
+        executiveSummary,
+        findings,
+        recommendedActions,
+        followUpPrompts,
+        uiActions,
+        costUsd,
+      };
     },
 
     async telemetry(step: Extract<Step, { action: "telemetry" }>, seed: number): Promise<DispatchResult> {
@@ -552,6 +581,38 @@ export function makeAdapters(fx: Fixtures) {
       return { kind: "why", findingId: f.id, tree, stats };
     },
   };
+}
+
+function buildBriefingUiActions(query: string): BriefingUiAction[] {
+  const low = query.toLowerCase();
+  const uiActions: BriefingUiAction[] = [
+    {
+      kind: "open_feed",
+      target: "autonomy",
+      label: "Open autonomy FEED",
+    },
+  ];
+  const wantsConfig = /\b(config|configure|runtime|setting|settings)\b/.test(low);
+  const wantsAutonomy =
+    /\b(autonomy|loop|interval|rotation|tick|spend|cap)\b/.test(low);
+  const wantsBudgets =
+    /\b(budget|budgets|cost|complexity|simple|moderate|deep)\b/.test(low);
+
+  if (wantsConfig || wantsAutonomy) {
+    uiActions.push({
+      kind: "open_config",
+      domain: "console.autonomy",
+      label: "Tune console.autonomy",
+    });
+  }
+  if (wantsConfig || wantsBudgets) {
+    uiActions.push({
+      kind: "open_config",
+      domain: "thalamus.budgets",
+      label: "Review thalamus.budgets",
+    });
+  }
+  return uiActions;
 }
 
 export async function runTurn(

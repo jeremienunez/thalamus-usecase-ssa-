@@ -85,6 +85,7 @@ export function makeStubApi(overrides: Partial<ApiClient> = {}): ApiClient {
       }),
       start: async () => ({ ok: true, state: {} as never }),
       stop: async () => ({ ok: true, state: {} as never }),
+      reset: async () => ({ ok: true, state: {} as never }),
     },
   };
   return { ...base, ...overrides };

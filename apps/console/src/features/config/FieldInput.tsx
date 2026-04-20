@@ -28,24 +28,23 @@ export function FieldInput({ kind, choices, fieldName, value, onChange }: Props)
     );
   }
 
-  if (choices) {
-    return (
-      <select
-        className={INPUT_CLASS}
-        value={typeof value === "string" ? value : ""}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {choices.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
   switch (kind) {
     case "string":
+      if (choices) {
+        return (
+          <select
+            className={INPUT_CLASS}
+            value={typeof value === "string" ? value : ""}
+            onChange={(e) => onChange(e.target.value)}
+          >
+            {choices.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        );
+      }
       return (
         <input
           type="text"
@@ -82,6 +81,7 @@ export function FieldInput({ kind, choices, fieldName, value, onChange }: Props)
       return (
         <StringArrayInput
           value={Array.isArray(value) ? (value as string[]) : []}
+          choices={choices}
           onChange={onChange}
         />
       );

@@ -60,6 +60,18 @@ export type PcEstimate = {
   suggestionId?: string;
 };
 
+export type BriefingUiAction =
+  | {
+      kind: "open_feed";
+      target: "autonomy";
+      label: string;
+    }
+  | {
+      kind: "open_config";
+      domain: "console.autonomy" | "thalamus.budgets";
+      label: string;
+    };
+
 export type DispatchResult =
   | {
       kind: "briefing";
@@ -67,6 +79,7 @@ export type DispatchResult =
       findings: BriefingFinding[];
       recommendedActions: string[];
       followUpPrompts: string[];
+      uiActions: BriefingUiAction[];
       costUsd: number;
     }
   | { kind: "telemetry"; satId: string; satName: string; distribution: TelemetryEntry[] }

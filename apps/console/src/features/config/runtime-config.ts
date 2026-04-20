@@ -176,7 +176,7 @@ export type RuntimeConfigSingleResponse = {
   domain: string;
   value: Record<string, unknown>;
   defaults: Record<string, unknown>;
-  schema: Record<string, FieldKind>;
+  schema: Record<string, FieldSpec>;
   hasOverrides: boolean;
 };
 

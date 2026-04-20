@@ -16,6 +16,7 @@ export { useAutonomyStatusQuery } from "./useAutonomyStatusQuery";
 export {
   useAutonomyStartMutation,
   useAutonomyStopMutation,
+  useAutonomyResetMutation,
 } from "./useAutonomyControlMutations";
 export { useCyclesQuery } from "./useCyclesQuery";
 export { useLaunchCycleMutation } from "./useLaunchCycleMutation";
@@ -41,6 +42,7 @@ export { useAutonomyStatusQuery as useAutonomyStatus } from "./useAutonomyStatus
 export {
   useAutonomyStartMutation as useAutonomyStart,
   useAutonomyStopMutation as useAutonomyStop,
+  useAutonomyResetMutation as useAutonomyReset,
 } from "./useAutonomyControlMutations";
 export { useCyclesQuery as useCycles } from "./useCyclesQuery";
 export { useLaunchCycleMutation as useLaunchCycle } from "./useLaunchCycleMutation";

@@ -1,5 +1,9 @@
 import { clsx } from "clsx";
-import type { BriefingFinding, DispatchResult } from "@/features/repl/types";
+import type {
+  BriefingFinding,
+  BriefingUiAction,
+  DispatchResult,
+} from "@/features/repl/types";
 import { confidenceBar } from "@/shared/ui/sparkline";
 
 const DOT_COLOR: Record<BriefingFinding["sourceClass"], string> = {
@@ -11,9 +15,11 @@ const DOT_COLOR: Record<BriefingFinding["sourceClass"], string> = {
 export function BriefingRender({
   r,
   onFollowUp,
+  onUiAction,
 }: {
   r: Extract<DispatchResult, { kind: "briefing" }>;
   onFollowUp: (input: string) => void;
+  onUiAction: (action: BriefingUiAction) => void;
 }) {
   return (
     <div className="flex flex-col gap-2 border border-hairline bg-elevated p-2">
@@ -56,6 +62,20 @@ export function BriefingRender({
               className="mono text-left text-caption text-muted hover:text-primary"
             >
               • {q}
+            </button>
+          ))}
+        </div>
+      )}
+      {r.uiActions.length > 0 && (
+        <div className="flex flex-col gap-0.5">
+          <div className="mono text-caption text-amber">Operator shortcuts</div>
+          {r.uiActions.map((action, i) => (
+            <button
+              key={`${action.kind}-${i}`}
+              onClick={() => onUiAction(action)}
+              className="mono text-left text-caption text-amber hover:text-primary"
+            >
+              ↗ {action.label}
             </button>
           ))}
         </div>
