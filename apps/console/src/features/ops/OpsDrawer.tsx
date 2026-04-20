@@ -30,6 +30,17 @@ export function OpsDrawer({
         <KV k="Operator" v={satellite.operator} />
         <KV k="Country" v={satellite.country} mono />
         <KV
+          k="Mass"
+          v={
+            <span className="mono tabular-nums">
+              {satellite.massKg.toLocaleString(undefined, {
+                maximumFractionDigits: 0,
+              })}
+              <span className="ml-1 text-dim">kg</span>
+            </span>
+          }
+        />
+        <KV
           k="Declared"
           v={
             <span
@@ -58,6 +69,9 @@ export function OpsDrawer({
         <KV k="Altitude" v={<Measure value={fmtAltitudeKm(satellite.semiMajorAxisKm - 6371)} />} />
         <KV k="Inc" v={<Measure value={fmtDeg(satellite.inclinationDeg)} />} />
         <KV k="Ecc" v={<span className="mono tabular-nums">{satellite.eccentricity.toFixed(4)}</span>} />
+        <KV k="RAAN" v={<Measure value={fmtDeg(satellite.raanDeg)} />} />
+        <KV k="Arg ω" v={<Measure value={fmtDeg(satellite.argPerigeeDeg)} />} />
+        <KV k="Mean anom" v={<Measure value={fmtDeg(satellite.meanAnomalyDeg)} />} />
         <KV
           k="Mean motion"
           v={
@@ -69,6 +83,16 @@ export function OpsDrawer({
         />
         <KV k="Epoch" v={satellite.epoch.slice(0, 19) + "Z"} mono />
       </DrawerSection>
+
+      {satellite.tleLine1 && satellite.tleLine2 && (
+        <DrawerSection title="TLE">
+          <pre className="mono overflow-x-auto whitespace-pre text-nano text-numeric leading-tight">
+            {satellite.tleLine1}
+            {"\n"}
+            {satellite.tleLine2}
+          </pre>
+        </DrawerSection>
+      )}
 
       <DrawerSection title={`CONJUNCTIONS (${conjunctions.length})`}>
         {conjunctions.length === 0 && (

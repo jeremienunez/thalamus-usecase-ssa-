@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { SatelliteDTO } from "@/shared/types";
+import { useOpsFilterStore, type RegimeKey } from "@/features/ops/opsFilterStore";
 
-type RegimeKey = "LEO" | "MEO" | "GEO" | "HEO";
 type TrailMode = "off" | "tails" | "full";
 type RegimeFilterKey = "ALL" | RegimeKey;
 
@@ -10,16 +10,13 @@ type RegimeFilterKey = "ALL" | RegimeKey;
  *   - `orbitRegimeFilter`: "ALL" unless exactly one regime is on
  *   - `filteredSats`: sats whose regime is currently visible
  *   - `regimeCounts`: per-regime totals across the unfiltered set
+ *
+ * Regime visibility is sourced from the shared ops filter store so the HUD
+ * regime toggles and the left-rail ops filters stay in sync.
  */
 export function useRegimeFilter(satellites: SatelliteDTO[]) {
-  const [regimeVisible, setRegimeVisible] = useState<Record<RegimeKey, boolean>>({
-    LEO: true,
-    MEO: true,
-    GEO: true,
-    HEO: true,
-  });
-  const toggleRegime = (k: RegimeKey) =>
-    setRegimeVisible((v) => ({ ...v, [k]: !v[k] }));
+  const regimeVisible = useOpsFilterStore((s) => s.regimeVisible);
+  const toggleRegime = useOpsFilterStore((s) => s.toggleRegime);
 
   const [trailMode, setTrailMode] = useState<TrailMode>("tails");
 
