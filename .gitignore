@@ -17,15 +17,16 @@ coverage/
 .vitest-cache/
 *.lcov
 
-# LaTeX — track compiled PDFs, ignore .tex sources + build artifacts
-docs/specs/**/*.tex
-docs/specs/**/*.aux
-docs/specs/**/*.log
-docs/specs/**/*.out
-docs/specs/**/*.toc
-docs/specs/**/*.fls
-docs/specs/**/*.fdb_latexmk
-docs/specs/**/*.synctex.gz
+# LaTeX / Mermaid — track compiled PDFs, ignore sources + build artifacts
+docs/**/*.tex
+docs/**/*.mmd
+docs/**/*.aux
+docs/**/*.log
+docs/**/*.out
+docs/**/*.toc
+docs/**/*.fls
+docs/**/*.fdb_latexmk
+docs/**/*.synctex.gz
 
 # OS / editor
 .DS_Store
@@ -49,6 +50,14 @@ data/seeds/local/
 
 # Private interview prep (Thales/CortAIx framing — not for the public repo)
 .interview/
+
+# Local-only working notes (not for the public repo)
+CLAUDE.md
+TO-REVIEW.md
+
+# Superpowers working dirs (plans, findings, specs, scratch) — not for the public repo
+docs/superpowers/
+docs/tasks/
 
 # Frontend WIP — not ready for the portfolio tree yet
 design-system/
