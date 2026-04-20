@@ -25,6 +25,8 @@ import type {
   RuntimeConfigDomain,
   RuntimeConfigMap,
   RuntimeConfigRegistrar,
+  ThalamusBudgetsConfig,
+  ConsoleAutonomyConfig,
   ThalamusPlannerConfig,
   ThalamusCortexConfig,
   ThalamusReflexionConfig,
@@ -36,6 +38,8 @@ import {
   DEFAULT_THALAMUS_PLANNER_CONFIG,
   DEFAULT_THALAMUS_CORTEX_CONFIG,
   DEFAULT_THALAMUS_REFLEXION_CONFIG,
+  DEFAULT_THALAMUS_BUDGETS_CONFIG,
+  DEFAULT_CONSOLE_AUTONOMY_CONFIG,
   fieldKindOf,
 } from "@interview/shared/config";
 import { createLogger } from "@interview/shared/observability";
@@ -92,6 +96,28 @@ function parseValue(kind: FieldKind, raw: string): unknown {
     default:
       return raw;
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
+function deepMergeJson(target: unknown, source: unknown): unknown {
+  if (source === undefined) return target;
+  if (!isPlainObject(target) || !isPlainObject(source)) return source;
+  const out: Record<string, unknown> = { ...target };
+  for (const [key, value] of Object.entries(source)) {
+    out[key] =
+      isPlainObject(out[key]) && isPlainObject(value)
+        ? deepMergeJson(out[key], value)
+        : value;
+  }
+  return out;
 }
 
 function serializeValue(kind: FieldKind, value: unknown): string {
@@ -187,8 +213,11 @@ export class RuntimeConfigService implements RuntimeConfigRegistrar {
     for (const [key, spec] of Object.entries(schema)) {
       const rawValue = raw[key];
       if (rawValue == null || rawValue === "") continue;
-      const parsed = parseValue(fieldKindOf(spec as FieldSpec), rawValue);
-      if (parsed !== undefined) out[key] = parsed;
+      const kind = fieldKindOf(spec as FieldSpec);
+      const parsed = parseValue(kind, rawValue);
+      if (parsed === undefined) continue;
+      out[key] =
+        kind === "json" ? deepMergeJson(out[key], parsed) : parsed;
     }
     return out as unknown as RuntimeConfigMap[D];
   }
@@ -197,8 +226,11 @@ export class RuntimeConfigService implements RuntimeConfigRegistrar {
     domain: D,
     patch: Partial<RuntimeConfigMap[D]>,
   ): Promise<RuntimeConfigMap[D]> {
-    const { schema } = this.specOrThrow(domain);
+    const { schema, validate } = this.specOrThrow(domain);
     const schemaMap = schema as unknown as Record<string, FieldSpec>;
+    const current = await this.get(domain);
+    const currentMap = current as unknown as Record<string, unknown>;
+    const candidate: Record<string, unknown> = { ...current };
     const normalized: Record<string, string> = {};
     for (const [key, value] of Object.entries(patch)) {
       if (!(key in schemaMap)) {
@@ -207,8 +239,17 @@ export class RuntimeConfigService implements RuntimeConfigRegistrar {
         );
       }
       if (value === undefined) continue;
-      normalized[key] = serializeValue(fieldKindOf(schemaMap[key]!), value);
+      const kind = fieldKindOf(schemaMap[key]!);
+      if (kind === "json") {
+        const next = deepMergeJson(currentMap[key], value);
+        candidate[key] = next;
+        normalized[key] = serializeValue("json", next);
+      } else {
+        candidate[key] = value;
+        normalized[key] = serializeValue(kind, value);
+      }
     }
+    validate?.(candidate as unknown as RuntimeConfigMap[D]);
     await this.repo.write(domain, normalized);
     logger.info({ domain, patch }, "runtime config updated");
     return this.get(domain);
@@ -245,6 +286,8 @@ export type {
   ThalamusPlannerConfig,
   ThalamusCortexConfig,
   ThalamusReflexionConfig,
+  ThalamusBudgetsConfig,
+  ConsoleAutonomyConfig,
   RuntimeConfigDomain,
   RuntimeConfigMap,
 };
@@ -255,4 +298,6 @@ export {
   DEFAULT_THALAMUS_PLANNER_CONFIG,
   DEFAULT_THALAMUS_CORTEX_CONFIG,
   DEFAULT_THALAMUS_REFLEXION_CONFIG,
+  DEFAULT_THALAMUS_BUDGETS_CONFIG,
+  DEFAULT_CONSOLE_AUTONOMY_CONFIG,
 };

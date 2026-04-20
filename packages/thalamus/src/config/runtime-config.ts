@@ -12,9 +12,11 @@ import {
   type ThalamusPlannerConfig,
   type ThalamusCortexConfig,
   type ThalamusReflexionConfig,
+  type ThalamusBudgetsConfig,
   DEFAULT_THALAMUS_PLANNER_CONFIG,
   DEFAULT_THALAMUS_CORTEX_CONFIG,
   DEFAULT_THALAMUS_REFLEXION_CONFIG,
+  DEFAULT_THALAMUS_BUDGETS_CONFIG,
   StaticConfigProvider,
 } from "@interview/shared/config";
 
@@ -26,6 +28,9 @@ let cortexProvider: ConfigProvider<ThalamusCortexConfig> =
 
 let reflexionProvider: ConfigProvider<ThalamusReflexionConfig> =
   new StaticConfigProvider(DEFAULT_THALAMUS_REFLEXION_CONFIG);
+
+let budgetsProvider: ConfigProvider<ThalamusBudgetsConfig> =
+  new StaticConfigProvider(DEFAULT_THALAMUS_BUDGETS_CONFIG);
 
 export function setPlannerConfigProvider(
   provider: ConfigProvider<ThalamusPlannerConfig>,
@@ -45,6 +50,12 @@ export function setReflexionConfigProvider(
   reflexionProvider = provider;
 }
 
+export function setBudgetsConfigProvider(
+  provider: ConfigProvider<ThalamusBudgetsConfig>,
+): void {
+  budgetsProvider = provider;
+}
+
 export function getPlannerConfig(): Promise<ThalamusPlannerConfig> {
   return plannerProvider.get();
 }
@@ -55,4 +66,8 @@ export function getCortexConfig(): Promise<ThalamusCortexConfig> {
 
 export function getReflexionConfig(): Promise<ThalamusReflexionConfig> {
   return reflexionProvider.get();
+}
+
+export function getBudgetsConfig(): Promise<ThalamusBudgetsConfig> {
+  return budgetsProvider.get();
 }

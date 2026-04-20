@@ -21,6 +21,7 @@ import {
   setPlannerConfigProvider,
   setCortexConfigProvider,
   setReflexionConfigProvider,
+  setBudgetsConfigProvider,
   setNanoSwarmProfile,
   setEntityExtractor,
   type WebSearchPort,
@@ -52,6 +53,7 @@ import {
   type SuggestionFeedbackRow,
 } from "@interview/sweep";
 import { IngestionService } from "./services/ingestion.service";
+import { registerConsoleConfigDomains } from "./config/register-console-config";
 
 // SSA sweep pack — port implementations consumed by buildSweepContainer.
 import {
@@ -121,7 +123,9 @@ import { MissionFillWriter } from "./services/mission-fill-writer.service";
 import { KnnPropagationService } from "./services/knn-propagation.service";
 import { ReflexionService } from "./services/reflexion.service";
 import { CycleRunnerService } from "./services/cycle-runner.service";
+import { setAutonomyConfigProvider } from "./services/autonomy-config";
 import { AutonomyService } from "./services/autonomy.service";
+import { SpendLedger } from "./services/spend-ledger";
 import { ReplChatService } from "./services/repl-chat.service";
 import { IntentClassifier } from "./services/intent-classifier.service";
 import { ChatReplyService } from "./services/chat-reply.service";
@@ -242,6 +246,7 @@ export async function buildContainer(
   // Each package ships its own registrar — service stays closed to
   // modification when a new domain is added (OCP).
   registerThalamusConfigDomains(runtimeConfigService);
+  registerConsoleConfigDomains(runtimeConfigService);
   registerSweepConfigDomains(runtimeConfigService);
 
   setNanoConfigProvider(runtimeConfigService.provider("thalamus.nano"));
@@ -256,6 +261,12 @@ export async function buildContainer(
   );
   setReflexionConfigProvider(
     runtimeConfigService.provider("thalamus.reflexion"),
+  );
+  setBudgetsConfigProvider(
+    runtimeConfigService.provider("thalamus.budgets"),
+  );
+  setAutonomyConfigProvider(
+    runtimeConfigService.provider("console.autonomy"),
   );
   setSimFishConfigProvider(runtimeConfigService.provider("sim.fish"));
 
@@ -421,7 +432,12 @@ export async function buildContainer(
     logger,
   );
   const cycleRunner = new CycleRunnerService(thalamus, sweep, logger);
-  const autonomyService = new AutonomyService(cycleRunner, logger);
+  const autonomyLedger = new SpendLedger();
+  const autonomyService = new AutonomyService(
+    cycleRunner,
+    logger,
+    autonomyLedger,
+  );
 
   // Ingestion harness: registry → worker → service. The SSA provider is
   // built above from the factory (each fetcher closes over `db`), so the

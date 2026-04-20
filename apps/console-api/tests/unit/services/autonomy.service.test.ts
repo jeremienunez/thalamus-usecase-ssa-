@@ -2,10 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { FastifyBaseLogger } from "fastify";
 import { AutonomyService } from "../../../src/services/autonomy.service";
 import type { CycleRunnerService } from "../../../src/services/cycle-runner.service";
+import { setAutonomyConfigProvider } from "../../../src/services/autonomy-config";
+import {
+  DEFAULT_CONSOLE_AUTONOMY_CONFIG,
+  StaticConfigProvider,
+} from "@interview/shared/config";
 
 function mockCycleRunner(): CycleRunnerService {
   return {
-    runThalamus: vi.fn().mockResolvedValue(0),
+    runThalamus: vi.fn().mockResolvedValue({ emitted: 0, costUsd: 0 }),
     runFish: vi.fn().mockResolvedValue(0),
     runBriefing: vi.fn().mockResolvedValue(0),
   } as unknown as CycleRunnerService;
@@ -32,6 +37,9 @@ describe("AutonomyService.start intervalSec guards", () => {
   let svc: AutonomyService;
 
   beforeEach(() => {
+    setAutonomyConfigProvider(
+      new StaticConfigProvider(DEFAULT_CONSOLE_AUTONOMY_CONFIG),
+    );
     cycles = mockCycleRunner();
     logger = mockLogger();
     svc = new AutonomyService(cycles, logger);
@@ -41,30 +49,41 @@ describe("AutonomyService.start intervalSec guards", () => {
     svc.stop();
   });
 
-  it("clamps NaN to the default (45s) then floor clamps to 15s min → 15000ms", () => {
-    const res = svc.start(NaN);
-    // NaN → default 45 → clamped in [15, 600] range (45 is valid)
+  it("clamps NaN override to the config default (45s)", async () => {
+    const res = await svc.start(NaN);
     expect(res.state.intervalMs).toBe(45_000);
   });
 
-  it("clamps negative intervalSec to 15s min (15000ms)", () => {
-    const res = svc.start(-5);
+  it("clamps negative override to 15s min", async () => {
+    const res = await svc.start(-5);
     expect(res.state.intervalMs).toBe(15_000);
   });
 
-  it("clamps overly large intervalSec to 600s max (600000ms)", () => {
-    const res = svc.start(10_000);
+  it("clamps overly large override to 600s max", async () => {
+    const res = await svc.start(10_000);
     expect(res.state.intervalMs).toBe(600_000);
   });
 
-  it("accepts a valid intervalSec in range", () => {
-    const res = svc.start(60);
+  it("accepts a valid override", async () => {
+    const res = await svc.start(60);
     expect(res.state.intervalMs).toBe(60_000);
   });
 
-  it("falls back to default when Infinity (not finite) → 45000ms", () => {
-    const res = svc.start(Infinity);
-    // Infinity is not finite → default 45 → in range → 45000ms
+  it("falls back to 45s when override is Infinity", async () => {
+    const res = await svc.start(Infinity);
     expect(res.state.intervalMs).toBe(45_000);
+  });
+
+  it("reads intervalSec from the config provider when override is omitted", async () => {
+    setAutonomyConfigProvider(
+      new StaticConfigProvider({
+        ...DEFAULT_CONSOLE_AUTONOMY_CONFIG,
+        intervalSec: 120,
+      }),
+    );
+
+    const res = await svc.start();
+
+    expect(res.state.intervalMs).toBe(120_000);
   });
 });

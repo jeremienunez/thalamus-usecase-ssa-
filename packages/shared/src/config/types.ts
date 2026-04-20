@@ -180,6 +180,70 @@ export const DEFAULT_THALAMUS_REFLEXION_CONFIG: ThalamusReflexionConfig = {
   stopOnNoNewFindings: true,
 };
 
+// ─── thalamus.budgets — per-complexity iteration budgets ────────────
+export interface BudgetRow {
+  maxIterations: number;
+  maxCost: number;
+  confidenceTarget: number;
+  coverageTarget: number;
+  minFindingsToStop: number;
+}
+
+export interface ThalamusBudgetsConfig {
+  simple: BudgetRow;
+  moderate: BudgetRow;
+  deep: BudgetRow;
+}
+
+export const DEFAULT_THALAMUS_BUDGETS_CONFIG: ThalamusBudgetsConfig = {
+  simple: {
+    maxIterations: 2,
+    maxCost: 0.03,
+    confidenceTarget: 0.7,
+    coverageTarget: 0.5,
+    minFindingsToStop: 2,
+  },
+  moderate: {
+    maxIterations: 4,
+    maxCost: 0.06,
+    confidenceTarget: 0.75,
+    coverageTarget: 0.6,
+    minFindingsToStop: 3,
+  },
+  deep: {
+    maxIterations: 8,
+    maxCost: 0.1,
+    confidenceTarget: 0.8,
+    coverageTarget: 0.7,
+    minFindingsToStop: 5,
+  },
+};
+
+// ─── console.autonomy — autonomous loop capacity caps ───────────────
+export const AUTONOMY_ACTION_CHOICES: readonly string[] = [
+  "thalamus",
+  "sweep-nullscan",
+  "fish-swarm",
+];
+
+export interface ConsoleAutonomyConfig {
+  intervalSec: number;
+  rotation: string[];
+  dailyBudgetUsd: number;
+  monthlyBudgetUsd: number;
+  maxThalamusCyclesPerDay: number;
+  stopOnBudgetExhausted: boolean;
+}
+
+export const DEFAULT_CONSOLE_AUTONOMY_CONFIG: ConsoleAutonomyConfig = {
+  intervalSec: 45,
+  rotation: ["thalamus", "sweep-nullscan"],
+  dailyBudgetUsd: 0.5,
+  monthlyBudgetUsd: 5.0,
+  maxThalamusCyclesPerDay: 0,
+  stopOnBudgetExhausted: true,
+};
+
 // ─── sim.swarm — default swarm knobs for new sim runs ────────────────
 export interface SimSwarmConfig {
   /** Default fish (agent-turn) concurrency used when an orchestrator
@@ -247,6 +311,8 @@ export type RuntimeConfigDomain =
   | "thalamus.planner"
   | "thalamus.cortex"
   | "thalamus.reflexion"
+  | "thalamus.budgets"
+  | "console.autonomy"
   | "sim.swarm"
   | "sim.fish"
   | "sim.embedding"
@@ -258,6 +324,8 @@ export interface RuntimeConfigMap {
   "thalamus.planner": ThalamusPlannerConfig;
   "thalamus.cortex": ThalamusCortexConfig;
   "thalamus.reflexion": ThalamusReflexionConfig;
+  "thalamus.budgets": ThalamusBudgetsConfig;
+  "console.autonomy": ConsoleAutonomyConfig;
   "sim.swarm": SimSwarmConfig;
   "sim.fish": SimFishConfig;
   "sim.embedding": SimEmbeddingConfig;
@@ -272,6 +340,8 @@ export const RUNTIME_CONFIG_DEFAULTS: {
   "thalamus.planner": DEFAULT_THALAMUS_PLANNER_CONFIG,
   "thalamus.cortex": DEFAULT_THALAMUS_CORTEX_CONFIG,
   "thalamus.reflexion": DEFAULT_THALAMUS_REFLEXION_CONFIG,
+  "thalamus.budgets": DEFAULT_THALAMUS_BUDGETS_CONFIG,
+  "console.autonomy": DEFAULT_CONSOLE_AUTONOMY_CONFIG,
   "sim.swarm": DEFAULT_SIM_SWARM_CONFIG,
   "sim.fish": DEFAULT_SIM_FISH_CONFIG,
   "sim.embedding": DEFAULT_SIM_EMBEDDING_CONFIG,
@@ -284,6 +354,8 @@ export const RUNTIME_CONFIG_DOMAINS: RuntimeConfigDomain[] = [
   "thalamus.planner",
   "thalamus.cortex",
   "thalamus.reflexion",
+  "thalamus.budgets",
+  "console.autonomy",
   "sim.swarm",
   "sim.fish",
   "sim.embedding",
@@ -463,6 +535,7 @@ export const PROVIDER_CHOICES: readonly string[] = [
 export interface DomainSpec<D extends RuntimeConfigDomain> {
   defaults: RuntimeConfigMap[D];
   schema: DomainSchema<D>;
+  validate?: (merged: RuntimeConfigMap[D]) => void;
 }
 
 /**
