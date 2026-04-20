@@ -391,6 +391,12 @@ export function fieldKindOf(spec: FieldSpec): FieldKind {
   return typeof spec === "string" ? spec : spec.kind;
 }
 
+export function fieldChoices(spec: FieldSpec): readonly string[] | null {
+  return typeof spec === "object" && Array.isArray(spec.choices)
+    ? spec.choices
+    : null;
+}
+
 export type DomainSchema<D extends RuntimeConfigDomain> = {
   [K in keyof RuntimeConfigMap[D]]: FieldSpec;
 };

@@ -1,4 +1,4 @@
-import type { Regime } from "./dtos";
+import type { Regime } from "@interview/shared/ssa";
 
 export type SatelliteBusClass = "TELECOM" | "PROBE" | "SMALLSAT";
 

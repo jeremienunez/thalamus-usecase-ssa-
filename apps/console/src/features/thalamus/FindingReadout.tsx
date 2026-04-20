@@ -2,7 +2,7 @@ import { useId } from "react";
 import { X } from "lucide-react";
 import { clsx } from "clsx";
 import { useFindingQuery } from "@/usecases/useFindingQuery";
-import type { FindingDTO } from "@/shared/types";
+import type { FindingDTO } from "@/transformers/http";
 import { SOURCE_COLOR, STATUS_COLOR } from "@/shared/types/graph-colors";
 import { KV } from "@/shared/ui/Drawer";
 import { useDrawerA11y } from "@/hooks/useDrawerA11y";

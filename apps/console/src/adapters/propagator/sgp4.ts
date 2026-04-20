@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import * as satelliteJs from "satellite.js";
-import type { SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/transformers/http";
 
 /** Earth radius in km (scene uses km → units / 1000 for display). */
 export const EARTH_KM = 6378.137;

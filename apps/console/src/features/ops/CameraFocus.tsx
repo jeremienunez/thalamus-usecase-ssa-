@@ -1,7 +1,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/transformers/http";
 import { satellitePosition } from "@/adapters/propagator/sgp4";
 
 /**

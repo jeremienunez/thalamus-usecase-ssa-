@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useFrame, ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/transformers/http";
 import { classifySatellite } from "@/shared/types/satellite-classification";
 import { propagateSgp4 } from "@/adapters/propagator/sgp4";
 import { useRenderer } from "@/adapters/renderer/RendererContext";

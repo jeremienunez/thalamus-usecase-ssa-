@@ -4,7 +4,7 @@ import { blockBar } from "@/shared/ui/sparkline";
 import { ENTITY_COLOR, SOURCE_COLOR } from "@/shared/types/graph-colors";
 import { fmtCount } from "@/shared/types/units";
 import { countBy, topN, maxCount } from "@/shared/util/aggregate";
-import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/shared/types";
+import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/transformers/http";
 
 function classDescription(cls: EntityClass): string {
   switch (cls) {

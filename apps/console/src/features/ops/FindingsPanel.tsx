@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { clsx } from "clsx";
 import { useFindings } from "@/usecases";
-import type { FindingDTO, SatelliteDTO } from "@/shared/types";
+import type { FindingDTO, SatelliteDTO } from "@/transformers/http";
 
 /**
  * Recent findings stream — bottom-right. When a satellite is selected,

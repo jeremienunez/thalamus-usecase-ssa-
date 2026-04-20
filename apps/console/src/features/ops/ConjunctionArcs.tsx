@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { ConjunctionDTO, SatelliteDTO } from "@/shared/types";
+import type { ConjunctionDTO, SatelliteDTO } from "@/transformers/http";
 import { satellitePosition } from "@/adapters/propagator/sgp4";
 import { pcColor } from "@/adapters/renderer/palette";
 

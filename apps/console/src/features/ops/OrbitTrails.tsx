@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/transformers/http";
 import { satellitePosition } from "@/adapters/propagator/sgp4";
 import { useRenderer } from "@/adapters/renderer/RendererContext";
 import type { TailsGeometry } from "@/adapters/renderer/orbit-geometry";

@@ -26,7 +26,7 @@ import { useSatellitesQuery } from "@/usecases/useSatellitesQuery";
 import { useConjunctionsQuery } from "@/usecases/useConjunctionsQuery";
 import { useUiStore } from "@/shared/ui/uiStore";
 import { useOpsFilterStore } from "./opsFilterStore";
-import type { SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/transformers/http";
 
 const SPEEDS = TIME_SPEEDS;
 const SPEED_LABELS = ["1×", "1m", "10m", "1h"];

@@ -14,7 +14,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import type { ConjunctionDTO, SatelliteDTO } from "@/shared/types";
+import type { ConjunctionDTO, SatelliteDTO } from "@/transformers/http";
 import { satellitePosition } from "@/adapters/propagator/sgp4";
 import { severityOf, SEVERITY_COLOR, type Severity } from "@/shared/types/conjunction";
 

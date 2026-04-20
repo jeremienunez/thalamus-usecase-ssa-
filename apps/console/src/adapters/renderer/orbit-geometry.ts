@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/transformers/http";
 import { orbitRing } from "@/adapters/propagator/sgp4";
 
 /**

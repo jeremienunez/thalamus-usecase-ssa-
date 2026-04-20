@@ -1,5 +1,5 @@
 import type { ApiFetcher } from "./client";
-import type { FindingDTO, FindingStatus } from "@/shared/types";
+import type { FindingDTO, FindingStatus } from "@/transformers/http";
 
 export interface FindingsApiPort {
   list(params?: {

@@ -9,7 +9,13 @@ import {
   fmtPcCompact,
   fmtPct,
 } from "@/shared/types/units";
-import type { ConjunctionDTO, SatelliteDTO, TelemetryDTO } from "@/shared/types";
+import type {
+  ConjunctionDTO,
+  PayloadDTO,
+  SatelliteDTO,
+  TelemetryDTO,
+} from "@/transformers/http";
+import { useSatellitePayloadsQuery } from "@/usecases/useSatellitePayloadsQuery";
 
 export function OpsDrawer({
   satellite,
@@ -19,9 +25,13 @@ export function OpsDrawer({
   conjunctions: ConjunctionDTO[];
 }) {
   const drawerId = useUiStore((s) => s.drawerId);
+  const { data: payloadsData } = useSatellitePayloadsQuery(
+    satellite?.id ?? null,
+  );
   if (!drawerId || !satellite) {
     return <Drawer title="SATELLITE" subtitle="select a node">{null}</Drawer>;
   }
+  const payloads = payloadsData?.items ?? [];
 
   return (
     <Drawer title="SATELLITE" subtitle={`${satellite.name} · NORAD ${satellite.noradId}`}>
@@ -157,15 +167,43 @@ export function OpsDrawer({
         </DrawerSection>
       )}
 
-      {satellite.tleLine1 && satellite.tleLine2 && (
-        <DrawerSection title="TLE">
-          <pre className="mono overflow-x-auto whitespace-pre text-nano text-numeric leading-tight">
-            {satellite.tleLine1}
-            {"\n"}
-            {satellite.tleLine2}
-          </pre>
+      {payloads.length > 0 && (
+        <DrawerSection title={`PAYLOADS · ${payloads.length}`}>
+          <div className="flex flex-col">
+            {payloads.map((p) => (
+              <PayloadRow key={p.id} payload={p} />
+            ))}
+          </div>
         </DrawerSection>
       )}
+
+      {(satellite.tleLine1 && satellite.tleLine2) ||
+      satellite.lastTleIngestedAt ? (
+        <DrawerSection title="TLE">
+          {satellite.lastTleIngestedAt && (
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <span className="mono text-nano uppercase tracking-widest text-muted">
+                AGE
+              </span>
+              <span className="mono text-caption tabular-nums text-primary">
+                {fmtTleAge(satellite.lastTleIngestedAt)}
+                {typeof satellite.meanMotionDrift === "number" && (
+                  <span className="ml-2 text-dim">
+                    Δmm {fmtSignedFixed(satellite.meanMotionDrift, 4)}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+          {satellite.tleLine1 && satellite.tleLine2 && (
+            <pre className="mono overflow-x-auto whitespace-pre text-nano text-numeric leading-tight">
+              {satellite.tleLine1}
+              {"\n"}
+              {satellite.tleLine2}
+            </pre>
+          )}
+        </DrawerSection>
+      ) : null}
 
       <DrawerSection title={`CONJUNCTIONS (${conjunctions.length})`}>
         {conjunctions.length === 0 && (
@@ -258,6 +296,33 @@ function HealthCell({ label, value }: { label: string; value: string }) {
   );
 }
 
+function PayloadRow({ payload }: { payload: PayloadDTO }) {
+  const budget: string[] = [];
+  if (typeof payload.massKg === "number") {
+    budget.push(`${payload.massKg.toFixed(0)} kg`);
+  }
+  if (typeof payload.powerW === "number") {
+    budget.push(`${payload.powerW.toFixed(0)} W`);
+  }
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-hairline py-1 last:border-0">
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-caption text-primary">{payload.name}</span>
+        {payload.role && (
+          <span className="mono text-nano uppercase tracking-widest text-dim">
+            {payload.role}
+          </span>
+        )}
+      </div>
+      {budget.length > 0 && (
+        <span className="mono flex-shrink-0 text-nano tabular-nums text-muted">
+          {budget.join(" · ")}
+        </span>
+      )}
+    </div>
+  );
+}
+
 const DASH = "—";
 
 function fmtNumber(v: number | null, unit: string, digits = 2): string {
@@ -281,4 +346,21 @@ function fmtRatioPct(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return DASH;
   const [val, unit] = fmtPct(v, true);
   return unit ? `${val} ${unit}` : val;
+}
+
+function fmtTleAge(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return DASH;
+  const diffMin = Math.max(0, (Date.now() - t) / 60000);
+  if (diffMin < 60) return `${Math.round(diffMin)} min ago`;
+  const diffH = diffMin / 60;
+  if (diffH < 48) return `${diffH.toFixed(1)} h ago`;
+  const diffD = diffH / 24;
+  return `${diffD.toFixed(1)} d ago`;
+}
+
+function fmtSignedFixed(v: number, digits = 4): string {
+  if (!Number.isFinite(v)) return DASH;
+  const sign = v > 0 ? "+" : "";
+  return `${sign}${v.toFixed(digits)}`;
 }

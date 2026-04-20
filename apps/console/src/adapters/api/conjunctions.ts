@@ -1,5 +1,5 @@
 import type { ApiFetcher } from "./client";
-import type { ConjunctionDTO } from "@/shared/types";
+import type { ConjunctionDTO } from "@/transformers/http";
 
 export interface ConjunctionsApiPort {
   list(minPc?: number): Promise<{ items: ConjunctionDTO[]; count: number }>;

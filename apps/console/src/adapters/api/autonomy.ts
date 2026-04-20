@@ -1,5 +1,5 @@
 import type { ApiFetcher } from "./client";
-import type { AutonomyStateDTO } from "@/shared/types";
+import type { AutonomyStateDTO } from "@/transformers/http";
 
 export interface AutonomyApiPort {
   status(): Promise<AutonomyStateDTO>;

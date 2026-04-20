@@ -1,8 +1,10 @@
-import type { FindingStatus, Regime } from "@/shared/types";
+import type { FindingStatus, Regime } from "@/transformers/http";
 
 /** Centralised TanStack Query keys. One tuple shape per cacheable resource. */
 export const qk = {
   satellites: (regime?: Regime) => ["satellites", regime] as const,
+  satellitePayloads: (satelliteId: number) =>
+    ["satellite-payloads", satelliteId] as const,
   conjunctions: (minPc?: number) => ["conjunctions", minPc] as const,
   kg: () => ["kg"] as const,
   findings: (status?: FindingStatus, cortex?: string) =>

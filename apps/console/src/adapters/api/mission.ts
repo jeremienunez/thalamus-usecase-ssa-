@@ -1,5 +1,5 @@
 import type { ApiFetcher } from "./client";
-import type { MissionStateDTO } from "@/shared/types";
+import type { MissionStateDTO } from "@/transformers/http";
 
 export interface MissionApiPort {
   status(): Promise<MissionStateDTO>;

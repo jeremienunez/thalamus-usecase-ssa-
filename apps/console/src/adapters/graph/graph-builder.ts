@@ -1,7 +1,7 @@
 import Graph from "graphology";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { ENTITY_COLOR, SOURCE_COLOR } from "@/shared/types/graph-colors";
-import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/shared/types";
+import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/transformers/http";
 
 export type GraphInstance = Graph;
 

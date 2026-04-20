@@ -1,5 +1,5 @@
 import type { ApiFetcher } from "./client";
-import type { StatsDTO } from "@/shared/types";
+import type { StatsDTO } from "@/transformers/http";
 
 export interface StatsApiPort {
   get(): Promise<StatsDTO>;

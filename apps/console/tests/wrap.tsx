@@ -24,6 +24,7 @@ import {
 export function makeStubApi(overrides: Partial<ApiClient> = {}): ApiClient {
   const base: ApiClient = {
     satellites: { list: async () => ({ items: [], count: 0 }) },
+    payloads: { listForSatellite: async () => ({ items: [], count: 0 }) },
     conjunctions: { list: async () => ({ items: [], count: 0 }) },
     kg: {
       listNodes: async () => ({ items: [] }),

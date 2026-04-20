@@ -3,7 +3,7 @@ import { Drawer, DrawerSection, KV } from "@/shared/ui/Drawer";
 import { useDecision, useFinding } from "@/usecases";
 import { useUiStore } from "@/shared/ui/uiStore";
 import { SOURCE_COLOR, STATUS_COLOR } from "@/shared/types/graph-colors";
-import type { FindingStatus } from "@/shared/types";
+import type { FindingStatus } from "@/transformers/http";
 import { Check, X, Edit3 } from "lucide-react";
 
 export function SweepDrawer({ findingId }: { findingId: string | null }) {

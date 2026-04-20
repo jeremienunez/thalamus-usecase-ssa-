@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, X, Radar, Square } from "lucide-react";
 import { clsx } from "clsx";
-import type { SweepSuggestionDTO } from "@/shared/types";
+import type { SweepSuggestionDTO } from "@/transformers/http";
 import {
   useSweepSuggestions,
   useReviewSuggestion,

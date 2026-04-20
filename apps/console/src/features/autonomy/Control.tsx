@@ -8,7 +8,7 @@ import {
   useStats,
   useSweepSuggestions,
 } from "@/usecases";
-import type { AutonomyStateDTO, AutonomyTickDTO } from "@/shared/types";
+import type { AutonomyStateDTO, AutonomyTickDTO } from "@/transformers/http";
 import { useUiStore } from "@/shared/ui/uiStore";
 
 const ACTION_COLOR: Record<AutonomyTickDTO["action"], string> = {

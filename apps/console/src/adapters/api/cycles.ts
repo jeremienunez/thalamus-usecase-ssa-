@@ -1,5 +1,5 @@
 import type { ApiFetcher } from "./client";
-import type { CycleDTO } from "@/shared/types";
+import type { CycleDTO } from "@/transformers/http";
 
 export type CycleKind = "thalamus" | "fish" | "both";
 

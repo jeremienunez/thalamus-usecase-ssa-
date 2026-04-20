@@ -1,4 +1,5 @@
 export { useSatellitesQuery } from "./useSatellitesQuery";
+export { useSatellitePayloadsQuery } from "./useSatellitePayloadsQuery";
 export { useConjunctionsQuery } from "./useConjunctionsQuery";
 export { useKgQuery } from "./useKgQuery";
 export { useFindingsQuery } from "./useFindingsQuery";

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useApiClient } from "@/adapters/api/ApiClientContext";
 import { qk } from "./keys";
-import type { FindingStatus } from "@/shared/types";
+import type { FindingStatus } from "@/transformers/http";
 
 export function useFindingsQuery(status?: FindingStatus, cortex?: string) {
   const api = useApiClient();

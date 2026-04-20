@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { SweepEntry } from "./Entry";
 import { WrapProviders, makeStubApi } from "../../../tests/wrap";
-import type { SweepSuggestionDTO, FindingDTO } from "@/shared/types";
+import type { SweepSuggestionDTO, FindingDTO } from "@/transformers/http";
 
 describe("SweepEntry", () => {
   it("renders tab bar with suggestions / overview / map / stats", async () => {

@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { STEP_REGISTRY, type StepName } from "@/shared/types/steps";
+import {
+  STEP_REGISTRY,
+  type StepName,
+} from "@interview/shared/observability-browser";
 
 export type StepPhase = "start" | "progress" | "done" | "error";
 

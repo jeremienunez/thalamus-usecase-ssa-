@@ -5,6 +5,7 @@ import type { ApiClient } from "./index";
 
 const stub: ApiClient = {
   satellites: { list: async () => ({ items: [], count: 0 }) },
+  payloads: { listForSatellite: async () => ({ items: [], count: 0 }) },
   conjunctions: { list: async () => ({ items: [], count: 0 }) },
   kg: {
     listNodes: async () => ({ items: [] }),

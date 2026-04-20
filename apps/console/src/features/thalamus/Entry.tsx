@@ -14,7 +14,7 @@ import type { GraphInstance } from "@/adapters/graph/graph-builder";
 import type { SigmaRendererHandle } from "@/adapters/graph/sigma-renderer";
 import { FindingReadout } from "./FindingReadout";
 import { ThalamusDrawer } from "./ThalamusDrawer";
-import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/shared/types";
+import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/transformers/http";
 
 const CLASSES: EntityClass[] = [
   "Satellite",

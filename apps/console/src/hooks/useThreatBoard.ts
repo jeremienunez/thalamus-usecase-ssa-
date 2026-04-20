@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { ConjunctionDTO } from "@/shared/types";
+import type { ConjunctionDTO } from "@/transformers/http";
 
 /**
  * Derive the THREAT BOARD view: top-5 conjunctions by P(C), ≥1e-4 count,

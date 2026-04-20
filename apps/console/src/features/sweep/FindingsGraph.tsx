@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { FindingDTO, FindingStatus } from "@/shared/types";
+import type { FindingDTO, FindingStatus } from "@/transformers/http";
 import { STATUS_COLOR } from "@/shared/types/graph-colors";
 
 const STATUSES: FindingStatus[] = ["pending", "in-review", "accepted", "rejected"];

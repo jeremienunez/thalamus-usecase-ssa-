@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/transformers/http";
 import { useOpsFilterStore, type RegimeKey } from "@/features/ops/opsFilterStore";
 
 type TrailMode = "off" | "tails" | "full";

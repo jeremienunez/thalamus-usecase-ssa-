@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Search } from "lucide-react";
 import { clsx } from "clsx";
-import type { SatelliteDTO } from "@/shared/types";
+import type { SatelliteDTO } from "@/transformers/http";
 
 /**
  * HUD search panel — filter satellites by name or NORAD id as you type,
