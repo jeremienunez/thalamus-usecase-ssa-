@@ -162,6 +162,9 @@ importers:
       '@interview/thalamus':
         specifier: workspace:*
         version: link:../../packages/thalamus
+      crawlee:
+        specifier: ^3.7.0
+        version: 3.16.0(@types/node@20.19.39)(puppeteer@23.11.1(typescript@5.9.3))
       drizzle-orm:
         specifier: ^0.30.0
         version: 0.30.10(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@18.3.28)(pg@8.20.0)(react@18.3.1)
@@ -368,9 +371,6 @@ importers:
       '@langchain/core':
         specifier: ^0.1.0
         version: 0.1.63
-      crawlee:
-        specifier: ^3.7.0
-        version: 3.16.0(@types/node@20.19.39)(puppeteer@23.11.1(typescript@5.9.3))
       drizzle-orm:
         specifier: ^0.30.0
         version: 0.30.10(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@18.3.28)(pg@8.20.0)(react@18.3.1)

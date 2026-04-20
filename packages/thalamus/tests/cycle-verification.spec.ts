@@ -3,7 +3,6 @@ import {
   buildCycleVerification,
 } from "../src/services/cycle-loop.service";
 import {
-  ResearchEntityType,
   ResearchFindingType,
   ResearchRelation,
   ResearchUrgency,
@@ -25,12 +24,12 @@ describe("buildCycleVerification", () => {
           sourceCortex: "strategist",
           edges: [
             {
-              entityType: ResearchEntityType.ConjunctionEvent,
+              entityType: "conjunction_event",
               entityId: 41,
               relation: ResearchRelation.About,
             },
             {
-              entityType: ResearchEntityType.Satellite,
+              entityType: "satellite",
               entityId: 7,
               relation: ResearchRelation.About,
             },
@@ -63,11 +62,11 @@ describe("buildCycleVerification", () => {
     expect(verification.targetHints).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          entityType: ResearchEntityType.ConjunctionEvent,
+          entityType: "conjunction_event",
           entityId: 41n,
         }),
         expect.objectContaining({
-          entityType: ResearchEntityType.Satellite,
+          entityType: "satellite",
           entityId: 7n,
         }),
       ]),

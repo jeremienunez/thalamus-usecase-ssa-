@@ -35,7 +35,6 @@ import {
   operator,
   satellite,
 } from "@interview/db-schema";
-import { CortexRegistry } from "@interview/thalamus";
 import {
   ResearchCortex,
   ResearchFindingType,
@@ -87,7 +86,6 @@ const SEED_TAG = "e2e-cli-repl-real";
 let pool: Pool;
 let redis: IORedis;
 let db: ReturnType<typeof drizzle>;
-let registry: CortexRegistry;
 let adapters: Adapters;
 let seededOperatorId: bigint;
 let seededSatelliteId: bigint;
@@ -107,22 +105,18 @@ beforeAll(async () => {
   db = drizzle(pool);
   redis = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
 
-  registry = new CortexRegistry();
-  registry.discover();
-
   await cleanE2E();
   await seedFixture();
 
   adapters = await buildRealAdapters({
     // Pino logger + ring are exercised only by the logs adapter; the rest
-    // take live DB/Redis/registry. Null-like stubs suffice here.
+    // take live DB/Redis. Null-like stubs suffice here.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     logger: { info() {}, warn() {}, error() {}, debug() {} } as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ring: { snapshot: () => [] } as any,
     pool,
     redis,
-    registry,
   });
 }, 30_000);
 

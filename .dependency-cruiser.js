@@ -264,6 +264,22 @@ module.exports = {
         ],
       },
     },
+    {
+      name: "thalamus-kernel-no-ssa-vocabulary",
+      severity: "error",
+      comment:
+        "packages/thalamus/src must not import or reference SSA-specific modules or file names. " +
+        "If a capability genuinely needs SSA vocabulary, it belongs in apps/console-api/src/agent/ssa/.",
+      from: { path: "^packages/thalamus/src/" },
+      to: {
+        path:
+          "satellite-entity-patterns" +
+          "|fetcher-celestrak|fetcher-launch-market|fetcher-spectra|fetcher-ntrs" +
+          "|fetcher-arxiv|fetcher-seesat|fetcher-bus-archetype|fetcher-knowledge-graph" +
+          "|fetcher-orbit-regime|fetcher-regulation|fetcher-rss|fetcher-space-weather" +
+          "|opacity-scout|voyage-embedder",
+      },
+    },
 
     // ───── Frontend layer rules (apps/console) ─────
     {

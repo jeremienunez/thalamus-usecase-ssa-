@@ -12,7 +12,7 @@
 import { createLlmTransport } from "../transports/llm-chat";
 import type { ProviderName } from "../transports/providers";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import { extractJsonObject } from "../utils/llm-json-parser";
+import { extractJsonObject } from "@interview/shared/utils";
 import type { CortexFinding } from "./types";
 import {
   getCortexConfig,
@@ -37,7 +37,32 @@ export interface CortexLlmInput {
    *  hardcoded to an SSA list; now injected. Falls back to a minimal
    *  placeholder when absent. */
   entityTypes?: string[];
+  /** Domain-owned mode-specific user-prompt addenda. Kernel used to hardcode
+   *  an SSA-flavored ternary (conjunctions / fleet health / stale epochs);
+   *  now injected via DomainConfig.modeInstructions. Falls back to generic
+   *  domain-neutral strings when absent. */
+  modeInstructions?: {
+    audit?: string;
+    investment?: string;
+  };
 }
+
+/**
+ * Generic audit-mode instruction — domain-neutral baseline. Domains may
+ * override via DomainConfig.modeInstructions.audit (SSA mentions stale
+ * epochs / misclassifications; other domains use their own vocabulary).
+ */
+const DEFAULT_AUDIT_MODE_INSTRUCTION =
+  "Focus on DATA QUALITY: anomalies, missing fields, provenance gaps. Use findingType=anomaly.";
+
+/**
+ * Generic investment-mode instruction — domain-neutral baseline. Domains
+ * override via DomainConfig.modeInstructions.investment (SSA mentions
+ * conjunctions / maneuver opportunities / fleet health; other domains use
+ * their own business vocabulary).
+ */
+const DEFAULT_INVESTMENT_MODE_INSTRUCTION =
+  "Focus on actionable insights and opportunities relevant to the cortex's domain. Do NOT report data-quality anomalies.";
 
 /**
  * Call Kimi K2 (or OpenAI fallback) with cortex data and parse structured findings.
@@ -109,10 +134,14 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
       ? "Write all titles and summaries in English."
       : "Redige tous les titres et resumes en francais.";
 
+  // Mode instruction: domain-owned override wins, else kernel generic default.
+  // SSA-specific vocabulary (conjunctions / fleet health / stale epochs) lives
+  // in apps/console-api/src/agent/ssa/domain-config.ts, not here.
   const modeInstruction =
     input.mode === "audit"
-      ? "Focus on DATA QUALITY: anomalies, misclassifications, missing fields, stale epochs, provenance gaps. Use findingType=anomaly."
-      : "Focus on MISSION INSIGHTS: conjunctions, maneuver opportunities, debris risk, fleet health, launch-window signals. Do NOT report data-quality anomalies.";
+      ? (input.modeInstructions?.audit ?? DEFAULT_AUDIT_MODE_INSTRUCTION)
+      : (input.modeInstructions?.investment ??
+        DEFAULT_INVESTMENT_MODE_INSTRUCTION);
 
   // If the skill defines its own output format, defer to the system prompt
   const hasCustomFormat = input.systemPrompt.includes("## Output Format");

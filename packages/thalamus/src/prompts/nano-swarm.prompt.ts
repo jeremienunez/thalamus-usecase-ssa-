@@ -9,7 +9,18 @@
  * a minimal generic default so the module is runnable + testable alone.
  */
 
-import type { ExplorationQuery } from "../explorer/scout";
+/**
+ * ExplorationQuery — hoisted from explorer/scout.ts so the NanoSwarmProfile
+ * contract stays kernel-owned even after the SSA explorer pack moves to
+ * apps/console-api/src/agent/ssa/explorer. Shape matches what scout emits.
+ */
+export interface ExplorationQuery {
+  query: string;
+  type: "web" | "academic" | "market";
+  signal: string;
+  priority: number;
+  maxDepth: number;
+}
 
 export interface Lens {
   readonly id: string;

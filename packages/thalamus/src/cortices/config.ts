@@ -121,15 +121,4 @@ export const THALAMUS_CONFIG = {
     injectThreshold: { relevance: 0.7, novelty: 0.5 },
     promoteThreshold: { relevance: 0.8, appearances: 3 },
   },
-
-  // ─── Data Inventory (for reference) ───────────────────────
-  data: {
-    satellites: 30_000, // tracked objects in catalog
-    conjunctionEventsActive: 500, // typical active screening window
-    orbitRegimes: 9, // LEO/MEO/GEO/HEO/SSO/GTO/Lunar/Cislunar/Helio
-    operators: 450,
-    operatorCountries: 80,
-    rssFeeds: 47,
-    cortices: 21,
-  },
 } as const;

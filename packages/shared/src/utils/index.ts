@@ -10,6 +10,7 @@ export * from "./collection";
 export * from "./completeness-scorer";
 export * from "./concurrency";
 export * from "./domain-normalizer";
+export * from "./llm-json-parser";
 
 export function formatDate(date: Date): string {
   return date.toISOString();

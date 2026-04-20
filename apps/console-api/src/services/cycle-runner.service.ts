@@ -1,7 +1,11 @@
 // apps/console-api/src/services/cycle-runner.service.ts
 import type { FastifyBaseLogger } from "fastify";
 import { ResearchCycleTrigger } from "@interview/shared";
-import type { CycleKind, CycleRun } from "../types";
+import type { CycleKind, CycleRun, CycleRunFinding } from "../types";
+import {
+  projectThalamusFinding,
+  type ThalamusFindingLike,
+} from "../transformers/cycle-run.transformer";
 
 export interface ThalamusDep {
   thalamusService: {
@@ -9,7 +13,17 @@ export interface ThalamusDep {
       query: string;
       triggerType: ResearchCycleTrigger;
       triggerSource: string;
-    }): Promise<{ findingsCount?: number | null }>;
+    }): Promise<{
+      id?: bigint | number | string;
+      findingsCount?: number | null;
+      totalCost?: number | null;
+    }>;
+  };
+  graphService: {
+    listFindings(opts?: {
+      limit?: number;
+      minConfidence?: number;
+    }): Promise<ThalamusFindingLike[]>;
   };
 }
 
@@ -20,6 +34,17 @@ export interface SweepDep {
       mode: string,
     ): Promise<{ suggestionsStored?: number | null }>;
   };
+}
+
+/**
+ * Output of a thalamus branch when the cycle runner wants the full
+ * CLI-compatible payload. `runThalamus` keeps its legacy `Promise<number>`
+ * shape so AutonomyService (CycleOrchestratorPort) keeps compiling.
+ */
+interface ThalamusRunDetail {
+  count: number;
+  findings: CycleRunFinding[];
+  costUsd: number;
 }
 
 export class CycleRunnerService {
@@ -38,12 +63,47 @@ export class CycleRunnerService {
   }
 
   async runThalamus(query: string): Promise<number> {
+    const detail = await this.runThalamusDetail(query);
+    return detail.count;
+  }
+
+  /**
+   * Run a thalamus cycle and return the finding projection the CLI HTTP
+   * contract exposes plus the total cost. The autonomous tick path still
+   * calls {@link runThalamus} and only sees the count, so the
+   * CycleOrchestratorPort surface stays intact.
+   *
+   * Row → CycleRunFinding shaping is delegated to
+   * `projectThalamusFinding` in transformers/cycle-run.transformer — the
+   * service stays free of wire-shape concerns.
+   */
+  private async runThalamusDetail(query: string): Promise<ThalamusRunDetail> {
     const cycle = await this.thalamus.thalamusService.runCycle({
       query,
       triggerType: ResearchCycleTrigger.User,
       triggerSource: "console-ui",
     });
-    return cycle.findingsCount ?? 0;
+    // Scope findings to the current cycle so stale rows from prior runs
+    // don't leak into the response. Fallback: return the full listing so
+    // callers don't see a mysteriously empty payload if cycle-id matching
+    // misses (bigint/string coercion edge cases, reruns against fixtures).
+    const all = await this.thalamus.graphService.listFindings({
+      limit: 5,
+      minConfidence: 0.5,
+    });
+    const cycleIdStr = cycle.id !== undefined ? String(cycle.id) : null;
+    const scoped =
+      cycleIdStr !== null
+        ? all.filter((f) => String(f.researchCycleId) === cycleIdStr)
+        : all;
+    const projected = (scoped.length > 0 ? scoped : all).map(
+      projectThalamusFinding,
+    );
+    return {
+      count: cycle.findingsCount ?? 0,
+      findings: projected,
+      costUsd: cycle.totalCost ?? 0,
+    };
   }
 
   async runFish(): Promise<number> {
@@ -65,9 +125,14 @@ export class CycleRunnerService {
     try {
       let emitted = 0;
       const cortices: string[] = [];
+      let findings: CycleRunFinding[] | undefined;
+      let costUsd: number | undefined;
       if (kind === "thalamus" || kind === "both") {
-        emitted += await this.runThalamus(query);
+        const t = await this.runThalamusDetail(query);
+        emitted += t.count;
         cortices.push("thalamus");
+        findings = t.findings;
+        costUsd = t.costUsd;
       }
       if (kind === "fish" || kind === "both") {
         emitted += await this.runFish();
@@ -80,6 +145,8 @@ export class CycleRunnerService {
         completedAt: new Date().toISOString(),
         findingsEmitted: emitted,
         cortices,
+        ...(findings !== undefined ? { findings } : {}),
+        ...(costUsd !== undefined ? { costUsd } : {}),
       };
       this.pushHistory(run);
       return { cycle: run };

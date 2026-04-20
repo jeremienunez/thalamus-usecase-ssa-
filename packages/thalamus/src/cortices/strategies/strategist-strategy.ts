@@ -4,7 +4,6 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import { ResearchCortex } from "@interview/shared/enum";
 import type { CortexSkill } from "../registry";
 import type { CortexInput, CortexOutput, DomainConfig } from "../types";
 import { analyzeCortexData } from "../cortex-llm";
@@ -18,7 +17,7 @@ export class StrategistStrategy implements CortexExecutionStrategy {
   constructor(private readonly domainConfig?: DomainConfig) {}
 
   canHandle(cortexName: string): boolean {
-    return cortexName === ResearchCortex.Strategist;
+    return cortexName === (this.domainConfig?.synthesisCortexName ?? "strategist");
   }
 
   async execute(skill: CortexSkill, input: CortexInput): Promise<CortexOutput> {
@@ -49,6 +48,7 @@ export class StrategistStrategy implements CortexExecutionStrategy {
       mode: input.mode,
       sourcingRules: this.domainConfig?.sourcingRules,
       entityTypes: this.domainConfig?.entityTypes,
+      modeInstructions: this.domainConfig?.modeInstructions,
     });
 
     const findings = result.findings.map((f) =>

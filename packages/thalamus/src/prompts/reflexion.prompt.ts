@@ -44,7 +44,7 @@ SPECIAL CASE — low-confidence round (CURRENT_RAW > 0 but ACCUMULATED_KEPT == 0
 If gaps are significant AND budget allows, recommend replanning.
 If findings in ACCUMULATED_KEPT are solid OR budget is nearly exhausted, approve them.
 
-Gap names should be short, machine-usable labels when possible (e.g. "need_operator_id", "need_payload_profile", "need_field_corroboration"), not long prose paragraphs.
+Gap names should be short, machine-usable labels when possible (e.g. "need_identifier", "need_profile_detail", "need_field_corroboration"), not long prose paragraphs.
 
 Respond with ONLY JSON: { "replan": bool, "notes": "...", "gaps": ["..."], "overallConfidence": 0.0-1.0 }`;
 }

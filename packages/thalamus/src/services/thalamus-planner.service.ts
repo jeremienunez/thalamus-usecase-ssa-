@@ -11,11 +11,10 @@
 import { z } from "zod";
 import { createLlmTransport } from "../transports/llm-chat";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import { extractJson } from "../utils/llm-json-parser";
+import { extractJson } from "@interview/shared/utils";
 import type { CortexRegistry } from "../cortices/registry";
 import type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
-import { buildPlannerSystemPrompt } from "../prompts";
-import { DAEMON_DAGS as DEFAULT_DAEMON_DAGS } from "../config/daemon-dags.config";
+import { buildGenericPlannerSystemPrompt } from "../prompts";
 import {
   getPlannerConfig,
   getCortexConfig,
@@ -24,6 +23,30 @@ import {
 const logger = createLogger("thalamus-planner");
 
 export type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
+
+/**
+ * PlannerConfig — app-owned seams consumed by ThalamusPlanner. Every field
+ * optional; defaults preserve pre-agnosticity behavior (SSA planner prompt +
+ * hardcoded SSA 4-cortex fallback). Phase 5 of the agnosticity cleanup
+ * drops those legacy defaults once SSA domain-config injects both.
+ */
+export interface PlannerConfig {
+  /** Daemon-trigger DAGs. Empty object by default; domains inject their
+   *  own map (e.g. SSA_DAEMON_DAGS from apps/console-api/src/agent/ssa/daemon-dags.ts). */
+  daemonDags?: Record<string, DAGPlan>;
+  /** Cortices requiring a userId in params (fleet-scoped work). */
+  userScopedCortices?: Set<string>;
+  /** App-owned system-prompt builder. Defaults to the generic prompt. */
+  plannerPrompt?: (input: {
+    headers: string;
+    cortexNames: readonly string[];
+  }) => string;
+  /** App-owned fallback DAG for empty/failed plans. */
+  fallbackPlan?: (query: string) => DAGPlan;
+  /** Flat list of cortices used to synthesize a fallback DAG when no
+   *  `fallbackPlan` is provided. */
+  fallbackCortices?: string[];
+}
 
 const dagPlanSchema = z.object({
   intent: z.string(),
@@ -49,14 +72,53 @@ export interface PlanOptions {
 export class ThalamusPlanner {
   private readonly daemonDags: Record<string, DAGPlan>;
   private readonly userScopedCortices: Set<string>;
+  private readonly plannerPromptFn: (input: {
+    headers: string;
+    cortexNames: readonly string[];
+  }) => string;
+  private readonly injectedFallbackPlan?: (query: string) => DAGPlan;
+  private readonly fallbackCortices: string[];
 
   constructor(
     private registry: CortexRegistry,
-    daemonDags: Record<string, DAGPlan> = DEFAULT_DAEMON_DAGS,
-    userScopedCortices: Set<string> = new Set(),
+    config: PlannerConfig = {},
   ) {
-    this.daemonDags = daemonDags;
-    this.userScopedCortices = userScopedCortices;
+    this.daemonDags = config.daemonDags ?? {};
+    this.userScopedCortices = config.userScopedCortices ?? new Set();
+    this.plannerPromptFn =
+      config.plannerPrompt ?? buildGenericPlannerSystemPrompt;
+    this.injectedFallbackPlan = config.fallbackPlan;
+    this.fallbackCortices = config.fallbackCortices ?? [];
+  }
+
+  /**
+   * Build the planner system prompt. Uses the injected builder when
+   * provided, otherwise the legacy SSA-flavored default.
+   */
+  buildSystemPrompt(input: {
+    headers: string;
+    cortexNames: readonly string[];
+  }): string {
+    return this.plannerPromptFn(input);
+  }
+
+  /**
+   * Select the fallback DAG. Priority: injected `fallbackPlan` >
+   * flat `fallbackCortices` > legacy SSA default. Exposed for unit
+   * testing the seam selection; also called by `plan()` on empty/failed
+   * LLM output.
+   */
+  resolveFallbackPlan(query: string): DAGPlan {
+    if (this.injectedFallbackPlan) return this.injectedFallbackPlan(query);
+    return {
+      intent: query,
+      complexity: "moderate",
+      nodes: this.fallbackCortices.map((cortex) => ({
+        cortex,
+        params: {},
+        dependsOn: [] as string[],
+      })),
+    };
   }
 
   /**
@@ -73,7 +135,7 @@ export class ThalamusPlanner {
       getCortexConfig(),
     ]);
 
-    const systemPrompt = buildPlannerSystemPrompt({ headers, cortexNames });
+    const systemPrompt = this.buildSystemPrompt({ headers, cortexNames });
     const transport = createLlmTransport(systemPrompt, {
       preferredProvider:
         plannerCfg.provider === "local" ||
@@ -113,7 +175,7 @@ export class ThalamusPlanner {
 
       if (plan.nodes.length === 0) {
         logger.warn({ query }, "Planner produced empty DAG, using fallback");
-        const fallback = this.fallbackPlan(query);
+        const fallback = this.resolveFallbackPlan(query);
         stepLog(logger, "planner", "done", {
           intent: fallback.intent,
           cortices: fallback.nodes.map((n) => n.cortex),
@@ -145,7 +207,7 @@ export class ThalamusPlanner {
         err: err instanceof Error ? err.message : String(err),
         durationMs: Date.now() - plannerStartedAt,
       });
-      return this.fallbackPlan(query);
+      return this.resolveFallbackPlan(query);
     }
   }
 
@@ -267,34 +329,6 @@ export class ThalamusPlanner {
     }));
   }
 
-  /**
-   * Fallback: broad 4-cortex sweep when planner LLM fails.
-   * Covers fleet + traffic + regime + synthesis.
-   */
-  private fallbackPlan(query: string): DAGPlan {
-    return {
-      intent: query,
-      complexity: "moderate",
-      nodes: [
-        { cortex: "fleet_analyst", params: { limit: 100 }, dependsOn: [] },
-        { cortex: "conjunction_analysis", params: { window: "30d" }, dependsOn: [] },
-        {
-          cortex: "regime_profiler",
-          params: { focus: "underexplored" },
-          dependsOn: [],
-        },
-        {
-          cortex: "strategist",
-          params: {},
-          dependsOn: [
-            "fleet_analyst",
-            "conjunction_analysis",
-            "regime_profiler",
-          ],
-        },
-      ],
-    };
-  }
 }
 
 /**

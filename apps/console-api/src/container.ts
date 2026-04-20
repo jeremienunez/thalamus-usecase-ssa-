@@ -22,9 +22,11 @@ import {
   setCortexConfigProvider,
   setReflexionConfigProvider,
   setNanoSwarmProfile,
-  setCuratorPrompt,
+  setEntityExtractor,
   type WebSearchPort,
 } from "@interview/thalamus";
+import { setCuratorPrompt } from "./agent/ssa/explorer/curator";
+import { ssaEntityExtractor } from "./agent/ssa/ssa-entity-extractor";
 import {
   SSA_NANO_SWARM_PROFILE,
   SSA_CURATOR_PROMPT,
@@ -83,6 +85,12 @@ export interface ContainerConfig {
   webSearch: WebSearchPort;
   simLlmMode?: "cloud" | "fixtures" | "record";
   simKernelSharedSecret?: string;
+  /**
+   * Voyage API key for the SSA embedder adapter. When undefined, the
+   * adapter reports `isAvailable()=false` and the kernel falls through
+   * to the non-semantic path — no runtime error.
+   */
+  voyageApiKey?: string;
   /** Optional override; defaults to bundled SSA skill pack */
   skillsDir?: string;
 }
@@ -164,6 +172,9 @@ import { SatelliteSweepChatController } from "./controllers/satellite-sweep-chat
 
 import { buildCortexDataProvider } from "./agent/ssa/cortex-data-provider";
 import { buildSsaDomainConfig } from "./agent/ssa/domain-config";
+import { SsaEntityCatalogAdapter } from "./agent/ssa/ssa-entity-catalog.adapter";
+import { SsaSourceFetcherAdapter } from "./agent/ssa/ssa-source-fetcher.adapter";
+import { SsaVoyageEmbedderAdapter } from "./agent/ssa/ssa-voyage-embedder.adapter";
 
 import type { AppServices } from "./routes";
 import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
@@ -252,6 +263,7 @@ export async function buildContainer(
   // Package ships generic defaults; console-api owns the métier.
   setNanoSwarmProfile(SSA_NANO_SWARM_PROFILE);
   setCuratorPrompt(SSA_CURATOR_PROMPT);
+  setEntityExtractor(ssaEntityExtractor);
 
   const thalamus = buildThalamusContainer({
     db,
@@ -259,6 +271,9 @@ export async function buildContainer(
     dataProvider,
     domainConfig: buildSsaDomainConfig(),
     webSearch,
+    entityCatalog: new SsaEntityCatalogAdapter(db),
+    sourceFetcher: new SsaSourceFetcherAdapter(),
+    embedder: new SsaVoyageEmbedderAdapter(config.voyageApiKey),
   });
 
   // ─── Sweep SSA port wiring (Plan 1 Task 3.1) ─────────────────────

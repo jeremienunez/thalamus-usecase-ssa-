@@ -24,7 +24,16 @@ describe("cycleRunController", () => {
 
   it("uses the default query when none is provided", async () => {
     const service = {
-      runUserCycle: vi.fn().mockResolvedValue({ cycle: { id: "c1" } }),
+      runUserCycle: vi.fn().mockResolvedValue({
+        cycle: {
+          id: "c1",
+          kind: "fish",
+          startedAt: "2026-04-19T10:00:00.000Z",
+          completedAt: "2026-04-19T10:00:01.000Z",
+          findingsEmitted: 0,
+          cortices: ["nano-sweep"],
+        },
+      }),
     };
     const app = Fastify({ logger: false });
     app.post("/cycles/run", cycleRunController(service as never));
@@ -40,14 +49,32 @@ describe("cycleRunController", () => {
       "Current SSA situation — upcoming conjunctions, catalog anomalies, debris forecast",
     );
     expect(res.statusCode).toBe(200);
+    // Controller must emit the wire DTO, not the raw service object.
+    expect(res.json()).toEqual({
+      cycle: {
+        id: "c1",
+        kind: "fish",
+        startedAt: "2026-04-19T10:00:00.000Z",
+        completedAt: "2026-04-19T10:00:01.000Z",
+        findingsEmitted: 0,
+        cortices: ["nano-sweep"],
+      },
+    });
     await app.close();
   });
 
   it("returns 500 with error copied from result.cycle.error", async () => {
     const service = {
       runUserCycle: vi.fn().mockResolvedValue({
-        cycle: { id: "c1", error: "boom" },
-        history: [],
+        cycle: {
+          id: "c1",
+          kind: "thalamus",
+          startedAt: "2026-04-19T10:00:00.000Z",
+          completedAt: "2026-04-19T10:00:01.000Z",
+          findingsEmitted: 0,
+          cortices: [],
+          error: "boom",
+        },
       }),
     };
     const app = Fastify({ logger: false });
@@ -61,10 +88,58 @@ describe("cycleRunController", () => {
 
     expect(res.statusCode).toBe(500);
     expect(res.json()).toEqual({
-      cycle: { id: "c1", error: "boom" },
-      history: [],
+      cycle: {
+        id: "c1",
+        kind: "thalamus",
+        startedAt: "2026-04-19T10:00:00.000Z",
+        completedAt: "2026-04-19T10:00:01.000Z",
+        findingsEmitted: 0,
+        cortices: [],
+        error: "boom",
+      },
       error: "boom",
     });
+    await app.close();
+  });
+
+  it("projects findings + costUsd into the response DTO", async () => {
+    const service = {
+      runUserCycle: vi.fn().mockResolvedValue({
+        cycle: {
+          id: "c1",
+          kind: "thalamus",
+          startedAt: "2026-04-19T10:00:00.000Z",
+          completedAt: "2026-04-19T10:00:01.000Z",
+          findingsEmitted: 1,
+          cortices: ["thalamus"],
+          findings: [
+            {
+              id: "11",
+              title: "t",
+              summary: "s",
+              sourceClass: "KG",
+              confidence: 0.9,
+              evidenceRefs: [],
+            },
+          ],
+          costUsd: 0.42,
+        },
+      }),
+    };
+    const app = Fastify({ logger: false });
+    app.post("/cycles/run", cycleRunController(service as never));
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/cycles/run",
+      payload: { kind: "thalamus", query: "q" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.cycle.findings).toHaveLength(1);
+    expect(body.cycle.findings[0].sourceClass).toBe("KG");
+    expect(body.cycle.costUsd).toBe(0.42);
     await app.close();
   });
 });

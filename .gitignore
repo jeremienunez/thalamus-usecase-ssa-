@@ -17,7 +17,8 @@ coverage/
 .vitest-cache/
 *.lcov
 
-# LaTeX build artifacts (keep .tex sources, ignore compiled)
+# LaTeX — track compiled PDFs, ignore .tex sources + build artifacts
+docs/specs/**/*.tex
 docs/specs/**/*.aux
 docs/specs/**/*.log
 docs/specs/**/*.out
@@ -25,7 +26,6 @@ docs/specs/**/*.toc
 docs/specs/**/*.fls
 docs/specs/**/*.fdb_latexmk
 docs/specs/**/*.synctex.gz
-docs/specs/**/*.pdf
 
 # OS / editor
 .DS_Store
@@ -46,6 +46,9 @@ logs/
 # Local demo state
 fixtures/recorded/
 data/seeds/local/
+
+# Private interview prep (Thales/CortAIx framing — not for the public repo)
+.interview/
 
 # Frontend WIP — not ready for the portfolio tree yet
 design-system/

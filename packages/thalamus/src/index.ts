@@ -44,8 +44,8 @@ export type {
   CandidateLookup,
 } from "./cortices/field-correlation";
 
-// Explorer
-export { ExplorerOrchestrator } from "./explorer/orchestrator";
+// Explorer (nano-caller + nano-swarm only; scout/crawler/curator/
+// orchestrator + SSA entity patterns live in apps/console-api/src/agent/ssa/explorer/).
 export {
   callNano,
   callNanoStream,
@@ -57,16 +57,28 @@ export {
 } from "./explorer/nano-caller";
 export type { NanoRequest, NanoResponse } from "./explorer/nano-caller";
 export {
+  NanoSwarm,
   setNanoSwarmConfigProvider,
   setNanoSwarmProfile,
+  setEntityExtractor,
 } from "./explorer/nano-swarm";
-export { setCuratorPrompt } from "./explorer/curator";
-export type { ExplorationQuery } from "./explorer/scout";
+export type {
+  SwarmStats,
+  CrawlerExtraction,
+  EntityExtractorFn,
+  NanoArticle,
+} from "./explorer/nano-swarm";
+
+// Curator prompt — agnostic default; SSA override lives in
+// apps/console-api/src/prompts/curator-ssa.prompt.ts and is injected via
+// setCuratorPrompt from the SSA explorer bundle.
+export { DEFAULT_CURATOR_PROMPT } from "./prompts/curator.prompt";
 
 // Domain profile types (injected from consumers at boot)
 export type {
   Lens,
   NanoSwarmProfile,
+  ExplorationQuery,
 } from "./prompts/nano-swarm.prompt";
 export { DEFAULT_NANO_SWARM_PROFILE } from "./prompts/nano-swarm.prompt";
 
@@ -81,6 +93,18 @@ export {
 
 // Ports
 export type { WebSearchPort } from "./ports/web-search.port";
+export type {
+  EntityCatalogPort,
+  EntityRef,
+} from "./ports/entity-catalog.port";
+export { NoopEntityCatalog } from "./entities/noop-entity-catalog";
+export type {
+  SourceFetcherPort,
+  SourceResult,
+} from "./ports/source-fetcher.port";
+export { NoopSourceFetcher } from "./entities/noop-source-fetcher";
+export type { EmbedderPort } from "./ports/embedder.port";
+export { NullEmbedder } from "./entities/null-embedder";
 
 // Cortex execution strategies (extension points)
 export {
@@ -94,6 +118,3 @@ export { ResearchFindingRepository } from "./repositories/research-finding.repos
 export { ResearchEdgeRepository } from "./repositories/research-edge.repository";
 export { ResearchCycleRepository } from "./repositories/research-cycle.repository";
 
-// Utils
-export { VoyageEmbedder } from "./utils/voyage-embedder";
-export * from "./utils/llm-json-parser";

@@ -147,7 +147,6 @@ function extractPublicMethods(source: ts.SourceFile): MethodInfo[] {
 const COMPOSITE_METHOD_ALLOWLIST = new Set<string>([
   "upsertByDedupHash",         // select-or-insert, Postgres
   "checkRateLimit",            // Redis MULTI: GET + INCR + EXPIRE
-  "resolve",                   // EntityNameResolver: cache + DB lookup
   "insertMany",                // batch insert + returning row count
   "count",                     // paginated list + total count
   "appendMessage",             // Redis chat: RPUSH + LTRIM + EXPIRE
@@ -172,7 +171,6 @@ const COMPOSITE_METHOD_ALLOWLIST = new Set<string>([
 const NON_POSTGRES_REPO_ALLOWLIST = new Set<string>([
   "packages/sweep/src/repositories/satellite-sweep-chat.repository.ts",
   "packages/sweep/src/repositories/sweep.repository.ts",
-  "packages/thalamus/src/repositories/entity-name-resolver.ts",
 ]);
 
 function stripComments(src: string): string {

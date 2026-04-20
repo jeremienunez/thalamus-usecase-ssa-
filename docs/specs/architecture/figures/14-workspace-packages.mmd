@@ -1,0 +1,29 @@
+flowchart LR
+
+subgraph 0["packages"]
+subgraph 1["cli"]
+2[" "]
+end
+subgraph 3["db-schema"]
+4[" "]
+end
+subgraph 5["shared"]
+6[" "]
+end
+subgraph 7["sweep"]
+8[" "]
+end
+subgraph 9["thalamus"]
+A[" "]
+end
+end
+2-->6
+2-->4
+2-->8
+2-->A
+4-->6
+8-->A
+8-->6
+8-->4
+A-->4
+A-->6

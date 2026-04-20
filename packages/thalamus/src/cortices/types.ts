@@ -3,10 +3,8 @@
  */
 
 import type {
-  ResearchCortex,
   ResearchFindingType,
   ResearchUrgency,
-  ResearchEntityType,
   ResearchRelation,
 } from "@interview/shared/enum";
 
@@ -44,13 +42,15 @@ export interface CortexFinding {
    */
   sourceCortex?: string;
   /**
-   * Optional satellite-bus / platform-class context attached to the finding.
-   * Carries SSA platform / bus identifiers.
+   * Generic extension point — domain-neutral bag for arbitrary metadata
+   * emitted by a cortex. The kernel never inspects its shape. Domain-
+   * specific consumers stamp their own sub-keys (e.g. SSA cortices write
+   * `extensions.busContext = { busId, busName, similarity }`).
    */
-  busContext?: { busId: number; busName: string; similarity?: number };
+  extensions?: Record<string, unknown>;
   dedupKey?: string;
   edges: Array<{
-    entityType: ResearchEntityType;
+    entityType: string;
     entityId: number;
     relation: ResearchRelation;
     context?: Record<string, unknown>;
@@ -71,7 +71,7 @@ export interface CortexOutput {
 // ============================================================================
 
 export interface Cortex {
-  name: ResearchCortex;
+  name: string;
   execute(input: CortexInput): Promise<CortexOutput>;
 }
 
@@ -184,8 +184,58 @@ export interface DomainConfig {
    *  kernel used to hardcode an SSA-specific list; moved here so other
    *  domains (threat-intel, pharmacovigilance…) ship their own vocabulary. */
   entityTypes?: string[];
+  /**
+   * Mode-specific user-prompt addenda. Kernel selects by `CortexInput.mode`
+   * ("audit" | "investment"). Defaults to generic guidance; domains ship
+   * flavored copies (e.g. SSA mentions conjunctions / fleet health /
+   * stale epochs — vocabulary that otherwise would leak into the kernel).
+   * Either key may be omitted; the kernel fills the gap with a domain-
+   * neutral default.
+   */
+  modeInstructions?: {
+    audit?: string;
+    investment?: string;
+  };
   preSummarize: (
     rows: Record<string, unknown>[],
     cortexName: string,
   ) => Record<string, unknown>[];
+
+  // ── Phase 1 seams (agnosticity cleanup 2026-04-19) ──────────────────
+  /**
+   * Planner system-prompt builder. Kernel passes `{ headers, cortexNames }`;
+   * receives the full system prompt string. If omitted, kernel falls back
+   * to `buildGenericPlannerSystemPrompt`. Domains ship their flavored copy
+   * here (e.g. SSA planner mentioning NORAD / fleet conventions).
+   */
+  plannerPrompt?: (input: {
+    headers: string;
+    cortexNames: readonly string[];
+  }) => string;
+  /**
+   * Fallback DAG when planner LLM returns empty or fails outright. If
+   * omitted, kernel flattens `fallbackCortices` into parallel no-dep nodes.
+   */
+  fallbackPlan?: (query: string) => DAGPlan;
+  /**
+   * Name of the synthesis cortex that must run last in every plan.
+   * `StrategistStrategy.canHandle` compares cortex name against this.
+   * Default when consumed: `"strategist"`.
+   */
+  synthesisCortexName?: string;
+  /**
+   * Optional entity-extraction hook used by nano-swarm when building
+   * follow-up queries. If omitted, nano-swarm runs text-only grounding.
+   */
+  extractEntities?: (text: string) => {
+    primary: string[];
+    secondary?: string[];
+    hasContent: boolean;
+  };
+  /**
+   * Predicate: is a given entityType verification-relevant? Used by
+   * `cycle-loop.service` to gate the `needsVerification` heuristic. If
+   * omitted, the kernel defaults to "every type is verification-relevant".
+   */
+  isVerificationRelevantEntityType?: (entityType: string) => boolean;
 }

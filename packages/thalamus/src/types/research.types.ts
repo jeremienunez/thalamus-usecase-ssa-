@@ -9,17 +9,15 @@
 import type {
   ResearchCycleTrigger,
   ResearchCycleStatus,
-  ResearchCortex,
   ResearchFindingType,
   ResearchStatus,
   ResearchUrgency,
-  ResearchEntityType,
   ResearchRelation,
 } from "@interview/shared/enum";
 
 // ── Cycle ──────────────────────────────────────────────────────────
 export interface ResearchVerificationTargetHint {
-  entityType: ResearchEntityType | null;
+  entityType: string | null;
   entityId: bigint | null;
   sourceCortex: string | null;
   sourceTitle: string | null;
@@ -70,7 +68,7 @@ export interface NewResearchCycle {
 export interface ResearchFinding {
   id: bigint;
   researchCycleId: bigint;
-  cortex: ResearchCortex;
+  cortex: string;
   findingType: ResearchFindingType;
   status: ResearchStatus;
   urgency: ResearchUrgency | null;
@@ -80,7 +78,11 @@ export interface ResearchFinding {
   reasoning: string | null;
   confidence: number;
   impactScore: number | null;
-  busContext: unknown;
+  /**
+   * Generic extension point. DB column is still `bus_context` (historical
+   * SSA name) — the Drizzle schema maps it to this field on read/write.
+   */
+  extensions: Record<string, unknown> | null;
   reflexionNotes: unknown;
   iteration: number;
   dedupHash: string | null;
@@ -92,7 +94,7 @@ export interface ResearchFinding {
 
 export interface NewResearchFinding {
   researchCycleId: bigint;
-  cortex: ResearchCortex;
+  cortex: string;
   findingType: ResearchFindingType;
   status?: ResearchStatus;
   urgency?: ResearchUrgency | null;
@@ -102,7 +104,8 @@ export interface NewResearchFinding {
   reasoning?: string | null;
   confidence: number;
   impactScore?: number | null;
-  busContext?: unknown;
+  /** See `ResearchFinding.extensions`. DB column is `bus_context`. */
+  extensions?: Record<string, unknown> | null;
   reflexionNotes?: unknown;
   iteration?: number;
   dedupHash?: string | null;
@@ -116,7 +119,7 @@ export interface NewResearchFinding {
 export interface ResearchEdge {
   id: bigint;
   findingId: bigint;
-  entityType: ResearchEntityType;
+  entityType: string;
   entityId: bigint;
   relation: ResearchRelation;
   weight: number | null;
@@ -126,7 +129,7 @@ export interface ResearchEdge {
 
 export interface NewResearchEdge {
   findingId: bigint;
-  entityType: ResearchEntityType;
+  entityType: string;
   entityId: bigint;
   relation: ResearchRelation;
   weight?: number | null;
