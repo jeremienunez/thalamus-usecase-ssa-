@@ -10,6 +10,7 @@
  * No console-api edit.
  */
 
+import { z } from "zod";
 import {
   type RuntimeConfigRegistrar,
   DEFAULT_NANO_CONFIG,
@@ -17,12 +18,21 @@ import {
   DEFAULT_THALAMUS_PLANNER_CONFIG,
   DEFAULT_THALAMUS_CORTEX_CONFIG,
   DEFAULT_THALAMUS_REFLEXION_CONFIG,
+  DEFAULT_THALAMUS_BUDGETS_CONFIG,
   MODEL_PRESETS,
   PROVIDER_CHOICES,
   REASONING_EFFORT_CHOICES,
   REASONING_FORMAT_CHOICES,
   VERBOSITY_CHOICES,
 } from "@interview/shared/config";
+
+const budgetRowSchema = z.object({
+  maxIterations: z.number().int().min(1).max(20),
+  maxCost: z.number().min(0).max(10),
+  confidenceTarget: z.number().min(0).max(1),
+  coverageTarget: z.number().min(0).max(1),
+  minFindingsToStop: z.number().int().min(0).max(50),
+});
 
 export function registerThalamusConfigDomains(
   r: RuntimeConfigRegistrar,
@@ -86,6 +96,21 @@ export function registerThalamusConfigDomains(
       maxIterations: "number",
       minConfidenceToStop: "number",
       stopOnNoNewFindings: "boolean",
+    },
+  });
+
+  r.registerDomain("thalamus.budgets", {
+    defaults: DEFAULT_THALAMUS_BUDGETS_CONFIG,
+    schema: {
+      simple: "json",
+      moderate: "json",
+      deep: "json",
+    },
+    validate: (merged) => {
+      for (const key of ["simple", "moderate", "deep"] as const) {
+        const row = merged[key];
+        if (row !== undefined) budgetRowSchema.parse(row);
+      }
     },
   });
 }

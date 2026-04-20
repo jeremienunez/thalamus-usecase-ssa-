@@ -1,9 +1,10 @@
 import { useRouterState } from "@tanstack/react-router";
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 import { useUiStore } from "@/shared/ui/uiStore";
 import { clsx } from "clsx";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useRuntimeConfigList } from "@/features/config/runtime-config";
+import { useOpsFilterStore, type RegimeKey } from "@/features/ops/opsFilterStore";
 
 export function LeftRail() {
   const { location } = useRouterState();
@@ -54,6 +55,7 @@ function RailContent({ mode }: { mode: string }): ReactNode {
 
 function ConfigJumpLinks() {
   const { data, isLoading } = useRuntimeConfigList();
+  const focusConfigDomain = useUiStore((s) => s.focusConfigDomain);
   if (isLoading || !data) {
     return <div className="p-3 text-caption text-muted">Loading…</div>;
   }
@@ -65,15 +67,14 @@ function ConfigJumpLinks() {
     },
     {},
   );
-  const order = ["thalamus", "sim", "sweep"];
+  const order = ["console", "thalamus", "sim", "sweep"];
   const ordered = [
     ...order.filter((n) => grouped[n]),
     ...Object.keys(grouped).filter((n) => !order.includes(n)).sort(),
   ];
 
   function jump(domain: string) {
-    const el = document.getElementById(`domain-${domain}`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    focusConfigDomain(domain);
   }
 
   return (
@@ -83,7 +84,7 @@ function ConfigJumpLinks() {
           <div className="label mb-2">{ns.toUpperCase()}</div>
           <div className="space-y-0.5">
             {grouped[ns]!
-              .sort()
+              .sort(compareConfigDomains)
               .map((d) => {
                 const payload = data.domains[d];
                 const nFields = payload
@@ -114,6 +115,18 @@ function ConfigJumpLinks() {
   );
 }
 
+function compareConfigDomains(a: string, b: string): number {
+  const priority = ["console.autonomy", "thalamus.budgets"];
+  const aIdx = priority.indexOf(a);
+  const bIdx = priority.indexOf(b);
+  if (aIdx !== -1 || bIdx !== -1) {
+    if (aIdx === -1) return 1;
+    if (bIdx === -1) return -1;
+    return aIdx - bIdx;
+  }
+  return a.localeCompare(b);
+}
+
 const SUPERSCRIPT: Record<string, string> = {
   "-": "⁻",
   "0": "⁰",
@@ -136,15 +149,27 @@ function sup(s: string): string {
 }
 
 function OpsFilters() {
-  const [pcExp, setPcExp] = useState(-4);
+  const regimeVisible = useOpsFilterStore((s) => s.regimeVisible);
+  const toggleRegime = useOpsFilterStore((s) => s.toggleRegime);
+  const pcExp = useOpsFilterStore((s) => s.pcThresholdExp);
+  const setPcExp = useOpsFilterStore((s) => s.setPcThresholdExp);
+  const provenance = useOpsFilterStore((s) => s.provenance);
+  const toggleProvenance = useOpsFilterStore((s) => s.toggleProvenance);
+
+  const regimes: RegimeKey[] = ["LEO", "MEO", "GEO", "HEO"];
   return (
     <div className="space-y-6 p-3">
       <section>
         <div className="label mb-2">ORBIT REGIME</div>
         <div className="space-y-1">
-          {["LEO", "MEO", "GEO", "HEO"].map((r) => (
+          {regimes.map((r) => (
             <label key={r} className="flex cursor-pointer items-center gap-2 text-body">
-              <input type="checkbox" defaultChecked className="accent-cyan" />
+              <input
+                type="checkbox"
+                checked={regimeVisible[r]}
+                onChange={() => toggleRegime(r)}
+                className="accent-cyan"
+              />
               <span className="mono text-numeric">{r}</span>
             </label>
           ))}
@@ -169,11 +194,21 @@ function OpsFilters() {
         <div className="label mb-2">PROVENANCE</div>
         <div className="space-y-1 text-body">
           <label className="flex cursor-pointer items-center gap-2">
-            <input type="checkbox" defaultChecked className="accent-cyan" />
+            <input
+              type="checkbox"
+              checked={provenance.osint}
+              onChange={() => toggleProvenance("osint")}
+              className="accent-cyan"
+            />
             <span className="mono text-numeric">OSINT</span>
           </label>
           <label className="flex cursor-pointer items-center gap-2">
-            <input type="checkbox" defaultChecked className="accent-cyan" />
+            <input
+              type="checkbox"
+              checked={provenance.field}
+              onChange={() => toggleProvenance("field")}
+              className="accent-cyan"
+            />
             <span className="mono text-numeric">FIELD</span>
           </label>
         </div>

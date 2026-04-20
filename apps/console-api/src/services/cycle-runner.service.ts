@@ -38,8 +38,8 @@ export interface SweepDep {
 
 /**
  * Output of a thalamus branch when the cycle runner wants the full
- * CLI-compatible payload. `runThalamus` keeps its legacy `Promise<number>`
- * shape so AutonomyService (CycleOrchestratorPort) keeps compiling.
+ * CLI-compatible payload. `runThalamus` returns just the autonomy-facing
+ * count + cost subset of this shape.
  */
 interface ThalamusRunDetail {
   count: number;
@@ -62,9 +62,11 @@ export class CycleRunnerService {
     return [...this.history];
   }
 
-  async runThalamus(query: string): Promise<number> {
+  async runThalamus(
+    query: string,
+  ): Promise<{ emitted: number; costUsd: number }> {
     const detail = await this.runThalamusDetail(query);
-    return detail.count;
+    return { emitted: detail.count, costUsd: detail.costUsd };
   }
 
   /**

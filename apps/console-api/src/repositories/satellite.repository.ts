@@ -53,7 +53,11 @@ export class SatelliteRepository {
         s.mass_kg,
         s.classification_tier,
         s.opacity_score::text,
-        s.telemetry_summary
+        s.telemetry_summary,
+        s.object_class,
+        s.photo_url,
+        s.g_short_description,
+        s.g_description
       FROM satellite s
       LEFT JOIN operator op          ON op.id = s.operator_id
       LEFT JOIN operator_country oc  ON oc.id = s.operator_country_id

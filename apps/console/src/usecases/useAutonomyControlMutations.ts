@@ -23,3 +23,14 @@ export function useAutonomyStopMutation() {
     },
   });
 }
+
+export function useAutonomyResetMutation() {
+  const api = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.autonomy.reset(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.autonomyStatus() });
+    },
+  });
+}

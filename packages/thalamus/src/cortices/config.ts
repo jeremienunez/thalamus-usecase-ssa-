@@ -1,3 +1,5 @@
+import { DEFAULT_THALAMUS_BUDGETS_CONFIG } from "@interview/shared/config";
+
 /**
  * Thalamus Research Agent — Configuration & Budget Limits.
  *
@@ -25,28 +27,8 @@ export interface IterationBudget {
 }
 
 export const ITERATION_BUDGETS: Record<string, IterationBudget> = {
-  simple: {
-    maxIterations: 2,
-    maxCost: 0.03,
-    confidenceTarget: 0.7,
-    coverageTarget: 0.5,
-    minFindingsToStop: 2,
-  },
-  moderate: {
-    maxIterations: 4,
-    maxCost: 0.06,
-    confidenceTarget: 0.75,
-    coverageTarget: 0.6,
-    minFindingsToStop: 3,
-  },
-  deep: {
-    maxIterations: 8,
-    maxCost: 0.1,
-    confidenceTarget: 0.8,
-    coverageTarget: 0.7,
-    minFindingsToStop: 5,
-  },
-} as const;
+  ...DEFAULT_THALAMUS_BUDGETS_CONFIG,
+};
 
 /**
  * Diminishing returns: novelty threshold increases over iterations,

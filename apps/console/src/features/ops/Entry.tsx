@@ -25,6 +25,7 @@ import { OrbitTrails, type RegimeFilterKey } from "./OrbitTrails";
 import { useSatellitesQuery } from "@/usecases/useSatellitesQuery";
 import { useConjunctionsQuery } from "@/usecases/useConjunctionsQuery";
 import { useUiStore } from "@/shared/ui/uiStore";
+import { useOpsFilterStore } from "./opsFilterStore";
 import type { SatelliteDTO } from "@/shared/types";
 
 const SPEEDS = TIME_SPEEDS;
@@ -56,7 +57,8 @@ export function OpsEntry() {
   const { utc, date } = useUtcClock();
 
   const { data: satData, isLoading: loadingSats } = useSatellitesQuery();
-  const { data: cjData } = useConjunctionsQuery(1e-8);
+  const pcThresholdExp = useOpsFilterStore((s) => s.pcThresholdExp);
+  const { data: cjData } = useConjunctionsQuery(Math.pow(10, pcThresholdExp));
 
   const satellites = satData?.items ?? [];
   const conjunctions = cjData?.items ?? [];

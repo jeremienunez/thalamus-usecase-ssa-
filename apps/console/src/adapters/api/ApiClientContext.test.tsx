@@ -30,6 +30,7 @@ const stub: ApiClient = {
     status: async () => ({}) as never,
     start: async () => ({}) as never,
     stop: async () => ({}) as never,
+    reset: async () => ({}) as never,
   },
 };
 

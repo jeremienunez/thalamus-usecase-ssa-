@@ -17,6 +17,10 @@ export function autonomyStopController(service: AutonomyService) {
   return asyncHandler(async () => service.stop());
 }
 
+export function autonomyResetController(service: AutonomyService) {
+  return asyncHandler(async () => service.resetSpend());
+}
+
 export function autonomyStatusController(service: AutonomyService) {
   return asyncHandler(async () => service.publicState());
 }

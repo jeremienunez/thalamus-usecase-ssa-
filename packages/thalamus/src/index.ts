@@ -8,9 +8,11 @@ export {
   setPlannerConfigProvider,
   setCortexConfigProvider,
   setReflexionConfigProvider,
+  setBudgetsConfigProvider,
   getPlannerConfig,
   getCortexConfig,
   getReflexionConfig,
+  getBudgetsConfig,
 } from "./config/runtime-config";
 
 // Services
@@ -117,4 +119,3 @@ export type { CortexExecutionStrategy } from "./cortices/strategies";
 export { ResearchFindingRepository } from "./repositories/research-finding.repository";
 export { ResearchEdgeRepository } from "./repositories/research-edge.repository";
 export { ResearchCycleRepository } from "./repositories/research-cycle.repository";
-

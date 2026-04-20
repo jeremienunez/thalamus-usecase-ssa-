@@ -24,6 +24,11 @@ export const SatelliteViewSchema = z.object({
   opacityScore: z.number().nullable(),
   tleLine1: z.string().nullable().optional(),
   tleLine2: z.string().nullable().optional(),
+  launchYear: z.number().nullable().optional(),
+  objectClass: z.string().nullable().optional(),
+  photoUrl: z.string().nullable().optional(),
+  shortDescription: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
 });
 export type SatelliteView = z.infer<typeof SatelliteViewSchema>;
 

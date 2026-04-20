@@ -12,13 +12,11 @@
  */
 
 import { createLogger, stepLog } from "@interview/shared/observability";
-import {
-  THALAMUS_CONFIG,
-  ITERATION_BUDGETS,
-} from "../cortices/config";
+import { THALAMUS_CONFIG } from "../cortices/config";
 import {
   getReflexionConfig,
   getPlannerConfig,
+  getBudgetsConfig,
 } from "../config/runtime-config";
 import {
   ResearchCycleTrigger,
@@ -116,12 +114,14 @@ export class ThalamusService {
       // 3. Compute loop budget (complexity-aware, clamped by global caps
       //    AND by runtime-tunable thalamus.reflexion.maxIterations — the
       //    operator knob wins when lower than the complexity default).
-      const budget =
-        ITERATION_BUDGETS[plan.complexity] ?? ITERATION_BUDGETS.moderate;
-      const [reflexionCfg, plannerCfg] = await Promise.all([
+      const [reflexionCfg, plannerCfg, budgetsCfg] = await Promise.all([
         getReflexionConfig(),
         getPlannerConfig(),
+        getBudgetsConfig(),
       ]);
+      const budget =
+        budgetsCfg[plan.complexity as keyof typeof budgetsCfg] ??
+        budgetsCfg.moderate;
       const maxIter = Math.min(
         budget.maxIterations,
         THALAMUS_CONFIG.loop.maxIterationsPerChain,

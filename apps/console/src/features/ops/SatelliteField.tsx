@@ -359,6 +359,15 @@ export function SatelliteField({ satellites, selectedId, onSelect, timeScale, la
               {(isSel || isFloat) && (
                 <div className="flex flex-col gap-0.5 border-l-2 border-hairline bg-panel/95 pl-2 pr-2 py-1 backdrop-blur-md shadow-elevated">
                   <span className="mono text-nano text-muted tracking-widest">
+                    NORAD <strong className="ml-1 text-primary tabular-nums">{s.noradId}</strong>
+                  </span>
+                  {isSel && (
+                    <span className="mono max-w-[14rem] truncate text-nano text-muted tracking-widest">
+                      OP <strong className="ml-1 text-primary">{s.operator}</strong>
+                      <span className="ml-1 text-dim">· {s.country}</span>
+                    </span>
+                  )}
+                  <span className="mono text-nano text-muted tracking-widest">
                     REGIME <strong className="ml-1 text-primary">{s.regime}</strong>
                   </span>
                   <span className="mono text-nano text-muted tracking-widest">

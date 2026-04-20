@@ -96,7 +96,7 @@ export function SatelliteSearch({
   return (
     <div
       ref={containerRef}
-      className="pointer-events-auto relative w-[280px]"
+      className="pointer-events-auto relative z-10 w-[280px]"
     >
       <div className="flex items-center gap-2 border border-hairline bg-panel/90 px-2 py-1 backdrop-blur-sm">
         <Search className="h-3 w-3 text-dim" />
@@ -120,7 +120,7 @@ export function SatelliteSearch({
       </div>
 
       {open && matches.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 border border-hairline bg-panel/95 backdrop-blur-sm">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 border border-hairline bg-panel/95 shadow-elevated backdrop-blur-sm">
           {matches.map((sat, i) => (
             <button
               key={sat.id}

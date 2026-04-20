@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import {
+  autonomyResetController,
   autonomyStartController,
   autonomyStatusController,
   autonomyStopController,
@@ -47,17 +48,22 @@ describe("autonomyStopController and autonomyStatusController", () => {
   it("returns the service payloads for stop and status", async () => {
     const service = {
       stop: vi.fn().mockReturnValue({ ok: true, state: { running: false } }),
+      resetSpend: vi.fn().mockReturnValue({ ok: true, state: { running: false } }),
       publicState: vi.fn().mockReturnValue({ running: true, intervalMs: 45_000 }),
     };
     const app = Fastify({ logger: false });
     app.post("/autonomy/stop", autonomyStopController(service as never));
+    app.post("/autonomy/reset", autonomyResetController(service as never));
     app.get("/autonomy/status", autonomyStatusController(service as never));
 
     const stop = await app.inject({ method: "POST", url: "/autonomy/stop" });
+    const reset = await app.inject({ method: "POST", url: "/autonomy/reset" });
     const status = await app.inject({ method: "GET", url: "/autonomy/status" });
 
     expect(stop.statusCode).toBe(200);
     expect(stop.json()).toEqual({ ok: true, state: { running: false } });
+    expect(reset.statusCode).toBe(200);
+    expect(reset.json()).toEqual({ ok: true, state: { running: false } });
     expect(status.statusCode).toBe(200);
     expect(status.json()).toEqual({ running: true, intervalMs: 45_000 });
     await app.close();

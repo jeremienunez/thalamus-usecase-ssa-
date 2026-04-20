@@ -1,4 +1,4 @@
-import type { DispatchResult } from "@/features/repl/types";
+import type { BriefingUiAction, DispatchResult } from "@/features/repl/types";
 import { ChatRender } from "./renderers/ChatRender";
 import { BriefingRender } from "./renderers/BriefingRender";
 import { TelemetryRender } from "./renderers/TelemetryRender";
@@ -12,13 +12,21 @@ import { ResolutionRender } from "./renderers/ResolutionRender";
 export function ResultView({
   result,
   onFollowUp,
+  onUiAction,
 }: {
   result: DispatchResult;
   onFollowUp: (input: string) => void;
+  onUiAction: (action: BriefingUiAction) => void;
 }) {
   switch (result.kind) {
     case "briefing":
-      return <BriefingRender r={result} onFollowUp={onFollowUp} />;
+      return (
+        <BriefingRender
+          r={result}
+          onFollowUp={onFollowUp}
+          onUiAction={onUiAction}
+        />
+      );
     case "telemetry":
       return <TelemetryRender r={result} />;
     case "logs":

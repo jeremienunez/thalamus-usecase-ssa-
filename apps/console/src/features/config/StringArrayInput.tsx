@@ -2,23 +2,31 @@ import { useState } from "react";
 
 type Props = {
   value: string[];
+  choices?: readonly string[] | null;
   onChange: (v: string[]) => void;
 };
 
 /** Tag-input: type a value, press Enter/comma to push it; × removes. */
-export function StringArrayInput({ value, onChange }: Props) {
+export function StringArrayInput({ value, choices, onChange }: Props) {
   const [pending, setPending] = useState("");
+
+  function addValue(next: string) {
+    const trimmed = next.trim();
+    if (!trimmed) return;
+    if (value.includes(trimmed)) {
+      return;
+    }
+    onChange([...value, trimmed]);
+  }
 
   function commit() {
     const trimmed = pending.trim();
     if (!trimmed) return;
-    if (value.includes(trimmed)) {
-      setPending("");
-      return;
-    }
-    onChange([...value, trimmed]);
+    addValue(trimmed);
     setPending("");
   }
+
+  const suggestions = (choices ?? []).filter((choice) => !value.includes(choice));
 
   return (
     <div className="space-y-1">
@@ -41,6 +49,24 @@ export function StringArrayInput({ value, onChange }: Props) {
         ))}
         {value.length === 0 && <span className="label text-muted">empty</span>}
       </div>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {suggestions.map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                addValue(choice);
+                setPending("");
+              }}
+              className="border border-hairline px-2 py-0.5 mono text-caption text-muted transition-colors duration-fast ease-palantir hover:border-cyan hover:text-cyan cursor-pointer"
+            >
+              + {choice}
+            </button>
+          ))}
+        </div>
+      )}
       <input
         type="text"
         className="w-full bg-black/40 border border-hairline px-2 py-1 mono text-body text-primary focus:border-cyan focus:outline-none"

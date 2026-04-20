@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   value: unknown;
@@ -8,6 +8,11 @@ type Props = {
 export function JsonTextarea({ value, onChange }: Props) {
   const [raw, setRaw] = useState(() => JSON.stringify(value, null, 2));
   const [parseError, setParseError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRaw(JSON.stringify(value, null, 2));
+    setParseError(null);
+  }, [value]);
 
   function commit(text: string) {
     try {
@@ -24,6 +29,7 @@ export function JsonTextarea({ value, onChange }: Props) {
       <textarea
         className="w-full min-h-[100px] bg-black/40 border border-hairline px-2 py-1 mono text-caption text-primary focus:border-cyan focus:outline-none resize-y"
         value={raw}
+        spellCheck={false}
         onChange={(e) => {
           setRaw(e.target.value);
           commit(e.target.value);

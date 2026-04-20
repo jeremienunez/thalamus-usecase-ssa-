@@ -16,7 +16,10 @@
  * config sub-domains.
  */
 
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { getConfig } from "./helpers/runtime-config";
+
+const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 
 describe("SPEC-TH-025 — thalamus cortex config via runtime-config (stub)", () => {
   describe("AC-1 default parity — no regression", () => {
@@ -28,11 +31,47 @@ describe("SPEC-TH-025 — thalamus cortex config via runtime-config (stub)", () 
   });
 
   describe("AC-2 patch without redeploy", () => {
-    it.todo(
-      "given the server is running with defaults " +
-        "when PATCH /api/config/runtime/thalamus.budgets sets deep.maxCost to 0.25 " +
-        "then the next research cycle with complexity=deep accepts costs up to $0.25 " +
-        "and no process restart is required",
+    it(
+      "given the server is running with defaults when PATCH /api/config/runtime/thalamus.budgets sets deep.maxCost to 0.25 then GET returns the patched row without a restart",
+      async () => {
+        await fetch(`${BASE}/api/config/runtime/thalamus.budgets`, {
+          method: "DELETE",
+        });
+
+        const patchRes = await fetch(`${BASE}/api/config/runtime/thalamus.budgets`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ deep: { maxCost: 0.25 } }),
+        });
+        expect(patchRes.status).toBe(200);
+        const patched = (await patchRes.json()) as {
+          value: {
+            deep: {
+              maxCost: number;
+              maxIterations: number;
+              confidenceTarget: number;
+            };
+            simple: { maxCost: number };
+          };
+        };
+        expect(patched.value.deep.maxCost).toBe(0.25);
+        expect(patched.value.deep.maxIterations).toBe(8);
+        expect(patched.value.deep.confidenceTarget).toBe(0.8);
+        expect(patched.value.simple.maxCost).toBe(0.03);
+
+        const read = await getConfig("thalamus.budgets");
+        expect(read.value.deep).toEqual(
+          expect.objectContaining({
+            maxCost: 0.25,
+            maxIterations: 8,
+            confidenceTarget: 0.8,
+          }),
+        );
+
+        await fetch(`${BASE}/api/config/runtime/thalamus.budgets`, {
+          method: "DELETE",
+        });
+      },
     );
   });
 

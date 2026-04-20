@@ -24,11 +24,54 @@ export function OpsDrawer({
 
   return (
     <Drawer title="SATELLITE" subtitle={`${satellite.name} · NORAD ${satellite.noradId}`}>
+      {(satellite.photoUrl || satellite.shortDescription) && (
+        <DrawerSection title="BRIEF">
+          {satellite.photoUrl && (
+            <img
+              src={satellite.photoUrl}
+              alt={satellite.name}
+              className="mb-2 h-32 w-full border border-hairline object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          )}
+          {satellite.shortDescription && (
+            <p className="text-caption text-numeric leading-snug">
+              {satellite.shortDescription}
+            </p>
+          )}
+        </DrawerSection>
+      )}
+
       <DrawerSection title="IDENTITY">
         <KV k="Name" v={satellite.name} />
         <KV k="NORAD" v={satellite.noradId} mono />
         <KV k="Operator" v={satellite.operator} />
         <KV k="Country" v={satellite.country} mono />
+        {satellite.objectClass && (
+          <KV
+            k="Class"
+            v={<span className="mono text-caption uppercase">{satellite.objectClass}</span>}
+          />
+        )}
+        {typeof satellite.launchYear === "number" && (
+          <KV
+            k="Launched"
+            v={<span className="mono tabular-nums">{satellite.launchYear}</span>}
+          />
+        )}
+        <KV
+          k="Mass"
+          v={
+            <span className="mono tabular-nums">
+              {satellite.massKg.toLocaleString(undefined, {
+                maximumFractionDigits: 0,
+              })}
+              <span className="ml-1 text-dim">kg</span>
+            </span>
+          }
+        />
         <KV
           k="Declared"
           v={
@@ -58,6 +101,9 @@ export function OpsDrawer({
         <KV k="Altitude" v={<Measure value={fmtAltitudeKm(satellite.semiMajorAxisKm - 6371)} />} />
         <KV k="Inc" v={<Measure value={fmtDeg(satellite.inclinationDeg)} />} />
         <KV k="Ecc" v={<span className="mono tabular-nums">{satellite.eccentricity.toFixed(4)}</span>} />
+        <KV k="RAAN" v={<Measure value={fmtDeg(satellite.raanDeg)} />} />
+        <KV k="Arg ω" v={<Measure value={fmtDeg(satellite.argPerigeeDeg)} />} />
+        <KV k="Mean anom" v={<Measure value={fmtDeg(satellite.meanAnomalyDeg)} />} />
         <KV
           k="Mean motion"
           v={
@@ -69,6 +115,16 @@ export function OpsDrawer({
         />
         <KV k="Epoch" v={satellite.epoch.slice(0, 19) + "Z"} mono />
       </DrawerSection>
+
+      {satellite.tleLine1 && satellite.tleLine2 && (
+        <DrawerSection title="TLE">
+          <pre className="mono overflow-x-auto whitespace-pre text-nano text-numeric leading-tight">
+            {satellite.tleLine1}
+            {"\n"}
+            {satellite.tleLine2}
+          </pre>
+        </DrawerSection>
+      )}
 
       <DrawerSection title={`CONJUNCTIONS (${conjunctions.length})`}>
         {conjunctions.length === 0 && (

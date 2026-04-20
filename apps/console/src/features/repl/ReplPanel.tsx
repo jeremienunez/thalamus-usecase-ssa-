@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { X, Terminal } from "lucide-react";
 import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
+import type { BriefingUiAction } from "@/features/repl/types";
+import { useUiStore } from "@/shared/ui/uiStore";
 import { useRepl } from "./ReplContext";
 import { TurnView } from "./TurnView";
 
 export function ReplPanel() {
+  const navigate = useNavigate();
   const { open, setOpen, turns, inFlight, sendTurn, runFollowUp, cancelTurn } =
     useRepl();
+  const setAutonomyFeedOpen = useUiStore((s) => s.setAutonomyFeedOpen);
+  const focusConfigDomain = useUiStore((s) => s.focusConfigDomain);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -20,6 +26,17 @@ export function ReplPanel() {
   }, [open]);
 
   if (!open) return null;
+
+  const handleUiAction = (action: BriefingUiAction) => {
+    if (action.kind === "open_feed") {
+      setAutonomyFeedOpen(true);
+      setOpen(false);
+      return;
+    }
+    focusConfigDomain(action.domain);
+    setOpen(false);
+    void navigate({ to: "/config" });
+  };
 
   const submit = () => {
     if (!input.trim()) return;
@@ -74,6 +91,7 @@ export function ReplPanel() {
             key={t.id}
             turn={t}
             onFollowUp={sendTurn}
+            onUiAction={handleUiAction}
             onRunFollowUp={runFollowUp}
             onCancel={() => cancelTurn(t.id)}
           />

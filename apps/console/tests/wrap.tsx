@@ -77,10 +77,15 @@ export function makeStubApi(overrides: Partial<ApiClient> = {}): ApiClient {
         tickCount: 0,
         currentTick: null,
         history: [],
+        dailySpendUsd: 0,
+        monthlySpendUsd: 0,
+        thalamusCyclesToday: 0,
+        stoppedReason: null,
         nextTickInMs: null,
       }),
       start: async () => ({ ok: true, state: {} as never }),
       stop: async () => ({ ok: true, state: {} as never }),
+      reset: async () => ({ ok: true, state: {} as never }),
     },
   };
   return { ...base, ...overrides };

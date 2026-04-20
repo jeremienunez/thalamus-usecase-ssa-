@@ -2,6 +2,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AutonomyService } from "../services/autonomy.service";
 import {
+  autonomyResetController,
   autonomyStartController,
   autonomyStopController,
   autonomyStatusController,
@@ -16,5 +17,6 @@ export function registerAutonomyRoutes(
     autonomyStartController(service),
   );
   app.post("/api/autonomy/stop", autonomyStopController(service));
+  app.post("/api/autonomy/reset", autonomyResetController(service));
   app.get("/api/autonomy/status", autonomyStatusController(service));
 }

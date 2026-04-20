@@ -8,6 +8,7 @@ export type AutonomyTick = {
   startedAt: string;
   completedAt: string;
   emitted: number;
+  costUsd: number;
   error?: string;
 };
 
@@ -22,4 +23,10 @@ export type AutonomyState = {
   queryIdx: number;
   timer: NodeJS.Timeout | null;
   busy: boolean;
+  stoppedReason:
+    | null
+    | "daily_budget_exhausted"
+    | "monthly_budget_exhausted"
+    | "max_thalamus_cycles_per_day"
+    | "stopped_by_operator";
 };

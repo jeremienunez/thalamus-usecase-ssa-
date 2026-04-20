@@ -87,12 +87,12 @@ describe("runtime-config HTTP contract", () => {
     expect(read2.value.overrides).toBe("sentinel-string");
   });
 
-  it("given the server is up, when GET /api/config/runtime is called, then domains has the 9 registered keys with contract shape", async () => {
+  it("given the server is up, when GET /api/config/runtime is called, then domains has the 11 registered keys with contract shape", async () => {
     const { domains } = await getAllConfig();
     expect(new Set(Object.keys(domains))).toEqual(
       new Set(RUNTIME_CONFIG_DOMAINS),
     );
-    expect(Object.keys(domains)).toHaveLength(9);
+    expect(Object.keys(domains)).toHaveLength(11);
     for (const entry of Object.values(domains)) {
       expect(entry).toEqual(
         expect.objectContaining({
