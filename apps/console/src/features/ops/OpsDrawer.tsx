@@ -55,6 +55,25 @@ export function OpsDrawer({
             v={<span className="mono text-caption uppercase">{satellite.objectClass}</span>}
           />
         )}
+        {satellite.platformClass && (
+          <KV
+            k="Platform"
+            v={<span className="mono text-caption uppercase">{satellite.platformClass}</span>}
+          />
+        )}
+        {satellite.busName && (
+          <KV
+            k="Bus"
+            v={
+              <span className="mono text-caption">
+                {satellite.busName}
+                {satellite.busGeneration && (
+                  <span className="ml-1 text-dim">· {satellite.busGeneration}</span>
+                )}
+              </span>
+            }
+          />
+        )}
         {typeof satellite.launchYear === "number" && (
           <KV
             k="Launched"

@@ -42,5 +42,8 @@ export function toSatelliteView(r: SatelliteOrbitalRow): SatelliteView {
     photoUrl: r.photo_url,
     shortDescription: r.g_short_description,
     description: r.g_description,
+    platformClass: r.platform_class_name,
+    busName: r.bus_name,
+    busGeneration: r.bus_generation,
   };
 }

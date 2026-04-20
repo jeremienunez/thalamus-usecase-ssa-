@@ -22,6 +22,13 @@ function row(over: Partial<SatelliteOrbitalRow> = {}): SatelliteOrbitalRow {
       meanAnomaly: 20,
       epoch: "2024-01-01T00:00:00.000Z",
     },
+    object_class: null,
+    photo_url: null,
+    g_short_description: null,
+    g_description: null,
+    platform_class_name: null,
+    bus_name: null,
+    bus_generation: null,
     ...over,
   };
 }
@@ -90,5 +97,25 @@ describe("toSatelliteView", () => {
     expect(v.meanAnomalyDeg).toBe(20);
     expect(v.meanMotionRevPerDay).toBe(15);
     expect(v.semiMajorAxisKm).toBeGreaterThan(0);
+  });
+
+  it("passes platformClass / busName / busGeneration through from joined tables", () => {
+    const v = toSatelliteView(
+      row({
+        platform_class_name: "comms",
+        bus_name: "Starlink V2",
+        bus_generation: "gen 2",
+      }),
+    );
+    expect(v.platformClass).toBe("comms");
+    expect(v.busName).toBe("Starlink V2");
+    expect(v.busGeneration).toBe("gen 2");
+  });
+
+  it("leaves platformClass / bus fields null when joins miss", () => {
+    const v = toSatelliteView(row());
+    expect(v.platformClass).toBeNull();
+    expect(v.busName).toBeNull();
+    expect(v.busGeneration).toBeNull();
   });
 });

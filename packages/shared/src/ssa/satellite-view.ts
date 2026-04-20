@@ -29,6 +29,9 @@ export const SatelliteViewSchema = z.object({
   photoUrl: z.string().nullable().optional(),
   shortDescription: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
+  platformClass: z.string().nullable().optional(),
+  busName: z.string().nullable().optional(),
+  busGeneration: z.string().nullable().optional(),
 });
 export type SatelliteView = z.infer<typeof SatelliteViewSchema>;
 

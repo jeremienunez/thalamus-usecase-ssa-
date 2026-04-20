@@ -18,6 +18,9 @@ export type SatelliteOrbitalRow = {
   photo_url: string | null;
   g_short_description: string | null;
   g_description: string | null;
+  platform_class_name: string | null;
+  bus_name: string | null;
+  bus_generation: string | null;
 };
 
 export type SatelliteNameRow = {

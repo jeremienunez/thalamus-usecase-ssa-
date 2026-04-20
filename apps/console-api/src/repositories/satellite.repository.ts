@@ -57,10 +57,15 @@ export class SatelliteRepository {
         s.object_class,
         s.photo_url,
         s.g_short_description,
-        s.g_description
+        s.g_description,
+        pc.name                                          AS platform_class_name,
+        sb.name                                          AS bus_name,
+        sb.generation                                    AS bus_generation
       FROM satellite s
       LEFT JOIN operator op          ON op.id = s.operator_id
       LEFT JOIN operator_country oc  ON oc.id = s.operator_country_id
+      LEFT JOIN platform_class pc    ON pc.id = s.platform_class_id
+      LEFT JOIN satellite_bus sb     ON sb.id = s.satellite_bus_id
       WHERE s.telemetry_summary ? 'raan'
         ${regimeFilter}
       ORDER BY s.id

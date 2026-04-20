@@ -36,6 +36,9 @@ export type SatelliteDTO = {
   photoUrl?: string | null;
   shortDescription?: string | null;
   description?: string | null;
+  platformClass?: string | null;
+  busName?: string | null;
+  busGeneration?: string | null;
 };
 
 export type ConjunctionDTO = {
