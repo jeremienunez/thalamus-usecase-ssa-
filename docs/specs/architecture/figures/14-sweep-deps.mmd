@@ -1,0 +1,56 @@
+flowchart LR
+
+subgraph 0["packages"]
+subgraph 1["sweep"]
+subgraph 2["src"]
+subgraph 3["config"]
+4[" "]
+end
+5["index.ts"]
+subgraph 6["jobs"]
+7[" "]
+end
+subgraph 8["ports"]
+9[" "]
+end
+subgraph A["repositories"]
+B[" "]
+end
+subgraph C["services"]
+D[" "]
+end
+subgraph E["sim"]
+F[" "]
+end
+subgraph G["transformers"]
+H[" "]
+end
+subgraph I["types"]
+J[" "]
+end
+subgraph K["utils"]
+L[" "]
+end
+end
+end
+end
+4-->9
+4-->B
+4-->D
+4-->F
+5-->4
+5-->7
+5-->9
+5-->B
+5-->D
+5-->F
+5-->H
+7-->9
+7-->4
+7-->F
+7-->D
+B-->9
+D-->9
+D-->B
+D-->H
+F-->4

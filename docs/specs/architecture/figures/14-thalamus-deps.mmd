@@ -1,0 +1,83 @@
+flowchart LR
+
+subgraph 0["packages"]
+subgraph 1["thalamus"]
+subgraph 2["src"]
+subgraph 3["config"]
+4[" "]
+end
+subgraph 5["cortices"]
+6[" "]
+end
+subgraph 7["entities"]
+8[" "]
+end
+subgraph 9["explorer"]
+A[" "]
+end
+B["index.ts"]
+subgraph C["ports"]
+D[" "]
+end
+subgraph E["prompts"]
+F[" "]
+end
+subgraph G["repositories"]
+H[" "]
+end
+subgraph I["services"]
+J[" "]
+end
+subgraph K["transformers"]
+L[" "]
+end
+subgraph M["transports"]
+N[" "]
+end
+subgraph O["types"]
+P[" "]
+end
+subgraph Q["utils"]
+R[" "]
+end
+end
+end
+end
+4-->6
+4-->8
+4-->D
+4-->H
+4-->J
+4-->N
+6-->N
+6-->8
+6-->D
+6-->4
+6-->R
+8-->D
+A-->F
+A-->N
+B-->4
+B-->6
+B-->8
+B-->A
+B-->D
+B-->F
+B-->H
+B-->J
+B-->N
+B-->R
+H-->8
+H-->L
+H-->P
+J-->6
+J-->P
+J-->4
+J-->F
+J-->N
+J-->R
+J-->D
+L-->8
+L-->P
+N-->4
+N-->D

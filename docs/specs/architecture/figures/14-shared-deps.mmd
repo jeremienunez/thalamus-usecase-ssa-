@@ -1,0 +1,42 @@
+flowchart LR
+
+subgraph 0["packages"]
+subgraph 1["shared"]
+subgraph 2["src"]
+subgraph 3["config"]
+4[" "]
+end
+subgraph 5["enum"]
+6[" "]
+end
+7["index.ts"]
+subgraph 8["net"]
+9[" "]
+end
+subgraph A["observability"]
+B[" "]
+end
+subgraph C["schemas"]
+D[" "]
+end
+subgraph E["ssa"]
+F[" "]
+end
+subgraph G["types"]
+H[" "]
+end
+subgraph I["utils"]
+J[" "]
+end
+end
+end
+end
+7-->4
+7-->6
+7-->9
+7-->B
+7-->D
+7-->F
+7-->H
+7-->J
+H-->B

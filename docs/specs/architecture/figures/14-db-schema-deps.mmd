@@ -1,0 +1,22 @@
+flowchart LR
+
+subgraph 0["packages"]
+subgraph 1["db-schema"]
+subgraph 2["src"]
+subgraph 3["enums"]
+4[" "]
+end
+5["index.ts"]
+subgraph 6["schema"]
+7[" "]
+end
+subgraph 8["seed"]
+9[" "]
+end
+end
+end
+end
+5-->4
+5-->7
+7-->4
+9-->7
