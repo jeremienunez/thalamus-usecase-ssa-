@@ -14,6 +14,10 @@ export type SatelliteOrbitalRow = {
   classification_tier: string | null;
   opacity_score: string | null;
   telemetry_summary: Record<string, unknown> | null;
+  object_class: string | null;
+  photo_url: string | null;
+  g_short_description: string | null;
+  g_description: string | null;
 };
 
 export type SatelliteNameRow = {

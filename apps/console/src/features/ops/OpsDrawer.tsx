@@ -24,11 +24,43 @@ export function OpsDrawer({
 
   return (
     <Drawer title="SATELLITE" subtitle={`${satellite.name} · NORAD ${satellite.noradId}`}>
+      {(satellite.photoUrl || satellite.shortDescription) && (
+        <DrawerSection title="BRIEF">
+          {satellite.photoUrl && (
+            <img
+              src={satellite.photoUrl}
+              alt={satellite.name}
+              className="mb-2 h-32 w-full border border-hairline object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          )}
+          {satellite.shortDescription && (
+            <p className="text-caption text-numeric leading-snug">
+              {satellite.shortDescription}
+            </p>
+          )}
+        </DrawerSection>
+      )}
+
       <DrawerSection title="IDENTITY">
         <KV k="Name" v={satellite.name} />
         <KV k="NORAD" v={satellite.noradId} mono />
         <KV k="Operator" v={satellite.operator} />
         <KV k="Country" v={satellite.country} mono />
+        {satellite.objectClass && (
+          <KV
+            k="Class"
+            v={<span className="mono text-caption uppercase">{satellite.objectClass}</span>}
+          />
+        )}
+        {typeof satellite.launchYear === "number" && (
+          <KV
+            k="Launched"
+            v={<span className="mono tabular-nums">{satellite.launchYear}</span>}
+          />
+        )}
         <KV
           k="Mass"
           v={

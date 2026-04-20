@@ -37,5 +37,10 @@ export function toSatelliteView(r: SatelliteOrbitalRow): SatelliteView {
     opacityScore,
     tleLine1: typeof ts.tleLine1 === "string" ? ts.tleLine1 : null,
     tleLine2: typeof ts.tleLine2 === "string" ? ts.tleLine2 : null,
+    launchYear: r.launch_year,
+    objectClass: r.object_class,
+    photoUrl: r.photo_url,
+    shortDescription: r.g_short_description,
+    description: r.g_description,
   };
 }

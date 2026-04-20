@@ -31,6 +31,11 @@ export type SatelliteDTO = {
   opacityDeficitReasons?: string[];
   tleLine1?: string | null;
   tleLine2?: string | null;
+  launchYear?: number | null;
+  objectClass?: string | null;
+  photoUrl?: string | null;
+  shortDescription?: string | null;
+  description?: string | null;
 };
 
 export type ConjunctionDTO = {
