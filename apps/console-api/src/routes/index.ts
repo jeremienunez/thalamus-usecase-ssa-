@@ -1,6 +1,7 @@
 // apps/console-api/src/routes/index.ts
 import type { FastifyInstance } from "fastify";
 import type { SatelliteViewService } from "../services/satellite-view.service";
+import type { PayloadViewService } from "../services/payload-view.service";
 import type { ConjunctionViewService } from "../services/conjunction-view.service";
 import type { KgViewService } from "../services/kg-view.service";
 import type { FindingViewService } from "../services/finding-view.service";
@@ -25,6 +26,7 @@ import type { SatelliteSweepChatController } from "../controllers/satellite-swee
 
 import { registerHealthRoutes } from "./health.routes";
 import { registerSatelliteRoutes } from "./satellites.routes";
+import { registerPayloadsRoutes } from "./payloads.routes";
 import { registerConjunctionRoutes } from "./conjunctions.routes";
 import { registerKgRoutes } from "./kg.routes";
 import { registerFindingsRoutes } from "./findings.routes";
@@ -49,6 +51,7 @@ export type { SweepSuggestionsDeps } from "../services/sweep-suggestions.service
 
 export type AppServices = {
   satelliteView: SatelliteViewService;
+  payloadView: PayloadViewService;
   conjunctionView: ConjunctionViewService;
   kgView: KgViewService;
   findingView: FindingViewService;
@@ -79,6 +82,7 @@ export function registerAllRoutes(
 ): void {
   registerHealthRoutes(app);
   registerSatelliteRoutes(app, s.satelliteView);
+  registerPayloadsRoutes(app, s.payloadView);
   registerConjunctionRoutes(app, s.conjunctionView);
   registerKgRoutes(app, s.kgView);
   registerFindingsRoutes(app, s.findingView);

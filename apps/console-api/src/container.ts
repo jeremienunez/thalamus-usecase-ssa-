@@ -98,6 +98,7 @@ export interface ContainerConfig {
 }
 
 import { SatelliteRepository } from "./repositories/satellite.repository";
+import { PayloadRepository } from "./repositories/payload.repository";
 import { ConjunctionRepository } from "./repositories/conjunction.repository";
 import { KgRepository } from "./repositories/kg.repository";
 import { FindingRepository } from "./repositories/finding.repository";
@@ -110,6 +111,7 @@ import { ReflexionRepository } from "./repositories/reflexion.repository";
 import { StatsRepository } from "./repositories/stats.repository";
 
 import { SatelliteViewService } from "./services/satellite-view.service";
+import { PayloadViewService } from "./services/payload-view.service";
 import { ConjunctionViewService } from "./services/conjunction-view.service";
 import { KgViewService } from "./services/kg-view.service";
 import { FindingViewService } from "./services/finding-view.service";
@@ -197,6 +199,7 @@ export async function buildContainer(
 
   // repos
   const satelliteRepo = new SatelliteRepository(db);
+  const payloadRepo = new PayloadRepository(db);
   const conjunctionRepo = new ConjunctionRepository(db);
   const kgRepo = new KgRepository(db);
   const findingRepo = new FindingRepository(db);
@@ -557,6 +560,7 @@ export async function buildContainer(
 
   const services: AppServices = {
     satelliteView: new SatelliteViewService(satelliteRepo),
+    payloadView: new PayloadViewService(payloadRepo),
     conjunctionView: conjunctionViewService,
     kgView: new KgViewService(kgRepo),
     findingView: new FindingViewService(findingRepo, edgeRepo),
