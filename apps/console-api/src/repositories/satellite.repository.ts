@@ -74,12 +74,28 @@ export class SatelliteRepository {
         s.propellant_remaining,
         s.radiation_dose,
         s.debris_proximity,
-        s.mission_age
+        s.mission_age,
+        th_latest.last_tle_ingested_at,
+        (th_latest.latest_mm - th_prev.prev_mm)::real AS mean_motion_drift
       FROM satellite s
       LEFT JOIN operator op          ON op.id = s.operator_id
       LEFT JOIN operator_country oc  ON oc.id = s.operator_country_id
       LEFT JOIN platform_class pc    ON pc.id = s.platform_class_id
       LEFT JOIN satellite_bus sb     ON sb.id = s.satellite_bus_id
+      LEFT JOIN LATERAL (
+        SELECT ingested_at AS last_tle_ingested_at, mean_motion AS latest_mm
+        FROM tle_history
+        WHERE satellite_id = s.id
+        ORDER BY ingested_at DESC
+        LIMIT 1
+      ) th_latest ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT mean_motion AS prev_mm
+        FROM tle_history
+        WHERE satellite_id = s.id
+        ORDER BY ingested_at DESC
+        OFFSET 1 LIMIT 1
+      ) th_prev ON TRUE
       WHERE s.telemetry_summary ? 'raan'
         ${regimeFilter}
       ORDER BY s.id

@@ -43,6 +43,8 @@ function row(over: Partial<SatelliteOrbitalRow> = {}): SatelliteOrbitalRow {
     radiation_dose: null,
     debris_proximity: null,
     mission_age: null,
+    last_tle_ingested_at: null,
+    mean_motion_drift: null,
     ...over,
   };
 }
@@ -176,5 +178,22 @@ describe("toSatelliteView", () => {
     expect(
       Object.values(v.telemetry!).every((x) => x === null),
     ).toBe(true);
+  });
+
+  it("passes lastTleIngestedAt + meanMotionDrift through from tle_history joins", () => {
+    const v = toSatelliteView(
+      row({
+        last_tle_ingested_at: "2026-04-20T22:00:00.000Z",
+        mean_motion_drift: 0.0012,
+      }),
+    );
+    expect(v.lastTleIngestedAt).toBe("2026-04-20T22:00:00.000Z");
+    expect(v.meanMotionDrift).toBeCloseTo(0.0012);
+  });
+
+  it("leaves lastTleIngestedAt + meanMotionDrift null when no TLE history exists", () => {
+    const v = toSatelliteView(row());
+    expect(v.lastTleIngestedAt).toBeNull();
+    expect(v.meanMotionDrift).toBeNull();
   });
 });

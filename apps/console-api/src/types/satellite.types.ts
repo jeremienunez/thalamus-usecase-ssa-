@@ -35,6 +35,8 @@ export type SatelliteOrbitalRow = {
   radiation_dose: number | null;
   debris_proximity: number | null;
   mission_age: number | null;
+  last_tle_ingested_at: string | null;
+  mean_motion_drift: number | null;
 };
 
 export type SatelliteNameRow = {

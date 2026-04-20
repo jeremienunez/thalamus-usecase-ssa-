@@ -61,5 +61,7 @@ export function toSatelliteView(r: SatelliteOrbitalRow): SatelliteView {
       debrisProximity: r.debris_proximity,
       missionAge: r.mission_age,
     },
+    lastTleIngestedAt: r.last_tle_ingested_at,
+    meanMotionDrift: r.mean_motion_drift,
   };
 }

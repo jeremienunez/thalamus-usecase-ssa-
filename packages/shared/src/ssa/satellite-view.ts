@@ -51,6 +51,8 @@ export const SatelliteViewSchema = z.object({
   busName: z.string().nullable().optional(),
   busGeneration: z.string().nullable().optional(),
   telemetry: TelemetryViewSchema.nullable().optional(),
+  lastTleIngestedAt: z.string().nullable().optional(),
+  meanMotionDrift: z.number().nullable().optional(),
 });
 export type SatelliteView = z.infer<typeof SatelliteViewSchema>;
 
