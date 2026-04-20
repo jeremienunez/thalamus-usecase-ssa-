@@ -10,6 +10,7 @@ describe("ConfigEntry", () => {
   });
 
   it("promotes console namespace and renders guided config editors", async () => {
+    const user = userEvent.setup();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -78,14 +79,15 @@ describe("ConfigEntry", () => {
     expect(sections.slice(0, 3)).toEqual(["CONSOLE", "THALAMUS", "SIM"]);
 
     expect(screen.getByText("Pick the operating path")).toBeInTheDocument();
-    expect(screen.getByText("Loop cadence")).toBeInTheDocument();
-    expect(screen.getByText("Research mix")).toBeInTheDocument();
-    expect(screen.getByText("Operating profile")).toBeInTheDocument();
     expect(screen.getByText("interval 45s")).toBeInTheDocument();
     expect(screen.getByText(/rotation THALAMUS → SWEEP/i)).toBeInTheDocument();
     expect(screen.getAllByText("simple $0.030 · 2 iter").length).toBeGreaterThan(0);
     expect(screen.getAllByText("deep $0.100 · 8 iter").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("Simple max spend")).toBeInTheDocument();
+    expect(screen.queryByText("Loop cadence")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Edit console.autonomy/i }));
+    expect(await screen.findByText("Loop cadence")).toBeInTheDocument();
+    expect(screen.getByText("Research mix")).toBeInTheDocument();
   });
 
   it("lets the operator drive autonomy and budget choices through guided cards", async () => {
@@ -155,11 +157,14 @@ describe("ConfigEntry", () => {
 
     await screen.findByText("Runtime configuration");
 
+    await user.click(screen.getByRole("button", { name: /Edit console.autonomy/i }));
     await user.click(screen.getByRole("button", { name: /Full loop/i }));
     expect(
-      screen.getByText(/Thalamus → Sweep null-scan → Fish briefing/i),
-    ).toBeInTheDocument();
+      screen.getAllByText(/Thalamus → Sweep null-scan → Fish briefing/i).length,
+    ).toBeGreaterThan(0);
 
+    await user.click(screen.getByRole("button", { name: /Close drawer/i }));
+    await user.click(screen.getByRole("button", { name: /Edit thalamus.budgets/i }));
     await user.click(screen.getByRole("button", { name: /Deep verify/i }));
     await waitFor(() => {
       expect(screen.getByLabelText("Deep max iterations")).toHaveValue(10);

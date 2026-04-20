@@ -3,7 +3,7 @@ import { StringArrayInput } from "./StringArrayInput";
 import { JsonTextarea } from "./JsonTextarea";
 
 const INPUT_CLASS =
-  "w-full bg-black/40 border border-hairline px-2 py-1 mono text-body text-primary focus:border-cyan focus:outline-none";
+  "min-w-0 w-full bg-black/40 border border-hairline px-3 py-2 mono text-body text-primary focus:border-cyan focus:outline-none";
 
 type Props = {
   kind: string;
