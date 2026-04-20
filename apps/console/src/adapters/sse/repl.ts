@@ -1,4 +1,4 @@
-import type { ReplStreamEvent } from "@interview/shared";
+import type { ReplFollowUpPlanItem, ReplStreamEvent } from "@interview/shared";
 
 export type StreamHandler = (evt: ReplStreamEvent) => void;
 
@@ -32,6 +32,52 @@ export async function postChatStream(
       // SSE messages are separated by a blank line; tolerate \n\n and \r\n\r\n.
       let sep: number;
       // eslint-disable-next-line no-cond-assign
+      while ((sep = nextMessageBoundary(buf)) !== -1) {
+        const raw = buf.slice(0, sep);
+        buf = buf.slice(sep + (buf[sep] === "\r" ? 4 : 2));
+        const parsed = parseSseMessage(raw);
+        if (parsed) onEvent(parsed);
+      }
+    }
+    const tail = parseSseMessage(buf);
+    if (tail) onEvent(tail);
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      /* already released */
+    }
+  }
+}
+
+export async function postFollowUpStream(
+  input: {
+    query: string;
+    parentCycleId: string;
+    item: ReplFollowUpPlanItem;
+  },
+  onEvent: StreamHandler,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch("/api/repl/followups/run", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "text/event-stream" },
+    body: JSON.stringify(input),
+    signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      let sep: number;
       while ((sep = nextMessageBoundary(buf)) !== -1) {
         const raw = buf.slice(0, sep);
         buf = buf.slice(sep + (buf[sep] === "\r" ? 4 : 2));

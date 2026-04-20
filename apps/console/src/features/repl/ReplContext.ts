@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { ReplFollowUpPlanItem } from "@interview/shared";
 import type { Turn } from "@/features/repl/reducer";
 
 export type ReplCtx = {
@@ -7,6 +8,12 @@ export type ReplCtx = {
   turns: Turn[];
   inFlight: number;
   sendTurn: (input: string) => void;
+  runFollowUp: (
+    turnId: string,
+    query: string,
+    parentCycleId: string,
+    item: ReplFollowUpPlanItem,
+  ) => void;
   cancelTurn: (id: string) => void;
 };
 

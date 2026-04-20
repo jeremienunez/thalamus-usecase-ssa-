@@ -6,10 +6,63 @@ export type TurnPhase =
   | "classifying"
   | "chatting"
   | "cycle-running"
+  | "followup-running"
   | "done"
   | "error";
 
 export type FindingData = Extract<ReplStreamEvent, { event: "finding" }>["data"];
+export type FollowUpPlanData = Extract<
+  ReplStreamEvent,
+  { event: "followup.plan" }
+>["data"];
+export type FollowUpStartedData = Extract<
+  ReplStreamEvent,
+  { event: "followup.started" }
+>["data"];
+export type FollowUpFindingData = Extract<
+  ReplStreamEvent,
+  { event: "followup.finding" }
+>["data"];
+export type FollowUpSummaryData = Extract<
+  ReplStreamEvent,
+  { event: "followup.summary" }
+>["data"];
+export type FollowUpDoneData = Extract<
+  ReplStreamEvent,
+  { event: "followup.done" }
+>["data"];
+export type FollowUpStepData = Extract<
+  ReplStreamEvent,
+  { event: "followup.step" }
+>["data"];
+
+export type FollowUpStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "proposed"
+  | "dropped";
+
+export type FollowUpTurn = {
+  followupId: string;
+  kind: string;
+  auto: boolean;
+  title: string;
+  status: FollowUpStatus;
+  startedAt: number;
+  rationale?: string;
+  score?: number;
+  gateScore?: number;
+  costClass?: "low" | "medium";
+  reasonCodes?: string[];
+  currentStep?: CycleStep;
+  steps: CycleStep[];
+  findings: FollowUpFindingData[];
+  summaryText: string;
+  provider?: string;
+  tookMs?: number;
+};
 
 export type Turn = {
   id: string;
@@ -19,6 +72,7 @@ export type Turn = {
   response?: TurnResponse;
   error?: string;
   cycleId?: string;
+  executedQuery?: string;
   currentStep?: CycleStep;
   steps: CycleStep[];
   findings: FindingData[];
@@ -26,6 +80,9 @@ export type Turn = {
   summaryText: string;
   provider?: string;
   tookMs?: number;
+  followupPlan?: FollowUpPlanData;
+  followupOrder: string[];
+  followups: Record<string, FollowUpTurn>;
 };
 
 export type TurnAction =
@@ -43,6 +100,8 @@ export function newTurn(id: string, input: string): Turn {
     findings: [],
     chatText: "",
     summaryText: "",
+    followupOrder: [],
+    followups: {},
   };
 }
 
@@ -68,9 +127,11 @@ function applyStreamEvent(turn: Turn, evt: ReplStreamEvent): Turn {
       return {
         ...turn,
         phase: evt.data.action === "chat" ? "chatting" : "cycle-running",
+        executedQuery:
+          evt.data.action === "run_cycle" ? evt.data.query ?? turn.executedQuery : turn.executedQuery,
       };
     case "cycle.start":
-      return { ...turn, cycleId: evt.data.cycleId };
+      return { ...turn, cycleId: evt.data.cycleId, executedQuery: evt.data.query };
     case "step": {
       const cs: CycleStep = {
         name: evt.data.step,
@@ -97,6 +158,94 @@ function applyStreamEvent(turn: Turn, evt: ReplStreamEvent): Turn {
         summaryText: evt.data.text,
         provider: evt.data.provider,
       };
+    case "followup.plan":
+      return {
+        ...turn,
+        phase: "followup-running",
+        followupPlan: evt.data,
+      };
+    case "followup.started":
+      return {
+        ...upsertFollowUp(turn, evt.data.followupId, (followup) => ({
+          ...followup,
+          followupId: evt.data.followupId,
+          kind: evt.data.kind,
+          auto: evt.data.auto,
+          title: evt.data.title,
+          status: "running",
+          startedAt: followup.startedAt ?? Date.now(),
+        })),
+        phase: "followup-running",
+      };
+    case "followup.step": {
+      const cs: CycleStep = {
+        name: evt.data.step,
+        phase: evt.data.phase,
+        terminal: evt.data.terminal,
+        elapsedMs: evt.data.elapsedMs,
+      };
+      return {
+        ...upsertFollowUp(turn, evt.data.followupId, (followup) => {
+        const nextStep =
+          cs.phase === "start" || cs.phase === "progress"
+            ? cs
+            : followup.currentStep?.name === cs.name
+              ? undefined
+              : followup.currentStep;
+        const nextTrail =
+          cs.phase === "start" || cs.phase === "progress"
+            ? followup.steps
+            : [...followup.steps, cs];
+        return {
+          ...followup,
+          followupId: evt.data.followupId,
+          kind: evt.data.kind,
+          auto: evt.data.auto,
+          status: "running",
+          currentStep: nextStep,
+          steps: nextTrail,
+        };
+        }),
+        phase: "followup-running",
+      };
+    }
+    case "followup.finding":
+      return upsertFollowUp(turn, evt.data.followupId, (followup) => ({
+        ...followup,
+        followupId: evt.data.followupId,
+        kind: evt.data.kind,
+        auto: evt.data.auto,
+        findings: [...followup.findings, evt.data],
+      }));
+    case "followup.summary":
+      return upsertFollowUp(turn, evt.data.followupId, (followup) => ({
+        ...followup,
+        followupId: evt.data.followupId,
+        kind: evt.data.kind,
+        auto: evt.data.auto,
+        summaryText: evt.data.text,
+        provider: evt.data.provider,
+      }));
+    case "followup.done": {
+      const next = upsertFollowUp(turn, evt.data.followupId, (followup) => ({
+        ...followup,
+        followupId: evt.data.followupId,
+        kind: evt.data.kind,
+        auto: evt.data.auto,
+        status: evt.data.status,
+        provider: evt.data.provider,
+        tookMs: evt.data.tookMs,
+        currentStep: undefined,
+      }));
+      return {
+        ...next,
+        phase: hasRunningFollowUps(next.followups)
+          ? "followup-running"
+          : turn.tookMs != null || turn.response
+            ? "done"
+            : next.phase,
+      };
+    }
     case "done":
       return {
         ...turn,
@@ -109,4 +258,58 @@ function applyStreamEvent(turn: Turn, evt: ReplStreamEvent): Turn {
     default:
       return turn;
   }
+}
+
+function upsertFollowUp(
+  turn: Turn,
+  followupId: string,
+  update: (followup: FollowUpTurn) => FollowUpTurn,
+): Turn {
+  const planned = findPlannedFollowUp(turn.followupPlan, followupId);
+  const existing = turn.followups[followupId];
+  const base = existing ?? {
+    followupId,
+    kind: planned?.kind ?? "unknown",
+    auto: planned?.auto ?? false,
+    title: planned?.title ?? followupId,
+    status: planned?.auto ? "pending" : "proposed",
+    startedAt: Date.now(),
+    rationale: planned?.rationale,
+    score: planned?.score,
+    gateScore: planned?.gateScore,
+    costClass: planned?.costClass,
+    reasonCodes: planned?.reasonCodes,
+    steps: [],
+    findings: [],
+    summaryText: "",
+  } satisfies FollowUpTurn;
+  const next = update(base);
+  const order = turn.followupOrder.includes(followupId)
+    ? turn.followupOrder
+    : [...turn.followupOrder, followupId];
+  return {
+    ...turn,
+    followupOrder: order,
+    followups: {
+      ...turn.followups,
+      [followupId]: next,
+    },
+  };
+}
+
+function findPlannedFollowUp(
+  plan: FollowUpPlanData | undefined,
+  followupId: string,
+) {
+  if (!plan) return undefined;
+  return [...plan.autoLaunched, ...plan.proposed, ...plan.dropped].find(
+    (item) => item.followupId === followupId,
+  );
+}
+
+function hasRunningFollowUps(followups: Record<string, FollowUpTurn>): boolean {
+  return Object.values(followups).some(
+    (followup) =>
+      followup.status === "pending" || followup.status === "running",
+  );
 }

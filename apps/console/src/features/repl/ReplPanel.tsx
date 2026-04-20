@@ -5,7 +5,8 @@ import { useRepl } from "./ReplContext";
 import { TurnView } from "./TurnView";
 
 export function ReplPanel() {
-  const { open, setOpen, turns, inFlight, sendTurn, cancelTurn } = useRepl();
+  const { open, setOpen, turns, inFlight, sendTurn, runFollowUp, cancelTurn } =
+    useRepl();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -73,6 +74,7 @@ export function ReplPanel() {
             key={t.id}
             turn={t}
             onFollowUp={sendTurn}
+            onRunFollowUp={runFollowUp}
             onCancel={() => cancelTurn(t.id)}
           />
         ))}

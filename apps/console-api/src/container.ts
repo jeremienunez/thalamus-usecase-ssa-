@@ -560,6 +560,7 @@ export async function buildContainer(
     autonomy: autonomyService,
     cycles: cycleRunner,
     replChat,
+    replFollowUps,
     replTurn: new ReplTurnService(),
     sweepSuggestions: new SweepSuggestionsService({
       sweepRepo: sweep.sweepRepo,

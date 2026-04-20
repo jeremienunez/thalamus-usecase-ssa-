@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ReplStreamEvent } from "@interview/shared";
 import { ReplFollowUpService } from "../../../src/services/repl-followup.service";
 import { CycleStreamPump } from "../../../src/services/cycle-stream-pump.service";
 import { CycleSummariser } from "../../../src/services/cycle-summariser.service";
@@ -212,6 +213,55 @@ describe("ReplFollowUpService.plan", () => {
     );
     expect(plan.proposed[0]?.rationale).toContain(
       "Auto-launch held back because the target is not currently launchable.",
+    );
+  });
+});
+
+describe("ReplFollowUpService.executeSelected", () => {
+  it("streams a manually selected follow-up with auto=false", async () => {
+    const service = buildService();
+
+    const events: ReplStreamEvent[] = [];
+    for await (const event of service.executeSelected({
+      item: {
+        followupId: "fu-manual",
+        kind: "deep_research_30d",
+        auto: false,
+        title: "Extend verification horizon to 30 days",
+        rationale: "Needs monitoring",
+        score: 0.7,
+        gateScore: 0.8,
+        costClass: "medium",
+        reasonCodes: ["needs_monitoring"],
+        target: null,
+      },
+      query: "Analyse la flotte active",
+      parentCycleId: "419",
+    })) {
+      events.push(event);
+    }
+
+    expect(events[0]).toMatchObject({
+      event: "followup.started",
+      data: {
+        followupId: "fu-manual",
+        kind: "deep_research_30d",
+        auto: false,
+      },
+    });
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "followup.summary",
+        }),
+        expect.objectContaining({
+          event: "followup.done",
+          data: expect.objectContaining({
+            followupId: "fu-manual",
+            auto: false,
+          }),
+        }),
+      ]),
     );
   });
 });

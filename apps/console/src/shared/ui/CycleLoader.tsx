@@ -4,7 +4,7 @@ import type { StepName } from "@/shared/types/steps";
 
 export type CycleStep = {
   name: StepName | "unknown";
-  phase: "start" | "done" | "error";
+  phase: "start" | "progress" | "done" | "error";
   terminal: string;
   elapsedMs: number;
 };
