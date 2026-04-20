@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { X, Terminal } from "lucide-react";
 import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
-import type { BriefingUiAction } from "@/features/repl/types";
+import type { BriefingUiAction } from "@/types/repl-turn";
 import { useUiStore } from "@/shared/ui/uiStore";
 import { useRepl } from "./ReplContext";
 import { TurnView } from "./TurnView";

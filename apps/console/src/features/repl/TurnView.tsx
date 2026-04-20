@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import type { ReplFollowUpPlanItem } from "@interview/shared";
 import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
 import { CycleLoader } from "@/shared/ui/CycleLoader";
-import type { BriefingUiAction } from "@/features/repl/types";
+import type { BriefingUiAction } from "@/types/repl-turn";
 import type { Turn } from "@/features/repl/reducer";
 import { FollowUpPlanView } from "./FollowUpPlanView";
 import { FollowUpTurnView } from "./FollowUpTurnView";

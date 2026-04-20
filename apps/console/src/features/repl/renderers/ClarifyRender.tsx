@@ -1,4 +1,4 @@
-import type { DispatchResult } from "@/features/repl/types";
+import type { DispatchResult } from "@/types/repl-turn";
 
 export function ClarifyRender({
   r,

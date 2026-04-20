@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import type { DispatchResult } from "@/features/repl/types";
+import type { DispatchResult } from "@/types/repl-turn";
 
 const fmtSci = (v: number): string => v.toExponential(2);
 

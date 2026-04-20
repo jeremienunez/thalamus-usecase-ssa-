@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
-import type { DispatchResult, LogEvent } from "@/features/repl/types";
+import type { DispatchResult, LogEvent } from "@/types/repl-turn";
 
 const LEVEL_COLOR: Record<LogEvent["level"], string> = {
   debug: "text-dim",

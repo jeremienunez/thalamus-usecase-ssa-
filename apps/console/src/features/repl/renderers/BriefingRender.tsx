@@ -3,7 +3,7 @@ import type {
   BriefingFinding,
   BriefingUiAction,
   DispatchResult,
-} from "@/features/repl/types";
+} from "@/types/repl-turn";
 import { confidenceBar } from "@/shared/ui/sparkline";
 
 const DOT_COLOR: Record<BriefingFinding["sourceClass"], string> = {

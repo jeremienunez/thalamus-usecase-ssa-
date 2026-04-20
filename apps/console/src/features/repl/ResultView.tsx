@@ -1,4 +1,4 @@
-import type { BriefingUiAction, DispatchResult } from "@/features/repl/types";
+import type { BriefingUiAction, DispatchResult } from "@/types/repl-turn";
 import { ChatRender } from "./renderers/ChatRender";
 import { BriefingRender } from "./renderers/BriefingRender";
 import { TelemetryRender } from "./renderers/TelemetryRender";

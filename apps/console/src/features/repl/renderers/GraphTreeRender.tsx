@@ -1,4 +1,4 @@
-import type { DispatchResult, GraphNode } from "@/features/repl/types";
+import type { DispatchResult, GraphNode } from "@/types/repl-turn";
 
 export function GraphTreeRender({ r }: { r: Extract<DispatchResult, { kind: "graph" }> }) {
   const rows: { depth: number; node: GraphNode }[] = [];

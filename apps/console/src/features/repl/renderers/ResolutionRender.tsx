@@ -1,5 +1,5 @@
 import { CheckCircle2 } from "lucide-react";
-import type { DispatchResult } from "@/features/repl/types";
+import type { DispatchResult } from "@/types/repl-turn";
 
 export function ResolutionRender({
   r,

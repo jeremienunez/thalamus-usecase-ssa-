@@ -1,5 +1,4 @@
-/** Mirrors apps/console-api/src/repl.ts result shapes. */
-import type { StepName } from "@/shared/types/steps";
+import type { StepName } from "@interview/shared/observability-browser";
 
 export type BriefingFinding = {
   id: string;
@@ -96,37 +95,3 @@ export type TurnResponse = {
   costUsd: number;
   tookMs: number;
 };
-
-const KNOWN_VERBS = /^\s*\/?(query|telemetry|logs|graph|accept|explain|pc|why|corroborate|tlm|tail|neighbou?rhood)\b/i;
-
-function looksLikeCommand(input: string): boolean {
-  return input.trim().startsWith("/") || KNOWN_VERBS.test(input);
-}
-
-export function isSlashCommand(input: string): boolean {
-  return looksLikeCommand(input);
-}
-
-/**
- * Slash-command path only. Free-text chat now streams through
- * postChatStream (see ./repl-stream) — do not call postTurn for it.
- */
-export async function postTurn(
-  input: string,
-  sessionId: string,
-  signal?: AbortSignal,
-): Promise<TurnResponse> {
-  if (!looksLikeCommand(input)) {
-    throw new Error(
-      "postTurn handles slash-commands only; use postChatStream for free-text",
-    );
-  }
-  const res = await fetch("/api/repl/turn", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ input, sessionId }),
-    signal,
-  });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return (await res.json()) as TurnResponse;
-}
