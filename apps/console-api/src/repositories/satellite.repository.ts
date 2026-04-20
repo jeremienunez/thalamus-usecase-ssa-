@@ -60,7 +60,21 @@ export class SatelliteRepository {
         s.g_description,
         pc.name                                          AS platform_class_name,
         sb.name                                          AS bus_name,
-        sb.generation                                    AS bus_generation
+        sb.generation                                    AS bus_generation,
+        s.power_draw,
+        s.thermal_margin,
+        s.pointing_accuracy,
+        s.attitude_rate,
+        s.link_budget,
+        s.data_rate,
+        s.payload_duty,
+        s.eclipse_ratio,
+        s.solar_array_health,
+        s.battery_depth_of_discharge,
+        s.propellant_remaining,
+        s.radiation_dose,
+        s.debris_proximity,
+        s.mission_age
       FROM satellite s
       LEFT JOIN operator op          ON op.id = s.operator_id
       LEFT JOIN operator_country oc  ON oc.id = s.operator_country_id

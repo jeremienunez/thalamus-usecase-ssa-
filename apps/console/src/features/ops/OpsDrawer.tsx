@@ -7,8 +7,9 @@ import {
   fmtDeg,
   fmtPc,
   fmtPcCompact,
+  fmtPct,
 } from "@/shared/types/units";
-import type { ConjunctionDTO, SatelliteDTO } from "@/shared/types";
+import type { ConjunctionDTO, SatelliteDTO, TelemetryDTO } from "@/shared/types";
 
 export function OpsDrawer({
   satellite,
@@ -135,6 +136,27 @@ export function OpsDrawer({
         <KV k="Epoch" v={satellite.epoch.slice(0, 19) + "Z"} mono />
       </DrawerSection>
 
+      {satellite.telemetry && hasAnyTelemetry(satellite.telemetry) && (
+        <DrawerSection title="HEALTH · 14D">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            <HealthCell label="POWER" value={fmtWatts(satellite.telemetry.powerDraw)} />
+            <HealthCell label="THERMAL" value={fmtThermal(satellite.telemetry.thermalMargin)} />
+            <HealthCell label="POINTING" value={fmtNumber(satellite.telemetry.pointingAccuracy, "°", 3)} />
+            <HealthCell label="SLEW" value={fmtNumber(satellite.telemetry.attitudeRate, "°/s", 2)} />
+            <HealthCell label="LINK" value={fmtNumber(satellite.telemetry.linkBudget, "dBW", 1)} />
+            <HealthCell label="DATA" value={fmtNumber(satellite.telemetry.dataRate, "Mbps", 1)} />
+            <HealthCell label="DUTY" value={fmtRatioPct(satellite.telemetry.payloadDuty)} />
+            <HealthCell label="ECLIPSE" value={fmtRatioPct(satellite.telemetry.eclipseRatio)} />
+            <HealthCell label="SOLAR" value={fmtRatioPct(satellite.telemetry.solarArrayHealth)} />
+            <HealthCell label="BATT DOD" value={fmtRatioPct(satellite.telemetry.batteryDepthOfDischarge)} />
+            <HealthCell label="PROP" value={fmtRatioPct(satellite.telemetry.propellantRemaining)} />
+            <HealthCell label="RAD DOSE" value={fmtNumber(satellite.telemetry.radiationDose, "krad", 1)} />
+            <HealthCell label="DEBRIS PROX" value={fmtNumber(satellite.telemetry.debrisProximity, "", 2)} />
+            <HealthCell label="MISSION AGE" value={fmtNumber(satellite.telemetry.missionAge, "y", 1)} />
+          </div>
+        </DrawerSection>
+      )}
+
       {satellite.tleLine1 && satellite.tleLine2 && (
         <DrawerSection title="TLE">
           <pre className="mono overflow-x-auto whitespace-pre text-nano text-numeric leading-tight">
@@ -221,4 +243,42 @@ export function OpsDrawer({
       </DrawerSection>
     </Drawer>
   );
+}
+
+function hasAnyTelemetry(t: TelemetryDTO): boolean {
+  return Object.values(t).some((v) => typeof v === "number" && Number.isFinite(v));
+}
+
+function HealthCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 border-b border-hairline py-0.5">
+      <span className="mono text-nano uppercase tracking-widest text-muted">{label}</span>
+      <span className="mono text-caption tabular-nums text-primary">{value}</span>
+    </div>
+  );
+}
+
+const DASH = "—";
+
+function fmtNumber(v: number | null, unit: string, digits = 2): string {
+  if (v == null || !Number.isFinite(v)) return DASH;
+  return unit ? `${v.toFixed(digits)} ${unit}` : v.toFixed(digits);
+}
+
+function fmtWatts(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return DASH;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)} kW`;
+  return `${Math.round(v)} W`;
+}
+
+function fmtThermal(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return DASH;
+  const sign = v > 0 ? "+" : "";
+  return `${sign}${v.toFixed(1)} °C`;
+}
+
+function fmtRatioPct(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return DASH;
+  const [val, unit] = fmtPct(v, true);
+  return unit ? `${val} ${unit}` : val;
 }

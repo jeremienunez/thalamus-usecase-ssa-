@@ -39,6 +39,24 @@ export type SatelliteDTO = {
   platformClass?: string | null;
   busName?: string | null;
   busGeneration?: string | null;
+  telemetry?: TelemetryDTO | null;
+};
+
+export type TelemetryDTO = {
+  powerDraw: number | null;
+  thermalMargin: number | null;
+  pointingAccuracy: number | null;
+  attitudeRate: number | null;
+  linkBudget: number | null;
+  dataRate: number | null;
+  payloadDuty: number | null;
+  eclipseRatio: number | null;
+  solarArrayHealth: number | null;
+  batteryDepthOfDischarge: number | null;
+  propellantRemaining: number | null;
+  radiationDose: number | null;
+  debrisProximity: number | null;
+  missionAge: number | null;
 };
 
 export type ConjunctionDTO = {

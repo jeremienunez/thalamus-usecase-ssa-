@@ -4,6 +4,24 @@ import { RegimeSchema, type Regime } from "./conjunction-view";
 export const ClassificationTierSchema = z.enum(["unclassified", "sensitive", "restricted"]);
 export type ClassificationTier = z.infer<typeof ClassificationTierSchema>;
 
+export const TelemetryViewSchema = z.object({
+  powerDraw: z.number().nullable(),
+  thermalMargin: z.number().nullable(),
+  pointingAccuracy: z.number().nullable(),
+  attitudeRate: z.number().nullable(),
+  linkBudget: z.number().nullable(),
+  dataRate: z.number().nullable(),
+  payloadDuty: z.number().nullable(),
+  eclipseRatio: z.number().nullable(),
+  solarArrayHealth: z.number().nullable(),
+  batteryDepthOfDischarge: z.number().nullable(),
+  propellantRemaining: z.number().nullable(),
+  radiationDose: z.number().nullable(),
+  debrisProximity: z.number().nullable(),
+  missionAge: z.number().nullable(),
+});
+export type TelemetryView = z.infer<typeof TelemetryViewSchema>;
+
 export const SatelliteViewSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -32,6 +50,7 @@ export const SatelliteViewSchema = z.object({
   platformClass: z.string().nullable().optional(),
   busName: z.string().nullable().optional(),
   busGeneration: z.string().nullable().optional(),
+  telemetry: TelemetryViewSchema.nullable().optional(),
 });
 export type SatelliteView = z.infer<typeof SatelliteViewSchema>;
 

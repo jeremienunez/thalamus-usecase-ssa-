@@ -45,5 +45,21 @@ export function toSatelliteView(r: SatelliteOrbitalRow): SatelliteView {
     platformClass: r.platform_class_name,
     busName: r.bus_name,
     busGeneration: r.bus_generation,
+    telemetry: {
+      powerDraw: r.power_draw,
+      thermalMargin: r.thermal_margin,
+      pointingAccuracy: r.pointing_accuracy,
+      attitudeRate: r.attitude_rate,
+      linkBudget: r.link_budget,
+      dataRate: r.data_rate,
+      payloadDuty: r.payload_duty,
+      eclipseRatio: r.eclipse_ratio,
+      solarArrayHealth: r.solar_array_health,
+      batteryDepthOfDischarge: r.battery_depth_of_discharge,
+      propellantRemaining: r.propellant_remaining,
+      radiationDose: r.radiation_dose,
+      debrisProximity: r.debris_proximity,
+      missionAge: r.mission_age,
+    },
   };
 }

@@ -21,6 +21,20 @@ export type SatelliteOrbitalRow = {
   platform_class_name: string | null;
   bus_name: string | null;
   bus_generation: string | null;
+  power_draw: number | null;
+  thermal_margin: number | null;
+  pointing_accuracy: number | null;
+  attitude_rate: number | null;
+  link_budget: number | null;
+  data_rate: number | null;
+  payload_duty: number | null;
+  eclipse_ratio: number | null;
+  solar_array_health: number | null;
+  battery_depth_of_discharge: number | null;
+  propellant_remaining: number | null;
+  radiation_dose: number | null;
+  debris_proximity: number | null;
+  mission_age: number | null;
 };
 
 export type SatelliteNameRow = {

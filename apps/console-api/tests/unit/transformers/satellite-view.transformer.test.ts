@@ -29,6 +29,20 @@ function row(over: Partial<SatelliteOrbitalRow> = {}): SatelliteOrbitalRow {
     platform_class_name: null,
     bus_name: null,
     bus_generation: null,
+    power_draw: null,
+    thermal_margin: null,
+    pointing_accuracy: null,
+    attitude_rate: null,
+    link_budget: null,
+    data_rate: null,
+    payload_duty: null,
+    eclipse_ratio: null,
+    solar_array_health: null,
+    battery_depth_of_discharge: null,
+    propellant_remaining: null,
+    radiation_dose: null,
+    debris_proximity: null,
+    mission_age: null,
     ...over,
   };
 }
@@ -117,5 +131,50 @@ describe("toSatelliteView", () => {
     expect(v.platformClass).toBeNull();
     expect(v.busName).toBeNull();
     expect(v.busGeneration).toBeNull();
+  });
+
+  it("builds a 14D telemetry block with all scalars passed through", () => {
+    const v = toSatelliteView(
+      row({
+        power_draw: 12000,
+        thermal_margin: 8,
+        pointing_accuracy: 0.05,
+        attitude_rate: 0.2,
+        link_budget: 52.3,
+        data_rate: 500,
+        payload_duty: 0.95,
+        eclipse_ratio: 0.22,
+        solar_array_health: 0.98,
+        battery_depth_of_discharge: 0.34,
+        propellant_remaining: 0.67,
+        radiation_dose: 12,
+        debris_proximity: 0.12,
+        mission_age: 4.2,
+      }),
+    );
+    expect(v.telemetry).toMatchObject({
+      powerDraw: 12000,
+      thermalMargin: 8,
+      pointingAccuracy: 0.05,
+      attitudeRate: 0.2,
+      linkBudget: 52.3,
+      dataRate: 500,
+      payloadDuty: 0.95,
+      eclipseRatio: 0.22,
+      solarArrayHealth: 0.98,
+      batteryDepthOfDischarge: 0.34,
+      propellantRemaining: 0.67,
+      radiationDose: 12,
+      debrisProximity: 0.12,
+      missionAge: 4.2,
+    });
+  });
+
+  it("telemetry is an all-null object when the satellite has no readings", () => {
+    const v = toSatelliteView(row());
+    expect(v.telemetry).toBeDefined();
+    expect(
+      Object.values(v.telemetry!).every((x) => x === null),
+    ).toBe(true);
   });
 });
