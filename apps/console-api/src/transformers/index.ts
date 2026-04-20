@@ -16,3 +16,9 @@ export * from "./repl-chat.transformer";
 export * from "./enrichment-finding.transformer";
 export * from "./knn-propagation.transformer";
 export * from "./mission.transformer";
+export * from "./cycle-run.transformer";
+export type {
+  CycleRunDto,
+  CycleRunFindingDto,
+  CycleRunResponseDto,
+} from "./cycle-run.dto";

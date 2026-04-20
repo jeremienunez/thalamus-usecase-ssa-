@@ -2,19 +2,10 @@
 import type { FastifyBaseLogger } from "fastify";
 import { ResearchCycleTrigger } from "@interview/shared";
 import type { CycleKind, CycleRun, CycleRunFinding } from "../types";
-
-/**
- * Minimal projection of a thalamus finding the runner needs for the HTTP
- * response. Kept structural so the service does not depend on drizzle
- * column types — only the fields the CLI contract exposes.
- */
-interface ThalamusFindingLike {
-  id: bigint | number | string;
-  researchCycleId: bigint | number | string;
-  title: string;
-  summary: string;
-  confidence: number;
-}
+import {
+  projectThalamusFinding,
+  type ThalamusFindingLike,
+} from "../transformers/cycle-run.transformer";
 
 export interface ThalamusDep {
   thalamusService: {
@@ -78,10 +69,13 @@ export class CycleRunnerService {
 
   /**
    * Run a thalamus cycle and return the finding projection the CLI HTTP
-   * contract exposes (id, title, summary, sourceClass, confidence,
-   * evidenceRefs) plus the total cost. The autonomous tick path still
+   * contract exposes plus the total cost. The autonomous tick path still
    * calls {@link runThalamus} and only sees the count, so the
    * CycleOrchestratorPort surface stays intact.
+   *
+   * Row → CycleRunFinding shaping is delegated to
+   * `projectThalamusFinding` in transformers/cycle-run.transformer — the
+   * service stays free of wire-shape concerns.
    */
   private async runThalamusDetail(query: string): Promise<ThalamusRunDetail> {
     const cycle = await this.thalamus.thalamusService.runCycle({
@@ -103,14 +97,7 @@ export class CycleRunnerService {
         ? all.filter((f) => String(f.researchCycleId) === cycleIdStr)
         : all;
     const projected = (scoped.length > 0 ? scoped : all).map(
-      (f): CycleRunFinding => ({
-        id: String(f.id),
-        title: f.title,
-        summary: f.summary,
-        sourceClass: "KG",
-        confidence: f.confidence,
-        evidenceRefs: [],
-      }),
+      projectThalamusFinding,
     );
     return {
       count: cycle.findingsCount ?? 0,
