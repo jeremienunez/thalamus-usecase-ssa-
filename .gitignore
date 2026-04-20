@@ -54,6 +54,7 @@ data/seeds/local/
 # Local-only working notes (not for the public repo)
 CLAUDE.md
 TO-REVIEW.md
+DONE.md
 
 # Superpowers working dirs (plans, findings, specs, scratch) — not for the public repo
 docs/superpowers/
