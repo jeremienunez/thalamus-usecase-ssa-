@@ -184,6 +184,18 @@ export interface DomainConfig {
    *  kernel used to hardcode an SSA-specific list; moved here so other
    *  domains (threat-intel, pharmacovigilance…) ship their own vocabulary. */
   entityTypes?: string[];
+  /**
+   * Mode-specific user-prompt addenda. Kernel selects by `CortexInput.mode`
+   * ("audit" | "investment"). Defaults to generic guidance; domains ship
+   * flavored copies (e.g. SSA mentions conjunctions / fleet health /
+   * stale epochs — vocabulary that otherwise would leak into the kernel).
+   * Either key may be omitted; the kernel fills the gap with a domain-
+   * neutral default.
+   */
+  modeInstructions?: {
+    audit?: string;
+    investment?: string;
+  };
   preSummarize: (
     rows: Record<string, unknown>[],
     cortexName: string,

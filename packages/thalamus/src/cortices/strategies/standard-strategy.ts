@@ -202,6 +202,7 @@ export class StandardStrategy implements CortexExecutionStrategy {
       mode: input.mode,
       sourcingRules: this.domainConfig.sourcingRules,
       entityTypes: this.domainConfig.entityTypes,
+      modeInstructions: this.domainConfig.modeInstructions,
     });
 
     // 7. Validate and normalize findings.

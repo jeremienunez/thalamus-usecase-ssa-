@@ -74,6 +74,23 @@ NUMERIC FIDELITY (SSA):
 - Never cite tool / model / standard names (ORDEM 3.x, DAS 3.0, NASA-SBN, SGP4 parameters) unless they appear verbatim in a DATA row's evidence.
 `.trim();
 
+/**
+ * SSA-flavored mode instructions. These strings were previously hardcoded
+ * in `packages/thalamus/src/cortices/cortex-llm.ts` (a kernel file) as a
+ * ternary on `input.mode`. Moving them here keeps the kernel domain-agnostic
+ * while preserving runtime behavior verbatim: SSA audit cycles still hunt
+ * stale epochs / misclassifications; SSA investment cycles still surface
+ * conjunctions / maneuver opportunities / fleet health / launch-window
+ * signals. Swap these strings when deploying thalamus against a different
+ * domain (threat-intel, pharmacovigilance, …).
+ */
+const SSA_MODE_INSTRUCTIONS = {
+  audit:
+    "Focus on DATA QUALITY: anomalies, misclassifications, missing fields, stale epochs, provenance gaps. Use findingType=anomaly.",
+  investment:
+    "Focus on MISSION INSIGHTS: conjunctions, maneuver opportunities, debris risk, fleet health, launch-window signals. Do NOT report data-quality anomalies.",
+};
+
 export function buildSsaDomainConfig(): DomainConfig {
   return {
     keywords: SSA_KEYWORDS,
@@ -86,6 +103,7 @@ export function buildSsaDomainConfig(): DomainConfig {
     preSummarize,
     sourcingRules: SSA_SOURCING_RULES,
     entityTypes: SSA_ENTITY_TYPES,
+    modeInstructions: SSA_MODE_INSTRUCTIONS,
     plannerPrompt: buildSsaPlannerSystemPrompt,
     fallbackPlan: ssaFallbackPlan,
     synthesisCortexName: "strategist",

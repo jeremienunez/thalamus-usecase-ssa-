@@ -52,4 +52,17 @@ describe("buildSsaDomainConfig — Phase 1 seams", () => {
   it("names strategist as the synthesis cortex", () => {
     expect(buildSsaDomainConfig().synthesisCortexName).toBe("strategist");
   });
+
+  it("ships SSA-flavored mode instructions for audit + investment", () => {
+    const cfg = buildSsaDomainConfig();
+    expect(cfg.modeInstructions).toBeDefined();
+    // Audit mode mentions SSA-specific data-quality signals.
+    expect(cfg.modeInstructions?.audit).toMatch(/stale epochs/i);
+    expect(cfg.modeInstructions?.audit).toMatch(/misclassifications/i);
+    // Investment mode mentions SSA mission-insight vocabulary.
+    expect(cfg.modeInstructions?.investment).toMatch(/conjunctions/i);
+    expect(cfg.modeInstructions?.investment).toMatch(/maneuver/i);
+    expect(cfg.modeInstructions?.investment).toMatch(/fleet health/i);
+    expect(cfg.modeInstructions?.investment).toMatch(/launch-window/i);
+  });
 });

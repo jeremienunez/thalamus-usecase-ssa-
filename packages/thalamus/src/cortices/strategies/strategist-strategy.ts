@@ -48,6 +48,7 @@ export class StrategistStrategy implements CortexExecutionStrategy {
       mode: input.mode,
       sourcingRules: this.domainConfig?.sourcingRules,
       entityTypes: this.domainConfig?.entityTypes,
+      modeInstructions: this.domainConfig?.modeInstructions,
     });
 
     const findings = result.findings.map((f) =>
