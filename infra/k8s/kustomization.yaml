@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: thalamus
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.example.yaml # swap for a real, non-committed secret.yaml in prod
+  - postgres.yaml
+  - redis.yaml
+  - console-api.yaml
+  - console.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+  # migration-job.yaml is applied on demand (`kubectl apply -f migration-job.yaml`)
+  # rather than bundled here — avoids re-applying a completed Job on every
+  # `kubectl apply -k`.
+
+images:
+  - name: ghcr.io/thalamus/console-api
+    newTag: latest
+  - name: ghcr.io/thalamus/console
+    newTag: latest
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: thalamus
+    includeSelectors: false

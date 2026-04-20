@@ -1,0 +1,49 @@
+# Runs once per deploy, BEFORE scaling the new color up.
+# Idempotent — safe to re-apply the Job on retries.
+#
+# Apply:
+#   kubectl apply -f infra/k8s/migration-job.yaml
+#   kubectl -n thalamus wait --for=condition=complete job/migrate-schema --timeout=10m
+#   kubectl -n thalamus logs job/migrate-schema
+#
+# The blue/green procedure (infra/k8s/bluegreen/README.md) calls this between
+# `prepare` and `smoke` so the new color always sees the latest schema.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate-schema
+  namespace: thalamus
+  labels:
+    app: console-api
+    role: migration
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: console-api
+        role: migration
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: migrate
+          image: ghcr.io/thalamus/console-api:latest # same image as the api
+          imagePullPolicy: IfNotPresent
+          workingDir: /app/packages/db-schema
+          command: ["node", "--import", "tsx", "src/migrate.ts"]
+          envFrom:
+            - secretRef: { name: console-api-secrets } # DATABASE_URL
+          env:
+            - name: NODE_ENV
+              value: production
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }

@@ -1,0 +1,35 @@
+# Helm values for grafana/loki-stack (Loki + Promtail).
+# Install:
+#   helm repo add grafana https://grafana.github.io/helm-charts
+#   helm upgrade --install loki grafana/loki-stack \
+#     --namespace monitoring \
+#     -f infra/k8s/observability/loki-stack.values.yaml
+#
+# Promtail tails every pod's stdout/stderr and ships to Loki.
+# Grafana (from kube-prometheus-stack) already has the Loki data source wired.
+
+loki:
+  persistence:
+    enabled: true
+    size: 20Gi
+  config:
+    limits_config:
+      retention_period: 168h # 7 days; bump + swap to object storage for longer
+    compactor:
+      retention_enabled: true
+
+promtail:
+  enabled: true
+  config:
+    snippets:
+      extraRelabelConfigs:
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+
+# Disable default grafana — we use the one from kube-prometheus-stack.
+grafana:
+  enabled: false
+prometheus:
+  enabled: false
+fluent-bit:
+  enabled: false

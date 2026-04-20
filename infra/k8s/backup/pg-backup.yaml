@@ -1,0 +1,94 @@
+# Daily Postgres logical backup -> object storage (rclone remote `s3:bucket/...`).
+#
+# What this gives you:
+#   - Consistent dump via `pg_dump --format=custom` (pg_restore-friendly)
+#   - Off-cluster copy (survives PVC loss / cluster rebuild)
+#   - Checksum written next to the dump for integrity verification
+#
+# What it doesn't:
+#   - PITR (would need WAL-G / pgBackRest / CloudNativePG)
+#   - Encryption at rest (add `--config` with a crypt: remote or
+#     server-side KMS on the bucket)
+#
+# Ops: rclone reads credentials + remote config from the `rclone-config`
+# Secret. Create it once:
+#
+#   kubectl -n thalamus create secret generic rclone-config \
+#     --from-file=rclone.conf=./rclone.conf
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pg-backup
+  namespace: thalamus
+  labels:
+    app: postgres
+    role: backup
+spec:
+  schedule: "15 2 * * *" # daily 02:15 UTC
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app: postgres
+            role: backup
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            fsGroup: 999
+          containers:
+            - name: backup
+              image: ghcr.io/rclone/rclone:1.67 # has rclone only
+              command: ["/bin/sh", "-ceu"]
+              args:
+                - |
+                  set -o pipefail
+                  apk add --no-cache postgresql16-client >/dev/null
+                  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+                  file="thalamus-${stamp}.pgdump"
+                  echo "dumping -> ${file}"
+                  pg_dump \
+                    --format=custom \
+                    --compress=9 \
+                    --no-owner --no-acl \
+                    --file="/tmp/${file}" \
+                    "${DATABASE_URL}"
+                  sha256sum "/tmp/${file}" > "/tmp/${file}.sha256"
+                  echo "uploading -> ${RCLONE_REMOTE}/${file}"
+                  rclone copy --checksum "/tmp/${file}"        "${RCLONE_REMOTE}/"
+                  rclone copy --checksum "/tmp/${file}.sha256" "${RCLONE_REMOTE}/"
+                  echo "ok: ${file}"
+              env:
+                - name: RCLONE_REMOTE
+                  value: "s3:thalamus-backups/postgres" # CHANGE ME
+                - name: RCLONE_CONFIG
+                  value: /config/rclone.conf
+              envFrom:
+                - secretRef: { name: console-api-secrets } # DATABASE_URL
+              volumeMounts:
+                - name: rclone-config
+                  mountPath: /config
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests: { cpu: "100m", memory: "256Mi" }
+                limits: { cpu: "1", memory: "1Gi" }
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+          volumes:
+            - name: rclone-config
+              secret:
+                secretName: rclone-config
+            - name: tmp
+              emptyDir: { sizeLimit: 20Gi, medium: "" }

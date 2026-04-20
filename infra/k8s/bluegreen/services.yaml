@@ -1,0 +1,43 @@
+# Two Services on top of the same pod pool:
+#   - console-api            → the "live" Service, selector.color is flipped on cutover
+#   - console-api-preview    → always points at the *inactive* color, used to smoke-test
+#                              the idle stack before switching traffic
+#
+# The Deployment label `color: blue|green` is what makes this work — the live Service
+# and Ingress never change names/ports, only whose pods they select.
+apiVersion: v1
+kind: Service
+metadata:
+  name: console-api
+  namespace: thalamus
+  labels:
+    app: console-api
+    role: live
+spec:
+  selector:
+    app: console-api
+    color: blue # <-- active color. Flip to `green` to cut over.
+  ports:
+    - port: 4000
+      targetPort: 4000
+      name: http
+    - port: 9464
+      targetPort: 9464
+      name: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: console-api-preview
+  namespace: thalamus
+  labels:
+    app: console-api
+    role: preview
+spec:
+  selector:
+    app: console-api
+    color: green # <-- idle color. Used for pre-cutover validation.
+  ports:
+    - port: 4000
+      targetPort: 4000
+      name: http

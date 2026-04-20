@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: console-api
+  namespace: thalamus
+  labels:
+    app: console-api
+spec:
+  selector:
+    app: console-api
+  ports:
+    - port: 4000
+      targetPort: 4000
+      name: http # also serves /metrics for Prometheus (see ServiceMonitor)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console-api
+  namespace: thalamus
+  labels:
+    app: console-api
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: console-api
+  template:
+    metadata:
+      labels:
+        app: console-api
+      # Scraping is wired via a ServiceMonitor (observability/servicemonitor.yaml)
+      # rather than pod annotations, so we don't duplicate the source of truth.
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: api
+          image: ghcr.io/thalamus/console-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4000
+              name: http
+          envFrom:
+            - configMapRef: { name: console-api-env }
+            - secretRef: { name: console-api-secrets }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits: { cpu: "2", memory: "2Gi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: console-api
+  namespace: thalamus
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: console-api
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: console-api
+  namespace: thalamus
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: console-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+    - type: Resource
+      resource:
+        name: memory
+        target: { type: Utilization, averageUtilization: 80 }

@@ -1,0 +1,83 @@
+# Same topology, managed by Argo Rollouts (https://argo-rollouts.readthedocs.io).
+# Use this instead of the manual Deployments + switch.sh once argo-rollouts is
+# installed (`kubectl create ns argo-rollouts && kubectl apply -n argo-rollouts
+# -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml`).
+#
+# It gives us: autoPromotion gates, preview Service wiring, analysis runs
+# against Prometheus, and `kubectl argo rollouts` as a first-class CLI.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: console-api
+  namespace: thalamus
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: { app: console-api }
+  strategy:
+    blueGreen:
+      activeService: console-api
+      previewService: console-api-preview
+      autoPromotionEnabled: false # require manual promote after smoke
+      scaleDownDelaySeconds: 300 # keep old pool warm for 5 min for instant rollback
+      prePromotionAnalysis:
+        templates:
+          - templateName: success-rate
+        args:
+          - name: service
+            value: console-api-preview
+      postPromotionAnalysis:
+        templates:
+          - templateName: success-rate
+        args:
+          - name: service
+            value: console-api
+  template:
+    metadata:
+      labels: { app: console-api }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/thalamus/console-api:latest
+          ports:
+            - { containerPort: 4000, name: http }
+            - { containerPort: 9464, name: metrics }
+          envFrom:
+            - configMapRef: { name: console-api-env }
+            - secretRef: { name: console-api-secrets }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 15
+          resources:
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits: { cpu: "2", memory: "2Gi" }
+---
+# Reusable analysis: "is the new color healthy enough to promote?"
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+  namespace: thalamus
+spec:
+  args:
+    - name: service
+  metrics:
+    - name: http-success-rate
+      interval: 30s
+      count: 5
+      successCondition: result[0] >= 0.99
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring:9090
+          query: |
+            sum(rate(http_requests_total{service="{{args.service}}",status!~"5.."}[1m]))
+            /
+            sum(rate(http_requests_total{service="{{args.service}}"}[1m]))

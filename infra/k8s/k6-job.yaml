@@ -1,0 +1,49 @@
+# In-cluster load test against the running console-api Service.
+#
+# Load the scripts:
+#   kubectl -n thalamus create configmap k6-scripts \
+#     --from-file=infra/k6/scripts/ --dry-run=client -o yaml | kubectl apply -f -
+#
+# Run a scenario:
+#   kubectl -n thalamus apply -f infra/k8s/k6-job.yaml
+#   kubectl -n thalamus logs -f job/k6-load -c k6
+#
+# Override the scenario via env:
+#   kubectl -n thalamus set env job/k6-load K6_SCRIPT=stress.js
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-load
+  namespace: thalamus
+  labels:
+    app: k6
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: k6
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:0.54.0
+          args: ["run", "/scripts/$(K6_SCRIPT)"]
+          env:
+            - name: K6_SCRIPT
+              value: load.js
+            - name: BASE_URL
+              value: http://console-api:4000
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "2", memory: "1Gi" }
+      volumes:
+        - name: scripts
+          configMap:
+            name: k6-scripts
+            defaultMode: 0444
