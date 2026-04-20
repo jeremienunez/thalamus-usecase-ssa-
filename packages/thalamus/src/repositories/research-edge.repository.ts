@@ -1,41 +1,18 @@
 /**
- * Research Edge Repository — Knowledge graph edge CRUD + cleanup.
+ * Research Edge Repository — Knowledge graph edge CRUD.
  *
- * Domain: SSA (Space Situational Awareness). Orphan-cleanup checks the
- * satellite / operator / orbit-regime family of tables.
+ * Orphan cleanup is domain-specific and moved to `EntityCatalogPort`
+ * adapters (e.g. `SsaEntityCatalogAdapter` on the app side).
  */
 
 import { eq, and, sql, inArray } from "drizzle-orm";
-import {
-  researchEdge,
-  researchFinding,
-  satellite,
-  operatorCountry,
-  operator,
-  satelliteBus,
-  payload,
-  orbitRegime,
-  platformClass,
-  type Database,
-} from "@interview/db-schema";
+import { researchEdge, type Database } from "@interview/db-schema";
 import type { NewResearchEdgeEntity } from "../entities/research.entity";
 import type {
   ResearchEdge,
   NewResearchEdge,
 } from "../types/research.types";
 import { toResearchEdge } from "../transformers/research.transformer";
-import type { ResearchEntityType } from "@interview/shared/enum";
-
-// Touch imports so tree-shaking can't drop them (they're part of the public
-// knowledge-graph surface even if this file only references them via raw SQL).
-void satellite;
-void operatorCountry;
-void operator;
-void satelliteBus;
-void payload;
-void orbitRegime;
-void platformClass;
-void researchFinding;
 
 export class ResearchEdgeRepository {
   constructor(private db: Database) {}
@@ -67,7 +44,7 @@ export class ResearchEdgeRepository {
   }
 
   async findByEntity(
-    entityType: ResearchEntityType,
+    entityType: string,
     entityId: bigint,
   ): Promise<ResearchEdge[]> {
     const rows = await this.db
@@ -80,31 +57,6 @@ export class ResearchEdgeRepository {
         ),
       );
     return rows.map(toResearchEdge);
-  }
-
-  /**
-   * Clean orphan edges whose target entity no longer exists.
-   * Checks the SSA entity tables. Findings cleaned via CASCADE.
-   */
-  async cleanOrphans(): Promise<number> {
-    const result = await this.db.execute(sql`
-      DELETE FROM research_edge re
-      WHERE NOT EXISTS (
-        CASE re.entity_type
-          WHEN 'satellite' THEN (SELECT 1 FROM satellite WHERE id = re.entity_id)
-          WHEN 'operator_country' THEN (SELECT 1 FROM operator_country WHERE id = re.entity_id)
-          WHEN 'operator' THEN (SELECT 1 FROM operator WHERE id = re.entity_id)
-          WHEN 'launch' THEN (SELECT 1 FROM launch WHERE id = re.entity_id)
-          WHEN 'satellite_bus' THEN (SELECT 1 FROM satellite_bus WHERE id = re.entity_id)
-          WHEN 'payload' THEN (SELECT 1 FROM payload WHERE id = re.entity_id)
-          WHEN 'orbit_regime' THEN (SELECT 1 FROM orbit_regime WHERE id = re.entity_id)
-          WHEN 'platform_class' THEN (SELECT 1 FROM platform_class WHERE id = re.entity_id)
-          WHEN 'finding' THEN (SELECT 1 FROM research_finding WHERE id = re.entity_id)
-          ELSE NULL
-        END
-      )
-    `);
-    return result.rowCount ?? 0;
   }
 
   async countByEntityType(): Promise<

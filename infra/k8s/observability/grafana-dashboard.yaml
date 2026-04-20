@@ -1,0 +1,70 @@
+# Starter Grafana dashboard for console-api. Sidecar picks it up via the
+# `grafana_dashboard=1` label and auto-provisions it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-console-api
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  console-api.json: |
+    {
+      "title": "console-api — overview",
+      "schemaVersion": 39,
+      "editable": true,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": { "list": [] },
+      "panels": [
+        {
+          "type": "timeseries", "title": "Request rate (req/s) by route",
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "targets": [{
+            "expr": "sum by (route) (rate(http_requests_total{app=\"console-api\"}[1m]))",
+            "legendFormat": "{{route}}"
+          }]
+        },
+        {
+          "type": "timeseries", "title": "5xx rate (%)",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "targets": [{
+            "expr": "100 * sum(rate(http_requests_total{app=\"console-api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{app=\"console-api\"}[5m]))",
+            "legendFormat": "5xx %"
+          }]
+        },
+        {
+          "type": "timeseries", "title": "Latency p50/p95/p99 (s)",
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "targets": [
+            { "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"console-api\"}[5m])))", "legendFormat": "p50" },
+            { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"console-api\"}[5m])))", "legendFormat": "p95" },
+            { "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"console-api\"}[5m])))", "legendFormat": "p99" }
+          ]
+        },
+        {
+          "type": "timeseries", "title": "Event-loop lag (s)",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "targets": [{
+            "expr": "app_nodejs_eventloop_lag_seconds{app=\"console-api\"}",
+            "legendFormat": "{{pod}}"
+          }]
+        },
+        {
+          "type": "timeseries", "title": "Heap used (MiB)",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "targets": [{
+            "expr": "app_nodejs_heap_size_used_bytes{app=\"console-api\"} / 1024 / 1024",
+            "legendFormat": "{{pod}}"
+          }]
+        },
+        {
+          "type": "timeseries", "title": "Pod count",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "targets": [{
+            "expr": "count(up{app=\"console-api\",job=\"console-api\"} == 1)",
+            "legendFormat": "ready"
+          }]
+        }
+      ]
+    }

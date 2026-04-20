@@ -9,7 +9,6 @@
 import {
   ResearchFindingType,
   ResearchUrgency,
-  ResearchEntityType,
   ResearchRelation,
 } from "@interview/shared/enum";
 import type { CortexFinding, CortexOutput } from "../types";
@@ -43,15 +42,14 @@ export function normalizeFinding(
     confidence: clamp(safeNumber(raw.confidence, 0.5), 0, 1),
     impactScore: clamp(safeNumber(raw.impactScore, 5), 0, 10),
     sourceCortex: cortexName,
-    busContext: raw.busContext ?? undefined,
+    extensions: raw.extensions ?? undefined,
     dedupKey: raw.dedupKey ?? undefined,
     edges: Array.isArray(raw.edges)
       ? raw.edges.map((e) => ({
-          entityType: validateEnum(
-            e.entityType,
-            ResearchEntityType,
-            ResearchEntityType.Satellite,
-          ),
+          entityType:
+            typeof e.entityType === "string" && e.entityType.length > 0
+              ? e.entityType
+              : "unknown",
           entityId: Number(e.entityId) || 0,
           relation: validateEnum(
             e.relation,

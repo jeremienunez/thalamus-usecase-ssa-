@@ -1,0 +1,34 @@
+# Overlay: replaces the single console-api Deployment/Service from the root
+# kustomization with the blue/green pair + dual Services.
+#
+# NOTE: references sibling files (../*.yaml), so you must build with
+# `--load-restrictor=LoadRestrictionsNone`:
+#
+#   kubectl kustomize --load-restrictor=LoadRestrictionsNone infra/k8s/bluegreen \
+#     | kubectl apply -f -
+#
+# If you adopt Argo Rollouts, delete console-api-{blue,green}.yaml from
+# resources and add rollout.argo.yaml instead.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: thalamus
+
+resources:
+  - ../namespace.yaml
+  - ../configmap.yaml
+  - ../secret.example.yaml
+  - ../postgres.yaml
+  - ../redis.yaml
+  - ../console.yaml
+  - ../ingress.yaml
+  - ../networkpolicy.yaml
+  - services.yaml
+  - console-api-blue.yaml
+  - console-api-green.yaml
+  # - rollout.argo.yaml      # enable once argo-rollouts controller is installed
+  # - canary-ingress.yaml    # enable for weighted traffic shifting
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: thalamus
+    includeSelectors: false

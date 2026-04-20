@@ -1,0 +1,58 @@
+# --- dependencies & build outputs --------------------------------------------
+**/node_modules
+**/dist
+**/build
+**/.turbo
+**/.next
+**/.vite
+**/.cache
+**/.pnpm-store
+**/*.tsbuildinfo
+
+# --- test artefacts -----------------------------------------------------------
+**/coverage
+**/.vitest
+**/.vitest-cache
+**/tests
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/vitest.config.ts
+vitest.workspace.ts
+tsconfig.depcruise.json
+.dependency-cruiser.js
+.jscpd.json
+
+# --- logs & local state -------------------------------------------------------
+**/logs
+logs
+**/*.log
+**/.DS_Store
+
+# --- editor / VCS -------------------------------------------------------------
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+.codex
+
+# --- secrets ------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- docs / scratchpad work-in-progress (not shipped in image) ---------------
+docs/
+design-system/
+scripts/
+TODO.md
+CHANGELOG.md
+DONE.md
+TO-REVIEW.md
+CLAUDE.md
+Makefile
+*.md
+!README.md

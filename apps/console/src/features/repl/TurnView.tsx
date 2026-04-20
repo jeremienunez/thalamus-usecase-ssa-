@@ -1,21 +1,39 @@
 import { X } from "lucide-react";
+import type { ReplFollowUpPlanItem } from "@interview/shared";
 import { AnimatedStepBadge } from "@/shared/ui/AnimatedStepBadge";
 import { CycleLoader } from "@/shared/ui/CycleLoader";
 import type { Turn } from "@/features/repl/reducer";
+import { FollowUpPlanView } from "./FollowUpPlanView";
+import { FollowUpTurnView } from "./FollowUpTurnView";
 import { ResultView } from "./ResultView";
 
 type Props = {
   turn: Turn;
   onFollowUp: (input: string) => void;
+  onRunFollowUp: (
+    turnId: string,
+    query: string,
+    parentCycleId: string,
+    item: ReplFollowUpPlanItem,
+  ) => void;
   onCancel?: () => void;
 };
 
-export function TurnView({ turn, onFollowUp, onCancel }: Props) {
+export function TurnView({
+  turn,
+  onFollowUp,
+  onRunFollowUp,
+  onCancel,
+}: Props) {
   const elapsed = Date.now() - turn.startedAt;
   const isRunning =
     turn.phase === "classifying" ||
     turn.phase === "chatting" ||
-    turn.phase === "cycle-running";
+    turn.phase === "cycle-running" ||
+    turn.phase === "followup-running";
+  const showStreamResult =
+    (turn.phase === "done" || turn.phase === "followup-running") &&
+    !turn.response;
 
   return (
     <div className="mb-3 animate-fade-in border-l border-hairline pl-3">
@@ -54,6 +72,20 @@ export function TurnView({ turn, onFollowUp, onCancel }: Props) {
         />
       )}
 
+      {turn.phase === "followup-running" && (
+        <div className="flex flex-col gap-2">
+          <CycleLoader
+            cycleId={turn.cycleId ?? "…"}
+            current={turn.currentStep}
+            trail={turn.steps}
+            elapsedMs={elapsed}
+          />
+          <div className="mono text-caption text-cold">
+            <AnimatedStepBadge step="swarm" phase="progress" /> follow-ups…
+          </div>
+        </div>
+      )}
+
       {turn.phase === "error" && (
         <div className="mono text-caption text-hot">error: {turn.error}</div>
       )}
@@ -69,7 +101,7 @@ export function TurnView({ turn, onFollowUp, onCancel }: Props) {
         </div>
       )}
 
-      {turn.phase === "done" && !turn.response && (
+      {showStreamResult && (
         <div className="flex flex-col gap-2">
           {turn.chatText && (
             <div className="border-l-2 border-cyan pl-3">
@@ -103,6 +135,34 @@ export function TurnView({ turn, onFollowUp, onCancel }: Props) {
               <div className="whitespace-pre-wrap text-body text-primary">
                 {turn.summaryText}
               </div>
+            </div>
+          )}
+          {turn.followupPlan && (
+            <FollowUpPlanView
+              plan={turn.followupPlan}
+              followups={turn.followups}
+              onRun={(item) =>
+                onRunFollowUp(
+                  turn.id,
+                  turn.executedQuery ?? turn.input,
+                  turn.followupPlan!.parentCycleId,
+                  item,
+                )
+              }
+            />
+          )}
+          {turn.followupOrder.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {turn.followupOrder.map((followupId) => {
+                const followup = turn.followups[followupId];
+                if (!followup) return null;
+                return (
+                  <FollowUpTurnView
+                    key={followup.followupId}
+                    followup={followup}
+                  />
+                );
+              })}
             </div>
           )}
           {turn.tookMs != null && (

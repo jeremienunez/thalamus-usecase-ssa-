@@ -24,8 +24,9 @@ import type {
 } from "../types";
 import { analyzeCortexData } from "../cortex-llm";
 import { sanitizeDataPayload, sanitizeText } from "../guardrails";
-import { fetchSourcesForCortex } from "../sources";
 import type { WebSearchPort } from "../../ports/web-search.port";
+import type { SourceFetcherPort } from "../../ports/source-fetcher.port";
+import { NoopSourceFetcher } from "../../entities/noop-source-fetcher";
 import { emptyOutput, normalizeFinding } from "./helpers";
 import type { CortexExecutionStrategy } from "./types";
 
@@ -36,6 +37,7 @@ export class StandardStrategy implements CortexExecutionStrategy {
     private readonly dataProvider: CortexDataProvider,
     private readonly domainConfig: DomainConfig,
     private readonly webSearch: WebSearchPort,
+    private readonly sourceFetcher: SourceFetcherPort = new NoopSourceFetcher(),
   ) {}
 
   /** Fallback strategy — accepts every cortex. Register last. */
@@ -65,7 +67,10 @@ export class StandardStrategy implements CortexExecutionStrategy {
     // 1b. Fetch external structured sources for this cortex.
     let sourceData: Record<string, unknown>[] = [];
     try {
-      const sources = await fetchSourcesForCortex(cortexName, input.params);
+      const sources = await this.sourceFetcher.fetchForCortex(
+        cortexName,
+        input.params,
+      );
       sourceData = sources.map((s) => ({
         type: s.type,
         _source: s.source,
@@ -197,6 +202,7 @@ export class StandardStrategy implements CortexExecutionStrategy {
       mode: input.mode,
       sourcingRules: this.domainConfig.sourcingRules,
       entityTypes: this.domainConfig.entityTypes,
+      modeInstructions: this.domainConfig.modeInstructions,
     });
 
     // 7. Validate and normalize findings.

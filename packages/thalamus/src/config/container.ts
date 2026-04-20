@@ -28,8 +28,12 @@ import { StopCriteriaEvaluator } from "../services/stop-criteria.service";
 import { ResearchCycleRepository } from "../repositories/research-cycle.repository";
 import { ResearchFindingRepository } from "../repositories/research-finding.repository";
 import { ResearchEdgeRepository } from "../repositories/research-edge.repository";
-import { EntityNameResolver } from "../repositories/entity-name-resolver";
-import { VoyageEmbedder } from "../utils/voyage-embedder";
+import type { EmbedderPort } from "../ports/embedder.port";
+import { NullEmbedder } from "../entities/null-embedder";
+import type { EntityCatalogPort } from "../ports/entity-catalog.port";
+import { NoopEntityCatalog } from "../entities/noop-entity-catalog";
+import type { SourceFetcherPort } from "../ports/source-fetcher.port";
+import { NoopSourceFetcher } from "../entities/noop-source-fetcher";
 
 export interface ThalamusContainer {
   thalamusService: ThalamusService;
@@ -39,7 +43,7 @@ export interface ThalamusContainer {
   cycleRepo: ResearchCycleRepository;
   findingRepo: ResearchFindingRepository;
   edgeRepo: ResearchEdgeRepository;
-  embedder: VoyageEmbedder;
+  embedder: EmbedderPort;
 }
 
 export interface BuildThalamusOpts {
@@ -67,8 +71,27 @@ export interface BuildThalamusOpts {
    * pipelines without touching the kernel.
    */
   strategies?: CortexExecutionStrategy[];
-  /** Optional Voyage API key override */
-  voyageApiKey?: string;
+  /**
+   * Domain-owned embedder adapter. Defaults to `NullEmbedder` which
+   * returns `null` for every query — `ResearchGraphService` then skips
+   * semantic dedup and cross-linking. Apps ship a real adapter (e.g.
+   * `SsaVoyageEmbedderAdapter`) at their composition root so the kernel
+   * never learns which provider or API key powers embeddings.
+   */
+  embedder?: EmbedderPort;
+  /**
+   * Domain-owned entity catalog adapter. Defaults to `NoopEntityCatalog`
+   * which returns empty resolutions and cleans 0 rows — enough for tests
+   * and standalone demos. Apps ship an `EntityCatalogPort` impl at their
+   * composition root (e.g. `SsaEntityCatalogAdapter` for SSA).
+   */
+  entityCatalog?: EntityCatalogPort;
+  /**
+   * Domain-owned source fetcher adapter. Defaults to `NoopSourceFetcher`
+   * (returns empty — StandardStrategy falls through to SQL + optional
+   * web-search only). SSA ships an adapter over its fetcher registry.
+   */
+  sourceFetcher?: SourceFetcherPort;
 }
 
 export function buildThalamusContainer(
@@ -79,8 +102,9 @@ export function buildThalamusContainer(
   const cycleRepo = new ResearchCycleRepository(db);
   const findingRepo = new ResearchFindingRepository(db);
   const edgeRepo = new ResearchEdgeRepository(db);
-  const entityResolver = new EntityNameResolver(db);
-  const embedder = new VoyageEmbedder(opts.voyageApiKey);
+  const entityCatalog = opts.entityCatalog ?? new NoopEntityCatalog();
+  const sourceFetcher = opts.sourceFetcher ?? new NoopSourceFetcher();
+  const embedder = opts.embedder ?? new NullEmbedder();
 
   const registry = new CortexRegistry(opts.skillsDir);
   registry.discover();
@@ -92,7 +116,12 @@ export function buildThalamusContainer(
   // (catch-all). First `canHandle` match wins.
   const strategies: CortexExecutionStrategy[] = opts.strategies ?? [
     new StrategistStrategy(domainConfig),
-    new StandardStrategy(opts.dataProvider, domainConfig, webSearch),
+    new StandardStrategy(
+      opts.dataProvider,
+      domainConfig,
+      webSearch,
+      sourceFetcher,
+    ),
   ];
 
   const executor = new CortexExecutor(registry, strategies);
@@ -102,16 +131,18 @@ export function buildThalamusContainer(
     edgeRepo,
     cycleRepo,
     embedder,
-    entityResolver,
+    entityCatalog,
   );
 
   // Thalamus service collaborators — wired here so the service itself
   // never `new`s concrete dependencies (DIP).
-  const planner = new ThalamusPlanner(
-    registry,
-    domainConfig.daemonDags,
-    domainConfig.userScopedCortices,
-  );
+  const planner = new ThalamusPlanner(registry, {
+    daemonDags: domainConfig.daemonDags,
+    userScopedCortices: domainConfig.userScopedCortices,
+    plannerPrompt: domainConfig.plannerPrompt,
+    fallbackPlan: domainConfig.fallbackPlan,
+    fallbackCortices: domainConfig.fallbackCortices,
+  });
   const dagExecutor = new ThalamusDAGExecutor(executor);
   const reflexion = new ThalamusReflexion();
   const stopCriteria = new StopCriteriaEvaluator();

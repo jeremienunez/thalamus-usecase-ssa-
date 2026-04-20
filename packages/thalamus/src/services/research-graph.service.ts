@@ -5,15 +5,18 @@
 
 import { createLogger } from "@interview/shared/observability";
 import { createHash } from "node:crypto";
-import type { VoyageEmbedder } from "../utils/voyage-embedder";
+import type { EmbedderPort } from "../ports/embedder.port";
+import type {
+  EntityCatalogPort,
+} from "../ports/entity-catalog.port";
 import type {
   ResearchFinding,
   ResearchEdge,
   NewResearchFinding,
   NewResearchEdge,
 } from "../types/research.types";
-import { ResearchEntityType, ResearchRelation } from "@interview/shared/enum";
-import type { ResearchCortex, ResearchFindingType } from "@interview/shared/enum";
+import { ResearchRelation } from "@interview/shared/enum";
+import type { ResearchFindingType } from "@interview/shared/enum";
 
 // ── Ports (structural — repos satisfy these by duck typing) ────────
 export interface FindingsGraphPort {
@@ -32,7 +35,7 @@ export interface FindingsGraphPort {
   ): Promise<void>;
   findById(id: bigint): Promise<ResearchFinding | null>;
   findByEntity(
-    entityType: ResearchEntityType,
+    entityType: string,
     entityId: bigint,
     opts?: { minConfidence?: number; limit?: number },
   ): Promise<ResearchFinding[]>;
@@ -41,7 +44,7 @@ export interface FindingsGraphPort {
     limit?: number,
   ): Promise<Array<ResearchFinding & { similarity: number }>>;
   findActive(opts?: {
-    cortex?: ResearchCortex;
+    cortex?: string;
     findingType?: ResearchFindingType;
     minConfidence?: number;
     limit?: number;
@@ -65,16 +68,11 @@ export interface EdgesGraphPort {
   createMany(edges: NewResearchEdge[]): Promise<ResearchEdge[]>;
   findByFinding(findingId: bigint): Promise<ResearchEdge[]>;
   findByFindings(findingIds: bigint[]): Promise<ResearchEdge[]>;
-  cleanOrphans(): Promise<number>;
   countByEntityType(): Promise<Array<{ entity_type: string; cnt: number }>>;
 }
 
 export interface CyclesGraphPort {
   incrementFindings(id: bigint): Promise<void>;
-}
-
-export interface EntityNamePort {
-  resolve(refs: Array<{ entityType: string; entityId: bigint }>): Promise<Map<string, string>>;
 }
 
 const logger = createLogger("research-graph");
@@ -85,7 +83,7 @@ export interface StoreFindingInput {
 }
 
 export interface QueryFindingsOptions {
-  cortex?: ResearchCortex;
+  cortex?: string;
   findingType?: ResearchFindingType;
   minConfidence?: number;
   limit?: number;
@@ -101,8 +99,8 @@ export class ResearchGraphService {
     private findingRepo: FindingsGraphPort,
     private edgeRepo: EdgesGraphPort,
     private cycleRepo: CyclesGraphPort,
-    private embedder: VoyageEmbedder,
-    private entityResolver?: EntityNamePort,
+    private embedder: EmbedderPort,
+    private entityCatalog: EntityCatalogPort,
   ) {}
 
   /**
@@ -247,7 +245,11 @@ export class ResearchGraphService {
         if (crossLinks.length > 0) {
           const linkEdges: NewResearchEdge[] = crossLinks.map((r) => ({
             findingId: finding.id,
-            entityType: ResearchEntityType.Finding,
+            // "finding" is a generic cross-link entityType for finding-to-finding
+            // edges — it is a protocol value shared between kernel and any domain,
+            // not SSA vocabulary. Domains that define their own entity enum must
+            // include this value in the DB enum for kernel cross-linking to work.
+            entityType: "finding",
             entityId: r.id,
             relation:
               r.similarity > 0.85
@@ -314,7 +316,7 @@ export class ResearchGraphService {
    * Query findings linked to a specific entity via knowledge graph edges
    */
   async queryByEntity(
-    entityType: ResearchEntityType,
+    entityType: string,
     entityId: bigint,
     opts?: { minConfidence?: number; limit?: number },
   ): Promise<ResearchFinding[]> {
@@ -364,7 +366,7 @@ export class ResearchGraphService {
    */
   async expireAndClean(): Promise<{ expired: number; orphans: number }> {
     const expired = await this.findingRepo.expireOld();
-    const orphans = await this.edgeRepo.cleanOrphans();
+    const orphans = await this.entityCatalog.cleanOrphans();
     logger.info({ expired, orphans }, "Expire and clean completed");
     return { expired, orphans };
   }
@@ -377,10 +379,6 @@ export class ResearchGraphService {
     nodes: KnowledgeGraphNode[];
     links: KnowledgeGraphLink[];
   }> {
-    if (!this.entityResolver) {
-      throw new Error("EntityNameResolver not wired");
-    }
-
     // 1. Fetch active findings
     const findings = await this.findingRepo.findActive({
       ...opts,
@@ -398,8 +396,8 @@ export class ResearchGraphService {
       entityId: e.entityId,
     }));
 
-    // 4. Resolve entity names
-    const nameMap = await this.entityResolver.resolve(entityRefs);
+    // 4. Resolve entity names via the injected catalog port
+    const nameMap = await this.entityCatalog.resolveNames(entityRefs);
 
     // 5. Build finding nodes
     const nodes: KnowledgeGraphNode[] = findings.map((f) => ({

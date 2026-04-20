@@ -6,8 +6,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { ReplFollowUpPlanItem } from "@interview/shared";
 import { postTurn, isSlashCommand } from "@/features/repl/types";
-import { postChatStream } from "@/adapters/sse/repl";
+import { postChatStream, postFollowUpStream } from "@/adapters/sse/repl";
 import {
   newTurn,
   turnReducer,
@@ -34,22 +35,27 @@ export function ReplProvider({ children }: { children: ReactNode }) {
     setTurns((ts) => ts.map((t) => (t.id === id ? turnReducer(t, action) : t)));
   }, []);
 
-  const finish = useCallback((id: string) => {
-    inFlightRef.current.delete(id);
+  const finish = useCallback((key: string) => {
+    inFlightRef.current.delete(key);
     setInFlight(inFlightRef.current.size);
   }, []);
 
-  const start = useCallback((id: string, ctrl: AbortController) => {
-    inFlightRef.current.set(id, ctrl);
+  const start = useCallback((key: string, ctrl: AbortController) => {
+    inFlightRef.current.set(key, ctrl);
     setInFlight(inFlightRef.current.size);
   }, []);
 
   const cancelTurn = useCallback(
     (id: string) => {
-      const ctrl = inFlightRef.current.get(id);
-      if (!ctrl) return;
-      ctrl.abort();
-      inFlightRef.current.delete(id);
+      let aborted = false;
+      for (const [key, ctrl] of inFlightRef.current.entries()) {
+        if (key === id || key.startsWith(`${id}:`)) {
+          ctrl.abort();
+          inFlightRef.current.delete(key);
+          aborted = true;
+        }
+      }
+      if (!aborted) return;
       setInFlight(inFlightRef.current.size);
       dispatch(id, { type: "fail", error: "cancelled" });
     },
@@ -93,9 +99,44 @@ export function ReplProvider({ children }: { children: ReactNode }) {
     [dispatch, start, finish],
   );
 
+  const runFollowUp = useCallback(
+    (
+      turnId: string,
+      query: string,
+      parentCycleId: string,
+      item: ReplFollowUpPlanItem,
+    ) => {
+      const ctrl = new AbortController();
+      const key = `${turnId}:${item.followupId}`;
+      start(key, ctrl);
+      setOpen(true);
+
+      postFollowUpStream(
+        { query, parentCycleId, item },
+        (evt) => dispatch(turnId, { type: "stream", event: evt }),
+        ctrl.signal,
+      )
+        .catch((err: unknown) => {
+          if (ctrl.signal.aborted) return;
+          const msg = err instanceof Error ? err.message : String(err);
+          dispatch(turnId, { type: "fail", error: msg });
+        })
+        .finally(() => finish(key));
+    },
+    [dispatch, finish, start],
+  );
+
   const value = useMemo<ReplCtx>(
-    () => ({ open, setOpen, turns, inFlight, sendTurn, cancelTurn }),
-    [open, turns, inFlight, sendTurn, cancelTurn],
+    () => ({
+      open,
+      setOpen,
+      turns,
+      inFlight,
+      sendTurn,
+      runFollowUp,
+      cancelTurn,
+    }),
+    [open, turns, inFlight, sendTurn, runFollowUp, cancelTurn],
   );
   return <ReplContext.Provider value={value}>{children}</ReplContext.Provider>;
 }

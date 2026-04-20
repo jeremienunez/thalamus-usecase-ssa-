@@ -30,8 +30,9 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 
 // Inlined to avoid circular dep (@interview/db-schema is upstream of
-// @interview/thalamus). Mirrors VoyageEmbedder.embedDocuments — same model,
-// same dimension. Keep in sync with packages/thalamus/src/utils/voyage-embedder.ts.
+// @interview/thalamus). Mirrors SsaVoyageEmbedderAdapter.embedDocuments —
+// same model, same dimension. Keep in sync with
+// apps/console-api/src/agent/ssa/ssa-voyage-embedder.adapter.ts.
 const VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings";
 const DOCUMENT_MODEL = "voyage-4-large";
 const DIMENSIONS = 2048;

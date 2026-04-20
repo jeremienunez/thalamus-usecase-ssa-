@@ -13,6 +13,7 @@ import { Pool } from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import Redis from "ioredis";
 import * as schema from "@interview/db-schema";
+import { MetricsCollector } from "@interview/shared";
 import {
   NullWebSearchAdapter,
   OpenAIWebSearchAdapter,
@@ -27,6 +28,7 @@ export interface ServerEnv {
   databaseUrl: string;
   redisUrl: string;
   openaiApiKey?: string;
+  voyageApiKey?: string;
   simLlmMode?: "cloud" | "fixtures" | "record";
   simKernelSharedSecret?: string;
 }
@@ -47,6 +49,7 @@ export function readServerEnv(): ServerEnv {
       "postgres://thalamus:thalamus@localhost:5433/thalamus",
     redisUrl: process.env.REDIS_URL ?? "redis://localhost:6380",
     openaiApiKey: process.env.OPENAI_API_KEY,
+    voyageApiKey: process.env.VOYAGE_API_KEY,
     simLlmMode: readSimLlmMode(process.env.SIM_LLM_MODE),
     simKernelSharedSecret: process.env.SIM_KERNEL_SHARED_SECRET,
   };
@@ -70,6 +73,7 @@ function buildInfra(env: ServerEnv): {
       db,
       redis,
       webSearch,
+      voyageApiKey: env.voyageApiKey,
       simLlmMode: env.simLlmMode,
       simKernelSharedSecret: env.simKernelSharedSecret,
     },
@@ -129,7 +133,13 @@ function durationColor(ms: number): string {
 function printSatelliteLogo(): void {
   const y = C.yellow, c = C.cyan, g = C.green, r = C.reset;
   const path = fileURLToPath(new URL("../../../scripts/ui/satellite.txt", import.meta.url));
-  const raw = readFileSync(path, "utf8").replace(/\n$/, "");
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8").replace(/\n$/, "");
+  } catch {
+    // Cosmetic only — missing file (e.g. in a container image) must not crash boot.
+    return;
+  }
   const colored = raw
     .replace(/◉/g, `${g}◉${c}`)
     .replace(/┌──┐/g, `${y}┌──┐${r}`)
@@ -213,8 +223,34 @@ export async function createApp(
   });
   await app.register(cors, { origin: true });
 
+  const metrics = new MetricsCollector({ serviceName: "console-api" });
+  const httpDuration = metrics.createHistogram(
+    "http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+    ["method", "route", "status"],
+  );
+  const httpTotal = metrics.createCounter(
+    "http_requests_total",
+    "HTTP requests total",
+    ["method", "route", "status"],
+  );
+
+  // Prometheus scrape endpoint. Served on the same port as the api (4000) to
+  // avoid a second listener; the ServiceMonitor is configured accordingly.
+  app.get("/metrics", async (_req, reply) => {
+    reply.header("Content-Type", metrics.registry.contentType);
+    return metrics.registry.metrics();
+  });
+
   app.addHook("onResponse", (req, reply, done) => {
     const url = req.url.split("?")[0];
+    const route = req.routeOptions?.url ?? url; // templated path, bounded cardinality
+    const status = String(reply.statusCode);
+    const seconds = reply.elapsedTime / 1000;
+    httpDuration.labels(req.method, route, status).observe(seconds);
+    httpTotal.labels(req.method, route, status).inc();
+
     if (POLL_ROUTES.has(url)) return done();
     const ms = reply.elapsedTime;
     const code = reply.statusCode;

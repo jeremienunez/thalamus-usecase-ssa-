@@ -1,4 +1,5 @@
 import type { ReplStreamEvent } from "@interview/shared";
+import type { ReplFollowUpPlanItem } from "@interview/shared";
 import type { ReplFindingSummaryView } from "../types/repl-chat.types";
 import type {
   FollowUpPlan,
@@ -32,5 +33,15 @@ export class ReplFollowUpService {
     signal?: AbortSignal;
   }): AsyncGenerator<ReplStreamEvent> {
     yield* this.executor.executeAutoLaunched(input);
+  }
+
+  async *executeSelected(input: {
+    item: ReplFollowUpPlanItem;
+    query: string;
+    userId?: bigint;
+    parentCycleId: string;
+    signal?: AbortSignal;
+  }): AsyncGenerator<ReplStreamEvent> {
+    yield* this.executor.executeSelected(input);
   }
 }

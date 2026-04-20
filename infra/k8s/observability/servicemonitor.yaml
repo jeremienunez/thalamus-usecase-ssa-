@@ -1,0 +1,68 @@
+# Tells kube-prometheus-stack to scrape console-api on :4000/metrics every 30s.
+# Requires the Prometheus Operator (comes with kube-prometheus-stack).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: console-api
+  namespace: thalamus
+  labels:
+    app: console-api
+    release: kube-prometheus-stack # default selector used by the chart
+spec:
+  namespaceSelector:
+    matchNames: [thalamus]
+  selector:
+    matchLabels:
+      app: console-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      honorLabels: true
+      metricRelabelings:
+        # Drop per-path duration cardinality explosions if any appear.
+        - action: drop
+          sourceLabels: [__name__, route]
+          regex: "http_request_duration_seconds_bucket;.*/debug/.*"
+---
+# Alerting rules: 5xx rate, p99 latency, pod restarts. Kept minimal; extend as
+# your SLOs get defined.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: console-api
+  namespace: thalamus
+  labels:
+    app: console-api
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: console-api.rules
+      interval: 30s
+      rules:
+        - alert: ConsoleApiHigh5xxRate
+          expr: |
+            sum(rate(http_requests_total{app="console-api",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{app="console-api"}[5m])) > 0.02
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "console-api 5xx rate above 2% (10m)"
+        - alert: ConsoleApiSlowP99
+          expr: |
+            histogram_quantile(
+              0.99,
+              sum by (le) (rate(http_request_duration_seconds_bucket{app="console-api"}[5m]))
+            ) > 2
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "console-api p99 latency above 2s (10m)"
+        - alert: ConsoleApiFrequentRestarts
+          expr: increase(kube_pod_container_status_restarts_total{namespace="thalamus",container="api"}[15m]) > 3
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "console-api pod restarting (>3 in 15m)"

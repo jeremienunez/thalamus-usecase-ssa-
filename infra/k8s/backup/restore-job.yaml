@@ -1,0 +1,72 @@
+# One-shot restore Job. DO NOT apply blindly — this drops and recreates the
+# target DB's objects. Always target a fresh, empty Postgres (or a dev
+# environment) unless you really mean to overwrite prod.
+#
+# Usage:
+#   1. Edit BACKUP_FILE and TARGET_URL below.
+#   2. Apply.
+#   3. kubectl -n thalamus logs -f job/pg-restore
+#   4. kubectl -n thalamus delete job/pg-restore once verified.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pg-restore
+  namespace: thalamus
+  labels:
+    app: postgres
+    role: restore
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 7200
+  activeDeadlineSeconds: 7200
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: restore
+          image: ghcr.io/rclone/rclone:1.67
+          command: ["/bin/sh", "-ceu"]
+          args:
+            - |
+              set -o pipefail
+              apk add --no-cache postgresql16-client >/dev/null
+              echo "fetching ${RCLONE_REMOTE}/${BACKUP_FILE}"
+              rclone copy "${RCLONE_REMOTE}/${BACKUP_FILE}"        /tmp/
+              rclone copy "${RCLONE_REMOTE}/${BACKUP_FILE}.sha256" /tmp/
+              cd /tmp && sha256sum -c "${BACKUP_FILE}.sha256"
+              echo "restoring into ${TARGET_URL_REDACTED}"
+              pg_restore \
+                --clean --if-exists \
+                --no-owner --no-acl \
+                --jobs=4 \
+                --dbname="${TARGET_URL}" \
+                "/tmp/${BACKUP_FILE}"
+              echo "restore ok"
+          env:
+            - name: RCLONE_REMOTE
+              value: "s3:thalamus-backups/postgres"
+            - name: RCLONE_CONFIG
+              value: /config/rclone.conf
+            - name: BACKUP_FILE
+              value: "thalamus-REPLACE_ME.pgdump"
+            # Point this at the TARGET database — often a staging/restore DB,
+            # never blindly at prod.
+            - name: TARGET_URL
+              valueFrom:
+                secretKeyRef: { name: restore-target, key: url }
+            - name: TARGET_URL_REDACTED
+              value: "***@postgres:5432/thalamus"
+          volumeMounts:
+            - name: rclone-config
+              mountPath: /config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits: { cpu: "2", memory: "2Gi" }
+      volumes:
+        - name: rclone-config
+          secret: { secretName: rclone-config }
+        - name: tmp
+          emptyDir: { sizeLimit: 20Gi }

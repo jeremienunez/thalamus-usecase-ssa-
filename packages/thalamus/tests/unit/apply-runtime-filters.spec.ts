@@ -65,7 +65,7 @@ describe("ThalamusPlanner.applyRuntimeFilters — runtime-config post-filters", 
   let planner: ThalamusPlanner;
 
   beforeEach(() => {
-    planner = new ThalamusPlanner(mkRegistry(), {}, new Set());
+    planner = new ThalamusPlanner(mkRegistry(), {});
   });
 
   it("given a dag with fleet_analyst and strategist and forcedCortices launch_scout, when applied, then launch_scout is injected into the result", () => {

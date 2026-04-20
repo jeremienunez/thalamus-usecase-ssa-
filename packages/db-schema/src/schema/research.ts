@@ -98,7 +98,11 @@ export const researchFinding = pgTable(
     reasoning: text("reasoning"),
     confidence: real("confidence").notNull(),
     impactScore: real("impact_score"),
-    busContext: jsonb("bus_context"),
+    // DB column: `bus_context` (historical SSA naming preserved to avoid a
+    // migration this pass). JS-side property is `extensions` — a generic,
+    // domain-neutral extension point. SSA cortices stamp
+    // `extensions.busContext = { busId, busName, similarity }` downstream.
+    extensions: jsonb("bus_context"),
     reflexionNotes: jsonb("reflexion_notes"),
     iteration: integer("iteration").notNull().default(0),
     dedupHash: text("dedup_hash"),

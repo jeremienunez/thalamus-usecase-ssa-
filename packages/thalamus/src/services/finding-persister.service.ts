@@ -7,8 +7,6 @@
 
 import { createLogger } from "@interview/shared/observability";
 import {
-  ResearchCortex,
-  ResearchEntityType,
   ResearchRelation,
   ResearchStatus,
 } from "@interview/shared/enum";
@@ -53,7 +51,7 @@ export class FindingPersister {
             confidence: finding.confidence,
             impactScore: finding.impactScore,
             urgency: finding.urgency,
-            busContext: finding.busContext ?? null,
+            extensions: finding.extensions ?? null,
             researchCycleId: ctx.cycleId,
             reflexionNotes: null,
             iteration: ctx.iteration,
@@ -63,7 +61,7 @@ export class FindingPersister {
           edges: ctx.entityOverride
             ? [
                 {
-                  entityType: ctx.entityOverride.entityType as ResearchEntityType,
+                  entityType: ctx.entityOverride.entityType,
                   entityId: ctx.entityOverride.entityId,
                   relation: ResearchRelation.About,
                   weight: 1.0,
@@ -71,7 +69,7 @@ export class FindingPersister {
                 },
               ]
             : finding.edges.map((e) => ({
-                entityType: e.entityType as ResearchEntityType,
+                entityType: e.entityType,
                 entityId: BigInt(e.entityId),
                 relation: e.relation as ResearchRelation,
                 weight: 1.0,
@@ -98,29 +96,18 @@ export class FindingPersister {
 /**
  * Derive which cortex produced a finding.
  * Preferred source is `finding.sourceCortex` stamped by `normalizeFinding`.
- * Falls back to the plan's first node (legacy behaviour) only when the
- * finding wasn't stamped — shouldn't happen in normal pipeline runs but
- * keeps parsing robust for older persisted objects / tests.
+ * Falls back to the plan's first node when the finding wasn't stamped —
+ * shouldn't happen in normal pipeline runs but keeps parsing robust for
+ * older persisted objects / tests. Final fallback is a neutral sentinel
+ * string; the domain is responsible for registering valid cortex names
+ * upstream (pg enum validates at write time).
  */
-function findingCortex(
-  finding: CortexFinding,
-  plan: DAGPlan,
-): ResearchCortex {
+function findingCortex(finding: CortexFinding, plan: DAGPlan): string {
   const stamped = finding.sourceCortex;
-  if (
-    stamped &&
-    Object.values(ResearchCortex).includes(stamped as ResearchCortex)
-  ) {
-    return stamped as ResearchCortex;
-  }
+  if (stamped && stamped.length > 0) return stamped;
   const first = plan.nodes[0]?.cortex;
-  if (
-    first &&
-    Object.values(ResearchCortex).includes(first as ResearchCortex)
-  ) {
-    return first as ResearchCortex;
-  }
-  return ResearchCortex.FleetAnalyst;
+  if (first && first.length > 0) return first;
+  return "unknown";
 }
 
 /**

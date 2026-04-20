@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: console-api-env
+  namespace: thalamus
+data:
+  NODE_ENV: production
+  PORT: "4000"
+  LOG_LEVEL: info
+  # Flip to `cloud` in prod + provide LLM keys via Secret. `fixtures` is a
+  # deterministic dev/test mode that does not call external LLMs.
+  THALAMUS_MODE: fixtures
+  # Metrics are served by the api on the same port as the HTTP surface (/metrics).
+  # ServiceMonitor scrapes port 4000 path /metrics — see observability/servicemonitor.yaml.
+  CELESTRAK_URL: "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle"
+  SEED_COUNT: "500"
+  OLLAMA_BASE_URL: http://ollama:11434
+  OLLAMA_MODEL: gemma4:4b-q4_K_M

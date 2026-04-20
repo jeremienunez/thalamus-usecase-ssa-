@@ -27,32 +27,54 @@ export class SsaReplFollowUpExecutor {
     signal?: AbortSignal;
   }): AsyncGenerator<ReplStreamEvent> {
     for (const item of input.plan.autoLaunched) {
-      if (input.signal?.aborted) return;
-      yield {
-        event: "followup.started",
-        data: {
-          parentCycleId: input.parentCycleId,
-          followupId: item.followupId,
-          kind: item.kind,
-          auto: true,
-          title: item.title,
-        },
-      };
+      yield* this.executeItem(item, input);
+    }
+  }
 
-      switch (item.kind) {
-        case "deep_research_30d":
-          yield* this.executeDeepResearch(item, input);
-          break;
-        case "sim_pc_verification":
-          yield* this.executePcVerification(item, input);
-          break;
-        case "sim_telemetry_verification":
-          yield* this.executeTelemetryVerification(item, input);
-          break;
-        case "sweep_targeted_audit":
-          yield* this.executeTargetedSweep(item, input);
-          break;
-      }
+  async *executeSelected(input: {
+    item: ReplFollowUpPlanItem;
+    query: string;
+    userId?: bigint;
+    parentCycleId: string;
+    signal?: AbortSignal;
+  }): AsyncGenerator<ReplStreamEvent> {
+    yield* this.executeItem(input.item, input);
+  }
+
+  private async *executeItem(
+    item: ReplFollowUpPlanItem,
+    input: {
+      query: string;
+      userId?: bigint;
+      parentCycleId: string;
+      signal?: AbortSignal;
+    },
+  ): AsyncGenerator<ReplStreamEvent> {
+    if (input.signal?.aborted) return;
+    yield {
+      event: "followup.started",
+      data: {
+        parentCycleId: input.parentCycleId,
+        followupId: item.followupId,
+        kind: item.kind,
+        auto: item.auto,
+        title: item.title,
+      },
+    };
+
+    switch (item.kind) {
+      case "deep_research_30d":
+        yield* this.executeDeepResearch(item, input);
+        break;
+      case "sim_pc_verification":
+        yield* this.executePcVerification(item, input);
+        break;
+      case "sim_telemetry_verification":
+        yield* this.executeTelemetryVerification(item, input);
+        break;
+      case "sweep_targeted_audit":
+        yield* this.executeTargetedSweep(item, input);
+        break;
     }
   }
 
@@ -92,7 +114,7 @@ export class SsaReplFollowUpExecutor {
           parentCycleId: input.parentCycleId,
           followupId: item.followupId,
           kind: item.kind,
-          auto: true,
+          auto: item.auto,
           ...next.value,
         },
       };
@@ -105,7 +127,7 @@ export class SsaReplFollowUpExecutor {
           parentCycleId: input.parentCycleId,
           followupId: item.followupId,
           kind: item.kind,
-          auto: true,
+          auto: item.auto,
           provider: "unknown",
           tookMs: Date.now() - startedAt,
           status: "failed",
@@ -123,7 +145,7 @@ export class SsaReplFollowUpExecutor {
           parentCycleId: input.parentCycleId,
           followupId: item.followupId,
           kind: item.kind,
-          auto: true,
+          auto: item.auto,
           ...toReplFindingStreamView(finding),
         },
       };
@@ -136,25 +158,25 @@ export class SsaReplFollowUpExecutor {
     );
     yield {
       event: "followup.summary",
-      data: {
-        parentCycleId: input.parentCycleId,
-        followupId: item.followupId,
-        kind: item.kind,
-        auto: true,
-        text: summary.text,
-        provider: summary.provider,
-      },
+        data: {
+          parentCycleId: input.parentCycleId,
+          followupId: item.followupId,
+          kind: item.kind,
+          auto: item.auto,
+          text: summary.text,
+          provider: summary.provider,
+        },
     };
     yield {
       event: "followup.done",
-      data: {
-        parentCycleId: input.parentCycleId,
-        followupId: item.followupId,
-        kind: item.kind,
-        auto: true,
-        provider: summary.provider,
-        tookMs: Date.now() - startedAt,
-        status: "completed",
+        data: {
+          parentCycleId: input.parentCycleId,
+          followupId: item.followupId,
+          kind: item.kind,
+          auto: item.auto,
+          provider: summary.provider,
+          tookMs: Date.now() - startedAt,
+          status: "completed",
       },
     };
   }
@@ -200,7 +222,7 @@ export class SsaReplFollowUpExecutor {
           parentCycleId: input.parentCycleId,
           followupId: item.followupId,
           kind: item.kind,
-          auto: true,
+          auto: item.auto,
           step: next.value.step === "unknown" ? "swarm" : next.value.step,
           phase: next.value.phase,
           terminal: next.value.terminal,
@@ -217,7 +239,7 @@ export class SsaReplFollowUpExecutor {
           parentCycleId: input.parentCycleId,
           followupId: item.followupId,
           kind: item.kind,
-          auto: true,
+          auto: item.auto,
           provider: "system",
           tookMs: Date.now() - startedAt,
           status: "failed",
@@ -276,7 +298,7 @@ export class SsaReplFollowUpExecutor {
           parentCycleId: input.parentCycleId,
           followupId: item.followupId,
           kind: item.kind,
-          auto: true,
+          auto: item.auto,
           step: next.value.step === "unknown" ? "swarm" : next.value.step,
           phase: next.value.phase,
           terminal: next.value.terminal,
@@ -293,7 +315,7 @@ export class SsaReplFollowUpExecutor {
           parentCycleId: input.parentCycleId,
           followupId: item.followupId,
           kind: item.kind,
-          auto: true,
+          auto: item.auto,
           provider: "system",
           tookMs: Date.now() - startedAt,
           status: "failed",
@@ -336,27 +358,27 @@ export class SsaReplFollowUpExecutor {
 
     yield {
       event: "followup.summary",
-      data: {
-        parentCycleId: input.parentCycleId,
-        followupId: item.followupId,
-        kind: item.kind,
-        auto: true,
-        text:
-          `Targeted sweep audit stored ${result.suggestionsStored} suggestion(s) ` +
-          `for ${item.target.entityType} ${item.target.entityId}.`,
+        data: {
+          parentCycleId: input.parentCycleId,
+          followupId: item.followupId,
+          kind: item.kind,
+          auto: item.auto,
+          text:
+            `Targeted sweep audit stored ${result.suggestionsStored} suggestion(s) ` +
+            `for ${item.target.entityType} ${item.target.entityId}.`,
         provider: "system",
       },
     };
     yield {
       event: "followup.done",
-      data: {
-        parentCycleId: input.parentCycleId,
-        followupId: item.followupId,
-        kind: item.kind,
-        auto: true,
-        provider: "system",
-        tookMs: Date.now() - startedAt,
-        status: "completed",
+        data: {
+          parentCycleId: input.parentCycleId,
+          followupId: item.followupId,
+          kind: item.kind,
+          auto: item.auto,
+          provider: "system",
+          tookMs: Date.now() - startedAt,
+          status: "completed",
       },
     };
   }
@@ -386,7 +408,7 @@ export class SsaReplFollowUpExecutor {
           parentCycleId,
           followupId: item.followupId,
           kind: item.kind,
-          auto: true,
+          auto: item.auto,
           step: "swarm",
           phase:
             swarm.status === "done"
@@ -421,7 +443,7 @@ export class SsaReplFollowUpExecutor {
                 parentCycleId,
                 followupId: item.followupId,
                 kind: item.kind,
-                auto: true,
+                auto: item.auto,
                 id: String(finding.id),
                 title: finding.title,
                 summary: finding.summary,
@@ -436,7 +458,7 @@ export class SsaReplFollowUpExecutor {
                 parentCycleId,
                 followupId: item.followupId,
                 kind: item.kind,
-                auto: true,
+                auto: item.auto,
                 text: finding.summary,
                 provider: "system",
               },
@@ -450,7 +472,7 @@ export class SsaReplFollowUpExecutor {
               parentCycleId,
               followupId: item.followupId,
               kind: item.kind,
-              auto: true,
+              auto: item.auto,
               text:
                 `Verification swarm ${swarmId} finished with status ${swarm.status}. ` +
                 `Done=${counts.done}, failed=${counts.failed}, pending=${counts.pending}.`,
@@ -464,7 +486,7 @@ export class SsaReplFollowUpExecutor {
             parentCycleId,
             followupId: item.followupId,
             kind: item.kind,
-            auto: true,
+            auto: item.auto,
             provider: "system",
             tookMs: Date.now() - startedAt,
             status: swarm.status === "done" ? "completed" : "failed",
@@ -487,7 +509,7 @@ export class SsaReplFollowUpExecutor {
         parentCycleId,
         followupId: item.followupId,
         kind: item.kind,
-        auto: true,
+        auto: item.auto,
         text: `Follow-up ${item.kind} is unavailable in this runtime.`,
         provider: "system",
       },
@@ -498,7 +520,7 @@ export class SsaReplFollowUpExecutor {
         parentCycleId,
         followupId: item.followupId,
         kind: item.kind,
-        auto: true,
+        auto: item.auto,
         provider: "system",
         tookMs: 0,
         status: "failed",

@@ -11,6 +11,7 @@ import type { KnnPropagationService } from "../services/knn-propagation.service"
 import type { AutonomyService } from "../services/autonomy.service";
 import type { CycleRunnerService } from "../services/cycle-runner.service";
 import type { ReplChatService } from "../services/repl-chat.service";
+import type { ReplFollowUpService } from "../services/repl-followup.service";
 import type { ReplTurnService } from "../services/repl-turn.service";
 import type { SweepSuggestionsService } from "../services/sweep-suggestions.service";
 import type { SourceDataService } from "../services/source-data.service";
@@ -58,6 +59,7 @@ export type AppServices = {
   autonomy: AutonomyService;
   cycles: CycleRunnerService;
   replChat: ReplChatService;
+  replFollowUps: ReplFollowUpService;
   replTurn: ReplTurnService;
   sweepSuggestions: SweepSuggestionsService;
   sourceData: SourceDataService;
@@ -86,7 +88,7 @@ export function registerAllRoutes(
   registerKnnPropagationRoutes(app, s.knnPropagation);
   registerAutonomyRoutes(app, s.autonomy);
   registerCyclesRoutes(app, s.cycles);
-  registerReplRoutes(app, s.replChat, s.replTurn);
+  registerReplRoutes(app, s.replChat, s.replFollowUps, s.replTurn);
   registerSourceRoutes(app, s.sourceData);
   registerSatelliteAuditRoutes(app, s.satelliteAudit);
   registerSatelliteEnrichmentRoutes(app, s.satelliteEnrichment);
