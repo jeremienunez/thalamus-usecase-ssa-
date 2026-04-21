@@ -6,5 +6,5 @@
     "noEmit": true,
     "types": ["node", "geojson"]
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

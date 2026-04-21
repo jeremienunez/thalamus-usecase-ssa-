@@ -1,27 +1,49 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import {
-  kgEdgesController,
-  kgNodesController,
-} from "../../../src/controllers/kg.controller";
+import { registerKgRoutes } from "../../../src/routes/kg.routes";
 
-describe("kgNodesController and kgEdgesController", () => {
-  it("returns the node and edge payloads from the service", async () => {
+describe("registerKgRoutes", () => {
+  it("wires /api/kg/nodes and /api/kg/edges to the matching service methods", async () => {
     const service = {
-      listNodes: vi.fn().mockResolvedValue({ items: [{ id: "sat:42" }] }),
-      listEdges: vi.fn().mockResolvedValue({ items: [{ id: "e1" }] }),
+      listNodes: vi.fn().mockResolvedValue({
+        items: [{ id: "sat:42", label: "SAT-42", class: "Satellite" }],
+      }),
+      listEdges: vi.fn().mockResolvedValue({
+        items: [
+          {
+            source: "sat:42",
+            target: "payload:7",
+            relation: "carries",
+            confidence: 0.98,
+            sourceClass: "field",
+          },
+        ],
+      }),
     };
     const app = Fastify({ logger: false });
-    app.get("/kg/nodes", kgNodesController(service as never));
-    app.get("/kg/edges", kgEdgesController(service as never));
+    registerKgRoutes(app, service as never);
 
-    const nodes = await app.inject({ method: "GET", url: "/kg/nodes" });
-    const edges = await app.inject({ method: "GET", url: "/kg/edges" });
+    const nodes = await app.inject({ method: "GET", url: "/api/kg/nodes" });
+    const edges = await app.inject({ method: "GET", url: "/api/kg/edges" });
 
     expect(nodes.statusCode).toBe(200);
-    expect(nodes.json()).toEqual({ items: [{ id: "sat:42" }] });
+    expect(nodes.json()).toEqual({
+      items: [{ id: "sat:42", label: "SAT-42", class: "Satellite" }],
+    });
     expect(edges.statusCode).toBe(200);
-    expect(edges.json()).toEqual({ items: [{ id: "e1" }] });
+    expect(edges.json()).toEqual({
+      items: [
+        {
+          source: "sat:42",
+          target: "payload:7",
+          relation: "carries",
+          confidence: 0.98,
+          sourceClass: "field",
+        },
+      ],
+    });
+    expect(service.listNodes).toHaveBeenCalledTimes(1);
+    expect(service.listEdges).toHaveBeenCalledTimes(1);
     await app.close();
   });
 });

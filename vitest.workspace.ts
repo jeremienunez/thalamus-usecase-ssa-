@@ -29,6 +29,10 @@ const aliases = {
   ),
   "@interview/shared": resolve(__dirname, "packages/shared/src/index.ts"),
   // Thalamus subpath imports used at runtime by sweep services.
+  "@interview/thalamus/explorer/curator": resolve(
+    __dirname,
+    "packages/thalamus/src/explorer/curator.ts",
+  ),
   "@interview/thalamus/explorer/nano-caller": resolve(
     __dirname,
     "packages/thalamus/src/explorer/nano-caller.ts",
@@ -58,8 +62,17 @@ export default defineWorkspace([
     test: {
       ...base,
       name: "unit",
-      include: ["packages/*/tests/**/*.spec.ts", "packages/*/src/**/*.test.ts"],
-      exclude: ["packages/*/tests/integration/**", "packages/*/tests/e2e/**"],
+      include: [
+        "packages/*/tests/**/*.spec.ts",
+        "packages/*/src/**/*.test.ts",
+        "apps/console-api/tests/unit/**/*.test.ts",
+      ],
+      exclude: [
+        "packages/*/tests/integration/**",
+        "packages/*/tests/e2e/**",
+        "apps/console-api/tests/integration/**",
+        "apps/console-api/tests/e2e/**",
+      ],
     },
   },
   {
@@ -67,19 +80,28 @@ export default defineWorkspace([
     test: {
       ...base,
       name: "integration",
-      include: ["packages/*/tests/integration/**/*.spec.ts"],
+      include: [
+        "packages/*/tests/integration/**/*.spec.ts",
+        "apps/console-api/tests/integration/**/*.spec.ts",
+      ],
       testTimeout: 15000,
     },
   },
-  "./apps/console-api/vitest.config.ts",
-  "./apps/console/vitest.config.ts",
   {
     resolve: { alias: aliases },
     test: {
       ...base,
       name: "e2e",
-      include: ["packages/*/tests/e2e/**/*.spec.ts"],
+      include: [
+        "packages/*/tests/e2e/**/*.spec.ts",
+        "apps/console-api/tests/e2e/**/*.spec.ts",
+      ],
+      globalSetup: ["./apps/console-api/tests/e2e/setup.ts"],
       testTimeout: 30000,
+      // E2E relies on a single live Fastify + Redis/Postgres stack.
+      pool: "forks",
+      poolOptions: { forks: { singleFork: true } },
     },
   },
+  "./apps/console/vitest.config.ts",
 ]);

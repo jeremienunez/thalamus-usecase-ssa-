@@ -1,31 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
-import { KnnPropagationService } from "../../../src/services/knn-propagation.service";
-import type { SatelliteRepository } from "../../../src/repositories/satellite.repository";
-import type { SweepAuditRepository } from "../../../src/repositories/sweep-audit.repository";
-import type { EnrichmentFindingService } from "../../../src/services/enrichment-finding.service";
+import {
+  KnnPropagationService,
+  type SatellitesKnnPort,
+  type SweepAuditWritePort,
+} from "../../../src/services/knn-propagation.service";
+import type { EnrichmentEmitPort } from "../../../src/services/enrichment-finding.service";
 
-function mockSatellites(): SatelliteRepository {
+function mockSatellites(): SatellitesKnnPort {
   return {
     listNullCandidatesForField: vi.fn(),
     knnNeighboursForField: vi.fn(),
     updateField: vi.fn().mockResolvedValue(undefined),
-  } as unknown as SatelliteRepository;
+  };
 }
 
-function mockAudit(): SweepAuditRepository {
+function mockAudit(): SweepAuditWritePort {
   return {
     insertEnrichmentSuccess: vi.fn().mockResolvedValue(undefined),
-  } as unknown as SweepAuditRepository;
+  };
 }
 
-function mockEnrichment(): EnrichmentFindingService {
+function mockEnrichment(): EnrichmentEmitPort {
   return {
     emit: vi.fn().mockResolvedValue(undefined),
-  } as unknown as EnrichmentFindingService;
+  };
 }
 
 describe("KnnPropagationService.propagate", () => {
-  it("fills numeric targets when all neighbour values agree within 10 percent", async () => {
+  it("records the requested K separately from the neighbour count used for the fill", async () => {
     const satellites = mockSatellites();
     const audit = mockAudit();
     const enrichment = mockEnrichment();
@@ -77,11 +79,13 @@ describe("KnnPropagationService.propagate", () => {
       description: "",
       suggestedAction: "UPDATE satellite SET mass_kg=105 (knn)",
       affectedSatellites: 1,
-      webEvidence: "knn_propagation:k=3,cosSim=0.900,neighbours=[10,11,12]",
+      webEvidence:
+        "knn_propagation:requestedK=5,used=3,cosSim=0.900,neighbours=[10,11,12]",
       resolutionPayload: {
         field: "mass_kg",
         value: 105,
-        source: "knn_propagation:k=3,cosSim=0.900,neighbours=[10,11,12]",
+        source:
+          "knn_propagation:requestedK=5,used=3,cosSim=0.900,neighbours=[10,11,12]",
         neighbourIds: ["10", "11", "12"],
         cosSim: 0.9,
       },
@@ -92,7 +96,8 @@ describe("KnnPropagationService.propagate", () => {
       field: "mass_kg",
       value: 105,
       confidence: 0.9,
-      source: "knn_propagation:k=3,cosSim=0.900,neighbours=[10,11,12]",
+      source:
+        "knn_propagation:requestedK=5,used=3,cosSim=0.900,neighbours=[10,11,12]",
       neighbourIds: ["10", "11", "12"],
       cosSim: 0.9,
     });

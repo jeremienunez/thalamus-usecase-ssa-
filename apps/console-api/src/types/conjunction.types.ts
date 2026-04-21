@@ -4,8 +4,8 @@ export type ConjunctionRow = {
   id: string;
   primary_id: string;
   secondary_id: string;
-  primary_name: string;
-  secondary_name: string;
+  primary_name: string | null;
+  secondary_name: string | null;
   /** Real NORAD catalog ID for the primary satellite. NULL means not tracked
    *  in our catalog — the cortex-llm wrapper instructs the LLM to cite
    *  '(NORAD unavailable)' in that case, never a substitute. */

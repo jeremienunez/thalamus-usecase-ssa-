@@ -51,8 +51,25 @@ export class KgRepository {
 
   async listRecentEdges(limit = 400): Promise<KgEdgeRow[]> {
     const rows = await this.db.execute<KgEdgeRow>(sql`
-      SELECT id::text, finding_id::text, entity_type, entity_id::text, relation
-      FROM research_edge ORDER BY id DESC LIMIT ${limit}
+      SELECT
+        re.id::text,
+        re.finding_id::text,
+        re.entity_type,
+        CASE
+          WHEN re.entity_type = 'operator'
+            THEN COALESCE(op.name, re.entity_id::text)
+          WHEN re.entity_type = 'orbit_regime'
+            THEN COALESCE(r.name, re.entity_id::text)
+          ELSE re.entity_id::text
+        END AS entity_id,
+        re.relation
+      FROM research_edge re
+      LEFT JOIN operator op
+        ON re.entity_type = 'operator' AND op.id = re.entity_id
+      LEFT JOIN orbit_regime r
+        ON re.entity_type = 'orbit_regime' AND r.id = re.entity_id
+      ORDER BY re.id DESC
+      LIMIT ${limit}
     `);
     return rows.rows;
   }

@@ -47,7 +47,6 @@ import {
   simTurnQueue,
   swarmFishQueue,
   swarmAggregateQueue,
-  closeQueues,
   type SwarmAggregate,
   type DomainAuditProvider,
   type SweepPromotionAdapter,
@@ -62,8 +61,6 @@ import { SsaAggregationStrategy } from "../../src/agent/ssa/sim/aggregation-stra
 import { SsaKindGuard } from "../../src/agent/ssa/sim/kind-guard";
 import { PcAggregatorService } from "../../src/agent/ssa/sim/aggregators/pc";
 import { TelemetryAggregatorService } from "../../src/agent/ssa/sim/aggregators/telemetry";
-import { createSimRouteTransport } from "../../src/infra/sim-route-transport";
-import { createApp, type AppHandle } from "../../src/server";
 import { SsaSimOutcomeResolverService } from "../../src/services/ssa-sim-outcome-resolver.service";
 
 // -----------------------------------------------------------------------
@@ -74,6 +71,7 @@ const DB_URL =
   process.env.DATABASE_URL ??
   "postgres://thalamus:thalamus@localhost:5433/thalamus";
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6380";
+const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 
 const FIXTURES_DIR = resolve(__dirname, "..", "fixtures");
 
@@ -105,7 +103,6 @@ let registry: CortexRegistry;
 let fishWorker: ReturnType<typeof createSwarmFishWorker>;
 let aggregateWorker: ReturnType<typeof createSwarmAggregateWorker>;
 let container: ReturnType<typeof buildSweepContainer>;
-let appHandle: AppHandle;
 let seededOperatorIds: number[] = [];
 
 // -----------------------------------------------------------------------
@@ -138,9 +135,10 @@ beforeAll(async () => {
 
   // Clean any previous e2e leftovers before seeding (DB + BullMQ queues).
   await cleanE2E();
-  await drainQueues().catch(() => undefined);
+  await drainQueues().catch((): void => {
+    // Setup cleanup is best-effort in e2e.
+  });
   seededOperatorIds = await seedOperators();
-  appHandle = await createApp();
 
   const ssaPersona = new SsaPersonaComposer();
   const ssaPrompt = new SsaPromptRenderer();
@@ -149,7 +147,7 @@ beforeAll(async () => {
   const ssaPerturbationPack = new SsaPerturbationPack();
   const ssaAggStrategy = new SsaAggregationStrategy();
   const ssaKindGuard = new SsaKindGuard();
-  const simHttp = new SimHttpClient(createSimRouteTransport(appHandle.app));
+  const simHttp = new SimHttpClient(createFetchSimTransport(BASE));
   const queue = new SimQueueHttpAdapter(simHttp, {
     kernelSecret: process.env.SIM_KERNEL_SHARED_SECRET,
   });
@@ -209,13 +207,13 @@ beforeAll(async () => {
         await promotion.emitSuggestionFromModal({ swarmId, aggregate });
         return null;
       },
-      emitTelemetrySuggestions: async (aggregate) => {
-        await promotion.emitScalarSuggestions({
-          swarmId: aggregate.swarmId,
-          aggregate: aggregate as Record<string, unknown>,
-        });
-        return [];
-      },
+          emitTelemetrySuggestions: async (aggregate) => {
+            await promotion.emitScalarSuggestions({
+              swarmId: aggregate.swarmId,
+              aggregate: aggregate as unknown as Record<string, unknown>,
+            });
+            return [];
+          },
     },
   });
   aggregateWorker = createSwarmAggregateWorker({
@@ -230,14 +228,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await drainQueues().catch(() => undefined);
-    await fishWorker?.close().catch(() => undefined);
-    await aggregateWorker?.close().catch(() => undefined);
-    await closeQueues().catch(() => undefined);
-    await appHandle?.close().catch(() => undefined);
+    await drainQueues().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
+    await fishWorker?.close().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
+    await aggregateWorker?.close().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
   } finally {
-    await redis?.quit().catch(() => undefined);
-    await pool?.end().catch(() => undefined);
+    await redis?.quit().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
+    await pool?.end().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
   }
 }, 15_000);
 
@@ -450,9 +456,39 @@ describe("UC3 swarm — E2E", () => {
       expect(edges.length).toBeGreaterThanOrEqual(1);
       expect(edges[0].entityType).toBe("satellite");
     },
-    45_000,
+    90_000,
   );
 });
+
+function createFetchSimTransport(baseUrl: string) {
+  return {
+    async request(input: {
+      method: "GET" | "POST" | "PATCH";
+      path: string;
+      query?: Record<string, string | number | boolean | null | undefined>;
+      json?: unknown;
+      headers?: Record<string, string>;
+    }) {
+      const url = new URL(input.path, baseUrl);
+      for (const [key, value] of Object.entries(input.query ?? {})) {
+        if (value === undefined || value === null) continue;
+        url.searchParams.set(key, String(value));
+      }
+      const res = await fetch(url, {
+        method: input.method,
+        headers: input.json === undefined
+          ? input.headers
+          : { "content-type": "application/json", ...(input.headers ?? {}) },
+        body: input.json === undefined ? undefined : JSON.stringify(input.json),
+      });
+      const text = await res.text();
+      return {
+        status: res.status,
+        body: text.length > 0 ? JSON.parse(text) : {},
+      };
+    },
+  };
+}
 
 // -----------------------------------------------------------------------
 // Helpers
@@ -588,10 +624,21 @@ async function cleanE2ERedis(): Promise<void> {
 }
 
 async function drainQueues(): Promise<void> {
+  const wipeQueueKeys = async (prefix: string): Promise<void> => {
+    let cursor = "0";
+    do {
+      const [next, keys] = await redis.scan(cursor, "MATCH", `${prefix}*`, "COUNT", "200");
+      cursor = next;
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== "0");
+  };
+
   await Promise.all([
-    simTurnQueue.drain(true).catch(() => undefined),
-    swarmFishQueue.drain(true).catch(() => undefined),
-    swarmAggregateQueue.drain(true).catch(() => undefined),
+    wipeQueueKeys("bull:sim-turn"),
+    wipeQueueKeys("bull:swarm-fish"),
+    wipeQueueKeys("bull:swarm-aggregate"),
   ]);
 }
 

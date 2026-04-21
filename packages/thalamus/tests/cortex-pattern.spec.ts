@@ -27,7 +27,7 @@ vi.mock("../src/transports/llm-chat", () => ({
 
 import { CortexExecutor } from "../src/cortices/executor";
 import { CortexRegistry, type CortexSkill } from "../src/cortices/registry";
-import { noopDomainConfig } from "../src/cortices/types";
+import { noopDomainConfig, type CortexDataProvider } from "../src/cortices/types";
 import { StandardStrategy } from "../src/cortices/strategies/standard-strategy";
 import { StrategistStrategy } from "../src/cortices/strategies/strategist-strategy";
 import { NullWebSearchAdapter } from "../src/transports/openai-web-search.adapter";
@@ -79,17 +79,20 @@ const testDomainConfig = {
 
 // Build the default strategy list the production container also wires:
 // Strategist first (specialised), Standard last (catch-all). Empty data
-// provider — tests that exercise SQL helpers point the skill at a helper
-// name absent from the map, exercising the "no data provider mapped" path.
-function buildTestStrategies(
-  sourceFetcher: SourceFetcherPort = {
+// provider by default; individual tests can inject a real seam fake.
+function buildTestStrategies({
+  dataProvider = {},
+  sourceFetcher = {
     fetchForCortex: async () => [] as SourceResult[],
   },
-) {
+}: {
+  dataProvider?: CortexDataProvider;
+  sourceFetcher?: SourceFetcherPort;
+} = {}) {
   return [
     new StrategistStrategy(testDomainConfig),
     new StandardStrategy(
-      {},
+      dataProvider,
       testDomainConfig,
       new NullWebSearchAdapter(),
       sourceFetcher,
@@ -177,7 +180,7 @@ describe("SPEC-TH-003 AC-1 / AC-3 — nominal execution normalises findings", ()
     });
     const executor = new CortexExecutor(
       registry,
-      buildTestStrategies(sourceFetcher),
+      buildTestStrategies({ sourceFetcher }),
     );
 
     const out = await executor.execute("catalog", {
@@ -231,22 +234,24 @@ describe("SPEC-TH-003 AC-4 — user-scoped cortex requires userId", () => {
 });
 
 describe("SPEC-TH-003 AC-5 — helper throw is swallowed, executor keeps going", () => {
-  it("does not reject when the SQL helper throws; attempts web fallback path", async () => {
-    // cortex-llm mock returns empty findings — enough to verify the executor
-    // did not propagate the helper throw.
+  it("does not reject when the SQL helper throws and still uses surviving source rows", async () => {
+    // cortex-llm mock returns empty findings — enough to verify the strategy
+    // did not propagate the helper failure and still processed source data.
     vi.mocked(analyzeCortexData).mockResolvedValue({
       findings: [],
       tokensUsed: 0,
       model: "test-nano",
     } as never);
 
-    // Point the skill at a helper name that does not exist in sqlHelpers.
+    const explodingHelper = vi.fn(async () => {
+      throw new Error("db down");
+    });
     const registry = fakeRegistry({
       catalog: {
         header: {
           name: "catalog",
           description: "",
-          sqlHelper: "helper_that_does_not_exist",
+          sqlHelper: "explodingHelper",
           params: {},
         },
       },
@@ -267,35 +272,27 @@ describe("SPEC-TH-003 AC-5 — helper throw is swallowed, executor keeps going",
     };
     const executor = new CortexExecutor(
       registry,
-      buildTestStrategies(sourceFetcher),
+      buildTestStrategies({
+        dataProvider: { explodingHelper },
+        sourceFetcher,
+      }),
     );
 
     const promise = executor.execute("catalog", {
       query: "screen",
-      params: {},
+      params: { noradId: 25544 },
       cycleId: 1n,
     });
     await expect(promise).resolves.toBeDefined();
     const out = await promise;
     // Bug #3 L1 fix (2026-04-17 morning audit): when the LLM emits 0
     // findings while DATA was non-empty (here: 1 structured-source row
-    // from the mocked `fetchSourcesForCortex`), the strategy now emits
-    // a synthetic data-gap "anomaly" meta-finding so the silence is
-    // visible to the strategist + /api/stats. AC-5's invariant is "the
-    // executor does not reject" — that still holds.
+    // survived after the helper failure), the strategy emits a synthetic
+    // data-gap "anomaly" meta-finding so the silence stays visible.
+    expect(explodingHelper).toHaveBeenCalledWith({ noradId: 25544 });
     expect(out.findings).toHaveLength(1);
     expect(out.findings[0].findingType).toBe(ResearchFindingType.Anomaly);
     expect(out.findings[0].title).toMatch(/0 findings from \d+ data items/);
     expect(out.metadata).toBeDefined();
   });
-});
-
-describe.skip("SPEC-TH-003 AC-1 — execute catches LLM transport failures", () => {
-  // Known non-conformance: the shipped executor does not wrap the
-  // analyzeCortexData call in a try/catch. The spec invariant
-  // ("never throws for domain-level failures") is arguably about cortex logic,
-  // not infrastructure rejections; see Open Questions in the .tex spec.
-  // If we decide to tighten this, the fix is a try/catch around lines 252-260
-  // of executor.ts with graceful fallback to emptyOutput.
-  it.todo("analyzeCortexData rejection should resolve to an empty CortexOutput");
 });

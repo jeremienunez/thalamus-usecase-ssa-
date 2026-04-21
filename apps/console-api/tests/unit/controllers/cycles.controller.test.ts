@@ -1,19 +1,16 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import {
-  cycleHistoryController,
-  cycleRunController,
-} from "../../../src/controllers/cycles.controller";
+import { registerCyclesRoutes } from "../../../src/routes/cycles.routes";
 
-describe("cycleRunController", () => {
-  it("returns 400 on invalid body and does not call the service", async () => {
+describe("registerCyclesRoutes", () => {
+  it("returns 400 on invalid public body and does not call the cycle service", async () => {
     const service = { runUserCycle: vi.fn() };
     const app = Fastify({ logger: false });
-    app.post("/cycles/run", cycleRunController(service as never));
+    registerCyclesRoutes(app, service as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/cycles/run",
+      url: "/api/cycles/run",
       payload: { kind: "all" },
     });
 
@@ -22,7 +19,7 @@ describe("cycleRunController", () => {
     await app.close();
   });
 
-  it("uses the default query when none is provided", async () => {
+  it("uses the default query on the public run route when none is provided", async () => {
     const service = {
       runUserCycle: vi.fn().mockResolvedValue({
         cycle: {
@@ -34,13 +31,14 @@ describe("cycleRunController", () => {
           cortices: ["nano-sweep"],
         },
       }),
+      listHistory: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    app.post("/cycles/run", cycleRunController(service as never));
+    registerCyclesRoutes(app, service as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/cycles/run",
+      url: "/api/cycles/run",
       payload: { kind: "fish" },
     });
 
@@ -49,7 +47,6 @@ describe("cycleRunController", () => {
       "Current SSA situation — upcoming conjunctions, catalog anomalies, debris forecast",
     );
     expect(res.statusCode).toBe(200);
-    // Controller must emit the wire DTO, not the raw service object.
     expect(res.json()).toEqual({
       cycle: {
         id: "c1",
@@ -63,7 +60,7 @@ describe("cycleRunController", () => {
     await app.close();
   });
 
-  it("returns 500 with error copied from result.cycle.error", async () => {
+  it("returns 500 with error mirrored from result.cycle.error on the public run route", async () => {
     const service = {
       runUserCycle: vi.fn().mockResolvedValue({
         cycle: {
@@ -76,13 +73,14 @@ describe("cycleRunController", () => {
           error: "boom",
         },
       }),
+      listHistory: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    app.post("/cycles/run", cycleRunController(service as never));
+    registerCyclesRoutes(app, service as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/cycles/run",
+      url: "/api/cycles/run",
       payload: { kind: "thalamus", query: "screen geo" },
     });
 
@@ -102,7 +100,7 @@ describe("cycleRunController", () => {
     await app.close();
   });
 
-  it("projects findings + costUsd into the response DTO", async () => {
+  it("projects findings and costUsd on the public run response", async () => {
     const service = {
       runUserCycle: vi.fn().mockResolvedValue({
         cycle: {
@@ -125,13 +123,14 @@ describe("cycleRunController", () => {
           costUsd: 0.42,
         },
       }),
+      listHistory: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    app.post("/cycles/run", cycleRunController(service as never));
+    registerCyclesRoutes(app, service as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/cycles/run",
+      url: "/api/cycles/run",
       payload: { kind: "thalamus", query: "q" },
     });
 
@@ -142,20 +141,37 @@ describe("cycleRunController", () => {
     expect(body.cycle.costUsd).toBe(0.42);
     await app.close();
   });
-});
 
-describe("cycleHistoryController", () => {
-  it("wraps service history inside {items}", async () => {
+  it("wraps history inside {items} on the public list route", async () => {
     const service = {
+      runUserCycle: vi.fn(),
       listHistory: vi.fn().mockReturnValue([{ id: "c1" }, { id: "c2" }]),
     };
     const app = Fastify({ logger: false });
-    app.get("/cycles/history", cycleHistoryController(service as never));
+    registerCyclesRoutes(app, service as never);
 
-    const res = await app.inject({ method: "GET", url: "/cycles/history" });
+    const res = await app.inject({ method: "GET", url: "/api/cycles" });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ items: [{ id: "c1" }, { id: "c2" }] });
+    await app.close();
+  });
+
+  it("does not expose stale non-api cycle paths", async () => {
+    const service = {
+      runUserCycle: vi.fn(),
+      listHistory: vi.fn(),
+    };
+    const app = Fastify({ logger: false });
+    registerCyclesRoutes(app, service as never);
+
+    const run = await app.inject({ method: "POST", url: "/cycles/run" });
+    const list = await app.inject({ method: "GET", url: "/cycles/history" });
+
+    expect(run.statusCode).toBe(404);
+    expect(list.statusCode).toBe(404);
+    expect(service.runUserCycle).not.toHaveBeenCalled();
+    expect(service.listHistory).not.toHaveBeenCalled();
     await app.close();
   });
 });

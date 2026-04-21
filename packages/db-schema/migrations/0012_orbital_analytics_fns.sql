@@ -21,6 +21,9 @@
 -- from the schema barrel). Mirrors the pattern used for 0001_hnsw_index.sql
 -- and 0011_source_item_trgm_gin.sql.
 
+ALTER TABLE orbit_regime
+  ADD COLUMN IF NOT EXISTS baselines jsonb;
+
 -- ─────────────────────────────────────────────────────────────────────────
 -- 1. fn_plan_orbit_slots
 -- ─────────────────────────────────────────────────────────────────────────

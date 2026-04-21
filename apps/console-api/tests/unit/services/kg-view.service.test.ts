@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { KgViewService } from "../../../src/services/kg-view.service";
-import type { KgRepository } from "../../../src/repositories/kg.repository";
+import {
+  KgViewService,
+  type KgReadPort,
+} from "../../../src/services/kg-view.service";
 
-function mockRepo(): KgRepository {
+function mockRepo(): KgReadPort {
   return {
     loadNodeSources: vi.fn(),
     listRecentEdges: vi.fn(),
-  } as unknown as KgRepository;
+  };
 }
 
 describe("KgViewService.listNodes", () => {
@@ -29,7 +31,7 @@ describe("KgViewService.listNodes", () => {
     ]);
     expect(items[3]).toMatchObject({
       label: "brief anomaly",
-      class: "Payload",
+      class: "ConjunctionEvent",
       cortex: "classification_auditor",
     });
   });
@@ -53,6 +55,13 @@ describe("KgViewService.listEdges", () => {
         entity_id: "ESA",
         relation: "owned_by",
       },
+      {
+        id: "12",
+        finding_id: "4",
+        entity_type: "orbit_regime",
+        entity_id: "LEO",
+        relation: "in_regime",
+      },
     ]);
 
     const { items } = await new KgViewService(repo).listEdges();
@@ -69,6 +78,12 @@ describe("KgViewService.listEdges", () => {
         source: "finding:4",
         target: "op:ESA",
         relation: "owned_by",
+      },
+      {
+        id: "12",
+        source: "finding:4",
+        target: "regime:LEO",
+        relation: "in_regime",
       },
     ]);
   });

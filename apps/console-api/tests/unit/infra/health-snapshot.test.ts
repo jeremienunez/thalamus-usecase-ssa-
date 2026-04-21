@@ -1,16 +1,30 @@
 import { describe, it, expect, vi } from "vitest";
 import { snapshotHealth } from "../../../src/infra/health-snapshot";
 
+function renderSql(query: {
+  toQuery: (config: {
+    escapeName: (name: string) => string;
+    escapeParam: () => string;
+    escapeString: (value: string) => string;
+    casing: { getColumnCasing: (column: string) => string };
+  }) => { sql: string };
+}): string {
+  return query.toQuery({
+    escapeName: (name) => `"${name}"`,
+    escapeParam: () => "?",
+    escapeString: (value) => `'${value}'`,
+    casing: { getColumnCasing: (column) => column },
+  }).sql;
+}
+
 function mockDb(answers: {
   pgvector?: string | null | Error;
   satellites?: number | null | Error;
   regimes?: number | null | Error;
 }) {
   return {
-    execute: vi.fn(async (q: { queryChunks?: Array<{ value?: string[] }> }) => {
-      const raw = (q.queryChunks ?? [])
-        .map((c) => (c.value ?? []).join(""))
-        .join(" ");
+    execute: vi.fn(async (q: Parameters<typeof renderSql>[0]) => {
+      const raw = renderSql(q);
       if (raw.includes("pg_extension")) {
         if (answers.pgvector instanceof Error) throw answers.pgvector;
         return { rows: answers.pgvector == null ? [] : [{ extversion: answers.pgvector }] };
@@ -50,6 +64,7 @@ describe("snapshotHealth", () => {
     expect(s.cortices).toBe(29);
     expect(s.catalog.satellites).toBe(500);
     expect(s.catalog.regimes).toBe(37);
+    expect(db.execute).toHaveBeenCalledTimes(3);
   });
 
   it("returns postgres.ok=false when pgvector query throws", async () => {

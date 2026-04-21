@@ -1,4 +1,4 @@
-name: Arch Check
+name: Repo Contracts
 
 on:
   pull_request:
@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  arch-check:
-    name: arch:check
+  repo-contracts:
+    name: arch + test-policy + spec-check
     runs-on: ubuntu-latest
 
     steps:
@@ -33,3 +33,9 @@ jobs:
 
       - name: Run architecture boundaries check
         run: pnpm arch:check
+
+      - name: Run test policy check
+        run: pnpm test:policy
+
+      - name: Run spec traceability check
+        run: pnpm spec:check

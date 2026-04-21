@@ -1,60 +1,78 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import {
-  sweepReviewController,
-  sweepSuggestionsListController,
-} from "../../../src/controllers/sweep-suggestions.controller";
+import { registerSweepRoutes } from "../../../src/routes/sweep.routes";
 
-describe("sweepSuggestionsListController", () => {
-  it("returns the service list payload", async () => {
+function missionStub() {
+  return {
+    start: vi.fn(),
+    stop: vi.fn(),
+    publicState: vi.fn(),
+  };
+}
+
+describe("registerSweepRoutes suggestions endpoints", () => {
+  it("returns the public suggestions list payload", async () => {
     const service = {
       list: vi.fn().mockResolvedValue({ items: [{ id: "s:1" }], count: 1 }),
+      review: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    app.get("/suggestions", sweepSuggestionsListController(service as never));
+    registerSweepRoutes(app, service as never, missionStub() as never);
 
-    const res = await app.inject({ method: "GET", url: "/suggestions" });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/sweep/suggestions",
+    });
 
     expect(service.list).toHaveBeenCalledOnce();
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ items: [{ id: "s:1" }], count: 1 });
     await app.close();
   });
-});
 
-describe("sweepReviewController", () => {
-  it("returns 400 on invalid params/body and does not call the service", async () => {
-    const service = { review: vi.fn() };
+  it("returns 400 when the matched public route carries an empty id param", async () => {
+    const service = { review: vi.fn(), list: vi.fn() };
     const app = Fastify({ logger: false });
-    app.post("/suggestions/:id/review", sweepReviewController(service as never));
+    registerSweepRoutes(app, service as never, missionStub() as never);
 
-    const badParams = await app.inject({
+    const res = await app.inject({
       method: "POST",
-      url: "/suggestions//review",
+      url: "/api/sweep/suggestions//review",
       payload: { accept: true },
     });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.review).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 400 on an invalid public review body and does not call the service", async () => {
+    const service = { review: vi.fn(), list: vi.fn() };
+    const app = Fastify({ logger: false });
+    registerSweepRoutes(app, service as never, missionStub() as never);
+
     const badBody = await app.inject({
       method: "POST",
-      url: "/suggestions/s:1/review",
+      url: "/api/sweep/suggestions/s:1/review",
       payload: { accept: "yes" },
     });
 
-    expect(badParams.statusCode).toBe(400);
     expect(badBody.statusCode).toBe(400);
     expect(service.review).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("returns 404 when the service reports notFound", async () => {
+  it("returns 404 when the service reports notFound on the public review route", async () => {
     const service = {
       review: vi.fn().mockResolvedValue({ ok: false, notFound: true }),
+      list: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    app.post("/suggestions/:id/review", sweepReviewController(service as never));
+    registerSweepRoutes(app, service as never, missionStub() as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/suggestions/s:404/review",
+      url: "/api/sweep/suggestions/s:404/review",
       payload: { accept: true },
     });
 
@@ -63,20 +81,21 @@ describe("sweepReviewController", () => {
     await app.close();
   });
 
-  it("returns the service review payload on success", async () => {
+  it("returns the service review payload on the public success path", async () => {
     const service = {
       review: vi.fn().mockResolvedValue({
         ok: true,
         reviewed: true,
         resolution: { applied: true },
       }),
+      list: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    app.post("/suggestions/:id/review", sweepReviewController(service as never));
+    registerSweepRoutes(app, service as never, missionStub() as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/suggestions/s:1/review",
+      url: "/api/sweep/suggestions/s:1/review",
       payload: { accept: true, reason: "looks good" },
     });
 
@@ -87,6 +106,28 @@ describe("sweepReviewController", () => {
       reviewed: true,
       resolution: { applied: true },
     });
+    await app.close();
+  });
+
+  it("does not expose stale non-api suggestions paths", async () => {
+    const service = {
+      review: vi.fn(),
+      list: vi.fn(),
+    };
+    const app = Fastify({ logger: false });
+    registerSweepRoutes(app, service as never, missionStub() as never);
+
+    const list = await app.inject({ method: "GET", url: "/suggestions" });
+    const review = await app.inject({
+      method: "POST",
+      url: "/suggestions/s:1/review",
+      payload: { accept: true },
+    });
+
+    expect(list.statusCode).toBe(404);
+    expect(review.statusCode).toBe(404);
+    expect(service.list).not.toHaveBeenCalled();
+    expect(service.review).not.toHaveBeenCalled();
     await app.close();
   });
 });

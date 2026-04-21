@@ -75,9 +75,15 @@ describe("toFindingDetailView", () => {
     const v = toFindingDetailView(detailRow(), [
       { entity_type: "satellite", entity_id: "123" },
       { entity_type: "operator", entity_id: "SpaceX" },
+      { entity_type: "orbit_regime", entity_id: "LEO" },
       { entity_type: "payload", entity_id: "99" },
     ]);
-    expect(v.linkedEntityIds).toEqual(["sat:123", "op:SpaceX", "payload:99"]);
+    expect(v.linkedEntityIds).toEqual([
+      "sat:123",
+      "op:SpaceX",
+      "regime:LEO",
+      "payload:99",
+    ]);
   });
 
   it("parses evidence kind field/osint/derived from source", () => {
@@ -152,4 +158,3 @@ describe("toFindingDetailView", () => {
     expect(v.id).toBe("f:42");
   });
 });
-

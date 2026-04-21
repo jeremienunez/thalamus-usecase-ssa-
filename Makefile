@@ -158,6 +158,10 @@ typecheck: ## TypeScript on every package
 test: ## Run vitest workspace
 	pnpm test
 
+.PHONY: test-policy
+test-policy: ## Enforce executable expected-behavior test rules
+	pnpm test:policy
+
 .PHONY: spec-check
 spec-check: ## Verify every APPROVED/IMPLEMENTED spec AC has a test
 	pnpm spec:check

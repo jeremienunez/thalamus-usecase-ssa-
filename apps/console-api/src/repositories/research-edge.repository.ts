@@ -17,9 +17,22 @@ export class ResearchEdgeRepository {
   async findByFindingIds(ids: bigint[]): Promise<EdgeRow[]> {
     if (ids.length === 0) return [];
     const rows = await this.db.execute<EdgeRow>(sql`
-      SELECT finding_id::text, entity_type, entity_id::text
-      FROM research_edge
-      WHERE finding_id = ANY(${sql`ARRAY[${sql.join(
+      SELECT
+        re.finding_id::text,
+        re.entity_type,
+        CASE
+          WHEN re.entity_type = 'operator'
+            THEN COALESCE(op.name, re.entity_id::text)
+          WHEN re.entity_type = 'orbit_regime'
+            THEN COALESCE(r.name, re.entity_id::text)
+          ELSE re.entity_id::text
+        END AS entity_id
+      FROM research_edge re
+      LEFT JOIN operator op
+        ON re.entity_type = 'operator' AND op.id = re.entity_id
+      LEFT JOIN orbit_regime r
+        ON re.entity_type = 'orbit_regime' AND r.id = re.entity_id
+      WHERE re.finding_id = ANY(${sql`ARRAY[${sql.join(
         ids.map((i) => sql`${i}`),
         sql`, `,
       )}]::bigint[]`})
@@ -35,8 +48,21 @@ export class ResearchEdgeRepository {
       entity_type: string;
       entity_id: string;
     }>(sql`
-      SELECT entity_type, entity_id::text
-      FROM research_edge WHERE finding_id = ${id}
+      SELECT
+        re.entity_type,
+        CASE
+          WHEN re.entity_type = 'operator'
+            THEN COALESCE(op.name, re.entity_id::text)
+          WHEN re.entity_type = 'orbit_regime'
+            THEN COALESCE(r.name, re.entity_id::text)
+          ELSE re.entity_id::text
+        END AS entity_id
+      FROM research_edge re
+      LEFT JOIN operator op
+        ON re.entity_type = 'operator' AND op.id = re.entity_id
+      LEFT JOIN orbit_regime r
+        ON re.entity_type = 'orbit_regime' AND r.id = re.entity_id
+      WHERE re.finding_id = ${id}
       LIMIT ${limit}
     `);
     return rows.rows;

@@ -5,6 +5,7 @@ export const KgEntityClassSchema = z.enum([
   "Operator",
   "OrbitRegime",
   "Payload",
+  "ConjunctionEvent",
 ]);
 export type KgEntityClass = z.infer<typeof KgEntityClassSchema>;
 

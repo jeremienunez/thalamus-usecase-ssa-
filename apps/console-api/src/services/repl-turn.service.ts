@@ -8,28 +8,23 @@
  * keeps the controller thin and opens the door to injecting alt routers
  * (real KG/finding data) in the future without touching the route handler.
  */
+import { buildFixtures } from "../fixtures";
 import { runTurn, type Fixtures } from "../repl";
 
 export type TurnContext = Fixtures;
 
-const EMPTY_CONTEXT: TurnContext = {
-  satellites: [],
-  kgNodes: [],
-  kgEdges: [],
-  findings: [],
-};
-
 export class ReplTurnService {
   /**
-   * Run one REPL turn. Context is empty by default — this mirrors the
-   * previous inline controller behaviour which used the fixture-backed
-   * router regardless of the real DB state.
+   * Run one REPL turn. When callers don't provide a context, the service
+   * materialises the deterministic demo fixtures expected by `runTurn`.
+   * This keeps /api/repl/turn usable for accept/explain/telemetry routes
+   * instead of passing an empty context that would miss every entity.
    */
   async handle(
     input: string,
     sessionId: string,
-    context: TurnContext = EMPTY_CONTEXT,
+    context?: TurnContext,
   ): Promise<Awaited<ReturnType<typeof runTurn>>> {
-    return runTurn(input, context, sessionId);
+    return runTurn(input, context ?? buildFixtures(), sessionId);
   }
 }

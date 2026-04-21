@@ -4,7 +4,7 @@ import { SsaSimOutcomeResolverService } from "../../../src/services/ssa-sim-outc
 describe("SsaSimOutcomeResolverService", () => {
   it("resolves a modal narrative swarm and triggers promotion", async () => {
     const emitSuggestionFromModal = vi.fn(async () => 123);
-    const emitTelemetrySuggestions = vi.fn(async () => []);
+    const emitTelemetrySuggestions = vi.fn(async (): Promise<number[]> => []);
     const service = new SsaSimOutcomeResolverService({
       aggregator: {
         aggregate: vi.fn(async () => ({
@@ -13,7 +13,7 @@ describe("SsaSimOutcomeResolverService", () => {
           quorumMet: true,
           succeededFish: 3,
           failedFish: 0,
-          clusters: [],
+          clusters: [] as unknown[],
           modal: {
             actionKind: "accept",
             fraction: 0.67,
@@ -59,7 +59,9 @@ describe("SsaSimOutcomeResolverService", () => {
   });
 
   it("resolves a telemetry swarm and emits scalar promotions", async () => {
-    const emitTelemetrySuggestions = vi.fn(async () => [11, 12]);
+    const emitTelemetrySuggestions = vi.fn(
+      async (): Promise<number[]> => [11, 12],
+    );
     const service = new SsaSimOutcomeResolverService({
       aggregator: {
         aggregate: vi.fn(),
@@ -92,7 +94,7 @@ describe("SsaSimOutcomeResolverService", () => {
         aggregate: vi.fn(),
       },
       promotionService: {
-        emitSuggestionFromModal: vi.fn(async () => null),
+        emitSuggestionFromModal: vi.fn(async (): Promise<null> => null),
         emitTelemetrySuggestions,
       },
     });
@@ -126,8 +128,8 @@ describe("SsaSimOutcomeResolverService", () => {
           quorumMet: false,
           succeededFish: 1,
           failedFish: 3,
-          clusters: [],
-          modal: null,
+          clusters: [] as unknown[],
+          modal: null as null,
           divergenceScore: 1,
         })),
       } as never,
@@ -139,7 +141,7 @@ describe("SsaSimOutcomeResolverService", () => {
       },
       promotionService: {
         emitSuggestionFromModal,
-        emitTelemetrySuggestions: vi.fn(async () => []),
+        emitTelemetrySuggestions: vi.fn(async (): Promise<number[]> => []),
       },
     });
 

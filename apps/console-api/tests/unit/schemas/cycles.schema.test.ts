@@ -10,8 +10,11 @@ describe("CycleRunBodySchema", () => {
     });
   });
 
-  it("rejects unknown kinds and blank queries after trim", () => {
+  it("rejects unknown kinds", () => {
     expect(CycleRunBodySchema.safeParse({ kind: "all" }).success).toBe(false);
+  });
+
+  it("rejects blank queries after trim even for valid kinds", () => {
     expect(CycleRunBodySchema.safeParse({ kind: "fish", query: "   " }).success).toBe(false);
   });
 });

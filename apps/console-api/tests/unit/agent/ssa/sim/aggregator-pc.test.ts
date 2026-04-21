@@ -4,18 +4,27 @@ import {
   aggregateToSuggestion,
   severityFromMedian,
 } from "../../../../../src/agent/ssa/sim/aggregators/pc";
-import type { TurnAction } from "@interview/db-schema";
+import {
+  turnActionSchema,
+} from "../../../../../src/agent/ssa/sim/action-schema";
 
-// The aggregator treats `dominantMode` and `flags` as opaque strings for
-// clustering; the test uses synthetic values ("nominal", "tight", "loose",
-// "cov-clamped") that don't match the strict TurnAction union. We cast via
-// `unknown` to keep the spec readable without weakening the prod type.
+type EstimatePcMode =
+  | "elliptical-overlap"
+  | "short-encounter"
+  | "long-encounter"
+  | "unknown";
+type EstimatePcFlag =
+  | "low-data"
+  | "high-uncertainty"
+  | "degraded-covariance"
+  | "field-required";
+
 function est(
   pc: number,
-  mode: string = "nominal",
-  flags: string[] = [],
-): TurnAction {
-  return {
+  mode: EstimatePcMode = "unknown",
+  flags: EstimatePcFlag[] = [],
+) {
+  return turnActionSchema.parse({
     kind: "estimate_pc",
     conjunctionId: 42,
     pcEstimate: pc,
@@ -28,7 +37,7 @@ function est(
       conjunctionGeometry: "test",
     },
     flags,
-  } as unknown as TurnAction;
+  });
 }
 
 describe("computePcAggregate", () => {
@@ -50,17 +59,17 @@ describe("computePcAggregate", () => {
 
   it("surfaces clusters with >= 2 fish, sorted by fishCount desc", () => {
     const agg = computePcAggregate([
-      est(1e-4, "nominal", []),
-      est(2e-4, "nominal", []),
-      est(5e-3, "tight", ["cov-clamped"]),
-      est(6e-3, "tight", ["cov-clamped"]),
-      est(7e-3, "tight", ["cov-clamped"]),
-      est(3e-6, "loose"),
+      est(1e-4, "short-encounter", []),
+      est(2e-4, "short-encounter", []),
+      est(5e-3, "elliptical-overlap", ["degraded-covariance"]),
+      est(6e-3, "elliptical-overlap", ["degraded-covariance"]),
+      est(7e-3, "elliptical-overlap", ["degraded-covariance"]),
+      est(3e-6, "long-encounter"),
     ])!;
     expect(agg.clusters.length).toBe(2);
     expect(agg.clusters[0]!.fishCount).toBe(3);
-    expect(agg.clusters[0]!.mode).toBe("tight");
-    expect(agg.clusters[0]!.flags).toEqual(["cov-clamped"]);
+    expect(agg.clusters[0]!.mode).toBe("elliptical-overlap");
+    expect(agg.clusters[0]!.flags).toEqual(["degraded-covariance"]);
   });
 
   it("derives severity from median", () => {

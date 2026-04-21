@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
-const RUN_LLM = !!process.env.RUN_LLM_E2E;
+const RUN_LLM = process.env.RUN_LLM_E2E === "1";
 
 async function patchAutonomy(body: Record<string, unknown>) {
   const res = await fetch(`${BASE}/api/config/runtime/console.autonomy`, {

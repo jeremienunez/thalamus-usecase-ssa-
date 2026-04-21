@@ -1,21 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
-import { ReflexionService } from "../../../src/services/reflexion.service";
+import {
+  ReflexionService,
+  type CyclesPort,
+  type EdgesWritePort,
+  type FindingsWritePort,
+  type ReflexionReadPort,
+} from "../../../src/services/reflexion.service";
 import type {
-  ReflexionRepository,
   CoplaneRow,
   BeltRow,
   MilRow,
   ReflexionTarget,
-} from "../../../src/repositories/reflexion.repository";
-import type { EnrichmentCycleRepository } from "../../../src/repositories/enrichment-cycle.repository";
-import type { FindingRepository } from "../../../src/repositories/finding.repository";
-import type { ResearchEdgeRepository } from "../../../src/repositories/research-edge.repository";
+} from "../../../src/types/reflexion.types";
 import { HttpError } from "../../../src/utils/http-error";
+
+function typedSpy<Fn extends (...args: never[]) => unknown>() {
+  return vi.fn<Parameters<Fn>, ReturnType<Fn>>();
+}
 
 function target(overrides: Partial<ReflexionTarget> = {}): ReflexionTarget {
   return {
     id: "42",
     name: "FENGYUN 3A",
+    norad_id: 32958,
     object_class: "payload",
     operator_country: "China",
     classification_tier: "restricted",
@@ -68,86 +75,114 @@ function milRow(overrides: Partial<MilRow> = {}): MilRow {
   };
 }
 
-function mockRepo(): ReflexionRepository {
+function mockRepo() {
+  const findTarget = typedSpy<ReflexionReadPort["findTarget"]>();
+  const findStrictCoplane = typedSpy<ReflexionReadPort["findStrictCoplane"]>();
+  const findInclinationBelt = typedSpy<ReflexionReadPort["findInclinationBelt"]>();
+  const findMilLineagePeers = typedSpy<ReflexionReadPort["findMilLineagePeers"]>();
+
   return {
-    findTarget: vi.fn(),
-    findStrictCoplane: vi.fn(),
-    findInclinationBelt: vi.fn(),
-    findMilLineagePeers: vi.fn(),
-  } as unknown as ReflexionRepository;
+    repo: {
+      findTarget,
+      findStrictCoplane,
+      findInclinationBelt,
+      findMilLineagePeers,
+    } satisfies ReflexionReadPort,
+    findTarget,
+    findStrictCoplane,
+    findInclinationBelt,
+    findMilLineagePeers,
+  };
 }
 
-function mockCycles(): EnrichmentCycleRepository {
+function mockCycles() {
+  const getOrCreate = typedSpy<CyclesPort["getOrCreate"]>();
+
   return {
-    getOrCreate: vi.fn(),
-  } as unknown as EnrichmentCycleRepository;
+    cycles: { getOrCreate } satisfies CyclesPort,
+    getOrCreate,
+  };
 }
 
-function mockFindings(): FindingRepository {
+function mockFindings() {
+  const insert = typedSpy<FindingsWritePort["insert"]>();
+
   return {
-    insert: vi.fn(),
-  } as unknown as FindingRepository;
+    findings: { insert } satisfies FindingsWritePort,
+    insert,
+  };
 }
 
-function mockEdges(): ResearchEdgeRepository {
+function mockEdges() {
+  const insert = typedSpy<EdgesWritePort["insert"]>();
+  insert.mockResolvedValue(undefined);
+
   return {
-    insert: vi.fn().mockResolvedValue(undefined),
-  } as unknown as ResearchEdgeRepository;
+    edges: { insert } satisfies EdgesWritePort,
+    insert,
+  };
 }
 
 describe("ReflexionService.runPass", () => {
   it("throws notFound when the target satellite is missing", async () => {
-    const repo = mockRepo();
-    (repo.findTarget as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    const { repo, findTarget } = mockRepo();
+    findTarget.mockResolvedValue(null);
 
     await expect(
-      new ReflexionService(repo, mockCycles(), mockFindings(), mockEdges()).runPass({
+      new ReflexionService(
+        repo,
+        mockCycles().cycles,
+        mockFindings().findings,
+        mockEdges().edges,
+    ).runPass({
         noradId: 32958,
         dIncMax: 0.3,
         dRaanMax: 5,
         dMmMax: 0.05,
       }),
-    ).rejects.toMatchObject<HttpError>({
+    ).rejects.toMatchObject({
       statusCode: 404,
       message: "satellite not found",
-    });
+    } satisfies Partial<HttpError>);
   });
 
   it("throws badRequest when the target lacks orbital elements", async () => {
-    const repo = mockRepo();
-    (repo.findTarget as ReturnType<typeof vi.fn>).mockResolvedValue(
-      target({ inc: null }),
-    );
+    const { repo, findTarget } = mockRepo();
+    findTarget.mockResolvedValue(target({ inc: null }));
 
     await expect(
-      new ReflexionService(repo, mockCycles(), mockFindings(), mockEdges()).runPass({
+      new ReflexionService(
+        repo,
+        mockCycles().cycles,
+        mockFindings().findings,
+        mockEdges().edges,
+    ).runPass({
         noradId: 32958,
         dIncMax: 0.3,
         dRaanMax: 5,
         dMmMax: 0.05,
       }),
-    ).rejects.toMatchObject<HttpError>({
+    ).rejects.toMatchObject({
       statusCode: 400,
       message: "target missing orbital elements",
-    });
+    } satisfies Partial<HttpError>);
   });
 
   it("returns formatted reflexion data without emitting a finding when there is no anomaly trigger", async () => {
-    const repo = mockRepo();
-    const cycles = mockCycles();
-    const findings = mockFindings();
-    const edges = mockEdges();
-    (repo.findTarget as ReturnType<typeof vi.fn>).mockResolvedValue(
-      target({ operator_country: "France" }),
-    );
-    (repo.findStrictCoplane as ReturnType<typeof vi.fn>).mockResolvedValue([
+    const { repo, findTarget, findStrictCoplane, findInclinationBelt, findMilLineagePeers } =
+      mockRepo();
+    const { cycles, getOrCreate } = mockCycles();
+    const { findings, insert: insertFinding } = mockFindings();
+    const { edges, insert: insertEdge } = mockEdges();
+    findTarget.mockResolvedValue(target({ operator_country: "France" }));
+    findStrictCoplane.mockResolvedValue([
       strictRow(),
     ]);
-    (repo.findInclinationBelt as ReturnType<typeof vi.fn>).mockResolvedValue([
+    findInclinationBelt.mockResolvedValue([
       beltRow({ country: "France", n: "2" }),
       beltRow({ country: "Germany", n: "1" }),
     ]);
-    (repo.findMilLineagePeers as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    findMilLineagePeers.mockResolvedValue([]);
 
     const result = await new ReflexionService(
       repo,
@@ -209,29 +244,44 @@ describe("ReflexionService.runPass", () => {
       milLineagePeers: [],
       findingId: null,
     });
-    expect(cycles.getOrCreate).not.toHaveBeenCalled();
-    expect(findings.insert).not.toHaveBeenCalled();
-    expect(edges.insert).not.toHaveBeenCalled();
+    expect(findStrictCoplane).toHaveBeenCalledWith(
+      32958,
+      expect.objectContaining({
+        inc: 98.5,
+        raan: 122.2,
+        mm: 14.2,
+        ma: 180,
+      }),
+      0.3,
+      5,
+      0.05,
+    );
+    expect(findInclinationBelt).toHaveBeenCalledWith(32958, 98.5, 0.3);
+    expect(findMilLineagePeers).toHaveBeenCalledWith(32958, 98.5, 0.3);
+    expect(getOrCreate).not.toHaveBeenCalled();
+    expect(insertFinding).not.toHaveBeenCalled();
+    expect(insertEdge).not.toHaveBeenCalled();
   });
 
   it("emits a high-urgency finding when MIL-lineage peers are present", async () => {
-    const repo = mockRepo();
-    const cycles = mockCycles();
-    const findings = mockFindings();
-    const edges = mockEdges();
-    (repo.findTarget as ReturnType<typeof vi.fn>).mockResolvedValue(target());
-    (repo.findStrictCoplane as ReturnType<typeof vi.fn>).mockResolvedValue([
+    const { repo, findTarget, findStrictCoplane, findInclinationBelt, findMilLineagePeers } =
+      mockRepo();
+    const { cycles, getOrCreate } = mockCycles();
+    const { findings, insert: insertFinding } = mockFindings();
+    const { edges, insert: insertEdge } = mockEdges();
+    findTarget.mockResolvedValue(target());
+    findStrictCoplane.mockResolvedValue([
       strictRow(),
       strictRow({ id: "102", norad_id: "50002", name: "YAOGAN-102", d_inc: 0.2, d_raan: 2.2, lag_min: 20.1 }),
     ]);
-    (repo.findInclinationBelt as ReturnType<typeof vi.fn>).mockResolvedValue([
+    findInclinationBelt.mockResolvedValue([
       beltRow({ country: "China", n: "4" }),
     ]);
-    (repo.findMilLineagePeers as ReturnType<typeof vi.fn>).mockResolvedValue([
+    findMilLineagePeers.mockResolvedValue([
       milRow(),
     ]);
-    (cycles.getOrCreate as ReturnType<typeof vi.fn>).mockResolvedValue(77n);
-    (findings.insert as ReturnType<typeof vi.fn>).mockResolvedValue(501n);
+    getOrCreate.mockResolvedValue(77n);
+    insertFinding.mockResolvedValue(501n);
 
     const result = await new ReflexionService(
       repo,
@@ -246,7 +296,7 @@ describe("ReflexionService.runPass", () => {
     });
 
     expect(result.findingId).toBe("501");
-    expect(findings.insert).toHaveBeenCalledWith(
+    expect(insertFinding).toHaveBeenCalledWith(
       expect.objectContaining({
         cycleId: 77n,
         cortex: "classification_auditor",
@@ -258,8 +308,8 @@ describe("ReflexionService.runPass", () => {
         impactScore: 0.7,
       }),
     );
-    expect(edges.insert).toHaveBeenCalledTimes(4);
-    expect(edges.insert).toHaveBeenNthCalledWith(1, {
+    expect(insertEdge).toHaveBeenCalledTimes(4);
+    expect(insertEdge).toHaveBeenNthCalledWith(1, {
       findingId: 501n,
       entityType: "satellite",
       entityId: 42n,
@@ -274,7 +324,7 @@ describe("ReflexionService.runPass", () => {
         },
       },
     });
-    expect(edges.insert).toHaveBeenNthCalledWith(2, {
+    expect(insertEdge).toHaveBeenNthCalledWith(2, {
       findingId: 501n,
       entityType: "satellite",
       entityId: 201n,
@@ -285,21 +335,20 @@ describe("ReflexionService.runPass", () => {
   });
 
   it("emits a medium-urgency finding when the inclination belt is dominated by another country", async () => {
-    const repo = mockRepo();
-    const cycles = mockCycles();
-    const findings = mockFindings();
-    const edges = mockEdges();
-    (repo.findTarget as ReturnType<typeof vi.fn>).mockResolvedValue(
-      target({ operator_country: "France" }),
-    );
-    (repo.findStrictCoplane as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (repo.findInclinationBelt as ReturnType<typeof vi.fn>).mockResolvedValue([
+    const { repo, findTarget, findStrictCoplane, findInclinationBelt, findMilLineagePeers } =
+      mockRepo();
+    const { cycles, getOrCreate } = mockCycles();
+    const { findings, insert: insertFinding } = mockFindings();
+    const { edges, insert: insertEdge } = mockEdges();
+    findTarget.mockResolvedValue(target({ operator_country: "France" }));
+    findStrictCoplane.mockResolvedValue([]);
+    findInclinationBelt.mockResolvedValue([
       beltRow({ country: "China", n: "5" }),
       beltRow({ country: "France", n: "1" }),
     ]);
-    (repo.findMilLineagePeers as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (cycles.getOrCreate as ReturnType<typeof vi.fn>).mockResolvedValue(77n);
-    (findings.insert as ReturnType<typeof vi.fn>).mockResolvedValue(601n);
+    findMilLineagePeers.mockResolvedValue([]);
+    getOrCreate.mockResolvedValue(77n);
+    insertFinding.mockResolvedValue(601n);
 
     const result = await new ReflexionService(
       repo,
@@ -314,15 +363,15 @@ describe("ReflexionService.runPass", () => {
     });
 
     expect(result.findingId).toBe("601");
-    expect(findings.insert).toHaveBeenCalledWith(
+    expect(insertFinding).toHaveBeenCalledWith(
       expect.objectContaining({
         urgency: "medium",
         title:
           "Orbital anomaly · FENGYUN 3A inclination-belt dominated by China (declared France)",
       }),
     );
-    expect(edges.insert).toHaveBeenCalledTimes(1);
-    expect(edges.insert).toHaveBeenCalledWith(
+    expect(insertEdge).toHaveBeenCalledTimes(1);
+    expect(insertEdge).toHaveBeenCalledWith(
       expect.objectContaining({
         findingId: 601n,
         relation: "about",

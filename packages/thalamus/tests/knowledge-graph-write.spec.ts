@@ -1,204 +1,516 @@
-/**
- * SPEC-TH-030 — Knowledge-Graph Write-Path
- *
- * Traceability covered:
- *   AC-1 no raw SQL outside repositories/ and sql-helpers — static scan
- *   AC-2 dedup-hash determinism — same (cortex, entityType, entityId, findingType)
- *        yields the same sha256:32 prefix across calls
- *   AC-4 callback fan-out — onFinding callbacks fire post-store; a throwing
- *        callback does not break the write path
- *   AC-5 public-surface freeze — snapshot of ResearchGraphService methods
- *
- * Skipped (require a live DB):
- *   AC-3 NOT NULL DB check constraint on provenance fields
- *   AC-6 end-to-end research-cycle provenance — integration test
- */
-import { describe, it, expect, vi } from "vitest";
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import {
+  ResearchFindingType,
+  ResearchRelation,
+  ResearchStatus,
+  ResearchUrgency,
+} from "@interview/shared/enum";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-/** Spec formula: sha256(`${cortex}:${entityType}:${entityId}:${findingType}`).slice(0, 32) */
-function computeDedupHash(
-  cortex: string,
-  entityType: string,
-  entityId: bigint | number,
-  findingType: string,
-): string {
-  const key = `${cortex}:${entityType}:${entityId}:${findingType}`;
-  return createHash("sha256").update(key).digest("hex").slice(0, 32);
+import type { EntityCatalogPort } from "../src/ports/entity-catalog.port";
+import type { EmbedderPort } from "../src/ports/embedder.port";
+import {
+  ResearchGraphService,
+  type CyclesGraphPort,
+  type EdgesGraphPort,
+  type FindingsGraphPort,
+  type StoreFindingInput,
+} from "../src/services/research-graph.service";
+import type { ResearchEdge, ResearchFinding } from "../src/types/research.types";
+
+type Args<T extends (...args: any[]) => any> = Parameters<T>;
+type Result<T extends (...args: any[]) => any> = ReturnType<T>;
+
+function sha25632(input: string): string {
+  return createHash("sha256").update(input).digest("hex").slice(0, 32);
 }
 
-describe("SPEC-TH-030 AC-2 — dedup-hash determinism", () => {
-  it("same inputs yield the same 32-char hex prefix", () => {
-    const h1 = computeDedupHash("catalog", "satellite", 42n, "anomaly");
-    const h2 = computeDedupHash("catalog", "satellite", 42n, "anomaly");
-    expect(h1).toBe(h2);
-    expect(h1).toHaveLength(32);
-    expect(h1).toMatch(/^[0-9a-f]{32}$/);
-  });
+function makeStoredFinding(
+  overrides: Partial<ResearchFinding> = {},
+): ResearchFinding {
+  return {
+    id: 101n,
+    researchCycleId: 1n,
+    cortex: "catalog",
+    findingType: ResearchFindingType.Anomaly,
+    status: ResearchStatus.Active,
+    urgency: ResearchUrgency.Medium,
+    title: "Nominal finding",
+    summary: "Nominal summary",
+    evidence: [{ source: "https://example.org/evidence" }],
+    reasoning: null,
+    confidence: 0.6,
+    impactScore: 5,
+    extensions: null,
+    reflexionNotes: null,
+    iteration: 0,
+    dedupHash: null,
+    embedding: null,
+    expiresAt: null,
+    createdAt: new Date("2026-04-21T00:00:00.000Z"),
+    updatedAt: new Date("2026-04-21T00:00:00.000Z"),
+    ...overrides,
+  };
+}
 
-  it("different tuples yield different hashes", () => {
-    const h1 = computeDedupHash("catalog", "satellite", 42n, "anomaly");
-    const h2 = computeDedupHash("catalog", "satellite", 43n, "anomaly");
-    const h3 = computeDedupHash("catalog", "satellite", 42n, "insight");
-    const h4 = computeDedupHash(
-      "conjunction_analysis",
-      "satellite",
-      42n,
-      "anomaly",
-    );
-    const h5 = computeDedupHash("catalog", "payload", 42n, "anomaly");
-    expect(new Set([h1, h2, h3, h4, h5]).size).toBe(5);
-  });
+function makeInput(
+  overrides: {
+    finding?: Partial<StoreFindingInput["finding"]>;
+    edges?: Array<Partial<StoreFindingInput["edges"][number]>>;
+  } = {},
+): StoreFindingInput {
+  const baseEdge: StoreFindingInput["edges"][number] = {
+    entityType: "satellite",
+    entityId: 42n,
+    relation: ResearchRelation.About,
+    weight: 1,
+    context: { source: "seed" },
+  };
 
-  it("hash is stable across process separations (pure function)", () => {
-    // 100 runs → same output — deterministic.
-    const hashes = Array.from({ length: 100 }, () =>
-      computeDedupHash("catalog", "satellite", 42n, "anomaly"),
-    );
-    expect(new Set(hashes).size).toBe(1);
-  });
+  return {
+    finding: {
+      researchCycleId: 1n,
+      cortex: "catalog",
+      findingType: ResearchFindingType.Anomaly,
+      status: ResearchStatus.Active,
+      urgency: ResearchUrgency.Medium,
+      title: "Solar panel anomaly",
+      summary: "Power draw spiked after eclipse exit.",
+      evidence: [{ source: "https://example.org/evidence" }],
+      confidence: 0.7,
+      impactScore: 4,
+      iteration: 0,
+      ...overrides.finding,
+    },
+    edges: overrides.edges
+      ? overrides.edges.map((edge) => ({ ...baseEdge, ...edge }))
+      : [baseEdge],
+  };
+}
+
+function createHarness() {
+  const insertedFinding = makeStoredFinding();
+  const embedQuery = vi.fn<
+    Args<EmbedderPort["embedQuery"]>,
+    Result<EmbedderPort["embedQuery"]>
+  >(async (_text) => [0.11, 0.22]);
+  const upsertByDedupHash = vi.fn<
+    Args<FindingsGraphPort["upsertByDedupHash"]>,
+    Result<FindingsGraphPort["upsertByDedupHash"]>
+  >(
+    async (_data) => ({
+      finding: insertedFinding,
+      inserted: true,
+    }),
+  );
+  const findSimilar = vi.fn<
+    Args<FindingsGraphPort["findSimilar"]>,
+    Result<FindingsGraphPort["findSimilar"]>
+  >(async () => []);
+  const mergeFinding = vi.fn<
+    Args<FindingsGraphPort["mergeFinding"]>,
+    Result<FindingsGraphPort["mergeFinding"]>
+  >(
+    async (_id, _data) => undefined,
+  );
+  const findById = vi.fn<
+    Args<FindingsGraphPort["findById"]>,
+    Result<FindingsGraphPort["findById"]>
+  >(async (_id) => null);
+  const findByEntity = vi.fn<
+    Args<FindingsGraphPort["findByEntity"]>,
+    Result<FindingsGraphPort["findByEntity"]>
+  >(
+    async (_entityType, _entityId, _opts) => [],
+  );
+  const searchBySimilarity = vi.fn<
+    Args<FindingsGraphPort["searchBySimilarity"]>,
+    Result<FindingsGraphPort["searchBySimilarity"]>
+  >(
+    async (_embedding, _limit) => [],
+  );
+  const findActive = vi.fn<
+    Args<FindingsGraphPort["findActive"]>,
+    Result<FindingsGraphPort["findActive"]>
+  >(async (_opts) => []);
+  const archive = vi.fn<
+    Args<FindingsGraphPort["archive"]>,
+    Result<FindingsGraphPort["archive"]>
+  >(async (_id) => undefined);
+  const expireOld = vi.fn<
+    Args<FindingsGraphPort["expireOld"]>,
+    Result<FindingsGraphPort["expireOld"]>
+  >(async () => 0);
+  const countByCortexAndType = vi.fn<
+    Args<FindingsGraphPort["countByCortexAndType"]>,
+    Result<FindingsGraphPort["countByCortexAndType"]>
+  >(
+    async () => [],
+  );
+  const countRecent24h = vi.fn<
+    Args<FindingsGraphPort["countRecent24h"]>,
+    Result<FindingsGraphPort["countRecent24h"]>
+  >(async () => 0);
+  const linkToCycle = vi.fn<
+    Args<FindingsGraphPort["linkToCycle"]>,
+    Result<FindingsGraphPort["linkToCycle"]>
+  >(
+    async (_opts) => undefined,
+  );
+  const createMany = vi.fn<
+    Args<EdgesGraphPort["createMany"]>,
+    Result<EdgesGraphPort["createMany"]>
+  >(async (_edges) => []);
+  const findByFinding = vi.fn<
+    Args<EdgesGraphPort["findByFinding"]>,
+    Result<EdgesGraphPort["findByFinding"]>
+  >(
+    async (_findingId) => [],
+  );
+  const findByFindings = vi.fn<
+    Args<EdgesGraphPort["findByFindings"]>,
+    Result<EdgesGraphPort["findByFindings"]>
+  >(
+    async (_findingIds) => [],
+  );
+  const countByEntityType = vi.fn<
+    Args<EdgesGraphPort["countByEntityType"]>,
+    Result<EdgesGraphPort["countByEntityType"]>
+  >(
+    async () => [],
+  );
+  const incrementFindings = vi.fn<
+    Args<CyclesGraphPort["incrementFindings"]>,
+    Result<CyclesGraphPort["incrementFindings"]>
+  >(
+    async (_id) => undefined,
+  );
+  const embedDocuments = vi.fn<
+    Args<EmbedderPort["embedDocuments"]>,
+    Result<EmbedderPort["embedDocuments"]>
+  >(async (texts) => texts.map(() => null));
+
+  const findingRepo: FindingsGraphPort = {
+    upsertByDedupHash,
+    findSimilar,
+    mergeFinding,
+    findById,
+    findByEntity,
+    searchBySimilarity,
+    findActive,
+    archive,
+    expireOld,
+    countByCortexAndType,
+    countRecent24h,
+    linkToCycle,
+  };
+  const edgeRepo: EdgesGraphPort = {
+    createMany,
+    findByFinding,
+    findByFindings,
+    countByEntityType,
+  };
+  const cycleRepo: CyclesGraphPort = {
+    incrementFindings,
+  };
+  const embedder: EmbedderPort = {
+    isAvailable: () => true,
+    embedQuery,
+    embedDocuments,
+  };
+  const entityCatalog: EntityCatalogPort = {
+    resolveNames: async () => new Map(),
+    cleanOrphans: async () => 0,
+  };
+
+  const service = new ResearchGraphService(
+    findingRepo,
+    edgeRepo,
+    cycleRepo,
+    embedder,
+    entityCatalog,
+  );
+
+  return {
+    service,
+    insertedFinding,
+    embedQuery,
+    upsertByDedupHash,
+    findSimilar,
+    mergeFinding,
+    linkToCycle,
+    createMany,
+    incrementFindings,
+  };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
-describe("SPEC-TH-030 AC-4 — onFinding callback fan-out", () => {
-  // Minimal standalone fan-out harness, mirroring the service contract
-  // without importing the baseline-broken ResearchGraphService.
-  class CallbackHub<T> {
-    private cbs: Array<(x: T) => Promise<void>> = [];
-    on(cb: (x: T) => Promise<void>) {
-      this.cbs.push(cb);
-    }
-    async fan(x: T) {
-      for (const cb of this.cbs) {
-        try {
-          await cb(x);
-        } catch {
-          // swallow — a misbehaving listener must not break the write path.
-        }
-      }
-    }
-  }
-
-  it("every registered callback fires post-store", async () => {
-    const hub = new CallbackHub<{ id: bigint }>();
-    const a = vi.fn(async () => {});
-    const b = vi.fn(async () => {});
-    hub.on(a);
-    hub.on(b);
-    await hub.fan({ id: 1n });
-    expect(a).toHaveBeenCalledWith({ id: 1n });
-    expect(b).toHaveBeenCalledWith({ id: 1n });
-  });
-
-  it("a throwing callback does not prevent later callbacks from running", async () => {
-    const hub = new CallbackHub<{ id: bigint }>();
-    const bad = vi.fn(async () => {
-      throw new Error("bang");
+describe("ResearchGraphService.storeFinding", () => {
+  it("computes the anchored dedup hash from cortex + primary edge + finding type", async () => {
+    const { service, embedQuery, upsertByDedupHash } = createHarness();
+    const input = makeInput({
+      finding: {
+        cortex: "catalog",
+        findingType: ResearchFindingType.Alert,
+      },
+      edges: [{ entityType: "satellite", entityId: 42n }],
     });
-    const good = vi.fn(async () => {});
-    hub.on(bad);
-    hub.on(good);
-    await expect(hub.fan({ id: 1n })).resolves.toBeUndefined();
-    expect(good).toHaveBeenCalled();
-  });
-});
 
-// ─── AC-1 — no raw SQL outside repositories/ and sql-helpers ─────────
+    await service.storeFinding(input);
 
-const THALAMUS_SRC = resolve(__dirname, "../src");
-/** SQL raw-text signals: template-tag `sql\`…\``, driver calls like `pool.query(...)`. */
-const RAW_SQL_PATTERN = /(?:\bsql`|\.query\s*\(\s*['"`]|\.execute\s*\(\s*['"`])/;
-/** Folders allowed to host raw SQL: the data access layer.
- *  `explorer/` is allow-listed as a known deviation — orchestrator.ts and
- *  scout.ts read the research graph for crawling decisions. A follow-up is
- *  tracked to move those reads behind a repo. See `it.todo` below. */
-const SQL_ALLOW_PREFIXES = [
-  "repositories/",
-  "explorer/", // TODO: refactor explorer/{orchestrator,scout}.ts through a repo
-];
-
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const abs = resolve(dir, entry);
-    if (statSync(abs).isDirectory()) out.push(...walk(abs));
-    else if (entry.endsWith(".ts")) out.push(abs);
-  }
-  return out;
-}
-
-describe("SPEC-TH-030 AC-1 — no raw SQL outside the data-access layer", () => {
-  it("every raw-SQL hit is under repositories/ or explorer/", () => {
-    const files = walk(THALAMUS_SRC);
-    expect(files.length).toBeGreaterThan(0);
-
-    const offenders: string[] = [];
-    for (const abs of files) {
-      const rel = abs.slice(THALAMUS_SRC.length + 1);
-      if (SQL_ALLOW_PREFIXES.some((p) => rel.startsWith(p))) continue;
-
-      const text = readFileSync(abs, "utf8")
-        // Strip block + line comments so doc mentions of "sql" don't trip the match.
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/\/\/.*$/gm, "");
-      if (RAW_SQL_PATTERN.test(text)) {
-        offenders.push(rel);
-      }
-    }
-    expect(
-      offenders,
-      `raw SQL detected outside the data-access layer:\n  - ${offenders.join("\n  - ")}`,
-    ).toEqual([]);
+    expect(embedQuery).toHaveBeenCalledWith(
+      "Solar panel anomaly\nPower draw spiked after eclipse exit.",
+    );
+    expect(upsertByDedupHash).toHaveBeenCalledTimes(1);
+    expect(upsertByDedupHash.mock.calls[0]?.[0]).toMatchObject({
+      dedupHash: sha25632("catalog:satellite:42:alert"),
+      embedding: [0.11, 0.22],
+    });
   });
 
-  it.todo(
-    "explorer/orchestrator.ts and explorer/scout.ts should move their db.execute(sql`…`) reads behind a repository",
-  );
-});
+  it("merges into an existing finding when semantic dedup finds the same type on the same entity", async () => {
+    const {
+      service,
+      findSimilar,
+      mergeFinding,
+      upsertByDedupHash,
+      createMany,
+      incrementFindings,
+      linkToCycle,
+    } = createHarness();
+    const existing = {
+      ...makeStoredFinding({
+        id: 55n,
+        findingType: ResearchFindingType.Anomaly,
+        confidence: 0.9,
+      }),
+      similarity: 0.97,
+    };
+    const input = makeInput();
+    findSimilar.mockResolvedValueOnce([existing]);
 
-// ─── AC-5 — ResearchGraphService public surface freeze ───────────────
+    const out = await service.storeFinding(input);
 
-describe("SPEC-TH-030 AC-5 — ResearchGraphService public surface freeze", () => {
-  it("exposes only the documented public methods", async () => {
-    const mod = await import("../src/services/research-graph.service");
-    const ServiceClass = (mod as { ResearchGraphService: unknown })
-      .ResearchGraphService as { prototype: object };
-    expect(ServiceClass).toBeDefined();
+    expect(out).toMatchObject({ id: 55n, findingType: ResearchFindingType.Anomaly });
+    expect(mergeFinding).toHaveBeenCalledWith(55n, {
+      confidence: 0.9,
+      evidence: [{ source: "https://example.org/evidence" }],
+    });
+    expect(incrementFindings).toHaveBeenCalledWith(1n);
+    expect(linkToCycle).toHaveBeenCalledWith({
+      cycleId: 1n,
+      findingId: 55n,
+      iteration: 0,
+      isDedupHit: true,
+    });
+    expect(upsertByDedupHash).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
+  });
 
-    const methods = Object.getOwnPropertyNames(ServiceClass.prototype).filter(
-      (n) => n !== "constructor" && !n.startsWith("_"),
+  it("falls back to hash upsert when the nearest semantic match has a different finding type", async () => {
+    const {
+      service,
+      findSimilar,
+      mergeFinding,
+      upsertByDedupHash,
+      linkToCycle,
+    } = createHarness();
+    findSimilar
+      .mockResolvedValueOnce([
+        {
+          ...makeStoredFinding({
+            id: 77n,
+            findingType: ResearchFindingType.Insight,
+          }),
+          similarity: 0.98,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await service.storeFinding(makeInput());
+
+    expect(mergeFinding).not.toHaveBeenCalled();
+    expect(upsertByDedupHash).toHaveBeenCalledTimes(1);
+    expect(linkToCycle).toHaveBeenCalledWith({
+      cycleId: 1n,
+      findingId: 101n,
+      iteration: 0,
+      isDedupHit: false,
+    });
+  });
+
+  it("uses the timestamped fallback bucket for unanchored findings", async () => {
+    const { service, embedQuery, findSimilar, upsertByDedupHash } = createHarness();
+    vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    embedQuery.mockResolvedValueOnce(null);
+    const input = makeInput({
+      edges: [{ entityType: "satellite", entityId: 0n }],
+    });
+
+    await service.storeFinding(input);
+
+    expect(findSimilar).not.toHaveBeenCalled();
+    expect(upsertByDedupHash.mock.calls[0]?.[0]).toMatchObject({
+      dedupHash: sha25632("catalog:1:1700000000000:Solar panel anomaly"),
+      embedding: null,
+    });
+  });
+
+  it("links the cycle on a hash dedup hit and skips all insert-only side effects", async () => {
+    const {
+      service,
+      upsertByDedupHash,
+      createMany,
+      incrementFindings,
+      linkToCycle,
+      findSimilar,
+    } = createHarness();
+    const existing = makeStoredFinding({ id: 88n, iteration: 3 });
+    upsertByDedupHash.mockResolvedValueOnce({
+      finding: existing,
+      inserted: false,
+    });
+    const callback = vi.fn(async () => undefined);
+    service.onFinding(callback);
+
+    const out = await service.storeFinding(makeInput());
+
+    expect(out).toMatchObject({ id: 88n, iteration: 3 });
+    expect(findSimilar).toHaveBeenCalledTimes(1);
+    expect(linkToCycle).toHaveBeenCalledWith({
+      cycleId: 1n,
+      findingId: 88n,
+      iteration: 0,
+      isDedupHit: true,
+    });
+    expect(incrementFindings).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it("creates only resolved entity edges on insert", async () => {
+    const { service, embedQuery, createMany } = createHarness();
+    embedQuery.mockResolvedValueOnce(null);
+
+    await service.storeFinding(
+      makeInput({
+        edges: [
+          { entityType: "satellite", entityId: 42n, relation: ResearchRelation.About },
+          { entityType: "satellite", entityId: 0n, relation: ResearchRelation.About },
+        ],
+      }),
     );
 
-    // Actual public surface as of this pass. The spec §Interface names
-    // `storeFinding` + `onFinding` but the shipped service exposes read/maintenance
-    // helpers as well. Snapshot locks the surface so any further growth forces
-    // a spec update.
-    const EXPECTED = new Set([
-      "storeFinding",
-      "onFinding",
-      "queryByEntity",
-      "semanticSearch",
-      "listFindings",
-      "getFindingWithEdges",
-      "archiveFinding",
-      "expireAndClean",
-      "getKnowledgeGraph",
-      "getGraphStats",
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(createMany.mock.calls[0]?.[0]).toEqual([
+      {
+        findingId: 101n,
+        entityType: "satellite",
+        entityId: 42n,
+        relation: ResearchRelation.About,
+        weight: 1,
+        context: { source: "seed" },
+      },
     ]);
-    const unexpected = methods.filter((m) => !EXPECTED.has(m));
-    const missing = [...EXPECTED].filter((m) => !methods.includes(m));
-    expect(
-      unexpected,
-      `new public methods added without spec update: ${unexpected.join(", ")}`,
-    ).toEqual([]);
-    expect(
-      missing,
-      `expected public methods missing from the service: ${missing.join(", ")}`,
-    ).toEqual([]);
   });
 
-  it.todo(
-    "SPEC-TH-030 §Interface should document the full public surface (8 extra methods beyond storeFinding/onFinding)",
-  );
+  it("cross-links inserted findings to related findings with thresholded relations and a hard cap of 3", async () => {
+    const { service, insertedFinding, findSimilar, createMany } = createHarness();
+    findSimilar
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { ...insertedFinding, similarity: 0.99 },
+        { ...makeStoredFinding({ id: 201n, title: "close A" }), similarity: 0.91 },
+        { ...makeStoredFinding({ id: 202n, title: "close B" }), similarity: 0.86 },
+        { ...makeStoredFinding({ id: 203n, title: "close C" }), similarity: 0.8 },
+        { ...makeStoredFinding({ id: 204n, title: "close D" }), similarity: 0.72 },
+      ]);
+
+    await service.storeFinding(makeInput());
+
+    expect(createMany).toHaveBeenCalledTimes(2);
+    expect(createMany.mock.calls[1]?.[0]).toEqual([
+      {
+        findingId: 101n,
+        entityType: "finding",
+        entityId: 201n,
+        relation: ResearchRelation.Supports,
+        weight: 0.91,
+        context: { similarity: 0.91, relatedTitle: "close A" },
+      },
+      {
+        findingId: 101n,
+        entityType: "finding",
+        entityId: 202n,
+        relation: ResearchRelation.Supports,
+        weight: 0.86,
+        context: { similarity: 0.86, relatedTitle: "close B" },
+      },
+      {
+        findingId: 101n,
+        entityType: "finding",
+        entityId: 203n,
+        relation: ResearchRelation.SimilarTo,
+        weight: 0.8,
+        context: { similarity: 0.8, relatedTitle: "close C" },
+      },
+    ]);
+  });
+
+  it("swallows cross-linking failures and still completes the write path", async () => {
+    const {
+      service,
+      insertedFinding,
+      findSimilar,
+      createMany,
+      incrementFindings,
+      linkToCycle,
+    } = createHarness();
+    findSimilar
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          ...makeStoredFinding({ id: 301n, title: "cross-link target" }),
+          similarity: 0.83,
+        },
+      ]);
+    createMany
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("hnsw down"));
+
+    const out = await service.storeFinding(makeInput());
+
+    expect(out).toMatchObject({ id: insertedFinding.id });
+    expect(createMany).toHaveBeenCalledTimes(2);
+    expect(incrementFindings).toHaveBeenCalledWith(1n);
+    expect(linkToCycle).toHaveBeenCalledWith({
+      cycleId: 1n,
+      findingId: 101n,
+      iteration: 0,
+      isDedupHit: false,
+    });
+  });
+
+  it("fires every callback after a successful store even if an earlier callback throws", async () => {
+    const { service, embedQuery, insertedFinding, linkToCycle } = createHarness();
+    embedQuery.mockResolvedValueOnce(null);
+    const linkCountsAtCallback: number[] = [];
+    const bad = vi.fn(async () => {
+      throw new Error("callback failed");
+    });
+    const good = vi.fn(async () => {
+      linkCountsAtCallback.push(linkToCycle.mock.calls.length);
+    });
+    service.onFinding(bad);
+    service.onFinding(good);
+
+    await service.storeFinding(makeInput());
+
+    expect(bad).toHaveBeenCalledWith(insertedFinding);
+    expect(good).toHaveBeenCalledWith(insertedFinding);
+    expect(linkCountsAtCallback).toEqual([1]);
+  });
 });

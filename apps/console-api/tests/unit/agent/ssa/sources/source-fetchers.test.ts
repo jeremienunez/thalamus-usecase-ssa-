@@ -1,100 +1,120 @@
 /**
  * SPEC-TH-011 — Source Fetchers
  *
- * Tests the shipped SourceFetcher contract and the SSA source-kind catalog.
  * Concrete fetchers hit external HTTP (CelesTrak, NOAA SWPC, ITU SRS, ESA
- * DISCOS) — those live in `tests/integration/`. Here we lock the interface.
+ * DISCOS) — those live in `tests/integration/`. This unit file keeps only
+ * the deterministic registry behavior owned locally: dispatch, cache-key
+ * handling, and partial-failure tolerance.
  */
-import { describe, it, expect, expectTypeOf } from "vitest";
-import type {
-  SourceFetcher,
-  SourceResult,
-  SourceKind,
-} from "../../../../../src/agent/ssa/sources/types";
-import * as sourcesIndex from "../../../../../src/agent/ssa/sources";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import type { SourceResult } from "../../../../../src/agent/ssa/sources/types";
 
-describe("SPEC-TH-011 SourceFetcher contract", () => {
-  it("SourceResult has the documented shape", () => {
-    expectTypeOf<SourceResult>().toHaveProperty("type").toEqualTypeOf<string>();
-    expectTypeOf<SourceResult>()
-      .toHaveProperty("source")
-      .toEqualTypeOf<string>();
-    expectTypeOf<SourceResult>()
-      .toHaveProperty("fetchedAt")
-      .toEqualTypeOf<string>();
-    expectTypeOf<SourceResult>()
-      .toHaveProperty("latencyMs")
-      .toEqualTypeOf<number>();
-    expectTypeOf<SourceResult>()
-      .toHaveProperty("data")
-      .toEqualTypeOf<unknown>();
-  });
-
-  it("SourceFetcher is a Promise-returning function of params → SourceResult[]", () => {
-    expectTypeOf<SourceFetcher>().toEqualTypeOf<
-      (params: Record<string, unknown>) => Promise<SourceResult[]>
-    >();
-  });
-
-  it("a conforming fetcher typechecks against the interface", async () => {
-    const fakeFetcher: SourceFetcher = async () => [
-      {
-        type: "celestrak",
-        source: "CelesTrak",
-        url: "https://celestrak.org/NORAD/elements/",
-        data: { ok: true },
-        fetchedAt: new Date().toISOString(),
-        latencyMs: 42,
-      },
-    ];
-    const out = await fakeFetcher({ noradId: 25544 });
-    expect(out).toHaveLength(1);
-    expect(out[0]!.type).toBe("celestrak");
-    expect(out[0]!.latencyMs).toBe(42);
-  });
+beforeEach(() => {
+  vi.resetModules();
 });
 
-describe("SPEC-TH-011 SourceKind catalog (SSA)", () => {
-  it("union covers the 8 SSA source kinds", () => {
-    const kinds: SourceKind[] = [
-      "celestrak",
-      "space-weather",
-      "launch-market",
-      "bus-archetype",
-      "orbit-regime",
-      "spectra",
-      "regulation",
-      "knowledge-graph",
-    ];
-    expect(kinds).toHaveLength(8);
-    // Compile-time: each literal is assignable to SourceKind — the variable type is SourceKind[].
-    expectTypeOf<(typeof kinds)[number]>().toEqualTypeOf<SourceKind>();
-  });
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
-describe("SPEC-TH-011 sources barrel surface", () => {
-  it("index re-exports types and the cortex → fetchers entry point", () => {
-    const keys = Object.keys(sourcesIndex);
-    // The barrel should at minimum expose `fetchSourcesForCortex` (used by executor).
-    expect(keys).toContain("fetchSourcesForCortex");
-  });
-
-  it("fetchSourcesForCortex returns [] for an unknown cortex without throwing", async () => {
-    const out = await (
-      sourcesIndex as unknown as {
-        fetchSourcesForCortex: (
-          c: string,
-          p: Record<string, unknown>,
-        ) => Promise<SourceResult[]>;
-      }
-    ).fetchSourcesForCortex("not_a_real_cortex", {});
+describe("SPEC-TH-011 source dispatch", () => {
+  it("returns an empty source list for an unknown cortex without throwing", async () => {
+    const sourcesIndex = (await import(
+      "../../../../../src/agent/ssa/sources"
+    )) as {
+      fetchSourcesForCortex: (
+        c: string,
+        p: Record<string, unknown>,
+      ) => Promise<SourceResult[]>;
+    };
+    const out = await sourcesIndex.fetchSourcesForCortex("not_a_real_cortex", {});
     expect(Array.isArray(out)).toBe(true);
     expect(out).toEqual([]);
   });
-});
 
-describe("SPEC-TH-011 integration-only ACs", () => {
-  it.todo("AC-HTTP each concrete fetcher handles 4xx/5xx as empty results");
-  it.todo("AC-timeout concrete fetcher aborts after 10s with empty result");
-  it.todo("AC-rate-limit concrete fetcher respects per-source RPS cap");
+  it("loads the production self-registered CelesTrak fetcher via sources/index", async () => {
+    await import("../../../../../src/agent/ssa/sources");
+    const { fetchSourcesForCortex, getFetcherByKind } = await import(
+      "../../../../../src/agent/ssa/sources/registry"
+    );
+
+    expect(getFetcherByKind("celestrak")).toBeTypeOf("function");
+    const out = await fetchSourcesForCortex("launch_epoch_forecaster", {});
+
+    expect(out).toContainEqual(
+      expect.objectContaining({
+        type: "orbit_model_reference",
+        url: "https://celestrak.org/publications/AIAA/2006-6753/",
+      }),
+    );
+  });
+
+  it("reuses the cached result for identical bigint params instead of re-fetching", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-21T00:00:00.000Z"));
+
+    const { registerSource, fetchSourcesForCortex } = await import(
+      "../../../../../src/agent/ssa/sources/registry"
+    );
+    const fetcher = vi.fn(async (params: Record<string, unknown>) => {
+      expect(params).toEqual({ operatorId: 42n });
+      return [
+        {
+          type: "unit-cache",
+          source: "cache-test",
+          data: { operatorId: "42" },
+          fetchedAt: new Date().toISOString(),
+          latencyMs: 0,
+        },
+      ] satisfies SourceResult[];
+    });
+    registerSource(["unit_cache_bigint"], fetcher);
+
+    const first = await fetchSourcesForCortex("unit_cache_bigint", {
+      operatorId: 42n,
+    });
+    const second = await fetchSourcesForCortex("unit_cache_bigint", {
+      operatorId: 42n,
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+  });
+
+  it("keeps fulfilled results when one registered fetcher rejects", async () => {
+    const { registerSource, fetchSourcesForCortex } = await import(
+      "../../../../../src/agent/ssa/sources/registry"
+    );
+    const boom = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    const ok = vi.fn(async () => [
+      {
+        type: "unit-ok",
+        source: "ok-fetcher",
+        data: { value: 1 },
+        fetchedAt: "2026-04-21T00:00:00.000Z",
+        latencyMs: 4,
+      },
+    ] satisfies SourceResult[]);
+    registerSource(["unit_partial_failure"], boom);
+    registerSource(["unit_partial_failure"], ok);
+
+    const out = await fetchSourcesForCortex("unit_partial_failure", {
+      noradId: 25544,
+    });
+
+    expect(boom).toHaveBeenCalledTimes(1);
+    expect(ok).toHaveBeenCalledTimes(1);
+    expect(out).toEqual([
+      {
+        type: "unit-ok",
+        source: "ok-fetcher",
+        data: { value: 1 },
+        fetchedAt: "2026-04-21T00:00:00.000Z",
+        latencyMs: 4,
+      },
+    ]);
+  });
 });

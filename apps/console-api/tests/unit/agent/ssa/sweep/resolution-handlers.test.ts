@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { ResolutionActionContext } from "@interview/sweep";
 import {
   createUpdateFieldHandler,
   createLinkPayloadHandler,
@@ -21,11 +22,13 @@ function fakeSatelliteRepo() {
   };
 }
 
-function baseCtx(domain: Record<string, unknown> = {}) {
+function baseCtx(
+  domain: Record<string, unknown> = {},
+): ResolutionActionContext {
   return {
     suggestionId: "sugg-1",
-    reviewer: null,
-    reviewerNote: null,
+    reviewer: null as string | null,
+    reviewerNote: null as string | null,
     domainContext: { operatorCountryId: "42", ...domain },
   };
 }
@@ -111,6 +114,30 @@ describe("update_field handler", () => {
       nextSourceClass: "OSINT_CORROBORATED",
     });
   });
+
+  it("uses a preselected FK target instead of reopening name resolution", async () => {
+    const db = fakeDb();
+    const satelliteRepo = fakeSatelliteRepo();
+    const handler = createUpdateFieldHandler({ db, satelliteRepo });
+    db.execute.mockResolvedValueOnce({ rowCount: 1 });
+
+    const result = await handler.handle(
+      {
+        kind: "update_field",
+        field: "operator_country_id",
+        value: "France",
+        satelliteIds: ["100"],
+      },
+      {
+        ...baseCtx(),
+        selectors: { operator_country_id: "20" },
+      },
+    );
+
+    expect(result).toEqual({ ok: true, affectedRows: 1 });
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(satelliteRepo.updateField).not.toHaveBeenCalled();
+  });
 });
 
 describe("link_payload handler", () => {
@@ -143,6 +170,29 @@ describe("link_payload handler", () => {
       label: expect.stringContaining("CERES"),
     });
     expect(result.pending?.[0]?.options).toHaveLength(2);
+  });
+
+  it("uses the UI-selected payload id without re-running payload lookup", async () => {
+    const db = fakeDb();
+    const satelliteRepo = fakeSatelliteRepo();
+    const handler = createLinkPayloadHandler({ db, satelliteRepo });
+    db.execute.mockResolvedValueOnce({});
+
+    const result = await handler.handle(
+      {
+        kind: "link_payload",
+        payloadName: "CERES",
+        role: "primary",
+        satelliteIds: ["100"],
+      },
+      {
+        ...baseCtx(),
+        selectors: { payload: 77 },
+      },
+    );
+
+    expect(result).toEqual({ ok: true, affectedRows: 1 });
+    expect(db.execute).toHaveBeenCalledTimes(1);
   });
 });
 

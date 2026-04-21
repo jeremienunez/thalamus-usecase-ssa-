@@ -42,11 +42,11 @@ describe("toSatelliteNode", () => {
 });
 
 describe("toFindingNode", () => {
-  it("prefixes id with finding:, class Payload, carries cortex", () => {
+  it("prefixes id with finding:, class ConjunctionEvent, carries cortex", () => {
     const n = toFindingNode({ id: "7", title: "short", cortex: "anomaly" });
     expect(n.id).toBe("finding:7");
     expect(n.label).toBe("short");
-    expect(n.class).toBe("Payload");
+    expect(n.class).toBe("ConjunctionEvent");
     expect(n.cortex).toBe("anomaly");
   });
 
@@ -62,6 +62,7 @@ describe("entityRef", () => {
   it.each([
     ["satellite", "123", "sat:123"],
     ["operator", "9", "op:9"],
+    ["orbit_regime", "7", "regime:7"],
     ["payload", "7", "payload:7"],
     ["regime", "LEO", "regime:LEO"],
   ])("type=%s id=%s → %s", (type, id, expected) => {
@@ -95,10 +96,21 @@ describe("toKgEdge", () => {
     expect(e.target).toBe("op:SpaceX");
   });
 
-  it("unknown entity_type falls through to type:id", () => {
+  it("orbit_regime target uses regime: prefix", () => {
     const e = toKgEdge({
       id: "3",
       finding_id: "13",
+      entity_type: "orbit_regime",
+      entity_id: "LEO",
+      relation: "about",
+    });
+    expect(e.target).toBe("regime:LEO");
+  });
+
+  it("unknown entity_type falls through to type:id", () => {
+    const e = toKgEdge({
+      id: "4",
+      finding_id: "14",
       entity_type: "payload",
       entity_id: "99",
       relation: "relates",

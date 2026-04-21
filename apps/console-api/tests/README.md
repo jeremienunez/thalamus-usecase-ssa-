@@ -1,12 +1,16 @@
 # Test organization
 
+Repo-wide policy lives in [`docs/testing/README.md`](../../../docs/testing/README.md):
+tests must prove expected behavior at the correct seam. `todo`, `skip`, and
+vague placeholder assertions are CI violations.
+
 Tests follow a classic testing pyramid:
 
 ```
           ┌────────────┐
-          │    e2e     │   4 specs — real HTTP via startServer, real DB + Redis
+          │    e2e     │   app + transport via globalSetup, real DB + Redis
           ├────────────┤
-          │integration │   1 spec  — repos against real Postgres, no HTTP
+          │integration │   repo wiring against real Postgres, no HTTP
           ├────────────┤
           │   unit     │   50+ tests — pure functions, no I/O, parallel-safe
           └────────────┘
@@ -39,11 +43,20 @@ the ephemeral port via `CONSOLE_API_URL`. Every e2e spec fetches against that UR
 ## Running
 
 ```bash
-# all tests (unit + integration + e2e, sequential in a single fork)
-pnpm exec vitest run
+# root layer scripts
+pnpm test:unit
+pnpm test:integration
+pnpm test:e2e
 
-# just one layer
-pnpm exec vitest run tests/unit
-pnpm exec vitest run tests/integration
-pnpm exec vitest run tests/e2e
+# repo-wide union run
+pnpm test
+```
+
+`pnpm test:integration` and `pnpm test:e2e` require a live Postgres at
+`DATABASE_URL`. `pnpm test:e2e` also requires Redis at `REDIS_URL`.
+
+Apply the test DB migrations before those layers:
+
+```bash
+pnpm tsx scripts/test-db-migrate.ts
 ```

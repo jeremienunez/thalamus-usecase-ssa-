@@ -18,8 +18,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SeedRefs } from "@interview/sweep";
 import { createLogger } from "@interview/shared/observability";
+import type { SsaBusDatasheetPrior } from "../action-schema";
 
 const logger = createLogger("bus-datasheets");
 
@@ -123,7 +123,7 @@ export function __resetBusDatasheetCache(): void {
 export interface BusPriorLookup {
   found: boolean;
   canonicalName: string | null;
-  prior: NonNullable<SeedRefs["busDatasheetPrior"]> | null;
+  prior: SsaBusDatasheetPrior | null;
   matchedAlias: string | null;
   designLifeYears: number | null;
   sources: string[];

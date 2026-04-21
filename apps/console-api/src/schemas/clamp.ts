@@ -15,8 +15,13 @@ import { z } from "zod";
 const numberLike = (value: unknown): unknown => {
   if (value === undefined) return undefined;
   if (typeof value === "number") return value;
-  // Accept numeric query-string inputs, but reject booleans/objects/arrays.
-  if (typeof value === "string") return Number(value);
+  // Accept numeric query-string inputs, but reject blank strings plus
+  // booleans/objects/arrays. `?limit=` should be a validation error, not a
+  // silent clamp to the minimum via Number("") === 0.
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed === "" ? Number.NaN : Number(trimmed);
+  }
   return Number.NaN;
 };
 

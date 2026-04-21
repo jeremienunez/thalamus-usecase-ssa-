@@ -1,16 +1,17 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import { knnPropagateController } from "../../../src/controllers/knn-propagation.controller";
+import { registerKnnPropagationRoutes } from "../../../src/routes/knn-propagation.routes";
+import type { PropagateStats } from "../../../src/services/knn-propagation.service";
 
-describe("knnPropagateController", () => {
-  it("returns 400 on invalid body and does not call the service", async () => {
+describe("registerKnnPropagationRoutes", () => {
+  it("returns 400 on invalid public body and does not call the service", async () => {
     const service = { propagate: vi.fn() };
     const app = Fastify({ logger: false });
-    app.post("/knn", knnPropagateController(service as never));
+    registerKnnPropagationRoutes(app, service as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/knn",
+      url: "/api/sweep/mission/knn-propagate",
       payload: { field: "thermal_margin" },
     });
 
@@ -19,16 +20,26 @@ describe("knnPropagateController", () => {
     await app.close();
   });
 
-  it("forwards the validated body to the service", async () => {
+  it("forwards the validated body on the public knn route", async () => {
     const service = {
-      propagate: vi.fn().mockResolvedValue({ attempted: 1, filled: 0 }),
+      propagate: vi.fn().mockResolvedValue({
+        field: "lifetime",
+        k: 3,
+        minSim: 0.99,
+        attempted: 1,
+        filled: 0,
+        disagree: 0,
+        tooFar: 1,
+        outOfRange: 0,
+        sampleFills: [],
+      } satisfies PropagateStats),
     };
     const app = Fastify({ logger: false });
-    app.post("/knn", knnPropagateController(service as never));
+    registerKnnPropagationRoutes(app, service as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/knn",
+      url: "/api/sweep/mission/knn-propagate",
       payload: { field: "lifetime", k: 1, minSim: 2, limit: 9999, dryRun: true },
     });
 
@@ -40,7 +51,35 @@ describe("knnPropagateController", () => {
       dryRun: true,
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ attempted: 1, filled: 0 });
+    expect(res.json()).toEqual({
+      field: "lifetime",
+      k: 3,
+      minSim: 0.99,
+      attempted: 1,
+      filled: 0,
+      disagree: 0,
+      tooFar: 1,
+      outOfRange: 0,
+      sampleFills: [],
+    });
+    await app.close();
+  });
+
+  it("does not expose the stale non-api knn route", async () => {
+    const service = {
+      propagate: vi.fn(),
+    };
+    const app = Fastify({ logger: false });
+    registerKnnPropagationRoutes(app, service as never);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/knn",
+      payload: { field: "lifetime" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(service.propagate).not.toHaveBeenCalled();
     await app.close();
   });
 });

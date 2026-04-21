@@ -1,19 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
-import { SatelliteViewService } from "../../../src/services/satellite-view.service";
+import {
+  SatelliteViewService,
+  type SatellitesReadPort,
+} from "../../../src/services/satellite-view.service";
 import type {
-  SatelliteRepository,
   SatelliteOrbitalRow,
-} from "../../../src/repositories/satellite.repository";
+} from "../../../src/types/satellite.types";
 import { smaFromMeanMotion } from "@interview/shared";
 
-function mockRepo(): SatelliteRepository {
+function mockRepo(): SatellitesReadPort {
   return {
     listWithOrbital: vi.fn(),
-    findPayloadNamesByIds: vi.fn(),
-    updateField: vi.fn(),
-    listNullCandidatesForField: vi.fn(),
-    knnNeighboursForField: vi.fn(),
-  } as unknown as SatelliteRepository;
+  };
 }
 
 function row(overrides: Partial<SatelliteOrbitalRow> = {}): SatelliteOrbitalRow {
@@ -36,6 +34,29 @@ function row(overrides: Partial<SatelliteOrbitalRow> = {}): SatelliteOrbitalRow 
       meanAnomaly: 45,
       epoch: "2024-01-01T00:00:00.000Z",
     },
+    object_class: "payload",
+    photo_url: null,
+    g_short_description: null,
+    g_description: null,
+    platform_class_name: null,
+    bus_name: null,
+    bus_generation: null,
+    power_draw: null,
+    thermal_margin: null,
+    pointing_accuracy: null,
+    attitude_rate: null,
+    link_budget: null,
+    data_rate: null,
+    payload_duty: null,
+    eclipse_ratio: null,
+    solar_array_health: null,
+    battery_depth_of_discharge: null,
+    propellant_remaining: null,
+    radiation_dose: null,
+    debris_proximity: null,
+    mission_age: null,
+    last_tle_ingested_at: null,
+    mean_motion_drift: null,
     ...overrides,
   };
 }

@@ -28,6 +28,10 @@ export interface SweepFeedbackPort {
   push(entry: SweepFeedbackEntry): Promise<void>;
 }
 
+export interface EnrichmentEmitPort {
+  emit(args: EmitArgs): Promise<void>;
+}
+
 export class EnrichmentFindingService {
   constructor(
     private readonly cycles: CyclesPort,
@@ -37,8 +41,14 @@ export class EnrichmentFindingService {
   ) {}
 
   async emit(args: EmitArgs): Promise<void> {
+    const satBig = parseEntityId(args.satelliteId, "satelliteId");
+    const knnNeighbourIds =
+      args.kind === "knn"
+        ? (args.neighbourIds ?? []).slice(0, 10).map((id) =>
+            parseEntityId(id, "neighbourId"),
+          )
+        : [];
     const cycleId = await this.cycles.getOrCreate();
-    const satBig = BigInt(args.satelliteId);
 
     const findingId = await this.findings.insert(
       toEnrichmentFindingInsert(args, cycleId),
@@ -53,12 +63,12 @@ export class EnrichmentFindingService {
       context: { field: args.field, value: String(args.value) },
     });
 
-    if (args.kind === "knn" && args.neighbourIds?.length) {
-      for (const nid of args.neighbourIds.slice(0, 10)) {
+    if (args.kind === "knn" && knnNeighbourIds.length > 0) {
+      for (const nid of knnNeighbourIds) {
         await this.edges.insert({
           findingId,
           entityType: "satellite",
-          entityId: BigInt(nid),
+          entityId: nid,
           relation: "similar_to",
           weight: args.cosSim ?? 0.8,
           context: { role: "knn_neighbour", cosSim: args.cosSim ?? null },
@@ -67,5 +77,13 @@ export class EnrichmentFindingService {
     }
 
     await this.feedback.push(toSweepFeedbackEntry(args));
+  }
+}
+
+function parseEntityId(raw: string, label: string): bigint {
+  try {
+    return BigInt(raw);
+  } catch {
+    throw new Error(`invalid ${label}: ${raw}`);
   }
 }

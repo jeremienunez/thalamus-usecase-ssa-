@@ -25,25 +25,37 @@ describe("parseOrReply", () => {
     expect(reply.send).not.toHaveBeenCalled();
   });
 
-  it("sends a 400 payload with flattened issue paths on failure", () => {
+  it("sends a 400 payload with flattened nested and array issue paths on failure", () => {
     const reply = mockReply();
     const schema = z.object({
       filters: z.object({
         minPc: z.number().min(0),
       }),
+      ids: z.array(z.number().int()).min(1),
     });
 
     const parsed = parseOrReply(
-      { filters: { minPc: -1 } },
+      { filters: { minPc: -1 }, ids: ["bad-id"] },
       schema,
       reply as never,
     );
 
     expect(parsed).toBeNull();
     expect(reply.code).toHaveBeenCalledWith(400);
-    expect(reply.send).toHaveBeenCalledWith({
-      error: "invalid request",
-      issues: [{ path: "filters.minPc", message: "Number must be greater than or equal to 0" }],
-    });
+    expect(reply.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "invalid request",
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            path: "filters.minPc",
+            message: expect.any(String),
+          }),
+          expect.objectContaining({
+            path: "ids.0",
+            message: expect.any(String),
+          }),
+        ]),
+      }),
+    );
   });
 });

@@ -59,17 +59,17 @@ export class ConjunctionRepository {
   ): Promise<ScreenedConjunctionRow[]> {
     const windowHours = opts.windowHours ?? 168;
     const noradFilter = opts.primaryNoradId
-      ? sql`AND (p.telemetry_summary->>'noradId' = ${String(opts.primaryNoradId)}
-                 OR s.telemetry_summary->>'noradId' = ${String(opts.primaryNoradId)})`
+      ? sql`AND (p.norad_id = ${Number(opts.primaryNoradId)}
+                 OR s.norad_id = ${Number(opts.primaryNoradId)})`
       : sql``;
 
     const results = await this.db.execute<ScreenedConjunctionRow>(sql`
       SELECT
         ce.id::int AS "conjunctionId",
         p.name AS "primarySatellite",
-        NULLIF(p.telemetry_summary->>'noradId','')::int AS "primaryNoradId",
+        p.norad_id AS "primaryNoradId",
         s.name AS "secondarySatellite",
-        NULLIF(s.telemetry_summary->>'noradId','')::int AS "secondaryNoradId",
+        s.norad_id AS "secondaryNoradId",
         ce.epoch::text AS "epoch",
         ce.min_range_km AS "minRangeKm",
         ce.relative_velocity_kmps AS "relativeVelocityKmps",
@@ -184,8 +184,8 @@ export class ConjunctionRepository {
         ce.secondary_satellite_id::text                     AS s_id,
         sp.name                                             AS p_name,
         ss.name                                             AS s_name,
-        NULLIF(sp.telemetry_summary->>'noradId','')::int    AS p_norad,
-        NULLIF(ss.telemetry_summary->>'noradId','')::int    AS s_norad,
+        sp.norad_id                                         AS p_norad,
+        ss.norad_id                                         AS s_norad,
         spb.name                                            AS p_bus,
         ssb.name                                            AS s_bus,
         sp.operator_id::text                                AS p_op,

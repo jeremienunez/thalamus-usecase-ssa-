@@ -1,0 +1,142 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        run: pnpm test:unit
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: thalamus
+          POSTGRES_PASSWORD: thalamus
+          POSTGRES_DB: thalamus
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready -U thalamus -d thalamus"
+          --health-interval=2s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      DATABASE_URL: postgres://thalamus:thalamus@localhost:5433/thalamus
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run test DB migrations
+        run: pnpm tsx scripts/test-db-migrate.ts
+
+      - name: Run integration tests
+        run: pnpm test:integration
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: thalamus
+          POSTGRES_PASSWORD: thalamus
+          POSTGRES_DB: thalamus
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready -U thalamus -d thalamus"
+          --health-interval=2s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=2s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      DATABASE_URL: postgres://thalamus:thalamus@localhost:5433/thalamus
+      REDIS_URL: redis://localhost:6380
+      RUN_LLM_E2E: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run test DB migrations
+        run: pnpm tsx scripts/test-db-migrate.ts
+
+      - name: Run e2e tests
+        run: pnpm test:e2e

@@ -6,11 +6,16 @@
  * on the other ports, promise resolves cleanly).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SsaAuditProvider } from "../../../../../../src/agent/ssa/sweep/audit-provider.ssa";
+import {
+  SsaAuditProvider,
+  type AuditFeedbackPort,
+} from "../../../../../../src/agent/ssa/sweep/audit-provider.ssa";
+import type { SweepFeedbackEntry } from "../../../../../../src/types/sweep.types";
 import {
   fakeSatellitePort,
   fakeSweepRepo,
   makeEmptyCaller,
+  typedSpy,
 } from "./__fixtures";
 
 beforeEach(() => {
@@ -22,7 +27,10 @@ describe("SsaAuditProvider.recordFeedback", () => {
     // Why: the original test used toHaveBeenCalledWith which misses a loop
     // bug (push invoked twice). Asserting call count AND shape together
     // pins both regressions.
-    const push = vi.fn().mockResolvedValue(undefined);
+    // Typed spy so toHaveBeenCalledWith matches AuditFeedbackPort["push"]
+    // args exactly — a drift in SweepFeedbackEntry fails typecheck here.
+    const push = typedSpy<AuditFeedbackPort["push"]>();
+    push.mockResolvedValue(undefined);
     const provider = new SsaAuditProvider({
       satelliteRepo: fakeSatellitePort(),
       sweepRepo: fakeSweepRepo(),
@@ -40,13 +48,18 @@ describe("SsaAuditProvider.recordFeedback", () => {
       },
     });
 
+    // The assertion shape is type-validated via `satisfies` — if
+    // SweepFeedbackEntry ever drops, renames, or retypes a field, TS
+    // breaks here. Vitest's own toHaveBeenCalledWith typing is too loose
+    // to catch it (<E extends any[]>), so the annotation is what pins
+    // behavior, not the mock's type parameter.
     expect(push).toHaveBeenCalledTimes(1);
     expect(push).toHaveBeenCalledWith({
       category: "missing_data",
       wasAccepted: true,
       reviewerNote: "good call",
       operatorCountryName: "Testland",
-    });
+    } satisfies SweepFeedbackEntry);
   });
 
   it("is a genuine no-op when feedbackRepo is absent (no side effect)", async () => {

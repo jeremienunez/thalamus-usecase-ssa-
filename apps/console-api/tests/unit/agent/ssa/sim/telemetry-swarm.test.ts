@@ -119,7 +119,7 @@ describe("startTelemetrySwarm", () => {
 
   it("throws when the satellite is not found", async () => {
     const satelliteRepo = {
-      findByIdFull: vi.fn(async () => null),
+      findByIdFull: vi.fn(async (): Promise<FindByIdFullRow | null> => null),
     };
     const { svc } = mockSwarmService();
 

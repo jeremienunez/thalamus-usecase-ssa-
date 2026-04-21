@@ -12,7 +12,7 @@
  *   AC-1 (pnpm typecheck — covered by `pnpm -C packages/db-schema typecheck` in CI)
  *   AC-5 (index scan via EXPLAIN — lives in tests/integration/indexes.int.spec.ts with pg-mem)
  */
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { getTableColumns, getTableName } from "drizzle-orm";
@@ -20,14 +20,12 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import * as schemaBarrel from "../src/schema";
 import * as rootBarrel from "../src";
 
-import { user, type User } from "../src/schema/user";
-import { article, type Article } from "../src/schema/article";
+import { user } from "../src/schema/user";
+import { article } from "../src/schema/article";
 import {
   researchCycle,
   researchFinding,
   researchEdge,
-  type ResearchCycle,
-  type ResearchFinding,
 } from "../src/schema/research";
 import {
   satellite,
@@ -37,11 +35,8 @@ import {
   platformClass,
   orbitRegime,
   operator,
-  type Satellite,
-  type Payload,
-  type OperatorCountry,
 } from "../src/schema/satellite";
-import { explorationLog, type ExplorationLog } from "../src/schema/exploration";
+import { explorationLog } from "../src/schema/exploration";
 
 const SCHEMA_DIR = resolve(__dirname, "../src/schema");
 
@@ -124,54 +119,60 @@ describe("SPEC-DB-001 AC-2 — every table file is re-exported", () => {
 
 describe("SPEC-DB-001 AC-3 — notNull columns are non-nullable in $inferSelect", () => {
   it("user.email / role / tier non-nullable; name nullable", () => {
-    expectTypeOf<User["email"]>().toEqualTypeOf<string>();
-    expectTypeOf<User["role"]>().toEqualTypeOf<string>();
-    expectTypeOf<User["tier"]>().toEqualTypeOf<string>();
-    expectTypeOf<User["name"]>().toEqualTypeOf<string | null>();
+    expect(user.email.notNull).toBe(true);
+    expect(user.role.notNull).toBe(true);
+    expect(user.tier.notNull).toBe(true);
+    expect(user.name.notNull).toBe(false);
   });
 
   it("article.slug / title / status non-nullable; content nullable", () => {
-    expectTypeOf<Article["slug"]>().toEqualTypeOf<string>();
-    expectTypeOf<Article["title"]>().toEqualTypeOf<string>();
-    expectTypeOf<Article["status"]>().toEqualTypeOf<string>();
-    expectTypeOf<Article["content"]>().toEqualTypeOf<string | null>();
+    expect(article.slug.notNull).toBe(true);
+    expect(article.title.notNull).toBe(true);
+    expect(article.status.notNull).toBe(true);
+    expect(article.content.notNull).toBe(false);
   });
 
-  it("researchCycle.status + timestamps non-nullable; goal nullable", () => {
-    expectTypeOf<ResearchCycle["status"]>().toEqualTypeOf<string>();
-    expectTypeOf<ResearchCycle["createdAt"]>().toEqualTypeOf<Date>();
-    expectTypeOf<ResearchCycle["updatedAt"]>().toEqualTypeOf<Date>();
-    expectTypeOf<ResearchCycle["goal"]>().toEqualTypeOf<string | null>();
+  it("researchCycle trigger/status/counters are required and completedAt stays nullable", () => {
+    expect(researchCycle.triggerType.notNull).toBe(true);
+    expect(researchCycle.status.notNull).toBe(true);
+    expect(researchCycle.findingsCount.notNull).toBe(true);
+    expect(researchCycle.startedAt.notNull).toBe(true);
+    expect(researchCycle.completedAt.notNull).toBe(false);
   });
 
-  it("researchFinding.cortex/entityType/entityName/findingType non-nullable", () => {
-    expectTypeOf<ResearchFinding["cortex"]>().toEqualTypeOf<string>();
-    expectTypeOf<ResearchFinding["entityType"]>().toEqualTypeOf<string>();
-    expectTypeOf<ResearchFinding["entityName"]>().toEqualTypeOf<string>();
-    expectTypeOf<ResearchFinding["findingType"]>().toEqualTypeOf<string>();
-    expectTypeOf<ResearchFinding["confidence"]>().toEqualTypeOf<
-      number | null
-    >();
-    expectTypeOf<ResearchFinding["cycleId"]>().toEqualTypeOf<bigint | null>();
+  it("researchFinding origin/cortex/body fields are required and optional scoring fields stay nullable", () => {
+    expect(researchFinding.researchCycleId.notNull).toBe(true);
+    expect(researchFinding.cortex.notNull).toBe(true);
+    expect(researchFinding.findingType.notNull).toBe(true);
+    expect(researchFinding.title.notNull).toBe(true);
+    expect(researchFinding.summary.notNull).toBe(true);
+    expect(researchFinding.evidence.notNull).toBe(true);
+    expect(researchFinding.confidence.notNull).toBe(true);
+    expect(researchFinding.impactScore.notNull).toBe(false);
   });
 
   it("satellite.name / slug non-nullable; nullable FKs stay nullable", () => {
-    expectTypeOf<Satellite["name"]>().toEqualTypeOf<string>();
-    expectTypeOf<Satellite["slug"]>().toEqualTypeOf<string>();
-    expectTypeOf<Satellite["operatorId"]>().toEqualTypeOf<bigint | null>();
-    expectTypeOf<Satellite["launchYear"]>().toEqualTypeOf<number | null>();
+    expect(satellite.name.notNull).toBe(true);
+    expect(satellite.slug.notNull).toBe(true);
+    expect(satellite.operatorId.notNull).toBe(false);
+    expect(satellite.launchYear.notNull).toBe(false);
   });
 
   it("satellitePayload join keys non-nullable", () => {
-    type SP = typeof satellitePayload.$inferSelect;
-    expectTypeOf<SP["satelliteId"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<SP["payloadId"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<SP["role"]>().toEqualTypeOf<string | null>();
+    expect(satellitePayload.satelliteId.notNull).toBe(true);
+    expect(satellitePayload.satelliteId.dataType).toBe("bigint");
+    expect(satellitePayload.payloadId.notNull).toBe(true);
+    expect(satellitePayload.payloadId.dataType).toBe("bigint");
+    expect(satellitePayload.role.notNull).toBe(false);
   });
 
-  it("explorationLog.topic + status non-nullable", () => {
-    expectTypeOf<ExplorationLog["topic"]>().toEqualTypeOf<string>();
-    expectTypeOf<ExplorationLog["status"]>().toEqualTypeOf<string>();
+  it("explorationLog query fields and counters are required while qualityScore stays nullable", () => {
+    expect(explorationLog.query.notNull).toBe(true);
+    expect(explorationLog.queryType.notNull).toBe(true);
+    expect(explorationLog.urlsCrawled.notNull).toBe(true);
+    expect(explorationLog.itemsInjected.notNull).toBe(true);
+    expect(explorationLog.itemsPromoted.notNull).toBe(true);
+    expect(explorationLog.qualityScore.notNull).toBe(false);
   });
 });
 
@@ -179,37 +180,36 @@ describe("SPEC-DB-001 AC-3 — notNull columns are non-nullable in $inferSelect"
 
 describe("SPEC-DB-001 AC-4 — FK types match referenced PK types", () => {
   it("all primary keys are bigint", () => {
-    expectTypeOf<User["id"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<Article["id"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<ResearchCycle["id"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<ResearchFinding["id"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<Satellite["id"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<Payload["id"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<OperatorCountry["id"]>().toEqualTypeOf<bigint>();
+    expect(user.id.dataType).toBe("bigint");
+    expect(article.id.dataType).toBe("bigint");
+    expect(researchCycle.id.dataType).toBe("bigint");
+    expect(researchFinding.id.dataType).toBe("bigint");
+    expect(satellite.id.dataType).toBe("bigint");
+    expect(payload.id.dataType).toBe("bigint");
+    expect(operatorCountry.id.dataType).toBe("bigint");
   });
 
   it("article.authorId → user.id both bigint", () => {
-    expectTypeOf<Article["authorId"]>().toEqualTypeOf<bigint | null>();
-    expectTypeOf<User["id"]>().toEqualTypeOf<bigint>();
+    expect(article.authorId.dataType).toBe("bigint");
+    expect(user.id.dataType).toBe("bigint");
   });
 
-  it("researchFinding.cycleId → researchCycle.id both bigint", () => {
-    expectTypeOf<ResearchFinding["cycleId"]>().toEqualTypeOf<bigint | null>();
-    expectTypeOf<ResearchCycle["id"]>().toEqualTypeOf<bigint>();
+  it("researchFinding.researchCycleId → researchCycle.id both bigint", () => {
+    expect(researchFinding.researchCycleId.dataType).toBe("bigint");
+    expect(researchCycle.id.dataType).toBe("bigint");
   });
 
   it("satellite FKs → respective PKs all bigint", () => {
-    expectTypeOf<Satellite["operatorId"]>().toEqualTypeOf<bigint | null>();
-    expectTypeOf<Satellite["operatorCountryId"]>().toEqualTypeOf<
-      bigint | null
-    >();
-    expectTypeOf<Satellite["platformClassId"]>().toEqualTypeOf<bigint | null>();
+    expect(satellite.operatorId.dataType).toBe("bigint");
+    expect(satellite.operatorCountryId.dataType).toBe("bigint");
+    expect(satellite.platformClassId.dataType).toBe("bigint");
   });
 
   it("satellitePayload join keys bigint, notNull", () => {
-    type SP = typeof satellitePayload.$inferSelect;
-    expectTypeOf<SP["satelliteId"]>().toEqualTypeOf<bigint>();
-    expectTypeOf<SP["payloadId"]>().toEqualTypeOf<bigint>();
+    expect(satellitePayload.satelliteId.dataType).toBe("bigint");
+    expect(satellitePayload.satelliteId.notNull).toBe(true);
+    expect(satellitePayload.payloadId.dataType).toBe("bigint");
+    expect(satellitePayload.payloadId.notNull).toBe(true);
   });
 
   it("every FK declaration in source points at a `.id` column", () => {

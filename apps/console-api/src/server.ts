@@ -155,11 +155,11 @@ function printSatelliteLogo(): void {
   process.stdout.write("\n" + colored + "\n");
 }
 
-function printBanner(
+export function buildBannerText(
   port: number,
   info: { databaseUrl: string; redisUrl: string; cortices: number },
   snapshot: HealthSnapshot,
-): void {
+): string {
   const mode = isProd ? "production" : "development";
   const c = C.cyan, g = C.green, gr = C.gray, b = C.bold, r = C.reset;
   const base = `http://localhost:${port}`;
@@ -188,14 +188,23 @@ function printBanner(
     `  ${gr}›${r} ${c}curl${r} "${base}/api/conjunctions?minPc=1e-8" ${gr}# close approaches${r}`,
     `  ${gr}›${r} ${c}curl${r} ${base}/api/findings           ${gr}# nano-research findings${r}`,
     `  ${gr}›${r} ${c}curl${r} ${base}/api/stats              ${gr}# KG counters${r}`,
-    `  ${gr}›${r} ${c}curl -X POST${r} ${base}/api/repl/turn ${gr}-d '{"query":"LEO traffic"}'${r}`,
+    `  ${gr}›${r} ${c}curl -X POST${r} ${base}/api/repl/turn ` +
+      `${gr}-H 'content-type: application/json' -d '{"input":"LEO traffic"}'${r}`,
   ];
-  process.stdout.write(
+  return (
     header.join("\n") + "\n\n" +
     cfg.join("\n") + "\n\n" +
     system.join("\n") + "\n\n" +
-    hints.join("\n") + "\n\n",
+    hints.join("\n") + "\n\n"
   );
+}
+
+function printBanner(
+  port: number,
+  info: { databaseUrl: string; redisUrl: string; cortices: number },
+  snapshot: HealthSnapshot,
+): void {
+  process.stdout.write(buildBannerText(port, info, snapshot));
 }
 
 /** Builds + configures a Fastify app with CORS, container, and routes.
@@ -276,6 +285,7 @@ export async function createApp(
   app.addHook("onClose", async () => {
     container.services.mission.stop();
     container.services.autonomy.stop();
+    await container.close();
   });
 
   return {

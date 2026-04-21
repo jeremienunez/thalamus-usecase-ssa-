@@ -1,19 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { FastifyBaseLogger } from "fastify";
-import { AutonomyService } from "../../../src/services/autonomy.service";
-import type { CycleRunnerService } from "../../../src/services/cycle-runner.service";
+import {
+  AutonomyService,
+  type CycleOrchestratorPort,
+} from "../../../src/services/autonomy.service";
 import { setAutonomyConfigProvider } from "../../../src/services/autonomy-config";
 import {
   DEFAULT_CONSOLE_AUTONOMY_CONFIG,
   StaticConfigProvider,
 } from "@interview/shared/config";
 
-function mockCycleRunner(): CycleRunnerService {
+function mockCycleRunner(): CycleOrchestratorPort {
   return {
     runThalamus: vi.fn().mockResolvedValue({ emitted: 0, costUsd: 0 }),
     runFish: vi.fn().mockResolvedValue(0),
     runBriefing: vi.fn().mockResolvedValue(0),
-  } as unknown as CycleRunnerService;
+  };
 }
 
 function mockLogger(): FastifyBaseLogger {
@@ -32,7 +34,7 @@ function mockLogger(): FastifyBaseLogger {
 }
 
 describe("AutonomyService.start intervalSec guards", () => {
-  let cycles: CycleRunnerService;
+  let cycles: CycleOrchestratorPort;
   let logger: FastifyBaseLogger;
   let svc: AutonomyService;
 
@@ -85,5 +87,30 @@ describe("AutonomyService.start intervalSec guards", () => {
     const res = await svc.start();
 
     expect(res.state.intervalMs).toBe(120_000);
+  });
+
+  it("falls back to a thalamus tick when the configured rotation contains no supported actions", async () => {
+    vi.useFakeTimers();
+    try {
+      setAutonomyConfigProvider(
+        new StaticConfigProvider({
+          ...DEFAULT_CONSOLE_AUTONOMY_CONFIG,
+          intervalSec: 30,
+          rotation: ["bogus-mode"],
+        }),
+      );
+
+      const res = await svc.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(res.state.running).toBe(true);
+      expect(cycles.runThalamus).toHaveBeenCalledTimes(1);
+      expect(cycles.runFish).not.toHaveBeenCalled();
+      expect(cycles.runBriefing).not.toHaveBeenCalled();
+      expect(svc.publicState().history[0]?.action).toBe("thalamus");
+    } finally {
+      svc.stop();
+      vi.useRealTimers();
+    }
   });
 });

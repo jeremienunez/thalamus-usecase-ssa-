@@ -1,31 +1,34 @@
 import { describe, expect, it, vi } from "vitest";
-import { EnrichmentFindingService } from "../../../src/services/enrichment-finding.service";
-import type { EnrichmentCycleRepository } from "../../../src/repositories/enrichment-cycle.repository";
-import type { FindingRepository } from "../../../src/repositories/finding.repository";
-import type { ResearchEdgeRepository } from "../../../src/repositories/research-edge.repository";
+import {
+  EnrichmentFindingService,
+  type CyclesPort,
+  type EdgesWritePort,
+  type FindingsWritePort,
+  type SweepFeedbackPort,
+} from "../../../src/services/enrichment-finding.service";
 
-function mockCycles(): EnrichmentCycleRepository {
+function mockCycles(): CyclesPort {
   return {
     getOrCreate: vi.fn(),
-  } as unknown as EnrichmentCycleRepository;
+  };
 }
 
-function mockFindings(): FindingRepository {
+function mockFindings(): FindingsWritePort {
   return {
     insert: vi.fn(),
-  } as unknown as FindingRepository;
+  };
 }
 
-function mockEdges(): ResearchEdgeRepository {
+function mockEdges(): EdgesWritePort {
   return {
     insert: vi.fn(),
-  } as unknown as ResearchEdgeRepository;
+  };
 }
 
 // EnrichmentFindingService now depends on a SweepFeedbackPort whose only
 // method is `push(entry)` — Redis lpush/ltrim moved into the
 // SweepFeedbackRepository implementation. Tests mock the port directly.
-function mockFeedback() {
+function mockFeedback(): SweepFeedbackPort {
   return {
     push: vi.fn().mockResolvedValue(undefined),
   };
@@ -171,5 +174,53 @@ describe("EnrichmentFindingService.emit", () => {
       reviewerNote: "mission-fill: operator=CNES",
       operatorCountryName: "web-mission",
     });
+  });
+
+  it("rejects an invalid satellite id before creating any cycle or writes", async () => {
+    const cycles = mockCycles();
+    const findings = mockFindings();
+    const edges = mockEdges();
+    const feedback = mockFeedback();
+
+    await expect(
+      new EnrichmentFindingService(cycles, findings, edges, feedback).emit({
+        kind: "mission",
+        satelliteId: "sat-7",
+        field: "operator",
+        value: "CNES",
+        confidence: 0.92,
+        source: "https://example.org/fact-sheet",
+      }),
+    ).rejects.toThrow("invalid satelliteId: sat-7");
+
+    expect(cycles.getOrCreate).not.toHaveBeenCalled();
+    expect(findings.insert).not.toHaveBeenCalled();
+    expect(edges.insert).not.toHaveBeenCalled();
+    expect(feedback.push).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid KNN neighbour id before persisting a partial finding", async () => {
+    const cycles = mockCycles();
+    const findings = mockFindings();
+    const edges = mockEdges();
+    const feedback = mockFeedback();
+
+    await expect(
+      new EnrichmentFindingService(cycles, findings, edges, feedback).emit({
+        kind: "knn",
+        satelliteId: "42",
+        field: "lifetime",
+        value: 12,
+        confidence: 0.81,
+        source: "knn://ignored",
+        neighbourIds: ["100", "bad-id", "102"],
+        cosSim: 0.934,
+      }),
+    ).rejects.toThrow("invalid neighbourId: bad-id");
+
+    expect(cycles.getOrCreate).not.toHaveBeenCalled();
+    expect(findings.insert).not.toHaveBeenCalled();
+    expect(edges.insert).not.toHaveBeenCalled();
+    expect(feedback.push).not.toHaveBeenCalled();
   });
 });

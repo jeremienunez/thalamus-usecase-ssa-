@@ -9,6 +9,8 @@ function row(over: Partial<ConjunctionRow> = {}): ConjunctionRow {
     secondary_id: "456",
     primary_name: "PRIMARY",
     secondary_name: "SECONDARY",
+    primary_norad_id: 25544,
+    secondary_norad_id: 58042,
     primary_mm: 15,
     epoch: "2024-06-01T00:00:00.000Z",
     min_range_km: 1.2,
@@ -64,15 +66,13 @@ describe("toConjunctionView — covariance quality derivation", () => {
 
 describe("toConjunctionView — fallbacks & formatting", () => {
   it("null primary_name → sat-<primary_id>", () => {
-    const v = toConjunctionView(
-      row({ primary_name: null as unknown as string, primary_id: "123" }),
-    );
+    const v = toConjunctionView(row({ primary_name: null, primary_id: "123" }));
     expect(v.primaryName).toBe("sat-123");
   });
 
   it("null secondary_name → sat-<secondary_id>", () => {
     const v = toConjunctionView(
-      row({ secondary_name: null as unknown as string, secondary_id: "456" }),
+      row({ secondary_name: null, secondary_id: "456" }),
     );
     expect(v.secondaryName).toBe("sat-456");
   });

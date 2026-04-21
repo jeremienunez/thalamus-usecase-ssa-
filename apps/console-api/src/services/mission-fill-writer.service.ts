@@ -1,7 +1,7 @@
 // apps/console-api/src/services/mission-fill-writer.service.ts
 import type { AuditInsertInput } from "../types/sweep.types";
 import { MISSION_WRITABLE_COLUMNS, inRange } from "../utils/field-constraints";
-import type { EnrichmentFindingService } from "./enrichment-finding.service";
+import type { EnrichmentEmitPort } from "./enrichment-finding.service";
 
 // ── Ports ───────────────────────────────────────────────────────────
 export interface SatellitesFillPort {
@@ -16,17 +16,22 @@ export interface SweepAuditWritePort {
   insertEnrichmentSuccess(input: AuditInsertInput): Promise<void>;
 }
 
+export type MissionFillResult =
+  | { applied: true; value: string | number }
+  | { applied: false; reason: string };
+
 /**
  * Persistence-only collaborator for the mission pipeline. Coerces the
  * incoming value to the column's expected shape, bails on out-of-range
  * numerics, then fans out to: satellite update, audit insert, enrichment
- * emit. No scheduling, no LLM, no task mutation.
+ * emit. Returns whether the fill was actually persisted so the caller can
+ * keep task state honest (`filled` means a real write happened).
  */
 export class MissionFillWriter {
   constructor(
     private readonly satellites: SatellitesFillPort,
     private readonly audit: SweepAuditWritePort,
-    private readonly enrichment: EnrichmentFindingService,
+    private readonly enrichment: EnrichmentEmitPort,
   ) {}
 
   async applyFill(
@@ -34,17 +39,23 @@ export class MissionFillWriter {
     field: string,
     value: string | number,
     source: string,
-  ): Promise<void> {
+  ): Promise<MissionFillResult> {
     const kind = MISSION_WRITABLE_COLUMNS[field];
-    if (!kind) return;
+    if (!kind) {
+      return { applied: false, reason: `unsupported field '${field}'` };
+    }
     const coerced =
       kind === "numeric"
         ? typeof value === "number"
           ? value
           : Number.parseFloat(String(value).replace(/[^\d.+-]/g, ""))
         : String(value);
-    if (kind === "numeric" && !Number.isFinite(coerced as number)) return;
-    if (kind === "numeric" && !inRange(field, coerced as number)) return;
+    if (kind === "numeric" && !Number.isFinite(coerced as number)) {
+      return { applied: false, reason: `non-finite numeric value for '${field}'` };
+    }
+    if (kind === "numeric" && !inRange(field, coerced as number)) {
+      return { applied: false, reason: `out-of-range value for '${field}'` };
+    }
 
     await this.satellites.updateField(BigInt(satelliteId), field, coerced);
     await this.audit.insertEnrichmentSuccess({
@@ -65,5 +76,6 @@ export class MissionFillWriter {
       confidence: 0.9,
       source,
     });
+    return { applied: true, value: coerced };
   }
 }

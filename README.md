@@ -105,6 +105,7 @@ Rebuild everything: `make -C docs/specs all` (requires `latexmk` + `pdflatex`; m
 ```bash
 pnpm install
 pnpm -r typecheck   # all packages
+pnpm test:policy    # structural test contract (no todo/skip/vague placeholders)
 pnpm test           # vitest workspace (unit / integration / e2e)
 
 make console        # Palantir-style operator UI on :5173 (+ console-api :4000)
@@ -124,6 +125,7 @@ Frontend beyond the console, ingestion pipelines, voice agent, multi-tenant / bi
 
 - [TODO.md](TODO.md) — extraction state + planned test coverage
 - [CHANGELOG.md](CHANGELOG.md) — extraction history
+- [docs/testing/README.md](docs/testing/README.md) — repo testability strategy + CI contract
 - [apps/console-api/src/agent/ssa/skills/](apps/console-api/src/agent/ssa/skills/) — SSA skill prompts as markdown
 - [docs/specs/thalamus/dual-stream-confidence.tex](docs/specs/thalamus/dual-stream-confidence.tex) — SPEC-TH-040
 - [docs/specs/thalamus/field-correlation.tex](docs/specs/thalamus/field-correlation.tex) — SPEC-TH-041

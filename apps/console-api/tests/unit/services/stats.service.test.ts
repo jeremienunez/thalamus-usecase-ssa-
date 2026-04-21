@@ -63,25 +63,47 @@ describe("StatsService.snapshot", () => {
 
   it("fires the three repo reads before awaiting the first result", async () => {
     const repo = mockRepo();
-    const agg = deferred({
-      satellites: 0,
-      conjunctions: 0,
-      findings: 0,
-      kg_edges: 0,
-      research_cycles: 0,
-    });
-    const byStatus = deferred<Array<{ status: string; count: number }>>([]);
-    const byCortex = deferred<Array<{ cortex: string; count: number }>>([]);
+    const calls: string[] = [];
+    const agg = deferred<{
+      satellites: number;
+      conjunctions: number;
+      findings: number;
+      kg_edges: number;
+      research_cycles: number;
+    }>();
+    const byStatus = deferred<Array<{ status: string; count: number }>>();
+    const byCortex = deferred<Array<{ cortex: string; count: number }>>();
 
-    (repo.aggregates as ReturnType<typeof vi.fn>).mockReturnValue(agg.promise);
-    (repo.findingsByStatus as ReturnType<typeof vi.fn>).mockReturnValue(byStatus.promise);
-    (repo.findingsByCortex as ReturnType<typeof vi.fn>).mockReturnValue(byCortex.promise);
+    (repo.aggregates as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      calls.push("aggregates:start");
+      const value = await agg.promise;
+      calls.push("aggregates:end");
+      return value;
+    });
+    (repo.findingsByStatus as ReturnType<typeof vi.fn>).mockImplementation(
+      async () => {
+        calls.push("byStatus:start");
+        const value = await byStatus.promise;
+        calls.push("byStatus:end");
+        return value;
+      },
+    );
+    (repo.findingsByCortex as ReturnType<typeof vi.fn>).mockImplementation(
+      async () => {
+        calls.push("byCortex:start");
+        const value = await byCortex.promise;
+        calls.push("byCortex:end");
+        return value;
+      },
+    );
 
     const pending = new StatsService(repo).snapshot();
 
-    expect(repo.aggregates).toHaveBeenCalledOnce();
-    expect(repo.findingsByStatus).toHaveBeenCalledOnce();
-    expect(repo.findingsByCortex).toHaveBeenCalledOnce();
+    expect(calls).toEqual([
+      "aggregates:start",
+      "byStatus:start",
+      "byCortex:start",
+    ]);
 
     byStatus.resolve([]);
     byCortex.resolve([]);
@@ -92,7 +114,6 @@ describe("StatsService.snapshot", () => {
       kg_edges: 0,
       research_cycles: 0,
     });
-
     await expect(pending).resolves.toEqual({
       satellites: 0,
       conjunctions: 0,
@@ -103,5 +124,13 @@ describe("StatsService.snapshot", () => {
       byStatus: {},
       byCortex: {},
     });
+    expect(calls).toEqual([
+      "aggregates:start",
+      "byStatus:start",
+      "byCortex:start",
+      "byStatus:end",
+      "byCortex:end",
+      "aggregates:end",
+    ]);
   });
 });

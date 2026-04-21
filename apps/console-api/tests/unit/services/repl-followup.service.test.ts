@@ -3,49 +3,148 @@ import type { ReplStreamEvent } from "@interview/shared";
 import { ReplFollowUpService } from "../../../src/services/repl-followup.service";
 import { CycleStreamPump } from "../../../src/services/cycle-stream-pump.service";
 import { CycleSummariser } from "../../../src/services/cycle-summariser.service";
+import type { LlmTransportFactory } from "../../../src/services/llm-transport.port";
 import {
   SsaReplFollowUpExecutor,
   SsaReplFollowUpPolicy,
+  type SsaReplFollowUpDeps,
 } from "../../../src/agent/ssa/followup";
+import type { EdgeRow } from "../../../src/types/finding.types";
 
-function buildService(edges: Array<{ finding_id: string; entity_type: string; entity_id: string }> = []) {
-  const deps = {
+type SimDeps = NonNullable<SsaReplFollowUpDeps["sim"]>;
+type SweepDeps = NonNullable<SsaReplFollowUpDeps["sweep"]>;
+
+function typedSpy<Fn extends (...args: never[]) => unknown>() {
+  return vi.fn<Parameters<Fn>, ReturnType<Fn>>();
+}
+
+function buildSummariser(
+  text = "summary",
+  provider = "kimi",
+): CycleSummariser {
+  const llm: LlmTransportFactory = {
+    create() {
+      return {
+        async call() {
+          return { content: text, provider };
+        },
+      };
+    },
+  };
+  return new CycleSummariser(llm);
+}
+
+function buildService(edges: EdgeRow[] = []) {
+  const runCycle = typedSpy<SsaReplFollowUpDeps["thalamusService"]["runCycle"]>();
+  runCycle.mockResolvedValue({ id: "cyc:child" });
+  const findByCycleId = typedSpy<
+    SsaReplFollowUpDeps["findingRepo"]["findByCycleId"]
+  >();
+  findByCycleId.mockResolvedValue([]);
+  const findById = typedSpy<
+    NonNullable<SsaReplFollowUpDeps["findingRepo"]["findById"]>
+  >();
+  findById.mockResolvedValue(null);
+  const findByFindingIds = typedSpy<
+    SsaReplFollowUpDeps["edgeRepo"]["findByFindingIds"]
+  >();
+  findByFindingIds.mockImplementation(async () => edges);
+  const canStartTelemetry = typedSpy<
+    NonNullable<SimDeps["preflight"]>["canStartTelemetry"]
+  >();
+  canStartTelemetry.mockResolvedValue(true);
+  const canStartPc = typedSpy<
+    NonNullable<SimDeps["preflight"]>["canStartPc"]
+  >();
+  canStartPc.mockResolvedValue(true);
+  const startTelemetry = typedSpy<SimDeps["launcher"]["startTelemetry"]>();
+  startTelemetry.mockImplementation(async ({ satelliteId, fishCount }) => ({
+    swarmId: satelliteId,
+    fishCount: fishCount ?? 25,
+  }));
+  const startPc = typedSpy<SimDeps["launcher"]["startPc"]>();
+  startPc.mockImplementation(async ({ conjunctionId, fishCount }) => ({
+    swarmId: conjunctionId,
+    fishCount: fishCount ?? 25,
+    conjunctionId,
+  }));
+  const findSwarmById = typedSpy<SimDeps["swarm"]["findById"]>();
+  findSwarmById.mockResolvedValue({
+    status: "done",
+    outcomeReportFindingId: null,
+    suggestionId: null,
+  });
+  const countFishByStatus = typedSpy<SimDeps["swarm"]["countFishByStatus"]>();
+  countFishByStatus.mockResolvedValue({
+    done: 12,
+    failed: 0,
+    running: 0,
+    pending: 0,
+    paused: 0,
+  });
+  const sweep = typedSpy<SweepDeps["nanoSweepService"]["sweep"]>();
+  sweep.mockResolvedValue({ suggestionsStored: 1, wallTimeMs: 5 });
+
+  const deps: SsaReplFollowUpDeps = {
     thalamusService: {
-      runCycle: vi.fn(async () => ({ id: "cyc:child" })),
+      runCycle,
     },
     findingRepo: {
-      findByCycleId: vi.fn(async () => []),
+      findByCycleId,
+      findById,
     },
     edgeRepo: {
-      findByFindingIds: vi.fn(async () => edges),
+      findByFindingIds,
     },
     sim: {
       preflight: {
-        canStartTelemetry: vi.fn(async () => true),
-        canStartPc: vi.fn(async () => true),
+        canStartTelemetry,
+        canStartPc,
+      },
+      launcher: {
+        startTelemetry,
+        startPc,
+      },
+      swarm: {
+        findById: findSwarmById,
+        countFishByStatus,
       },
     },
     sweep: {
       nanoSweepService: {
-        sweep: vi.fn(async () => ({ suggestionsStored: 1, wallTimeMs: 5 })),
+        sweep,
       },
     },
   };
-  return new ReplFollowUpService(
+
+  const service = new ReplFollowUpService(
     new SsaReplFollowUpPolicy(deps),
     new SsaReplFollowUpExecutor(
       deps,
       new CycleStreamPump(),
-      {
-        summarise: vi.fn(async () => ({ text: "summary", provider: "kimi" })),
-      } as unknown as CycleSummariser,
+      buildSummariser(),
     ),
   );
+
+  return {
+    service,
+    runCycle,
+    findByCycleId,
+    findById,
+    findByFindingIds,
+    canStartTelemetry,
+    canStartPc,
+    startTelemetry,
+    startPc,
+    findSwarmById,
+    countFishByStatus,
+    sweep,
+  };
 }
 
 describe("ReplFollowUpService.plan", () => {
   it("auto-launches at most one 30d child and one proof child", async () => {
-    const service = buildService();
+    const { service } = buildService();
 
     const plan = await service.plan({
       query: "Analyse la flotte active",
@@ -89,7 +188,7 @@ describe("ReplFollowUpService.plan", () => {
   });
 
   it("does not enqueue a 30d child when the parent query already asked for 30 days", async () => {
-    const service = buildService();
+    const { service } = buildService();
 
     const plan = await service.plan({
       query: "Dresse un brief SSA priorisé par opérateur sur les 30 jours à venir",
@@ -111,7 +210,7 @@ describe("ReplFollowUpService.plan", () => {
   });
 
   it("auto-launches a targeted sweep only when operator_country is explicit", async () => {
-    const service = buildService();
+    const { service } = buildService();
 
     const plan = await service.plan({
       query: "Analyse les trous de catalogage",
@@ -147,33 +246,8 @@ describe("ReplFollowUpService.plan", () => {
   });
 
   it("downgrades telemetry verification to proposed when the target is not launchable", async () => {
-    const deps = {
-      thalamusService: {
-        runCycle: vi.fn(async () => ({ id: "cyc:child" })),
-      },
-      findingRepo: {
-        findByCycleId: vi.fn(async () => []),
-      },
-      edgeRepo: {
-        findByFindingIds: vi.fn(async () => []),
-      },
-      sim: {
-        preflight: {
-          canStartTelemetry: vi.fn(async () => false),
-          canStartPc: vi.fn(async () => true),
-        },
-      },
-    };
-    const service = new ReplFollowUpService(
-      new SsaReplFollowUpPolicy(deps),
-      new SsaReplFollowUpExecutor(
-        deps,
-        new CycleStreamPump(),
-        {
-          summarise: vi.fn(async () => ({ text: "summary", provider: "kimi" })),
-        } as unknown as CycleSummariser,
-      ),
-    );
+    const { service, canStartTelemetry } = buildService();
+    canStartTelemetry.mockResolvedValue(false);
 
     const plan = await service.plan({
       query: "Analyse les trous de telemetrie",
@@ -215,11 +289,79 @@ describe("ReplFollowUpService.plan", () => {
       "Auto-launch held back because the target is not currently launchable.",
     );
   });
+
+  it("derives follow-ups from evidence edges and skips finding ids that are not BigInt-parsable", async () => {
+    const { service, findByFindingIds } = buildService([
+      {
+        finding_id: "12",
+        entity_type: "satellite",
+        entity_id: "27424",
+      },
+      {
+        finding_id: "12",
+        entity_type: "operator_country",
+        entity_id: "5",
+      },
+    ]);
+
+    const plan = await service.plan({
+      query: "Analyse les trous de telemetrie",
+      parentCycleId: "420",
+      verification: {
+        needsVerification: true,
+        reasonCodes: ["data_gap"],
+        confidence: 0.76,
+        targetHints: [],
+      },
+      findings: [
+        {
+          id: "12",
+          title: "Telemetry gap",
+          summary: null,
+          cortex: "data_auditor",
+          findingType: "anomaly",
+          urgency: "medium",
+          confidence: 0.81,
+        },
+        {
+          id: "f:ui-only",
+          title: "Decorative id",
+          summary: null,
+          cortex: "ui",
+          findingType: "note",
+          urgency: "low",
+          confidence: 0.2,
+        },
+      ],
+    });
+
+    expect(findByFindingIds).toHaveBeenCalledWith([12n]);
+    expect([...plan.autoLaunched, ...plan.proposed]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "sim_telemetry_verification",
+          rationale: "Derived from #12: Telemetry gap.",
+          target: expect.objectContaining({
+            entityType: "satellite",
+            entityId: "27424",
+          }),
+        }),
+        expect.objectContaining({
+          kind: "sweep_targeted_audit",
+          rationale: "Derived from #12: Telemetry gap.",
+          target: expect.objectContaining({
+            entityType: "operator_country",
+            entityId: "5",
+          }),
+        }),
+      ]),
+    );
+  });
 });
 
 describe("ReplFollowUpService.executeSelected", () => {
   it("streams a manually selected follow-up with auto=false", async () => {
-    const service = buildService();
+    const { service, runCycle } = buildService();
 
     const events: ReplStreamEvent[] = [];
     for await (const event of service.executeSelected({
@@ -263,5 +405,83 @@ describe("ReplFollowUpService.executeSelected", () => {
         }),
       ]),
     );
+    expect(runCycle).toHaveBeenCalledWith({
+      query:
+        "Analyse la flotte active\n\nVerification follow-up for parent cycle 419. Extend the horizon to 30 days, corroborate the highest-risk findings, and focus on operator-scoped conclusions where attribution is explicit.",
+      userId: undefined,
+      triggerType: "user",
+      triggerSource: "console-followup:30d:419",
+    });
+  });
+
+  it("runs a targeted sweep with the real runtime payload", async () => {
+    const { service, sweep } = buildService();
+    sweep.mockResolvedValue({ suggestionsStored: 3, wallTimeMs: 7 });
+
+    const events: ReplStreamEvent[] = [];
+    for await (const event of service.executeSelected({
+      item: {
+        followupId: "fu-sweep",
+        kind: "sweep_targeted_audit",
+        auto: false,
+        title: "Run a targeted audit on operator_country 5",
+        rationale: "Derived from #12: Telemetry gap.",
+        score: 0.75,
+        gateScore: 0.76,
+        costClass: "low",
+        reasonCodes: ["data_gap"],
+        target: {
+          entityType: "operator_country",
+          entityId: "5",
+          refs: null,
+        },
+      },
+      query: "Analyse les trous de telemetrie",
+      parentCycleId: "421",
+    })) {
+      events.push(event);
+    }
+
+    expect(sweep).toHaveBeenCalledWith(1, "nullScan", {
+      entityType: "operator_country",
+      entityIds: ["5"],
+      reasonCodes: ["data_gap"],
+      parentCycleId: "421",
+    });
+    expect(events).toEqual([
+      {
+        event: "followup.started",
+        data: {
+          parentCycleId: "421",
+          followupId: "fu-sweep",
+          kind: "sweep_targeted_audit",
+          auto: false,
+          title: "Run a targeted audit on operator_country 5",
+        },
+      },
+      {
+        event: "followup.summary",
+        data: {
+          parentCycleId: "421",
+          followupId: "fu-sweep",
+          kind: "sweep_targeted_audit",
+          auto: false,
+          text: "Targeted sweep audit stored 3 suggestion(s) for operator_country 5.",
+          provider: "system",
+        },
+      },
+      {
+        event: "followup.done",
+        data: {
+          parentCycleId: "421",
+          followupId: "fu-sweep",
+          kind: "sweep_targeted_audit",
+          auto: false,
+          provider: "system",
+          tookMs: expect.any(Number),
+          status: "completed",
+        },
+      },
+    ]);
   });
 });

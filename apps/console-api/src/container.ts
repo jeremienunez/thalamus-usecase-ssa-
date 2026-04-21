@@ -34,8 +34,10 @@ import {
 } from "./prompts";
 import {
   buildSweepContainer,
+  closeQueues,
   createIngestionRegistry,
   createIngestionWorker,
+  getRedis,
   ingestionQueue,
   registerSchedulers,
   registerSweepConfigDomains,
@@ -194,6 +196,7 @@ export async function buildContainer(
   services: AppServices;
   info: { cortices: number };
   snapshot: HealthSnapshot;
+  close: () => Promise<void>;
 }> {
   const { db, redis, webSearch } = config;
   const skillsDir = config.skillsDir ?? SSA_SKILLS_DIR;
@@ -455,7 +458,7 @@ export async function buildContainer(
     ingestionQueue,
     ingestionRegistry,
   );
-  void registerSchedulers().catch((err) =>
+  const schedulerRegistration = registerSchedulers().catch((err) =>
     logger.error({ err }, "Failed to register BullMQ schedulers"),
   );
   // Touch the worker so the linter doesn't strip the binding; the BullMQ
@@ -654,5 +657,11 @@ export async function buildContainer(
     services,
     info: { cortices: thalamus.registry.size() },
     snapshot,
+    close: async () => {
+      await schedulerRegistration;
+      await ingestionWorker.close();
+      await closeQueues();
+      getRedis().disconnect();
+    },
   };
 }

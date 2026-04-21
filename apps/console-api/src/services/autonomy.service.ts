@@ -158,7 +158,7 @@ export class AutonomyService {
             costUsd: 0,
           };
           emitted = await this.cycles.runFish();
-        } else {
+        } else if (action === "fish-swarm") {
           queryOrMode = "briefing(5 operator-countries)";
           this.state.currentTick = {
             id,
@@ -170,6 +170,8 @@ export class AutonomyService {
             costUsd: 0,
           };
           emitted = await this.cycles.runBriefing(5);
+        } else {
+          throw new Error(`unsupported autonomy action '${action satisfies never}'`);
         }
       } catch (err) {
         error = err instanceof Error ? err.message : String(err);

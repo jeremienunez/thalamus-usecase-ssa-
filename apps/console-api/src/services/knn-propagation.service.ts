@@ -1,5 +1,5 @@
 // apps/console-api/src/services/knn-propagation.service.ts
-import type { EnrichmentFindingService } from "./enrichment-finding.service";
+import type { EnrichmentEmitPort } from "./enrichment-finding.service";
 import { toKnnSampleFillView } from "../transformers/knn-propagation.transformer";
 import type {
   AuditInsertInput,
@@ -55,7 +55,7 @@ export class KnnPropagationService {
   constructor(
     private readonly satellites: SatellitesKnnPort,
     private readonly audit: SweepAuditWritePort,
-    private readonly enrichment: EnrichmentFindingService,
+    private readonly enrichment: EnrichmentEmitPort,
   ) {}
 
   async propagate(input: PropagateInput): Promise<PropagateStats> {
@@ -148,6 +148,7 @@ export class KnnPropagationService {
           consensus,
           neighbourIds,
           cosSim,
+          input.k,
         );
       }
       stats.filled++;
@@ -173,12 +174,17 @@ export class KnnPropagationService {
     value: string | number,
     neighbourIds: string[],
     cosSim: number,
+    requestedK: number,
   ): Promise<void> {
     const kind = MISSION_WRITABLE_COLUMNS[field];
     const coerced = kind === "numeric" ? Number(value) : String(value);
     await this.satellites.updateField(BigInt(satelliteId), field, coerced);
 
-    const source = `knn_propagation:k=${neighbourIds.length},cosSim=${cosSim.toFixed(3)},neighbours=[${neighbourIds.slice(0, 5).join(",")}]`;
+    const source =
+      `knn_propagation:requestedK=${requestedK},used=${neighbourIds.length},` +
+      `cosSim=${cosSim.toFixed(3)},neighbours=[${neighbourIds
+        .slice(0, 5)
+        .join(",")}]`;
     await this.audit.insertEnrichmentSuccess({
       suggestionId: `knn:${satelliteId}:${field}`,
       operatorCountryName: "knn-propagation",

@@ -86,7 +86,12 @@ describe("AutonomyService caps", () => {
     expect(state.stoppedReason).toBe("max_thalamus_cycles_per_day");
     expect(cycles.runThalamus).toHaveBeenCalledTimes(1);
     expect(cycles.runBriefing).toHaveBeenCalledTimes(1);
+    expect(cycles.runFish).not.toHaveBeenCalled();
     expect(state.thalamusCyclesToday).toBe(1);
+    expect(state.history.map((tick) => tick.action)).toEqual([
+      "thalamus",
+      "fish-swarm",
+    ]);
   });
 
   it("reschedules the timer when intervalSec changes live", async () => {

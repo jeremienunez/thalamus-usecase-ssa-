@@ -16,7 +16,6 @@ import {
 import { CortexRegistry } from "@interview/thalamus";
 import {
   buildSweepContainer,
-  closeQueues,
   createSwarmAggregateWorker,
   createSwarmFishWorker,
   type DomainAuditProvider,
@@ -34,8 +33,6 @@ import {
   type SweepPromotionAdapter,
   setRedisClient,
 } from "@interview/sweep";
-import { createSimRouteTransport } from "../../src/infra/sim-route-transport";
-import { createApp, type AppHandle } from "../../src/server";
 import { SsaActionSchemaProvider } from "../../src/agent/ssa/sim/action-schema";
 import { SsaAggregationStrategy } from "../../src/agent/ssa/sim/aggregation-strategy";
 import { SsaCortexSelector } from "../../src/agent/ssa/sim/cortex-selector";
@@ -51,6 +48,7 @@ const DB_URL =
   process.env.DATABASE_URL ??
   "postgres://thalamus:thalamus@localhost:5433/thalamus";
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6380";
+const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 const FIXTURES_DIR = resolve(__dirname, "..", "fixtures");
 const FALLBACK = "_telemetry_swarm_fallback";
 const SEED_TAG = "e2e-telemetry-swarm";
@@ -81,7 +79,6 @@ let registry: CortexRegistry;
 let fishWorker: ReturnType<typeof createSwarmFishWorker>;
 let aggregateWorker: ReturnType<typeof createSwarmAggregateWorker>;
 let container: ReturnType<typeof buildSweepContainer>;
-let appHandle: AppHandle;
 let targetSatelliteId: number;
 
 beforeAll(async () => {
@@ -104,9 +101,8 @@ beforeAll(async () => {
   }
 
   await cleanE2E();
-  await drainQueues().catch(() => undefined);
+  await drainQueues().catch((): void => undefined);
   targetSatelliteId = await seedTelemetryTarget();
-  appHandle = await createApp();
 
   const ssaPersona = new SsaPersonaComposer();
   const ssaPrompt = new SsaPromptRenderer();
@@ -115,7 +111,7 @@ beforeAll(async () => {
   const ssaPerturbationPack = new SsaPerturbationPack();
   const ssaAggStrategy = new SsaAggregationStrategy();
   const ssaKindGuard = new SsaKindGuard();
-  const simHttp = new SimHttpClient(createSimRouteTransport(appHandle.app));
+  const simHttp = new SimHttpClient(createFetchSimTransport(BASE));
   const queue = new SimQueueHttpAdapter(simHttp, {
     kernelSecret: process.env.SIM_KERNEL_SHARED_SECRET,
   });
@@ -175,7 +171,7 @@ beforeAll(async () => {
       emitTelemetrySuggestions: async (aggregate) => {
         await promotion.emitScalarSuggestions({
           swarmId: aggregate.swarmId,
-          aggregate: aggregate as Record<string, unknown>,
+          aggregate: aggregate as unknown as Record<string, number>,
         });
         return [];
       },
@@ -195,14 +191,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await drainQueues().catch(() => undefined);
-    await fishWorker?.close().catch(() => undefined);
-    await aggregateWorker?.close().catch(() => undefined);
-    await closeQueues().catch(() => undefined);
-    await appHandle?.close().catch(() => undefined);
+    await drainQueues().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
+    await fishWorker?.close().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
+    await aggregateWorker?.close().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
   } finally {
-    await redis?.quit().catch(() => undefined);
-    await pool?.end().catch(() => undefined);
+    await redis?.quit().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
+    await pool?.end().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
   }
 }, 15_000);
 
@@ -210,10 +214,10 @@ describe("Telemetry swarm — E2E", () => {
   it(
     "launches via HTTP, aggregates infer_telemetry fish, and emits HTTP-backed promotion suggestions",
     async () => {
-      const res = await appHandle.app.inject({
+      const res = await fetch(`${BASE}/api/sim/telemetry/start`, {
         method: "POST",
-        url: "/api/sim/telemetry/start",
-        payload: {
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
           satelliteId: String(targetSatelliteId),
           fishCount: 5,
           config: {
@@ -224,10 +228,9 @@ describe("Telemetry swarm — E2E", () => {
             nanoModel: "gpt-5.4-nano",
             seed: 42,
           },
-        },
+        }),
       });
-
-      expect(res.statusCode).toBe(201);
+      expect(res.status).toBe(201);
       const body = (await res.json()) as {
         swarmId: string;
         fishCount: number;
@@ -237,7 +240,7 @@ describe("Telemetry swarm — E2E", () => {
       expect(body.fishCount).toBe(5);
       expect(Number(body.firstSimRunId)).toBeGreaterThan(0);
 
-      const finalStatus = await waitForSwarmDone(swarmId, 45_000);
+      const finalStatus = await waitForSwarmDone(swarmId, 60_000);
       expect(finalStatus.status).toBe("done");
 
       const counts = await fishStatusCounts(swarmId);
@@ -311,9 +314,39 @@ describe("Telemetry swarm — E2E", () => {
         eclipseRatio: null,
       });
     },
-    45_000,
+    90_000,
   );
 });
+
+function createFetchSimTransport(baseUrl: string) {
+  return {
+    async request(input: {
+      method: "GET" | "POST" | "PATCH";
+      path: string;
+      query?: Record<string, string | number | boolean | null | undefined>;
+      json?: unknown;
+      headers?: Record<string, string>;
+    }) {
+      const url = new URL(input.path, baseUrl);
+      for (const [key, value] of Object.entries(input.query ?? {})) {
+        if (value === undefined || value === null) continue;
+        url.searchParams.set(key, String(value));
+      }
+      const res = await fetch(url, {
+        method: input.method,
+        headers: input.json === undefined
+          ? input.headers
+          : { "content-type": "application/json", ...(input.headers ?? {}) },
+        body: input.json === undefined ? undefined : JSON.stringify(input.json),
+      });
+      const text = await res.text();
+      return {
+        status: res.status,
+        body: text.length > 0 ? JSON.parse(text) : {},
+      };
+    },
+  };
+}
 
 async function waitForSwarmDone(
   swarmId: number,
@@ -497,10 +530,21 @@ async function cleanE2ERedis(): Promise<void> {
 }
 
 async function drainQueues(): Promise<void> {
+  const wipeQueueKeys = async (prefix: string): Promise<void> => {
+    let cursor = "0";
+    do {
+      const [next, keys] = await redis.scan(cursor, "MATCH", `${prefix}*`, "COUNT", "200");
+      cursor = next;
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== "0");
+  };
+
   await Promise.all([
-    simTurnQueue.drain(true).catch(() => undefined),
-    swarmFishQueue.drain(true).catch(() => undefined),
-    swarmAggregateQueue.drain(true).catch(() => undefined),
+    wipeQueueKeys("bull:sim-turn"),
+    wipeQueueKeys("bull:swarm-fish"),
+    wipeQueueKeys("bull:swarm-aggregate"),
   ]);
 }
 

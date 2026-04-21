@@ -8,7 +8,7 @@ import { MissionFillWriter } from "../../../src/services/mission-fill-writer.ser
 import type { SatelliteRepository } from "../../../src/repositories/satellite.repository";
 import type { SweepAuditRepository } from "../../../src/repositories/sweep-audit.repository";
 import type { NanoResearchService } from "../../../src/services/nano-research.service";
-import type { EnrichmentFindingService } from "../../../src/services/enrichment-finding.service";
+import type { EnrichmentEmitPort } from "../../../src/services/enrichment-finding.service";
 import type { NanoResult } from "../../../src/types";
 
 function flushAsync(times = 8) {
@@ -70,10 +70,10 @@ function mockNano(): NanoResearchService {
   } as unknown as NanoResearchService;
 }
 
-function mockEnrichment(): EnrichmentFindingService {
+function mockEnrichment(): EnrichmentEmitPort {
   return {
     emit: vi.fn().mockResolvedValue(undefined),
-  } as unknown as EnrichmentFindingService;
+  };
 }
 
 function mockSweepRepo(): SweepListProvider {
@@ -139,7 +139,7 @@ describe("MissionService", () => {
   let satellites: SatelliteRepository;
   let audit: SweepAuditRepository;
   let nano: NanoResearchService;
-  let enrichment: EnrichmentFindingService;
+  let enrichment: EnrichmentEmitPort;
   let sweepRepo: SweepListProvider;
   let logger: FastifyBaseLogger;
   let svc: MissionService;
@@ -343,6 +343,49 @@ describe("MissionService", () => {
     });
   });
 
+  it("stops immediately after the last queued task completes instead of waiting for an extra idle tick", async () => {
+    (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      rows: [
+        sweepRow({
+          id: "keep",
+          resolutionPayload: JSON.stringify({
+            actions: [
+              {
+                kind: "update_field",
+                field: "lifetime",
+                value: null,
+                satelliteIds: ["42", "43"],
+              },
+            ],
+          }),
+        }),
+      ],
+    });
+    (satellites.findPayloadNamesByIds as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "42", name: "SAT-42", norad_id: "32958" },
+      { id: "43", name: "SAT-43", norad_id: "32959" },
+    ]);
+    (nano.singleVote as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(okVote(12, 0.8, "https://example.org/a"))
+      .mockResolvedValueOnce(okVote(12, 0.9, "https://example.org/b"))
+      .mockResolvedValueOnce(okVote(13, 0.82, "https://example.org/c"))
+      .mockResolvedValueOnce(okVote(13, 0.84, "https://example.org/d"));
+    (nano.votesAgree as ReturnType<typeof vi.fn>).mockReturnValue(true);
+
+    await svc.start({ maxSatsPerSuggestion: 5 });
+    await settleMission();
+
+    expect(satellites.updateField).toHaveBeenCalledTimes(2);
+    expect(svc.publicState()).toMatchObject({
+      running: false,
+      total: 2,
+      completed: 2,
+      filled: 2,
+      unobtainable: 0,
+      errors: 0,
+    });
+  });
+
   it("marks a task error and logs when a write throws", async () => {
     (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       rows: [
@@ -386,7 +429,7 @@ describe("MissionService", () => {
     });
   });
 
-  it("keeps the task filled but skips writes when the numeric value is out of range", async () => {
+  it("marks the task unobtainable when the agreed numeric value is out of range", async () => {
     (sweepRepo.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       rows: [
         sweepRow({
@@ -413,13 +456,14 @@ describe("MissionService", () => {
     expect(enrichment.emit).not.toHaveBeenCalled();
     expect(svc.publicState()).toMatchObject({
       completed: 1,
-      filled: 1,
-      unobtainable: 0,
+      filled: 0,
+      unobtainable: 1,
       errors: 0,
     });
     expect(svc.publicState().recent[0]).toMatchObject({
-      status: "filled",
-      value: 99,
+      status: "unobtainable",
+      value: null,
+      error: "out-of-range value for 'lifetime'",
     });
   });
 });

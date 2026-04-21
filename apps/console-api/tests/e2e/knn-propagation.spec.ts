@@ -1,4 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, it, expect } from "vitest";
+import { Pool } from "pg";
+import { E2E_DATABASE_URL, seedKnnFixture } from "./helpers/db-fixtures";
 
 /**
  * Integration — KNN propagation endpoint.
@@ -12,6 +14,7 @@ import { describe, it, expect } from "vitest";
  */
 
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
+let pool: Pool;
 
 type PropagateRes = {
   field: string;
@@ -42,6 +45,20 @@ async function propagate(body: Record<string, unknown>): Promise<PropagateRes> {
   return JSON.parse(text) as PropagateRes;
 }
 
+beforeAll(async () => {
+  pool = new Pool({ connectionString: E2E_DATABASE_URL, max: 1 });
+  const client = await pool.connect();
+  try {
+    await seedKnnFixture(client);
+  } finally {
+    client.release();
+  }
+});
+
+afterAll(async () => {
+  await pool.end();
+});
+
 describe("KNN propagation — mission/knn-propagate", () => {
   it("rejects non-writable fields (400)", async () => {
     const res = await fetch(`${BASE}/api/sweep/mission/knn-propagate`, {
@@ -57,7 +74,7 @@ describe("KNN propagation — mission/knn-propagate", () => {
     expect(r.field).toBe("lifetime");
     expect(r.k).toBe(5);
     expect(r.minSim).toBeCloseTo(0.8, 6);
-    expect(r.attempted).toBeGreaterThanOrEqual(0);
+    expect(r.attempted).toBeGreaterThan(0);
     expect(r.attempted).toBe(r.filled + r.disagree + r.tooFar);
     expect(Array.isArray(r.sampleFills)).toBe(true);
   });
@@ -73,8 +90,14 @@ describe("KNN propagation — mission/knn-propagate", () => {
   });
 
   it("sampleFills carry a neighbour trail + cosine similarity", async () => {
-    const r = await propagate({ field: "mass_kg", k: 5, minSim: 0.7, limit: 100, dryRun: true });
-    if (r.sampleFills.length === 0) return; // sparse catalogue — skip
+    const r = await propagate({
+      field: "mass_kg",
+      k: 5,
+      minSim: 0.7,
+      limit: 10_000,
+      dryRun: true,
+    });
+    expect(r.sampleFills.length).toBeGreaterThan(0);
     for (const s of r.sampleFills) {
       expect(typeof s.id).toBe("string");
       expect(typeof s.value === "number" || typeof s.value === "string").toBe(true);

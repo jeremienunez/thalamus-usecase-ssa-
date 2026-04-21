@@ -9,7 +9,29 @@ import {
 function mockThalamus(): ThalamusDep {
   return {
     thalamusService: {
-      runCycle: vi.fn().mockResolvedValue({ findingsCount: 2 }),
+      runCycle: vi.fn().mockResolvedValue({
+        id: 77n,
+        findingsCount: 2,
+        totalCost: 1.25,
+      }),
+    },
+    graphService: {
+      listFindings: vi.fn().mockResolvedValue([
+        {
+          id: 501n,
+          researchCycleId: 77n,
+          title: "Current cycle finding",
+          summary: "Projected from the graph service.",
+          confidence: 0.82,
+        },
+        {
+          id: 999n,
+          researchCycleId: 12n,
+          title: "Stale finding",
+          summary: "Must not leak into the run response when the cycle id matches.",
+          confidence: 0.95,
+        },
+      ]),
     },
   };
 }
@@ -45,9 +67,21 @@ describe("CycleRunnerService.listHistory defensive copy", () => {
   });
 
   it("returns a new array reference on each call", async () => {
-    await svc.runUserCycle("thalamus", "test query");
+    const { cycle } = await svc.runUserCycle("thalamus", "test query");
     const a = svc.listHistory();
     const b = svc.listHistory();
+    expect(cycle.error).toBeUndefined();
+    expect(cycle.findingsEmitted).toBe(2);
+    expect(cycle.findings).toEqual([
+      {
+        id: "501",
+        title: "Current cycle finding",
+        summary: "Projected from the graph service.",
+        sourceClass: "KG",
+        confidence: 0.82,
+        evidenceRefs: [],
+      },
+    ]);
     expect(a).not.toBe(b); // different references
     expect(a).toEqual(b); // same contents
   });
@@ -68,5 +102,7 @@ describe("CycleRunnerService.listHistory defensive copy", () => {
     const second = svc.listHistory();
     expect(second.length).toBe(1);
     expect(second[0]!.id).not.toBe("injected");
+    expect(second[0]!.findingsEmitted).toBe(2);
+    expect(second[0]!.error).toBeUndefined();
   });
 });

@@ -1,11 +1,89 @@
 CREATE TABLE IF NOT EXISTS "research_cycle" (
-
-	"photo_url" text
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"trigger_type" "cycle_trigger" NOT NULL,
+	"trigger_source" text,
+	"user_id" bigint,
+	"dag_plan" jsonb,
+	"cortices_used" text[],
+	"status" "cycle_status" NOT NULL,
+	"findings_count" integer DEFAULT 0 NOT NULL,
+	"total_cost" real,
+	"error" text,
+	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "research_finding" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"research_cycle_id" bigint NOT NULL,
+	"cortex" "cortex" NOT NULL,
+	"finding_type" "finding_type" NOT NULL,
+	"status" "finding_status" DEFAULT 'active' NOT NULL,
+	"urgency" "urgency",
+	"title" text NOT NULL,
+	"summary" text NOT NULL,
+	"evidence" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"reasoning" text,
+	"confidence" real NOT NULL,
+	"impact_score" real,
+	"bus_context" jsonb,
+	"reflexion_notes" jsonb,
+	"iteration" integer DEFAULT 0 NOT NULL,
+	"dedup_hash" text,
+	"embedding" vector(1024),
+	"expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "research_edge" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"finding_id" bigint NOT NULL,
+	"entity_type" "entity_type" NOT NULL,
+	"entity_id" bigint NOT NULL,
+	"relation" "relation" NOT NULL,
+	"weight" real DEFAULT 1,
+	"context" jsonb,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "orbit_regime" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"altitude_band" text
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "platform_class" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "payload" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"slug" text NOT NULL,
+	"technical_profile" jsonb,
+	"photo_url" text
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "operator" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"slug" text NOT NULL,
+	"latitude" real,
+	"longitude" real,
+	"ground_station" text
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "operator_country" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"slug" text NOT NULL,
+	"orbit_regime_id" bigint,
+	"doctrine" jsonb,
+	"bounds" jsonb,
+	"centroid" jsonb,
+	"geometry" jsonb
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "satellite" (

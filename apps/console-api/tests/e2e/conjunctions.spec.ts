@@ -1,7 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, it, expect } from "vitest";
+import { Pool } from "pg";
 import { ConjunctionViewSchema } from "@interview/shared";
+import {
+  E2E_DATABASE_URL,
+  seedConjunctionFixture,
+} from "./helpers/db-fixtures";
 
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
+let pool: Pool;
+
+beforeAll(async () => {
+  pool = new Pool({ connectionString: E2E_DATABASE_URL, max: 1 });
+  const client = await pool.connect();
+  try {
+    await seedConjunctionFixture(client);
+  } finally {
+    client.release();
+  }
+});
+
+afterAll(async () => {
+  await pool.end();
+});
 
 describe("GET /api/conjunctions", () => {
   it("returns items matching ConjunctionView schema", async () => {

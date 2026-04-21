@@ -1,14 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
-import { ConjunctionViewService } from "../../../src/services/conjunction-view.service";
+import {
+  ConjunctionViewService,
+  type ConjunctionsReadPort,
+} from "../../../src/services/conjunction-view.service";
 import type {
-  ConjunctionRepository,
   ConjunctionRow,
+  ScreenedConjunctionRow,
+  KnnCandidateRow,
 } from "../../../src/repositories/conjunction.repository";
 
-function mockRepo(): ConjunctionRepository {
+function mockRepo(): ConjunctionsReadPort {
   return {
     listAboveMinPc: vi.fn(),
-  } as unknown as ConjunctionRepository;
+    screenConjunctions: vi.fn(),
+    findKnnCandidates: vi.fn(),
+  };
 }
 
 function row(overrides: Partial<ConjunctionRow> = {}): ConjunctionRow {
@@ -18,6 +24,8 @@ function row(overrides: Partial<ConjunctionRow> = {}): ConjunctionRow {
     secondary_id: "2",
     primary_name: "SAT-A",
     secondary_name: "SAT-B",
+    primary_norad_id: 10001,
+    secondary_norad_id: 10002,
     primary_mm: 15.5,
     epoch: "2024-01-01T00:00:00.000Z",
     min_range_km: 2.5,
@@ -27,6 +35,50 @@ function row(overrides: Partial<ConjunctionRow> = {}): ConjunctionRow {
     hard_body_radius_m: 5,
     pc_method: "foster-gaussian",
     computed_at: "2024-01-02T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function screenedRow(
+  overrides: Partial<ScreenedConjunctionRow> = {},
+): ScreenedConjunctionRow {
+  return {
+    conjunctionId: 77,
+    primarySatellite: "ISS",
+    primaryNoradId: 25544,
+    secondarySatellite: "STARLINK-1000",
+    secondaryNoradId: 50001,
+    epoch: "2026-04-21T00:00:00.000Z",
+    minRangeKm: 1.2,
+    relativeVelocityKmps: 12.5,
+    probabilityOfCollision: 1e-5,
+    primarySigmaKm: 0.2,
+    secondarySigmaKm: 0.3,
+    combinedSigmaKm: 0.36,
+    hardBodyRadiusM: 15,
+    pcMethod: "foster-gaussian",
+    operatorPrimary: "NASA",
+    operatorSecondary: "SpaceX",
+    regime: "LEO",
+    primaryTleEpoch: "2026-04-20T12:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function knnRow(overrides: Partial<KnnCandidateRow> = {}): KnnCandidateRow {
+  return {
+    targetNoradId: 25544,
+    targetName: "ISS",
+    candidateId: 42,
+    candidateName: "STARLINK-42",
+    candidateNoradId: 58042,
+    candidateClass: "payload",
+    cosDistance: 0.08,
+    overlapKm: 25,
+    apogeeKm: 550,
+    perigeeKm: 540,
+    inclinationDeg: 53,
+    regime: "leo",
     ...overrides,
   };
 }
@@ -161,14 +213,14 @@ describe("ConjunctionViewService.list", () => {
     expect(items[0]!.pcMethod).toBe("foster-gaussian");
   });
 
-  it("falls back null primary_name/secondary_name to sat-${id}", async () => {
+  it("falls back missing joined satellite names to sat-${id}", async () => {
     const repo = mockRepo();
     (repo.listAboveMinPc as ReturnType<typeof vi.fn>).mockResolvedValue([
       row({
         primary_id: "100",
         secondary_id: "200",
-        primary_name: null as unknown as string,
-        secondary_name: null as unknown as string,
+        primary_name: null,
+        secondary_name: null,
       }),
     ]);
     const svc = new ConjunctionViewService(repo);
@@ -226,5 +278,75 @@ describe("ConjunctionViewService.list", () => {
     const { items, count } = await svc.list({ minPc: 0 });
     expect(items.length).toBe(3);
     expect(count).toBe(3);
+  });
+});
+
+describe("ConjunctionViewService.screen", () => {
+  it("forwards screen params and maps conjunction ids to conj:<id>", async () => {
+    const repo = mockRepo();
+    (repo.screenConjunctions as ReturnType<typeof vi.fn>).mockResolvedValue([
+      screenedRow(),
+    ]);
+    const svc = new ConjunctionViewService(repo);
+
+    const result = await svc.screen({
+      windowHours: 48,
+      primaryNoradId: "25544",
+      limit: 25,
+    });
+
+    expect(repo.screenConjunctions).toHaveBeenCalledWith({
+      windowHours: 48,
+      primaryNoradId: "25544",
+      limit: 25,
+    });
+    expect(result).toEqual({
+      items: [
+        {
+          ...screenedRow(),
+          id: "conj:77",
+        },
+      ],
+      count: 1,
+    });
+  });
+});
+
+describe("ConjunctionViewService.knnCandidates", () => {
+  it("forwards candidate params and maps synthetic knn ids", async () => {
+    const repo = mockRepo();
+    (repo.findKnnCandidates as ReturnType<typeof vi.fn>).mockResolvedValue([
+      knnRow(),
+    ]);
+    const svc = new ConjunctionViewService(repo);
+
+    const result = await svc.knnCandidates({
+      targetNoradId: 25544,
+      knnK: 200,
+      limit: 50,
+      marginKm: 20,
+      objectClass: "payload",
+      excludeSameFamily: true,
+      efSearch: 100,
+    });
+
+    expect(repo.findKnnCandidates).toHaveBeenCalledWith({
+      targetNoradId: 25544,
+      knnK: 200,
+      limit: 50,
+      marginKm: 20,
+      objectClass: "payload",
+      excludeSameFamily: true,
+      efSearch: 100,
+    });
+    expect(result).toEqual({
+      items: [
+        {
+          ...knnRow(),
+          id: "knn:25544:42",
+        },
+      ],
+      count: 1,
+    });
   });
 });

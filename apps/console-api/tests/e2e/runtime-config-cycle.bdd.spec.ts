@@ -30,7 +30,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { patchConfig, resetAllConfig } from "./helpers/runtime-config";
 
-const RUN_LLM = !!process.env.RUN_LLM_E2E;
+const RUN_LLM = process.env.RUN_LLM_E2E === "1";
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 
 const PROVIDERS = ["openai", "kimi", "minimax", "local"] as const;

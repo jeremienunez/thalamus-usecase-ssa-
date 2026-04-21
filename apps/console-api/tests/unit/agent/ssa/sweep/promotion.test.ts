@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { AcceptedSuggestionInput } from "@interview/sweep";
 import { SsaPromotionAdapter } from "../../../../../src/agent/ssa/sweep/promotion.ssa";
 import type { SweepAuditRepository } from "../../../../../src/repositories/sweep-audit.repository";
 
@@ -12,7 +13,7 @@ function fakeAuditRepo() {
 }
 
 describe("SsaPromotionAdapter.promote", () => {
-  const input = {
+  const input: AcceptedSuggestionInput = {
     suggestionId: "sugg-1",
     domain: "ssa",
     domainFields: {

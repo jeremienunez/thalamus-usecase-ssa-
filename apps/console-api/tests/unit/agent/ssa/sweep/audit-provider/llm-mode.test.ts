@@ -139,7 +139,7 @@ describe("SsaAuditProvider LLM mode", () => {
               affectedSatellites: 999,
             },
           ]),
-          urls: [],
+          urls: [] as string[],
           latencyMs: 0,
           index: i,
         }));
@@ -174,7 +174,7 @@ describe("SsaAuditProvider LLM mode", () => {
       category: string;
       operatorCountryName: string;
     }) => ({
-      operatorCountryId: null,
+      operatorCountryId: null as bigint | null,
       operatorCountryName: overrides.operatorCountryName,
       category: overrides.category,
       severity: "info",
@@ -182,7 +182,7 @@ describe("SsaAuditProvider LLM mode", () => {
       description: "past description",
       affectedSatellites: 1,
       suggestedAction: "n/a",
-      webEvidence: null,
+      webEvidence: null as string | null,
     });
     const sweepRepo: SsaAuditDeps["sweepRepo"] = {
       loadPastFeedback: vi.fn().mockResolvedValue([

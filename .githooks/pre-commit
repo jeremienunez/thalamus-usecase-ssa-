@@ -5,8 +5,9 @@
 #   1. No .env* files in the staged set (safety net beyond .gitignore)
 #   2. pnpm arch:check         — console-api layer boundaries hold
 #   3. pnpm typecheck          — all packages compile
-#   4. pnpm spec:check         — every AC in APPROVED/IMPLEMENTED specs has a traced test
-#   5. pnpm test               — the traced tests (and all others) pass
+#   4. pnpm test:policy        — tests describe executable expected behavior only
+#   5. pnpm spec:check         — every AC in APPROVED/IMPLEMENTED specs has a traced test
+#   6. pnpm test               — the traced tests (and all others) pass
 #
 # DRAFT / REVIEW specs are ignored — work-in-progress doesn't block commits.
 # Bypass only with explicit --no-verify AND a written reason. Don't make a habit of it.
@@ -41,11 +42,16 @@ pnpm -s typecheck || fail "typecheck failed — fix types before committing"
 ok "typecheck passed"
 
 # ── 4. spec traceability ────────────────────────────────────────────────────
+step "pnpm test:policy (strict structural + behavior contract)"
+pnpm -s test:policy || fail "test-policy failed — no skip/todo/only/failing, direct expect() in each test, describe()-scoped seams only"
+ok "test policy passed"
+
+# ── 5. spec traceability ────────────────────────────────────────────────────
 step "pnpm spec:check (AC ↔ test traceability)"
 pnpm -s spec:check || fail "spec-check failed — every AC in APPROVED/IMPLEMENTED specs must have a passing test"
 ok "spec-check passed"
 
-# ── 5. tests ────────────────────────────────────────────────────────────────
+# ── 6. tests ────────────────────────────────────────────────────────────────
 step "pnpm test"
 pnpm -s test || fail "tests failed — the spec's 'attendu réel' is not met"
 ok "tests passed"

@@ -51,10 +51,21 @@ export async function resetConfig(domain: string): Promise<Response> {
 
 /** DELETE every registered domain. Safe in afterEach; ignores 404s. */
 export async function resetAllConfig(): Promise<void> {
+  const fallbackDomains = Object.fromEntries(
+    RUNTIME_CONFIG_DOMAINS.map(
+      (domain): [string, DomainEntry] => [
+        domain,
+        {
+          value: {},
+          defaults: {},
+          schema: {},
+          hasOverrides: false,
+        },
+      ],
+    ),
+  ) as Record<string, DomainEntry>;
   const { domains } = await getAllConfig().catch(() => ({
-    domains: Object.fromEntries(
-      RUNTIME_CONFIG_DOMAINS.map((d) => [d, null]),
-    ) as Record<string, unknown>,
+    domains: fallbackDomains,
   }));
   await Promise.all(
     Object.keys(domains).map(async (d) => {

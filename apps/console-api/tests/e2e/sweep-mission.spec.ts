@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import IORedis from "ioredis";
+import { Pool } from "pg";
+import {
+  E2E_DATABASE_URL,
+  seedSweepMissionSatellites,
+} from "./helpers/db-fixtures";
 
 /**
  * Integration tests — sweep mission expansion + guardrails.
@@ -18,13 +23,15 @@ const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6380";
 
 let redis: IORedis;
+let pool: Pool;
+let seededSatelliteIds: string[] = [];
 const SEEDED_IDS: string[] = [];
 let pendingSnapshot: string[] = [];
 
 async function stopMissionIfRunning(): Promise<void> {
-  await fetch(`${BASE}/api/sweep/mission/stop`, { method: "POST" }).catch(
-    () => undefined,
-  );
+  await fetch(`${BASE}/api/sweep/mission/stop`, { method: "POST" }).catch((): void => {
+    // Mission shutdown is best-effort during e2e cleanup.
+  });
 }
 
 async function missionStatus(): Promise<{
@@ -115,11 +122,19 @@ describe("sweep mission — per-satellite task expansion", () => {
   beforeAll(async () => {
     redis = new IORedis(REDIS_URL, { maxRetriesPerRequest: null, lazyConnect: true });
     await redis.connect();
+    pool = new Pool({ connectionString: E2E_DATABASE_URL, max: 1 });
+    const client = await pool.connect();
+    try {
+      seededSatelliteIds = await seedSweepMissionSatellites(client);
+    } finally {
+      client.release();
+    }
   });
 
   afterAll(async () => {
     await cleanupSeeded();
     await redis.quit();
+    await pool.end();
   });
 
   beforeEach(async () => {
@@ -185,10 +200,10 @@ describe("sweep mission — per-satellite task expansion", () => {
       id: "9900004",
       operatorCountryName: "United States",
       field: "lifetime",
-      satelliteIds: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+      satelliteIds: seededSatelliteIds,
     });
     const { total } = await startMissionWithCap(3);
-    // Some seeded sat ids may not exist in DB; ensure cap is the ceiling.
+    expect(total).toBeGreaterThan(0);
     expect(total).toBeLessThanOrEqual(3);
   });
 
@@ -199,11 +214,9 @@ describe("sweep mission — per-satellite task expansion", () => {
       id: "9900005",
       operatorCountryName: "United States",
       field: "lifetime",
-      satelliteIds: ["36", "40", "47"],
+      satelliteIds: seededSatelliteIds.slice(0, 3),
     });
     const { total } = await startMissionWithCap(5);
-    // If any of those ids belong to a different operator in the DB the query
-    // will still find the row — we only assert expansion happened.
     expect(total).toBeGreaterThan(0);
     expect(total).toBeLessThanOrEqual(3);
   });
@@ -213,7 +226,7 @@ describe("sweep mission — per-satellite task expansion", () => {
       id: "9900006",
       operatorCountryName: "United States",
       field: "lifetime",
-      satelliteIds: ["36"],
+      satelliteIds: seededSatelliteIds.slice(0, 5),
     });
     const first = await fetch(`${BASE}/api/sweep/mission/start`, {
       method: "POST",

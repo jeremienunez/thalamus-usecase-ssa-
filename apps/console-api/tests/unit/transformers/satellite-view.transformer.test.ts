@@ -96,7 +96,10 @@ describe("toSatelliteView", () => {
   });
 
   it("falls back to current ISO when epoch is not a string", () => {
-    const ts = { ...row().telemetry_summary, epoch: 12345 as unknown as string };
+    const ts: Record<string, unknown> = {
+      ...row().telemetry_summary,
+      epoch: 12345,
+    };
     const v = toSatelliteView(row({ telemetry_summary: ts }));
     // must be a valid ISO string
     expect(typeof v.epoch).toBe("string");

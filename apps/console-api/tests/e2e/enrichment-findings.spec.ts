@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, it, expect } from "vitest";
 import { Pool } from "pg";
+import { E2E_DATABASE_URL, seedKnnFixture } from "./helpers/db-fixtures";
 
 /**
  * Integration — enrichment findings emitted by KNN-propagation.
@@ -14,13 +15,24 @@ import { Pool } from "pg";
  */
 
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
-const DATABASE_URL =
-  process.env.DATABASE_URL ??
-  "postgres://thalamus:thalamus@localhost:5433/thalamus";
+let pool: Pool;
+
+beforeAll(async () => {
+  pool = new Pool({ connectionString: E2E_DATABASE_URL, max: 1 });
+  const client = await pool.connect();
+  try {
+    await seedKnnFixture(client);
+  } finally {
+    client.release();
+  }
+});
+
+afterAll(async () => {
+  await pool.end();
+});
 
 describe("KNN fill emits research_finding + research_edge", () => {
   it("writes a finding per fill with similar_to edges to the neighbours", async () => {
-    const pool = new Pool({ connectionString: DATABASE_URL });
     const client = await pool.connect();
     try {
       const beforeRes = await client.query<{ n: string }>(
@@ -78,7 +90,6 @@ describe("KNN fill emits research_finding + research_edge", () => {
       expect(byRelation.similar_to ?? 0).toBeGreaterThanOrEqual(1);
     } finally {
       client.release();
-      await pool.end();
     }
   });
 });

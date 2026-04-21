@@ -50,14 +50,27 @@ export class MissionTaskWorker {
         task.completedAt = new Date().toISOString();
         return;
       }
+      task.source = vote1.source;
+      const fill = await this.filler.applyFill(
+        task.satelliteId,
+        task.field,
+        v1,
+        task.source,
+      );
+      if (fill.applied === false) {
+        task.status = "unobtainable";
+        task.value = null;
+        task.confidence = 0;
+        task.error = fill.reason;
+        task.completedAt = new Date().toISOString();
+        return;
+      }
       task.status = "filled";
-      task.value = v1;
+      task.value = fill.value;
       task.confidence = Math.min(
         0.95,
         (vote1.confidence + vote2.confidence) / 2 + 0.15,
       );
-      task.source = vote1.source;
-      await this.filler.applyFill(task.satelliteId, task.field, v1, task.source);
     } catch (err) {
       task.status = "error";
       task.error = err instanceof Error ? err.message : String(err);

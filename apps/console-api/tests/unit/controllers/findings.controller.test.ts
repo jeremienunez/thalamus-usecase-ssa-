@@ -1,23 +1,34 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import {
-  findingByIdController,
-  findingDecisionController,
-  findingsListController,
-} from "../../../src/controllers/findings.controller";
+import type { FindingView } from "@interview/shared";
+import { registerFindingsRoutes } from "../../../src/routes/findings.routes";
 import { HttpError } from "../../../src/utils/http-error";
 
-describe("findingsListController", () => {
-  it("parses filters and forwards them to the service", async () => {
+const findingView: FindingView = {
+  id: "f:42",
+  title: "Conjunction finding",
+  summary: "Alert summary",
+  cortex: "catalog",
+  status: "accepted",
+  priority: 82,
+  createdAt: "2026-04-21T00:00:00.000Z",
+  linkedEntityIds: ["sat:123"],
+  evidence: [],
+};
+
+describe("registerFindingsRoutes", () => {
+  it("parses filters on the public findings list route", async () => {
     const service = {
       list: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+      findById: vi.fn(),
+      updateDecision: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    app.get("/findings", findingsListController(service as never));
+    registerFindingsRoutes(app, service as never);
 
     const res = await app.inject({
       method: "GET",
-      url: "/findings?status=pending&cortex=catalog",
+      url: "/api/findings?status=pending&cortex=catalog",
     });
 
     expect(service.list).toHaveBeenCalledWith({
@@ -25,19 +36,24 @@ describe("findingsListController", () => {
       cortex: "catalog",
     });
     expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ items: [], count: 0 });
+    expect(service.findById).not.toHaveBeenCalled();
+    expect(service.updateDecision).not.toHaveBeenCalled();
     await app.close();
   });
-});
 
-describe("findingByIdController", () => {
-  it("returns 400 when the path id is malformed", async () => {
-    const service = { findById: vi.fn() };
+  it("returns 400 when the public path id is malformed", async () => {
+    const service = {
+      list: vi.fn(),
+      findById: vi.fn(),
+      updateDecision: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    app.get("/findings/:id", findingByIdController(service as never));
+    registerFindingsRoutes(app, service as never);
 
     const res = await app.inject({
       method: "GET",
-      url: "/findings/abc",
+      url: "/api/findings/abc",
     });
 
     expect(res.statusCode).toBe(400);
@@ -45,16 +61,20 @@ describe("findingByIdController", () => {
     await app.close();
   });
 
-  it("maps HttpError.notFound from the service to 404", async () => {
+  it("maps HttpError.notFound from the service to 404 on the public by-id route", async () => {
     const service = {
-      findById: vi.fn().mockRejectedValue(HttpError.notFound("finding not found")),
+      list: vi.fn(),
+      findById: vi
+        .fn()
+        .mockRejectedValue(HttpError.notFound("finding not found")),
+      updateDecision: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    app.get("/findings/:id", findingByIdController(service as never));
+    registerFindingsRoutes(app, service as never);
 
     const res = await app.inject({
       method: "GET",
-      url: "/findings/f:42",
+      url: "/api/findings/f:42",
     });
 
     expect(service.findById).toHaveBeenCalledWith("f:42");
@@ -62,35 +82,19 @@ describe("findingByIdController", () => {
     expect(res.json()).toEqual({ error: "finding not found" });
     await app.close();
   });
-});
 
-describe("findingDecisionController", () => {
-  it("returns 400 when the decision body is invalid", async () => {
-    const service = { updateDecision: vi.fn() };
-    const app = Fastify({ logger: false });
-    app.post("/findings/:id/decision", findingDecisionController(service as never));
-
-    const res = await app.inject({
-      method: "POST",
-      url: "/findings/f:42/decision",
-      payload: { decision: "approve" },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(service.updateDecision).not.toHaveBeenCalled();
-    await app.close();
-  });
-
-  it("wraps the updated finding inside {ok:true,finding}", async () => {
+  it("wraps the updated finding inside {ok:true,finding} on the public decision route", async () => {
     const service = {
-      updateDecision: vi.fn().mockResolvedValue({ id: "f:42", status: "accepted" }),
+      list: vi.fn(),
+      findById: vi.fn(),
+      updateDecision: vi.fn().mockResolvedValue(findingView),
     };
     const app = Fastify({ logger: false });
-    app.post("/findings/:id/decision", findingDecisionController(service as never));
+    registerFindingsRoutes(app, service as never);
 
     const res = await app.inject({
       method: "POST",
-      url: "/findings/f:42/decision",
+      url: "/api/findings/f:42/decision",
       payload: { decision: "accepted" },
     });
 
@@ -98,8 +102,34 @@ describe("findingDecisionController", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       ok: true,
-      finding: { id: "f:42", status: "accepted" },
+      finding: findingView,
     });
+    await app.close();
+  });
+
+  it("does not expose stale non-api findings paths", async () => {
+    const service = {
+      list: vi.fn(),
+      findById: vi.fn(),
+      updateDecision: vi.fn(),
+    };
+    const app = Fastify({ logger: false });
+    registerFindingsRoutes(app, service as never);
+
+    const list = await app.inject({ method: "GET", url: "/findings" });
+    const byId = await app.inject({ method: "GET", url: "/findings/f:42" });
+    const decision = await app.inject({
+      method: "POST",
+      url: "/findings/f:42/decision",
+      payload: { decision: "accepted" },
+    });
+
+    expect(list.statusCode).toBe(404);
+    expect(byId.statusCode).toBe(404);
+    expect(decision.statusCode).toBe(404);
+    expect(service.list).not.toHaveBeenCalled();
+    expect(service.findById).not.toHaveBeenCalled();
+    expect(service.updateDecision).not.toHaveBeenCalled();
     await app.close();
   });
 });

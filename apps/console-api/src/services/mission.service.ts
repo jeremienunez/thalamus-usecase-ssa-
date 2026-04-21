@@ -117,6 +117,11 @@ export class MissionService {
       );
     } finally {
       this.state.busy = false;
+      if (this.state.cursor >= this.state.tasks.length) {
+        this.state.running = false;
+        if (this.state.timer) clearInterval(this.state.timer);
+        this.state.timer = null;
+      }
     }
   }
 }

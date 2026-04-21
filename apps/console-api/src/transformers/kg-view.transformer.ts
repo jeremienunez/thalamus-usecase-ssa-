@@ -47,7 +47,7 @@ export function toFindingNode(f: KgFindingRow): KgNode {
   return {
     id: `finding:${f.id}`,
     label: f.title.slice(0, 32),
-    class: "Payload",
+    class: "ConjunctionEvent",
     degree: 0,
     x: 0,
     y: 0,
@@ -59,6 +59,7 @@ export function toFindingNode(f: KgFindingRow): KgNode {
 export function entityRef(type: string, id: string): string {
   if (type === "satellite") return `sat:${id}`;
   if (type === "operator") return `op:${id}`;
+  if (type === "orbit_regime" || type === "regime") return `regime:${id}`;
   return `${type}:${id}`;
 }
 

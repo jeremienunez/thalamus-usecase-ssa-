@@ -43,7 +43,54 @@ const POST_DRIZZLE_SQL = [
   "0011_source_item_trgm_gin.sql",
   "0012_orbital_analytics_fns.sql",
   "0013_conjunction_knn_fn.sql",
+  "0014_satellite_embedding.sql",
 ] as const;
+
+export type RunMigrationsOptions = {
+  databaseUrl: string;
+  initSqlPath?: string;
+  migrationsFolder?: string;
+};
+
+export async function runMigrations({
+  databaseUrl,
+  initSqlPath,
+  migrationsFolder,
+}: RunMigrationsOptions): Promise<void> {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const resolvedMigrationsFolder =
+    migrationsFolder ?? resolve(here, "..", "migrations");
+  const resolvedInitSqlPath =
+    initSqlPath ??
+    resolve(here, "..", "..", "..", "infra", "postgres", "init.sql");
+
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  const db = drizzle(pool);
+  const t0 = Date.now();
+
+  console.log(`migrate: target ${redact(databaseUrl)}`);
+  console.log(`migrate: folder ${resolvedMigrationsFolder}`);
+
+  try {
+    await runInitSql(pool, resolvedInitSqlPath);
+    await runRawSql(
+      pool,
+      resolvedMigrationsFolder,
+      PRE_DRIZZLE_SQL,
+      "pre-drizzle",
+    );
+    await runDrizzle(db, resolvedMigrationsFolder);
+    await runRawSql(
+      pool,
+      resolvedMigrationsFolder,
+      POST_DRIZZLE_SQL,
+      "post-drizzle",
+    );
+    console.log(`migrate: ok (${Date.now() - t0}ms)`);
+  } finally {
+    await pool.end();
+  }
+}
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
@@ -51,25 +98,15 @@ async function main(): Promise<void> {
     console.error("migrate: DATABASE_URL is required");
     process.exit(1);
   }
+  await runMigrations({ databaseUrl: url });
+}
 
-  const here = dirname(fileURLToPath(import.meta.url));
-  const migrationsFolder = resolve(here, "..", "migrations");
-
-  const pool = new Pool({ connectionString: url, max: 2 });
-  const db = drizzle(pool);
-  const t0 = Date.now();
-
-  console.log(`migrate: target ${redact(url)}`);
-  console.log(`migrate: folder ${migrationsFolder}`);
-
-  try {
-    await runRawSql(pool, migrationsFolder, PRE_DRIZZLE_SQL, "pre-drizzle");
-    await runDrizzle(db, migrationsFolder);
-    await runRawSql(pool, migrationsFolder, POST_DRIZZLE_SQL, "post-drizzle");
-    console.log(`migrate: ok (${Date.now() - t0}ms)`);
-  } finally {
-    await pool.end();
-  }
+async function runInitSql(pool: Pool, path: string): Promise<void> {
+  const sql = readFileSync(path, "utf8");
+  const t = Date.now();
+  console.log(`  [bootstrap] ${path} ...`);
+  await pool.query(sql);
+  console.log(`  [bootstrap] ok (${Date.now() - t}ms)`);
 }
 
 async function runRawSql(
@@ -102,7 +139,9 @@ function redact(url: string): string {
   return url.replace(/\/\/[^@]+@/, "//***@");
 }
 
-main().catch((err) => {
-  console.error("migrate: failed", err instanceof Error ? err.stack : err);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error("migrate: failed", err instanceof Error ? err.stack : err);
+    process.exit(1);
+  });
+}
