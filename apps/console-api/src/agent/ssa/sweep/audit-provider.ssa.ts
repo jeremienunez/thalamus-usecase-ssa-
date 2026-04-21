@@ -16,14 +16,65 @@ import type {
   DomainAuditProvider,
 } from "@interview/sweep";
 import type { SuggestionFeedbackRow, SweepRepository } from "@interview/sweep";
-import type { SatelliteRepository } from "../../../repositories/satellite.repository";
-import type { SweepFeedbackRepository } from "../../../repositories/sweep-feedback.repository";
+import type { SweepFeedbackEntry } from "../../../types/sweep.types";
 import {
   buildSsaAuditInstructions,
   SSA_BRIEFING_INSTRUCTIONS,
 } from "../../../prompts";
 import { parseSsaFindingPayload } from "./finding-schema.ssa";
 import { ssaResolutionPayloadSchema } from "./resolution-schema.ssa";
+
+// ─── Ports (ISP) ──────────────────────────────────────────────────
+// The provider depends on narrow structural ports, not on concrete
+// repository classes. `container.ts` wires real repositories that
+// satisfy these shapes; tests pass lightweight fakes.
+
+export interface NullScanRow {
+  operatorCountryId: bigint | null;
+  operatorCountryName: string;
+  totalSatellites: number;
+  column: string;
+  nullCount: number;
+  nullFraction: number;
+}
+
+export interface OperatorCountrySweepStatsRow {
+  operatorCountryId: bigint;
+  operatorCountryName: string;
+  orbitRegimeName: string;
+  satelliteCount: number;
+  missingPayloads: number;
+  missingOrbitRegime: number;
+  missingLaunchYear: number;
+  missingMass: number;
+  hasDoctrine: boolean;
+  avgMass: number | null;
+  topPayloads: string[];
+  sampleSatellites: Array<{
+    name: string;
+    massKg: number;
+    launchYear: number | null;
+  }>;
+}
+
+export interface AuditSatellitePort {
+  nullScanByColumn(opts?: {
+    maxOperatorCountries?: number;
+    minNullFraction?: number;
+    minTotal?: number;
+    columns?: string[];
+  }): Promise<NullScanRow[]>;
+  findSatelliteIdsWithNullColumn(opts: {
+    operatorCountryId: bigint | null;
+    column: string;
+    limit?: number;
+  }): Promise<bigint[]>;
+  getOperatorCountrySweepStats(): Promise<OperatorCountrySweepStatsRow[]>;
+}
+
+export interface AuditFeedbackPort {
+  push(entry: SweepFeedbackEntry): Promise<void>;
+}
 
 const logger = createLogger("ssa-audit-provider");
 
@@ -111,11 +162,11 @@ function validSeverity(s: string): string {
 }
 
 export interface SsaAuditDeps {
-  satelliteRepo: SatelliteRepository;
+  satelliteRepo: AuditSatellitePort;
   /** Used only for loadPastFeedback; writes go via insertGeneric on the engine side. */
   sweepRepo: Pick<SweepRepository, "loadPastFeedback">;
   /** Feedback recording (recordFeedback port method). */
-  feedbackRepo?: SweepFeedbackRepository;
+  feedbackRepo?: AuditFeedbackPort;
   /** Optional — runtime-tunable batch size + null-scan caps. Defaults when unset. */
   config?: ConfigProvider<NanoSweepConfig>;
 }

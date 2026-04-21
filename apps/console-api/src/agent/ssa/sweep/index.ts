@@ -44,7 +44,13 @@ export {
 export type { SsaHandlerDeps, OnSimUpdateAccepted } from "./resolution-handlers.ssa";
 
 export { SsaAuditProvider } from "./audit-provider.ssa";
-export type { SsaAuditDeps } from "./audit-provider.ssa";
+export type {
+  SsaAuditDeps,
+  AuditSatellitePort,
+  AuditFeedbackPort,
+  NullScanRow,
+  OperatorCountrySweepStatsRow,
+} from "./audit-provider.ssa";
 
 export { SsaFindingRoutingPolicy } from "./finding-routing.ssa";
 
