@@ -19,11 +19,11 @@ import {
   SSA_BRIEFING_INSTRUCTIONS,
 } from "../../../prompts";
 import { parseSsaFindingPayload } from "./finding-schema.ssa";
-import { ssaResolutionPayloadSchema } from "./resolution-schema.ssa";
 import {
   type CitationResolver,
   createDefaultCitationResolver,
 } from "./citation-resolver.ssa";
+import { parseLlmSuggestions } from "./ssa-response-parser.ssa";
 
 // ─── Ports (ISP) ──────────────────────────────────────────────────
 // The provider depends on narrow structural ports, not on concrete
@@ -109,21 +109,6 @@ interface PastFeedback {
   operatorCountryName: string;
 }
 
-const CATEGORIES = new Set([
-  "mass_anomaly",
-  "missing_data",
-  "doctrine_mismatch",
-  "relationship_error",
-  "enrichment",
-  "briefing_angle",
-]);
-function validCategory(c: string): string {
-  return CATEGORIES.has(c) ? c : "enrichment";
-}
-function validSeverity(s: string): string {
-  return s === "critical" || s === "warning" || s === "info" ? s : "info";
-}
-
 export interface SsaAuditDeps {
   satelliteRepo: AuditSatellitePort;
   /** Used only for loadPastFeedback; writes go via insertGeneric on the engine side. */
@@ -192,7 +177,7 @@ export class SsaAuditProvider implements DomainAuditProvider {
     for (const r of results) {
       if (!r.ok) continue;
       const batch = batches[r.index]!;
-      const parsed = this.parseSuggestions(r.text, batch);
+      const parsed = parseLlmSuggestions(r.text, batch.operatorCountries);
       if (ctx.mode === "briefing") {
         for (const s of parsed) {
           (s.domainFields as Record<string, unknown>).category = "briefing_angle";
@@ -382,57 +367,6 @@ export class SsaAuditProvider implements DomainAuditProvider {
     };
   }
 
-  // ─── Response parsing ─────────────────────────────────────────────
-
-  private parseSuggestions(
-    text: string,
-    batch: OperatorCountryBatch,
-  ): AuditCandidate[] {
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) return [];
-    let items: Record<string, unknown>[];
-    try {
-      const parsed = JSON.parse(match[0]);
-      items = Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-    return items
-      .filter((item) => item.operatorCountry && item.category && item.title)
-      .map((item) => {
-        const oc = batch.operatorCountries.find(
-          (a) =>
-            a.name.toLowerCase() ===
-            (item.operatorCountry as string).toLowerCase(),
-        );
-        let resolutionPayload: string | null = null;
-        if (item.resolutionPayload) {
-          const parsed = ssaResolutionPayloadSchema.safeParse(
-            item.resolutionPayload,
-          );
-          if (parsed.success) {
-            resolutionPayload = JSON.stringify(parsed.data);
-          }
-        }
-        return {
-          domainFields: {
-            operatorCountryId: oc?.id ?? null,
-            operatorCountryName: (item.operatorCountry as string) ?? "",
-            category: validCategory(item.category as string),
-            severity: validSeverity(item.severity as string),
-            title: (item.title as string).slice(0, 200),
-            description: ((item.description as string) ?? "").slice(0, 1000),
-            affectedSatellites: Number(item.affectedSatellites) || 0,
-            suggestedAction: ((item.suggestedAction as string) ?? "").slice(
-              0,
-              500,
-            ),
-            webEvidence: (item.webEvidence as string) ?? null,
-          },
-          resolutionPayload,
-        };
-      });
-  }
 }
 
 function parseTargetOperatorCountryIds(ctx: AuditCycleContext): bigint[] | undefined {
