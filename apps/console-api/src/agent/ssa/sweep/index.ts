@@ -52,6 +52,17 @@ export type {
   OperatorCountrySweepStatsRow,
 } from "./audit-provider.ssa";
 
+export {
+  type CitationResolver,
+  type CitationStrategy,
+  CompositeCitationResolver,
+  createDefaultCitationResolver,
+  gcatStrategy,
+  celestrakStrategy,
+  privateTelemetryStrategy,
+  defaultFallbackStrategy,
+} from "./citation-resolver.ssa";
+
 export { SsaFindingRoutingPolicy } from "./finding-routing.ssa";
 
 export { createSsaIngestionProvider } from "./ingesters";

@@ -23,6 +23,10 @@ import {
 } from "../../../prompts";
 import { parseSsaFindingPayload } from "./finding-schema.ssa";
 import { ssaResolutionPayloadSchema } from "./resolution-schema.ssa";
+import {
+  type CitationResolver,
+  createDefaultCitationResolver,
+} from "./citation-resolver.ssa";
 
 // ─── Ports (ISP) ──────────────────────────────────────────────────
 // The provider depends on narrow structural ports, not on concrete
@@ -78,44 +82,6 @@ export interface AuditFeedbackPort {
 
 const logger = createLogger("ssa-audit-provider");
 
-/**
- * Per-column backfill citation — tells the reviewer WHERE the missing value
- * should come from. Column keys match the `satellite` Drizzle schema.
- */
-function backfillCitationFor(column: string): string {
-  const mapping: Record<string, string> = {
-    mass_kg:
-      "Back-fill from GCAT `DryMass`/`Mass`/`TotMass` (planet4589.org/space/gcat, CC-BY).",
-    satellite_bus_id:
-      "Back-fill from GCAT `Bus` field cross-referenced with `satellite_bus.name`.",
-    platform_class_id:
-      "Infer from CelesTrak GROUP (gps-ops → navigation, starlink → communications, weather → earth_observation, military → military, science → science).",
-    launch_year: "Derive from GCAT `LDate` or CelesTrak TLE epoch.",
-    operator_country_id:
-      "Infer from GCAT `State` field or operator home jurisdiction.",
-    operator_id: "Infer from GCAT `Owner` field or operator master list.",
-  };
-  if (mapping[column]) return mapping[column]!;
-  const privateTelemetry = new Set([
-    "power_draw",
-    "thermal_margin",
-    "pointing_accuracy",
-    "attitude_rate",
-    "payload_duty",
-    "solar_array_health",
-    "battery_depth_of_discharge",
-    "propellant_remaining",
-  ]);
-  if (privateTelemetry.has(column)) {
-    return (
-      `Operator-private telemetry — no public source. Route to sim-fish ` +
-      `multi-agent inference (SPEC-TH-040 SIM_UNCORROBORATED) and surface as ` +
-      `a separate suggestion with source_class tagging.`
-    );
-  }
-  return `Back-fill "${column}" from operator ingest or operator datasheet.`;
-}
-
 interface OperatorCountryBatch {
   operatorCountries: Array<{
     id: bigint;
@@ -169,14 +135,19 @@ export interface SsaAuditDeps {
   feedbackRepo?: AuditFeedbackPort;
   /** Optional — runtime-tunable batch size + null-scan caps. Defaults when unset. */
   config?: ConfigProvider<NanoSweepConfig>;
+  /** Optional — override for testing or for extending with new source strategies. */
+  citationResolver?: CitationResolver;
 }
 
 export class SsaAuditProvider implements DomainAuditProvider {
   private readonly config: ConfigProvider<NanoSweepConfig>;
+  private readonly citationResolver: CitationResolver;
 
   constructor(private readonly deps: SsaAuditDeps) {
     this.config =
       deps.config ?? new StaticConfigProvider(DEFAULT_NANO_SWEEP_CONFIG);
+    this.citationResolver =
+      deps.citationResolver ?? createDefaultCitationResolver();
   }
 
   async runAudit(ctx: AuditCycleContext): Promise<AuditCandidate[]> {
@@ -301,7 +272,7 @@ export class SsaAuditProvider implements DomainAuditProvider {
             `"${r.column}" for operator country "${r.operatorCountryName}". ` +
             `Detected by deterministic null-scan (no LLM, information_schema introspection).`,
           affectedSatellites: r.nullCount,
-          suggestedAction: backfillCitationFor(r.column),
+          suggestedAction: this.citationResolver.resolve(r.column),
           webEvidence: null,
         },
         resolutionPayload: JSON.stringify({
