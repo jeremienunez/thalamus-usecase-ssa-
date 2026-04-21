@@ -63,6 +63,9 @@ export {
   defaultFallbackStrategy,
 } from "./citation-resolver.ssa";
 
+export type { NanoCaller } from "./nano-caller.port";
+export { defaultNanoCaller } from "./nano-caller.default";
+
 export { SsaFindingRoutingPolicy } from "./finding-routing.ssa";
 
 export { createSsaIngestionProvider } from "./ingesters";

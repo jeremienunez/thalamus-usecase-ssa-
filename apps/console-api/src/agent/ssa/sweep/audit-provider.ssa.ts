@@ -6,10 +6,7 @@ import {
   DEFAULT_NANO_SWEEP_CONFIG,
   StaticConfigProvider,
 } from "@interview/shared/config";
-import {
-  callNanoWaves,
-  type NanoRequest,
-} from "@interview/thalamus";
+import type { NanoCaller, NanoRequest } from "./nano-caller.port";
 import type {
   AuditCycleContext,
   AuditCandidate,
@@ -137,6 +134,8 @@ export interface SsaAuditDeps {
   config?: ConfigProvider<NanoSweepConfig>;
   /** Optional — override for testing or for extending with new source strategies. */
   citationResolver?: CitationResolver;
+  /** Required — LLM transport port. Container injects the default thalamus adapter. */
+  nanoCaller: NanoCaller;
 }
 
 export class SsaAuditProvider implements DomainAuditProvider {
@@ -183,7 +182,7 @@ export class SsaAuditProvider implements DomainAuditProvider {
       });
     }
 
-    const results = await callNanoWaves(batches, (batch) =>
+    const results = await this.deps.nanoCaller.callWaves(batches, (batch) =>
       ctx.mode === "briefing"
         ? this.buildBriefingRequest(batch)
         : this.buildNanoRequest(batch, feedback),

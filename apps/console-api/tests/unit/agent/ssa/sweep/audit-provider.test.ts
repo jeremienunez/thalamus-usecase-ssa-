@@ -53,6 +53,7 @@ describe("SsaAuditProvider nullScan mode", () => {
     const provider = new SsaAuditProvider({
       satelliteRepo,
       sweepRepo: fakeSweepRepo(),
+      nanoCaller: { callWaves: vi.fn().mockResolvedValue([]) },
     });
 
     const candidates = await provider.runAudit({
@@ -107,6 +108,7 @@ describe("SsaAuditProvider nullScan mode", () => {
     const provider = new SsaAuditProvider({
       satelliteRepo,
       sweepRepo: fakeSweepRepo(),
+      nanoCaller: { callWaves: vi.fn().mockResolvedValue([]) },
     });
     const [c] = await provider.runAudit({
       cycleId: "c",
@@ -132,6 +134,7 @@ describe("SsaAuditProvider nullScan mode", () => {
     const provider = new SsaAuditProvider({
       satelliteRepo,
       sweepRepo: fakeSweepRepo(),
+      nanoCaller: { callWaves: vi.fn().mockResolvedValue([]) },
     });
     const [c] = await provider.runAudit({
       cycleId: "c",
@@ -154,6 +157,7 @@ describe("SsaAuditProvider.recordFeedback", () => {
       satelliteRepo: fakeSatelliteRepo(),
       sweepRepo: fakeSweepRepo(),
       feedbackRepo: feedbackRepo as never,
+      nanoCaller: { callWaves: vi.fn().mockResolvedValue([]) },
     });
 
     await provider.recordFeedback!({
@@ -178,6 +182,7 @@ describe("SsaAuditProvider.recordFeedback", () => {
     const provider = new SsaAuditProvider({
       satelliteRepo: fakeSatelliteRepo(),
       sweepRepo: fakeSweepRepo(),
+      nanoCaller: { callWaves: vi.fn().mockResolvedValue([]) },
     });
     await expect(
       provider.recordFeedback!({

@@ -63,6 +63,7 @@ import {
   SsaAuditProvider,
   SsaFindingRoutingPolicy,
   createSsaIngestionProvider,
+  defaultNanoCaller,
 } from "./agent/ssa/sweep";
 import {
   SsaActionSchemaProvider,
@@ -334,6 +335,7 @@ export async function buildContainer(
     sweepRepo: sweepRepoHolder,
     feedbackRepo: sweepFeedbackRepo,
     config: runtimeConfigService.provider("sweep.nanoSweep"),
+    nanoCaller: defaultNanoCaller,
   });
   const ssaFindingRouting = new SsaFindingRoutingPolicy();
   const simRunRepo = new SimRunRepository(db);
