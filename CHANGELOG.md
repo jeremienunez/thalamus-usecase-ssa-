@@ -4,6 +4,74 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### CI bedrock + real-contract test hardening — 2026-04-21
+
+`15356bb` lands SP-0 test execution in CI and a broad cleanup of
+false-green tests in `apps/console-api`. The goal of the pass was not
+to make tests pass at any cost, but to make a green suite mean
+"behaviour still matches the real contract".
+
+**CI / workspace split**
+
+- `vitest.workspace.ts` now defines explicit `unit`, `integration`,
+  and `e2e` projects across `packages/*` and `apps/console-api/**`.
+- `apps/console-api/vitest.config.ts` was removed; Fastify
+  `globalSetup` now runs only for e2e instead of every `console-api`
+  test.
+- Root scripts `test:unit`, `test:integration`, and `test:e2e` now
+  fail loudly on zero matches.
+- `.github/workflows/test.yml` now runs unit, integration
+  (Postgres + migrations), and e2e (Postgres + Redis) on PRs and
+  pushes.
+- `scripts/test-db-migrate.ts` boots a real migrated test database for
+  CI and local runs.
+- `docs/testing/README.md` and `apps/console-api/tests/README.md`
+  now document the layered test commands and local setup.
+
+**False-green removal**
+
+- Controller tests now exercise the real public `/api/...` routes via
+  `register*Routes`, and assert `404` on the fake local paths that
+  older tests used to hit.
+- REPL and follow-up tests now execute the actual SSE flow, follow-up
+  policy/execution path, and `runCycle(...)` wiring instead of only
+  checking forwarding to mocks.
+- Source fetcher, KG, mission, reflexion, KNN, conjunction,
+  enrichment, autonomy, satellite, and transformer/view tests were
+  reworked to use valid schemas, real ports, and full runtime shapes
+  instead of `as never`, `as unknown as`, or partial duck-typed mocks.
+- New repository integration specs now prove KG edge resolution,
+  research-edge output, conjunction screening, and related DB lookups
+  against Postgres rather than temp-only local fakes.
+
+**Bugs exposed and fixed**
+
+- blank numeric query params in `clamp.ts` no longer coerce to `0`
+  before clamping;
+- mission tasks no longer report `filled` without a persisted write,
+  and a mission stops immediately after its last task instead of one
+  empty tick later;
+- finding nodes in KG are no longer mislabeled as `Payload`, and KG
+  edges now resolve operator/orbit-regime names consistently with the
+  node ids used by the graph and finding views;
+- KNN evidence now distinguishes requested `k` from actually used
+  neighbours;
+- REPL turns now default to real fixtures, and the server banner
+  advertises the correct `/api/repl/turn` payload shape;
+- enrichment now rejects invalid satellite / neighbour ids before any
+  partial writes;
+- conjunction screening now uses `norad_id` SQL columns instead of
+  JSON-only lookups;
+- BullMQ / Redis teardown now closes cleanly, removing the recurring
+  `close timed out after 10000ms` test harness warning.
+
+**Verification**
+
+- local gate green: `arch:check`, `typecheck`, `test:policy`,
+  `spec:check`, `test`
+- final landing run: `172 passed | 2 skipped` files,
+  `908 passed | 5 skipped` tests
+
 ### Console front — SOLID compression + DRY pass + jscpd — 2026-04-19 (session 4)
 
 Two follow-up commits on `feature/console-front-5l` after the initial
