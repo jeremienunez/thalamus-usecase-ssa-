@@ -1,17 +1,15 @@
 /**
- * E2E — CLI REPL with real adapters against live Postgres + Redis.
+ * E2E — CLI REPL with real adapters against live Redis + HTTP.
  *
  * Proves that boot.buildRealAdapters wires the full stack:
- *   - drizzle pool against thalamus-postgres
  *   - IORedis against thalamus-redis
- *   - thalamus ResearchGraphService (buildThalamusContainer)
+ *   - HTTP clients against console-api route contracts
  *   - sweep DI (buildSweepContainer, SweepResolutionService, SwarmService)
  *
- * Scenario: seed a `research_cycle` + `research_finding` + `research_edge`
- * row, mount the real adapters, then drive the REPL via `/explain <fid>`.
- * The why-tree adapter reads directly from Postgres — no LLM fixtures
- * required for this path, which is the whole point: we want proof that
- * the DB wiring is live.
+ * Scenario: seed ids/titles, stand up a local HTTP stub that mimics the
+ * route contracts (`GET /api/why/:findingId`, `GET /api/kg/graph/:id`),
+ * mount the real adapters, then drive the REPL via `/explain <fid>` and
+ * `/graph satellite:<id>`.
  *
  * Prereqs (see swarm-uc3.e2e.spec.ts):
  *   - thalamus-postgres on :5433 with migrations applied
@@ -21,6 +19,8 @@
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
 import { EventEmitter } from "node:events";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import React from "react";
 import { Pool } from "pg";
 import IORedis from "ioredis";
@@ -87,6 +87,8 @@ let pool: Pool;
 let redis: IORedis;
 let db: ReturnType<typeof drizzle>;
 let adapters: Adapters;
+let apiServer: Server;
+let apiBaseUrl: string;
 let seededOperatorId: bigint;
 let seededSatelliteId: bigint;
 let seededCycleId: bigint;
@@ -107,6 +109,7 @@ beforeAll(async () => {
 
   await cleanE2E();
   await seedFixture();
+  ({ server: apiServer, baseUrl: apiBaseUrl } = await startApiStubServer());
 
   adapters = await buildRealAdapters({
     // Pino logger + ring are exercised only by the logs adapter; the rest
@@ -115,8 +118,8 @@ beforeAll(async () => {
     logger: { info() {}, warn() {}, error() {}, debug() {} } as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ring: { snapshot: () => [] } as any,
-    pool,
     redis,
+    apiBaseUrl,
   });
 }, 30_000);
 
@@ -124,6 +127,9 @@ afterAll(async () => {
   try {
     await cleanE2E();
   } finally {
+    await new Promise((resolve, reject) =>
+      apiServer?.close((error) => (error ? reject(error) : resolve(undefined))),
+    ).catch(() => undefined);
     await redis?.quit().catch(() => undefined);
     await pool?.end().catch(() => undefined);
   }
@@ -135,7 +141,7 @@ afterAll(async () => {
 
 describe("CLI REPL — real adapters E2E", () => {
   it(
-    "drives /explain <fid> through the live Postgres pool, renders a why-tree",
+    "drives /explain <fid> through the live why HTTP route, renders a why-tree",
     async () => {
       const { stdin: rawStdin, lastFrame } = render(
         <App
@@ -185,8 +191,7 @@ describe("CLI REPL — real adapters E2E", () => {
       // Proof-of-wiring assertions:
       //   1. The rendered frame is non-empty.
       //   2. It contains the seeded finding's title — which means the
-      //      drizzle pool read researchFinding, the why adapter composed
-      //      the tree, and the whyTree renderer painted it.
+      //      the HTTP why adapter fetched the tree and the renderer painted it.
       expect(frame.length).toBeGreaterThan(0);
       expect(frame).toContain(`${SEED_TAG}-finding-title`);
     },
@@ -194,7 +199,7 @@ describe("CLI REPL — real adapters E2E", () => {
   );
 
   it(
-    "drives /graph satellite:<id> through the live Postgres pool",
+    "drives /graph satellite:<id> through the live graph HTTP route",
     async () => {
       const { stdin: rawStdin, lastFrame } = render(
         <App
@@ -320,4 +325,67 @@ async function cleanE2E(): Promise<void> {
   await db.execute(
     sql`DELETE FROM operator WHERE slug LIKE ${`${SEED_TAG}%`}`,
   );
+}
+
+async function startApiStubServer(): Promise<{
+  server: Server;
+  baseUrl: string;
+}> {
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const pathname = decodeURIComponent(url.pathname);
+
+    if (
+      pathname === `/api/why/${seededFindingId}` ||
+      pathname === `/api/why/f:${seededFindingId}`
+    ) {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          id: `finding:${seededFindingId}`,
+          label: `${SEED_TAG}-finding-title`,
+          kind: "finding",
+          children: [],
+        }),
+      );
+      return;
+    }
+
+    if (pathname === `/api/kg/graph/satellite:${seededSatelliteId}`) {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          root: `sat:${seededSatelliteId}`,
+          nodes: [
+            { id: `sat:${seededSatelliteId}` },
+            { id: `finding:${seededFindingId}` },
+          ],
+          edges: [
+            {
+              id: "edge:1",
+              source: `sat:${seededSatelliteId}`,
+              target: `finding:${seededFindingId}`,
+            },
+          ],
+        }),
+      );
+      return;
+    }
+
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.listen(0, "127.0.0.1", (error?: Error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+
+  const address = server.address() as AddressInfo;
+  return {
+    server,
+    baseUrl: `http://127.0.0.1:${address.port}`,
+  };
 }

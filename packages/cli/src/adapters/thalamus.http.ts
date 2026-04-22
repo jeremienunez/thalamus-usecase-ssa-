@@ -3,6 +3,7 @@ import type {
   CycleRunResponseDto,
 } from "@interview/shared/dto/cycle-run.dto";
 import type { GraphTree } from "./graph";
+import type { WhyNode } from "./why";
 
 /**
  * Thin fetch wrapper for `POST /api/cycles/run`.
@@ -158,5 +159,30 @@ export class ThalamusHttpClient {
     }
 
     return { root: displayRoot, levels };
+  }
+
+  async getWhyTree(input: { findingId: string }): Promise<WhyNode | null> {
+    const headers: Record<string, string> = {};
+    if (this.auth) headers.authorization = `Bearer ${this.auth}`;
+
+    const res = await fetch(
+      `${this.baseUrl}/api/why/${encodeURIComponent(input.findingId)}`,
+      { headers },
+    );
+    const raw = (await res.json().catch((): null => null)) as
+      | (WhyNode & { error?: string })
+      | null;
+
+    if (!res.ok) {
+      const msg =
+        raw && typeof raw === "object" && "error" in raw && raw.error
+          ? String(raw.error)
+          : `status=${res.status}`;
+      throw new Error(`thalamus/getWhyTree failed: ${msg}`);
+    }
+    if (raw === null) {
+      throw new Error("thalamus/getWhyTree: malformed response");
+    }
+    return raw;
   }
 }

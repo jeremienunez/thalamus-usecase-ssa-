@@ -3,10 +3,7 @@ import { render } from "ink";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import pino from "pino";
-import { Pool } from "pg";
 import IORedis from "ioredis";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, sql } from "drizzle-orm";
 
 import { App } from "./app";
 import { LogsAdapter } from "./adapters";
@@ -26,13 +23,6 @@ import {
 // Plan 2 · B.10: startTelemetrySwarm moved to console-api SSA pack. Plan 3
 // will rewire this CLI path via POST /api/sim/telemetry/start. Until then
 // CLI telemetry.start throws at runtime (see telemetry adapter below).
-import {
-  researchCycle,
-  researchFinding,
-  researchEdge,
-  sourceItem,
-  type Database,
-} from "@interview/db-schema";
 
 export interface BootDeps {
   adapters: Adapters;
@@ -49,16 +39,14 @@ export interface BootDeps {
 /**
  * Pre-built wiring context (injected by tests; auto-constructed in prod).
  * When `deps.wiring` is provided, main() uses those deps instead of opening
- * its own Pool/Redis — this is how the e2e spec shares a DB connection with
- * the test fixture seed/teardown.
+ * its own Redis connection.
  *
  * The thalamus kernel is no longer built here: cycles are consumed through
- * `POST /api/cycles/run` via {@link ThalamusHttpClient}. The CLI only needs
- * Postgres/Redis for local read-only adapters (graph neighbourhood, why-tree,
- * logs ring-buffer) and for sweep resolution.
+ * `POST /api/cycles/run` via {@link ThalamusHttpClient}. The CLI now reads
+ * graph / why data through HTTP as well, so local infra is limited to Redis
+ * for sweep resolution and the in-memory logs ring buffer.
  */
 export interface BootWiring {
-  pool: Pool;
   redis: IORedis;
 }
 
@@ -100,16 +88,11 @@ export async function main(
   const logger = pino({ level: "info" }, { write });
 
   let wiring = deps?.wiring;
-  let ownedPool: Pool | undefined;
   let ownedRedis: IORedis | undefined;
   if (!wiring && !deps?.adapters) {
-    const databaseUrl =
-      process.env.DATABASE_URL ??
-      "postgres://thalamus:thalamus@localhost:5433/thalamus";
     const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6380";
-    ownedPool = new Pool({ connectionString: databaseUrl });
     ownedRedis = new IORedis(redisUrl, { maxRetriesPerRequest: null });
-    wiring = { pool: ownedPool, redis: ownedRedis };
+    wiring = { redis: ownedRedis };
   }
 
   const adapters: Adapters =
@@ -117,7 +100,6 @@ export async function main(
     (await buildRealAdapters({
       logger,
       ring,
-      pool: wiring!.pool,
       redis: wiring!.redis,
     }));
   const nano = deps?.nano ?? makeFixtureAwareNano();
@@ -139,10 +121,9 @@ export async function main(
     }),
   );
 
-  // In prod, when we own the pool/redis, make sure they close on exit.
-  if (ownedPool || ownedRedis) {
+  // In prod, when we own the redis client, make sure it closes on exit.
+  if (ownedRedis) {
     app.waitUntilExit().finally(() => {
-      ownedPool?.end().catch((): void => undefined);
       ownedRedis?.quit().catch((): void => undefined);
     });
   }
@@ -151,7 +132,6 @@ export async function main(
 export interface RealAdapterDeps {
   logger: pino.Logger;
   ring: PinoRingBuffer;
-  pool: Pool;
   redis: IORedis;
   /**
    * Override of the console-api base URL. Defaults to
@@ -175,7 +155,7 @@ export interface RealAdapterDeps {
  * 3. logs.tail           — pino ring buffer (unchanged)
  * 4. graph.neighbourhood — GET /api/kg/graph/:id via {@link ThalamusHttpClient}
  * 5. resolution.accept   — SweepResolutionService.resolve (accept then resolve)
- * 6. why.build           — compose from research_finding + research_edge + source_item
+ * 6. why.build           — GET /api/why/:findingId via {@link ThalamusHttpClient}
  *
  * The thalamus kernel is no longer built in-process: CLI consumes the HTTP
  * contract instead (CLAUDE.md §1 "one public contract, not two").
@@ -183,8 +163,6 @@ export interface RealAdapterDeps {
 export async function buildRealAdapters(
   ctx: RealAdapterDeps,
 ): Promise<Adapters> {
-  const db: Database = drizzle(ctx.pool);
-
   const apiBaseUrl =
     ctx.apiBaseUrl ?? process.env.CONSOLE_API_URL ?? "http://localhost:4000";
   const thalamusHttp = new ThalamusHttpClient(apiBaseUrl, ctx.cliAuth);
@@ -258,7 +236,7 @@ export async function buildRealAdapters(
     // --- 6. why.build ---------------------------------------------------
     why: {
       build: async (findingId: string) => {
-        return buildWhyTreeFromDb(db, findingId);
+        return thalamusHttp.getWhyTree({ findingId });
       },
     },
 
@@ -301,99 +279,6 @@ export async function buildRealAdapters(
         return (await res.json()) as Array<Record<string, unknown>>;
       },
     },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Why-tree composer — research_finding + research_edge + source_item
-// ---------------------------------------------------------------------------
-
-interface WhyNode {
-  id: string;
-  label: string;
-  kind: "finding" | "edge" | "source_item";
-  sha256?: string;
-  children: WhyNode[];
-}
-
-async function buildWhyTreeFromDb(
-  db: Database,
-  findingId: string,
-): Promise<WhyNode | null> {
-  // Accept either "finding:N" or "N".
-  const raw = findingId.startsWith("finding:")
-    ? findingId.slice("finding:".length)
-    : findingId;
-  let fid: bigint;
-  try {
-    fid = BigInt(raw);
-  } catch {
-    return null;
-  }
-  const f = await db
-    .select({
-      id: researchFinding.id,
-      title: researchFinding.title,
-      cycleId: researchFinding.researchCycleId,
-    })
-    .from(researchFinding)
-    .where(eq(researchFinding.id, fid))
-    .limit(1)
-    .then((rows) => rows[0]);
-  if (!f) return null;
-
-  const edges = await db
-    .select({
-      id: researchEdge.id,
-      relation: researchEdge.relation,
-      entityType: researchEdge.entityType,
-      entityId: researchEdge.entityId,
-    })
-    .from(researchEdge)
-    .where(eq(researchEdge.findingId, fid));
-
-  const children: WhyNode[] = edges.map((e): WhyNode => ({
-    id: `edge:${e.id}`,
-    label: `${e.relation} → ${e.entityType}:${e.entityId}`,
-    kind: "edge",
-    children: [],
-  }));
-
-  // Best-effort: attach a source_item if the cycle's trigger_source carries one.
-  const cycle = await db
-    .select({
-      id: researchCycle.id,
-      triggerSource: researchCycle.triggerSource,
-    })
-    .from(researchCycle)
-    .where(eq(researchCycle.id, f.cycleId))
-    .limit(1)
-    .then((rows) => rows[0]);
-  if (cycle?.triggerSource) {
-    const idMatch = /source_item:(\d+)/.exec(cycle.triggerSource);
-    if (idMatch) {
-      const si = await db
-        .select({ id: sourceItem.id, url: sourceItem.url, title: sourceItem.title })
-        .from(sourceItem)
-        .where(eq(sourceItem.id, BigInt(idMatch[1])))
-        .limit(1)
-        .then((rows) => rows[0]);
-      if (si) {
-        children.push({
-          id: `source_item:${si.id}`,
-          label: si.url ?? si.title,
-          kind: "source_item",
-          children: [],
-        });
-      }
-    }
-  }
-
-  return {
-    id: `finding:${f.id}`,
-    label: f.title,
-    kind: "finding",
-    children,
   };
 }
 

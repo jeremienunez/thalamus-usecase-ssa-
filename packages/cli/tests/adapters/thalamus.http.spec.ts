@@ -227,3 +227,44 @@ describe("ThalamusHttpClient.getGraphNeighbourhood", () => {
     ).rejects.toThrow(/graph not found/);
   });
 });
+
+describe("ThalamusHttpClient.getWhyTree", () => {
+  it("given a why tree response, when getWhyTree is called, then GET /api/why/:findingId is invoked", async () => {
+    const fetchStub = stubFetch({
+      ok: true,
+      jsonBody: {
+        id: "finding:4",
+        label: "Finding 4",
+        kind: "finding",
+        children: [],
+      },
+    });
+
+    const client = new ThalamusHttpClient("http://api.local");
+    const out = await client.getWhyTree({ findingId: "f:4" });
+
+    expect(fetchStub).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://api.local/api/why/f%3A4");
+    expect(init.headers).toEqual({});
+    expect(out).toEqual({
+      id: "finding:4",
+      label: "Finding 4",
+      kind: "finding",
+      children: [],
+    });
+  });
+
+  it("given a failing why response, when getWhyTree is called, then it throws with the server error", async () => {
+    stubFetch({
+      ok: false,
+      status: 404,
+      jsonBody: { error: "finding not found" },
+    });
+
+    const client = new ThalamusHttpClient("http://api.local");
+    await expect(client.getWhyTree({ findingId: "missing" })).rejects.toThrow(
+      /finding not found/,
+    );
+  });
+});
