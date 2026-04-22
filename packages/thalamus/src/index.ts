@@ -9,11 +9,16 @@ export {
   setCortexConfigProvider,
   setReflexionConfigProvider,
   setBudgetsConfigProvider,
+  setThalamusTransportConfigProvider,
   getPlannerConfig,
   getCortexConfig,
   getReflexionConfig,
   getBudgetsConfig,
 } from "./config/runtime-config";
+export {
+  getThalamusTransportConfig,
+  getThalamusTransportConfigSnapshot,
+} from "./config/transport-config";
 
 // Services
 export { ThalamusService } from "./services/thalamus.service";

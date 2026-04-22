@@ -4,6 +4,10 @@ import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, sql } from "drizzle-orm";
 import IORedis from "ioredis";
+import {
+  DEFAULT_THALAMUS_TRANSPORT_CONFIG,
+  StaticConfigProvider,
+} from "@interview/shared/config";
 
 import {
   operator,
@@ -13,7 +17,10 @@ import {
   simRun,
   simSwarm,
 } from "@interview/db-schema";
-import { CortexRegistry } from "@interview/thalamus";
+import {
+  CortexRegistry,
+  setThalamusTransportConfigProvider,
+} from "@interview/thalamus";
 import {
   buildSweepContainer,
   createSwarmAggregateWorker,
@@ -85,6 +92,14 @@ beforeAll(async () => {
   process.env.THALAMUS_MODE = "fixtures";
   process.env.FIXTURES_DIR = FIXTURES_DIR;
   process.env.FIXTURES_FALLBACK = FALLBACK;
+  setThalamusTransportConfigProvider(
+    new StaticConfigProvider({
+      ...DEFAULT_THALAMUS_TRANSPORT_CONFIG,
+      mode: "fixtures",
+      fixturesDir: FIXTURES_DIR,
+      fallbackFixture: FALLBACK,
+    }),
+  );
 
   pool = new Pool({ connectionString: DB_URL });
   db = drizzle(pool);

@@ -6,15 +6,23 @@
  * and Gemma 4 thinking toggle via `chat_template_kwargs.enable_thinking`.
  */
 
-import { isLocalLlmEnabled, localLlmConfig } from "../../config/enrichment";
+import {
+  getLocalLlmConfig,
+  getLocalLlmConfigSnapshot,
+} from "../../config/enrichment";
 import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
 export class LocalProvider implements LlmProvider {
   readonly name = "local" as const;
+  private config = getLocalLlmConfigSnapshot();
+
+  async refreshConfig(): Promise<void> {
+    this.config = await getLocalLlmConfig();
+  }
 
   isEnabled(): boolean {
-    return isLocalLlmEnabled();
+    return Boolean(this.config.url);
   }
 
   async call(
@@ -22,19 +30,21 @@ export class LocalProvider implements LlmProvider {
     userPrompt: string,
     opts: LlmProviderCallOpts,
   ): Promise<string> {
-    const url = localLlmConfig.url.endsWith("/v1/chat/completions")
-      ? localLlmConfig.url
-      : `${localLlmConfig.url.replace(/\/$/, "")}/v1/chat/completions`;
+    await this.refreshConfig();
+    const config = this.config;
+    const url = config.url.endsWith("/v1/chat/completions")
+      ? config.url
+      : `${config.url.replace(/\/$/, "")}/v1/chat/completions`;
 
-    const model = opts.model ?? localLlmConfig.model;
+    const model = opts.model ?? config.model;
     const maxTokens =
       opts.maxOutputTokens && opts.maxOutputTokens > 0
         ? opts.maxOutputTokens
-        : localLlmConfig.maxTokens;
+        : config.maxTokens;
     const temperature =
       typeof opts.temperature === "number"
         ? opts.temperature
-        : localLlmConfig.temperature;
+        : config.temperature;
 
     const body: Record<string, unknown> = {
       model,

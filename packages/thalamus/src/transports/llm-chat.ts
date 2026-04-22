@@ -13,9 +13,9 @@
 
 import { retry } from "@interview/shared/utils";
 import { createLogger } from "@interview/shared/observability";
-import { enrichmentConfig } from "../config/enrichment";
 import type { z } from "zod";
 import type { LlmChatConfig, LlmResponse, LlmTransport } from "./types";
+import { getThalamusTransportConfig } from "../config/transport-config";
 import {
   KimiProvider,
   LocalProvider,
@@ -37,14 +37,12 @@ export class LlmChatTransport {
   private static kimiConsecutiveFailures = 0;
   private static readonly CIRCUIT_BREAKER_THRESHOLD = 3;
 
-  private readonly maxRetries: number;
   private readonly providers: LlmProvider[];
   private readonly config: LlmChatConfig;
 
   constructor(config: LlmChatConfig, providers: LlmProvider[]) {
     this.config = config;
     this.providers = providers;
-    this.maxRetries = config.maxRetries ?? enrichmentConfig.maxRetries;
   }
 
   /**
@@ -65,6 +63,10 @@ export class LlmChatTransport {
           ),
         ]
       : this.providers;
+
+    await Promise.all(ordered.map((provider) => provider.refreshConfig?.()));
+    const transportConfig = await getThalamusTransportConfig();
+    const maxRetries = this.config.maxRetries ?? transportConfig.llmMaxRetries;
 
     for (const provider of ordered) {
       if (!provider.isEnabled()) continue;
@@ -99,7 +101,7 @@ export class LlmChatTransport {
               enableWebSearch: this.config.enableWebSearch,
             }),
           {
-            maxAttempts: this.maxRetries,
+            maxAttempts: maxRetries,
             delayMs: provider.name === "local" ? 500 : 1000,
             backoff: "exponential",
             onRetry:

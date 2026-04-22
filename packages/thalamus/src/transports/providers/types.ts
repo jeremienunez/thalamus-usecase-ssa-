@@ -45,6 +45,8 @@ export interface LlmProviderCallOpts {
 export interface LlmProvider {
   /** Canonical provider tag, surfaced in `LlmResponse.provider`. */
   readonly name: ProviderName;
+  /** Refresh any provider-local config snapshot before `isEnabled()` gates. */
+  refreshConfig?(): Promise<void>;
   /** Runtime check — skip this provider when config/env is incomplete. */
   isEnabled(): boolean;
   /** Execute a single chat completion. Throws on error; retry is caller's job. */

@@ -15,6 +15,11 @@ import Redis from "ioredis";
 import * as schema from "@interview/db-schema";
 import { MetricsCollector } from "@interview/shared";
 import {
+  type ConfigProvider,
+  DEFAULT_THALAMUS_TRANSPORT_CONFIG,
+  type ThalamusTransportConfig,
+} from "@interview/shared/config";
+import {
   NullWebSearchAdapter,
   OpenAIWebSearchAdapter,
   type WebSearchPort,
@@ -31,6 +36,7 @@ export interface ServerEnv {
   voyageApiKey?: string;
   simLlmMode?: "cloud" | "fixtures" | "record";
   simKernelSharedSecret?: string;
+  thalamusTransportConfigProvider: ConfigProvider<ThalamusTransportConfig>;
 }
 
 function readSimLlmMode(
@@ -39,6 +45,76 @@ function readSimLlmMode(
   return value === "cloud" || value === "fixtures" || value === "record"
     ? value
     : undefined;
+}
+
+function readNumberEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readThalamusTransportConfigFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): ThalamusTransportConfig {
+  return {
+    ...DEFAULT_THALAMUS_TRANSPORT_CONFIG,
+    mode:
+      readSimLlmMode(env.THALAMUS_MODE) ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.mode,
+    fixturesDir: env.FIXTURES_DIR ?? "",
+    fallbackFixture: env.FIXTURES_FALLBACK ?? "",
+    openaiApiKey:
+      env.OPENAI_API_KEY ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.openaiApiKey,
+    openaiFallbackModel:
+      env.OPENAI_FALLBACK_MODEL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.openaiFallbackModel,
+    kimiApiUrl:
+      env.KIMI_API_URL ??
+      env.MOONSHOT_API_URL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.kimiApiUrl,
+    kimiApiKey:
+      env.MOONSHOT_API_KEY ??
+      env.KIMI_API_KEY ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.kimiApiKey,
+    kimiModel:
+      env.KIMI_MODEL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.kimiModel,
+    kimiMaxTokens: readNumberEnv(
+      env.KIMI_MAX_TOKENS,
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.kimiMaxTokens,
+    ),
+    llmMaxRetries: readNumberEnv(
+      env.LLM_MAX_RETRIES,
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.llmMaxRetries,
+    ),
+    localLlmUrl:
+      env.LOCAL_LLM_URL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.localLlmUrl,
+    localLlmModel:
+      env.LOCAL_LLM_MODEL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.localLlmModel,
+    localLlmMaxTokens: readNumberEnv(
+      env.LOCAL_LLM_MAX_TOKENS,
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.localLlmMaxTokens,
+    ),
+    localLlmTemperature: readNumberEnv(
+      env.LOCAL_LLM_TEMPERATURE,
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.localLlmTemperature,
+    ),
+    minimaxApiUrl:
+      env.MINIMAX_API_URL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.minimaxApiUrl,
+    minimaxApiKey:
+      env.MINIMAX_API_KEY ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.minimaxApiKey,
+    minimaxModel:
+      env.MINIMAX_MODEL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.minimaxModel,
+    minimaxMaxTokens: readNumberEnv(
+      env.MINIMAX_MAX_TOKENS,
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.minimaxMaxTokens,
+    ),
+  };
 }
 
 export function readServerEnv(): ServerEnv {
@@ -52,6 +128,9 @@ export function readServerEnv(): ServerEnv {
     voyageApiKey: process.env.VOYAGE_API_KEY,
     simLlmMode: readSimLlmMode(process.env.SIM_LLM_MODE),
     simKernelSharedSecret: process.env.SIM_KERNEL_SHARED_SECRET,
+    thalamusTransportConfigProvider: {
+      get: async () => readThalamusTransportConfigFromEnv(),
+    },
   };
 }
 
@@ -76,6 +155,7 @@ function buildInfra(env: ServerEnv): {
       voyageApiKey: env.voyageApiKey,
       simLlmMode: env.simLlmMode,
       simKernelSharedSecret: env.simKernelSharedSecret,
+      thalamusTransportConfigProvider: env.thalamusTransportConfigProvider,
     },
     close: async () => {
       await pool.end();

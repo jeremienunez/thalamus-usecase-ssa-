@@ -1,7 +1,7 @@
 /**
  * Mode-aware LLM transport factory.
  *
- * Routes on `process.env.THALAMUS_MODE`:
+ * Routes on the injected transport config mode:
  *   - "cloud"     → real LlmChatTransport (default)
  *   - "fixtures"  → FixtureLlmTransport (read-only, throws on miss)
  *   - "record"    → FixtureLlmTransport (write-through over real transport)
@@ -12,7 +12,33 @@
 
 import { createLlmTransport } from "./llm-chat";
 import { FixtureLlmTransport } from "./fixture-transport";
+import {
+  getThalamusTransportConfig,
+  resolveFixturesDir,
+} from "../config/transport-config";
 import type { LlmChatConfig, LlmTransport } from "./types";
+
+class ModeAwareLlmTransport implements LlmTransport {
+  constructor(
+    private readonly systemPrompt: string,
+    private readonly real: LlmTransport,
+  ) {}
+
+  async call(userPrompt: string) {
+    const config = await getThalamusTransportConfig();
+    if (config.mode === "cloud") {
+      return this.real.call(userPrompt);
+    }
+    const fixtureTransport = new FixtureLlmTransport({
+      systemPrompt: this.systemPrompt,
+      mode: config.mode,
+      realTransport: config.mode === "record" ? this.real : undefined,
+      fixturesDir: resolveFixturesDir(config.fixturesDir),
+      fallbackFixture: config.fallbackFixture || undefined,
+    });
+    return fixtureTransport.call(userPrompt);
+  }
+}
 
 export function createLlmTransportWithMode(
   systemPrompt: string,
@@ -23,23 +49,6 @@ export function createLlmTransportWithMode(
     overrides?: LlmChatConfig["overrides"];
   },
 ): LlmTransport {
-  const mode = (process.env.THALAMUS_MODE ?? "cloud").toLowerCase();
   const real = createLlmTransport(systemPrompt, opts);
-  if (mode === "cloud") return real;
-
-  if (mode === "fixtures") {
-    return new FixtureLlmTransport({
-      systemPrompt,
-      mode: "fixtures",
-      fallbackFixture: process.env.FIXTURES_FALLBACK || undefined,
-    });
-  }
-  if (mode === "record") {
-    return new FixtureLlmTransport({
-      systemPrompt,
-      mode: "record",
-      realTransport: real,
-    });
-  }
-  return real;
+  return new ModeAwareLlmTransport(systemPrompt, real);
 }

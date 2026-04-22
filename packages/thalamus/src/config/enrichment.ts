@@ -1,60 +1,110 @@
-/**
- * LLM provider config — Kimi K2 primary, OpenAI fallback.
- *
- * Single source for all LLM transport config used by the explorer, cortex
- * executor, planner, and reflexion. Values read from `process.env` at import
- * time; no schema validation here (that belongs to a future `shared/config/env`).
- *
- * For the SSA interview artifact we inline the reads here so the thalamus
- * package is self-contained.
- */
+import { type ThalamusTransportConfig } from "@interview/shared/config";
+import {
+  getThalamusTransportConfig,
+  getThalamusTransportConfigSnapshot,
+} from "./transport-config";
 
-export const enrichmentConfig = {
-  url:
-    process.env.KIMI_API_URL ??
-    process.env.MOONSHOT_API_URL ??
-    "https://api.moonshot.ai/v1/chat/completions",
-  apiKey: process.env.MOONSHOT_API_KEY ?? process.env.KIMI_API_KEY ?? "",
-  model: process.env.KIMI_MODEL ?? "kimi-k2-turbo-preview",
-  maxTokens: Number(process.env.KIMI_MAX_TOKENS ?? 8192),
-  maxRetries: Number(process.env.LLM_MAX_RETRIES ?? 2),
-} as const;
+export interface KimiConfig {
+  url: string;
+  apiKey: string;
+  model: string;
+  maxTokens: number;
+  maxRetries: number;
+}
 
-export const enrichmentFallbackConfig = {
-  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
-  model: process.env.OPENAI_FALLBACK_MODEL ?? "gpt-5-nano",
-} as const;
+export interface OpenAIFallbackConfig {
+  openaiApiKey: string;
+  model: string;
+}
 
-export const isKimiEnabled = (): boolean => Boolean(enrichmentConfig.apiKey);
+export interface LocalLlmConfig {
+  url: string;
+  model: string;
+  maxTokens: number;
+  temperature: number;
+}
 
-/**
- * Local LLM (llama.cpp / Ollama / vLLM) — OpenAI-compatible endpoint.
- *
- * When `LOCAL_LLM_URL` is set, the transport routes through the local server
- * first (provider="local"), bypassing Kimi/OpenAI entirely. Used for fully
- * offline / sovereign demos (e.g. Gemma 4 on llama.cpp Vulkan backend).
- */
-export const localLlmConfig = {
-  url: process.env.LOCAL_LLM_URL ?? "",
-  model: process.env.LOCAL_LLM_MODEL ?? "local",
-  maxTokens: Number(process.env.LOCAL_LLM_MAX_TOKENS ?? 2048),
-  temperature: Number(process.env.LOCAL_LLM_TEMPERATURE ?? 0.3),
-} as const;
+export interface MiniMaxConfig {
+  url: string;
+  apiKey: string;
+  model: string;
+  maxTokens: number;
+}
 
-export const isLocalLlmEnabled = (): boolean => Boolean(localLlmConfig.url);
+function toKimiConfig(cfg: ThalamusTransportConfig): KimiConfig {
+  return {
+    url: cfg.kimiApiUrl,
+    apiKey: cfg.kimiApiKey,
+    model: cfg.kimiModel,
+    maxTokens: cfg.kimiMaxTokens,
+    maxRetries: cfg.llmMaxRetries,
+  };
+}
 
-/**
- * MiniMax (M-series) — OpenAI-compatible endpoint.
- * Returned reasoning lives in `message.reasoning_content`; runtime knob is
- * `reasoning_split` (boolean) on the request.
- */
-export const minimaxConfig = {
-  url:
-    process.env.MINIMAX_API_URL ??
-    "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
-  apiKey: process.env.MINIMAX_API_KEY ?? "",
-  model: process.env.MINIMAX_MODEL ?? "MiniMax-M2.7",
-  maxTokens: Number(process.env.MINIMAX_MAX_TOKENS ?? 8192),
-} as const;
+function toOpenAIFallbackConfig(
+  cfg: ThalamusTransportConfig,
+): OpenAIFallbackConfig {
+  return {
+    openaiApiKey: cfg.openaiApiKey,
+    model: cfg.openaiFallbackModel,
+  };
+}
 
-export const isMinimaxEnabled = (): boolean => Boolean(minimaxConfig.apiKey);
+function toLocalLlmConfig(cfg: ThalamusTransportConfig): LocalLlmConfig {
+  return {
+    url: cfg.localLlmUrl,
+    model: cfg.localLlmModel,
+    maxTokens: cfg.localLlmMaxTokens,
+    temperature: cfg.localLlmTemperature,
+  };
+}
+
+function toMiniMaxConfig(cfg: ThalamusTransportConfig): MiniMaxConfig {
+  return {
+    url: cfg.minimaxApiUrl,
+    apiKey: cfg.minimaxApiKey,
+    model: cfg.minimaxModel,
+    maxTokens: cfg.minimaxMaxTokens,
+  };
+}
+
+export async function getEnrichmentConfig(): Promise<KimiConfig> {
+  return toKimiConfig(await getThalamusTransportConfig());
+}
+
+export function getEnrichmentConfigSnapshot(): KimiConfig {
+  return toKimiConfig(getThalamusTransportConfigSnapshot());
+}
+
+export async function getEnrichmentFallbackConfig(): Promise<OpenAIFallbackConfig> {
+  return toOpenAIFallbackConfig(await getThalamusTransportConfig());
+}
+
+export function getEnrichmentFallbackConfigSnapshot(): OpenAIFallbackConfig {
+  return toOpenAIFallbackConfig(getThalamusTransportConfigSnapshot());
+}
+
+export const isKimiEnabled = (): boolean =>
+  Boolean(getEnrichmentConfigSnapshot().apiKey);
+
+export async function getLocalLlmConfig(): Promise<LocalLlmConfig> {
+  return toLocalLlmConfig(await getThalamusTransportConfig());
+}
+
+export function getLocalLlmConfigSnapshot(): LocalLlmConfig {
+  return toLocalLlmConfig(getThalamusTransportConfigSnapshot());
+}
+
+export const isLocalLlmEnabled = (): boolean =>
+  Boolean(getLocalLlmConfigSnapshot().url);
+
+export async function getMinimaxConfig(): Promise<MiniMaxConfig> {
+  return toMiniMaxConfig(await getThalamusTransportConfig());
+}
+
+export function getMinimaxConfigSnapshot(): MiniMaxConfig {
+  return toMiniMaxConfig(getThalamusTransportConfigSnapshot());
+}
+
+export const isMinimaxEnabled = (): boolean =>
+  Boolean(getMinimaxConfigSnapshot().apiKey);

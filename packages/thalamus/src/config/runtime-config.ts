@@ -71,3 +71,5 @@ export function getReflexionConfig(): Promise<ThalamusReflexionConfig> {
 export function getBudgetsConfig(): Promise<ThalamusBudgetsConfig> {
   return budgetsProvider.get();
 }
+
+export { setThalamusTransportConfigProvider } from "./transport-config";

@@ -11,21 +11,12 @@
 
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { createLogger } from "@interview/shared/observability";
+import { defaultFixturesDir } from "../config/transport-config";
 import type { LlmResponse, LlmTransport } from "./types";
 
 const logger = createLogger("fixture-transport");
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/** Resolve the fixtures dir. Honours FIXTURES_DIR env. Defaults to repo-root/fixtures/recorded. */
-export function defaultFixturesDir(): string {
-  if (process.env.FIXTURES_DIR) return process.env.FIXTURES_DIR;
-  // packages/thalamus/src/transports → repo root is 4 levels up
-  return join(__dirname, "..", "..", "..", "..", "fixtures", "recorded");
-}
 
 export type FixtureMode = "fixtures" | "record";
 

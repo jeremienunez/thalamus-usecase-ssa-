@@ -7,7 +7,10 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import { enrichmentFallbackConfig } from "../../config/enrichment";
+import {
+  getEnrichmentFallbackConfig,
+  getEnrichmentFallbackConfigSnapshot,
+} from "../../config/enrichment";
 import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
@@ -15,9 +18,14 @@ const logger = createLogger("llm-provider-openai");
 
 export class OpenAIProvider implements LlmProvider {
   readonly name = "openai" as const;
+  private config = getEnrichmentFallbackConfigSnapshot();
+
+  async refreshConfig(): Promise<void> {
+    this.config = await getEnrichmentFallbackConfig();
+  }
 
   isEnabled(): boolean {
-    return Boolean(enrichmentFallbackConfig.openaiApiKey);
+    return Boolean(this.config.openaiApiKey);
   }
 
   async call(
@@ -25,7 +33,9 @@ export class OpenAIProvider implements LlmProvider {
     userPrompt: string,
     opts: LlmProviderCallOpts,
   ): Promise<string> {
-    const model = opts.model ?? enrichmentFallbackConfig.model;
+    await this.refreshConfig();
+    const config = this.config;
+    const model = opts.model ?? config.model;
     // Responses API uses nested reasoning.effort; valid for gpt-5.4 family
     // is none|low|medium|high|xhigh. "minimal" was gpt-5-only.
     const effort = opts.reasoningEffort ?? "minimal";
@@ -56,7 +66,7 @@ export class OpenAIProvider implements LlmProvider {
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${enrichmentFallbackConfig.openaiApiKey}`,
+        Authorization: `Bearer ${config.openaiApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),

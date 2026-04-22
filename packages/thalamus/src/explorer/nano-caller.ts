@@ -5,8 +5,7 @@
 
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { createLogger } from "@interview/shared/observability";
 import {
   type ConfigProvider,
@@ -14,6 +13,10 @@ import {
   DEFAULT_NANO_CONFIG,
   StaticConfigProvider,
 } from "@interview/shared/config";
+import {
+  getThalamusTransportConfig,
+  resolveFixturesDir,
+} from "../config/transport-config";
 import { stripThinkingChannels } from "../transports/providers/strip-thinking";
 
 const logger = createLogger("nano-caller");
@@ -35,13 +38,6 @@ export function setNanoConfigProvider(
 
 /** Back-compat re-export: a few tests + log lines reference NANO_MODEL. */
 export const NANO_MODEL = DEFAULT_NANO_CONFIG.model;
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function fixturesDir(): string {
-  if (process.env.FIXTURES_DIR) return process.env.FIXTURES_DIR;
-  return join(__dirname, "..", "..", "..", "..", "fixtures", "recorded");
-}
 
 interface NanoFixtureFile {
   text: string;
@@ -204,8 +200,8 @@ export interface NanoResponse {
  * Call gpt-5.4-nano with optional web search.
  */
 export async function callNano(req: NanoRequest): Promise<NanoResponse> {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
+  const transportConfig = await getThalamusTransportConfig();
+  if (!transportConfig.openaiApiKey) {
     return {
       ok: false,
       text: "",
@@ -243,7 +239,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
     const res = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${openaiKey}`,
+        Authorization: `Bearer ${transportConfig.openaiApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(bodyBase),
@@ -321,12 +317,13 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
  * Distinct from LlmChatTransport's key so nano + Kimi fixtures don't collide.
  */
 export async function callNanoWithMode(req: NanoRequest): Promise<NanoResponse> {
-  const mode = (process.env.THALAMUS_MODE ?? "cloud").toLowerCase();
+  const transportConfig = await getThalamusTransportConfig();
+  const mode = transportConfig.mode.toLowerCase();
   if (mode === "cloud") return callNano(req);
 
   const cfg = await nanoConfigProvider.get();
   const hash = hashNano(req, cfg.model);
-  const dir = fixturesDir();
+  const dir = resolveFixturesDir(transportConfig.fixturesDir);
   const path = join(dir, `${hash}.json`);
 
   if (mode === "fixtures") {
@@ -334,7 +331,7 @@ export async function callNanoWithMode(req: NanoRequest): Promise<NanoResponse> 
       const f = JSON.parse(readFileSync(path, "utf-8")) as NanoFixtureFile;
       return { ok: true, text: f.text, urls: extractUrls(f.text), latencyMs: 0 };
     }
-    const fallback = process.env.FIXTURES_FALLBACK;
+    const fallback = transportConfig.fallbackFixture || undefined;
     if (fallback) {
       const fb = join(dir, `${fallback}.json`);
       if (existsSync(fb)) {
@@ -435,8 +432,8 @@ export interface NanoStreamEvent {
 export async function* callNanoStream(
   req: NanoStreamRequest,
 ): AsyncGenerator<NanoStreamEvent> {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) throw new Error("OPENAI_API_KEY not set");
+  const transportConfig = await getThalamusTransportConfig();
+  if (!transportConfig.openaiApiKey) throw new Error("OPENAI_API_KEY not set");
 
   const cfg = await nanoConfigProvider.get();
   const tools: Array<Record<string, unknown>> = [];
@@ -447,7 +444,7 @@ export async function* callNanoStream(
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${openaiKey}`,
+      Authorization: `Bearer ${transportConfig.openaiApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

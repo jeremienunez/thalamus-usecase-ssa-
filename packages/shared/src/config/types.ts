@@ -219,6 +219,56 @@ export const DEFAULT_THALAMUS_BUDGETS_CONFIG: ThalamusBudgetsConfig = {
   },
 };
 
+// ─── thalamus.transport — transport mode + provider credentials ─────
+export interface ThalamusTransportConfig {
+  /** Execution mode for both chat transports and nano fixture replay. */
+  mode: "cloud" | "fixtures" | "record";
+  /** Optional override for the fixtures directory. Empty = repo default. */
+  fixturesDir: string;
+  /** Optional fallback fixture id used when a hash-specific file is missing. */
+  fallbackFixture: string;
+
+  openaiApiKey: string;
+  openaiFallbackModel: string;
+
+  kimiApiUrl: string;
+  kimiApiKey: string;
+  kimiModel: string;
+  kimiMaxTokens: number;
+  llmMaxRetries: number;
+
+  localLlmUrl: string;
+  localLlmModel: string;
+  localLlmMaxTokens: number;
+  localLlmTemperature: number;
+
+  minimaxApiUrl: string;
+  minimaxApiKey: string;
+  minimaxModel: string;
+  minimaxMaxTokens: number;
+}
+
+export const DEFAULT_THALAMUS_TRANSPORT_CONFIG: ThalamusTransportConfig = {
+  mode: "cloud",
+  fixturesDir: "",
+  fallbackFixture: "",
+  openaiApiKey: "",
+  openaiFallbackModel: "gpt-5-nano",
+  kimiApiUrl: "https://api.moonshot.ai/v1/chat/completions",
+  kimiApiKey: "",
+  kimiModel: "kimi-k2-turbo-preview",
+  kimiMaxTokens: 8192,
+  llmMaxRetries: 2,
+  localLlmUrl: "",
+  localLlmModel: "local",
+  localLlmMaxTokens: 2048,
+  localLlmTemperature: 0.3,
+  minimaxApiUrl: "https://api.minimaxi.chat/v1/text/chatcompletion_v2",
+  minimaxApiKey: "",
+  minimaxModel: "MiniMax-M2.7",
+  minimaxMaxTokens: 8192,
+};
+
 // ─── console.autonomy — autonomous loop capacity caps ───────────────
 export const AUTONOMY_ACTION_CHOICES: readonly string[] = [
   "thalamus",

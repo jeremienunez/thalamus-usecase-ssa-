@@ -11,7 +11,10 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import { isMinimaxEnabled, minimaxConfig } from "../../config/enrichment";
+import {
+  getMinimaxConfig,
+  getMinimaxConfigSnapshot,
+} from "../../config/enrichment";
 import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
@@ -19,9 +22,14 @@ const logger = createLogger("llm-provider-minimax");
 
 export class MiniMaxProvider implements LlmProvider {
   readonly name = "minimax" as const;
+  private config = getMinimaxConfigSnapshot();
+
+  async refreshConfig(): Promise<void> {
+    this.config = await getMinimaxConfig();
+  }
 
   isEnabled(): boolean {
-    return isMinimaxEnabled();
+    return Boolean(this.config.apiKey);
   }
 
   async call(
@@ -29,11 +37,13 @@ export class MiniMaxProvider implements LlmProvider {
     userPrompt: string,
     opts: LlmProviderCallOpts,
   ): Promise<string> {
-    const model = opts.model ?? minimaxConfig.model;
+    await this.refreshConfig();
+    const config = this.config;
+    const model = opts.model ?? config.model;
     const maxTokens =
       opts.maxOutputTokens && opts.maxOutputTokens > 0
         ? opts.maxOutputTokens
-        : minimaxConfig.maxTokens;
+        : config.maxTokens;
     const temperature =
       typeof opts.temperature === "number" ? opts.temperature : 1.0;
 
@@ -50,10 +60,10 @@ export class MiniMaxProvider implements LlmProvider {
       body.reasoning_split = opts.reasoningSplit;
     }
 
-    const response = await fetch(minimaxConfig.url, {
+    const response = await fetch(config.url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${minimaxConfig.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),

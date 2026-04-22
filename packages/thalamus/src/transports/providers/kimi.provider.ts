@@ -7,7 +7,10 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import { enrichmentConfig, isKimiEnabled } from "../../config/enrichment";
+import {
+  getEnrichmentConfig,
+  getEnrichmentConfigSnapshot,
+} from "../../config/enrichment";
 import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
@@ -15,13 +18,18 @@ const logger = createLogger("llm-provider-kimi");
 
 export class KimiProvider implements LlmProvider {
   readonly name = "kimi" as const;
+  private config = getEnrichmentConfigSnapshot();
 
   /** Global rate limiter — minimum ms between Kimi calls (Kimi-specific). */
   private static lastKimiCallMs = 0;
   private static readonly KIMI_MIN_INTERVAL_MS = 2000;
 
+  async refreshConfig(): Promise<void> {
+    this.config = await getEnrichmentConfig();
+  }
+
   isEnabled(): boolean {
-    return isKimiEnabled();
+    return Boolean(this.config.apiKey);
   }
 
   async call(
@@ -29,6 +37,8 @@ export class KimiProvider implements LlmProvider {
     userPrompt: string,
     opts: LlmProviderCallOpts,
   ): Promise<string> {
+    await this.refreshConfig();
+    const config = this.config;
     // Global rate limiter — wait if we're calling too fast
     const now = Date.now();
     const elapsed = now - KimiProvider.lastKimiCallMs;
@@ -48,12 +58,12 @@ export class KimiProvider implements LlmProvider {
       ? [{ type: "builtin_function", function: { name: "$web_search" } }]
       : undefined;
 
-    const model = opts.model ?? enrichmentConfig.model;
+    const model = opts.model ?? config.model;
     // Moonshot prefers `max_completion_tokens` (max_tokens is deprecated).
     const maxTokens =
       opts.maxOutputTokens && opts.maxOutputTokens > 0
         ? opts.maxOutputTokens
-        : enrichmentConfig.maxTokens;
+        : config.maxTokens;
     const temperature =
       typeof opts.temperature === "number" ? opts.temperature : 1.0;
 
@@ -71,10 +81,10 @@ export class KimiProvider implements LlmProvider {
       body.thinking = { type: opts.thinking ? "enabled" : "disabled" };
     }
 
-    const response = await fetch(enrichmentConfig.url, {
+    const response = await fetch(config.url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${enrichmentConfig.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),

@@ -29,10 +29,17 @@ import {
   setCortexConfigProvider,
   setReflexionConfigProvider,
   setBudgetsConfigProvider,
+  setThalamusTransportConfigProvider,
   setNanoSwarmProfile,
   setEntityExtractor,
   type WebSearchPort,
 } from "@interview/thalamus";
+import {
+  type ConfigProvider,
+  DEFAULT_THALAMUS_TRANSPORT_CONFIG,
+  StaticConfigProvider,
+  type ThalamusTransportConfig,
+} from "@interview/shared/config";
 import { setCuratorPrompt } from "./agent/ssa/explorer/curator";
 import { ssaEntityExtractor } from "./agent/ssa/ssa-entity-extractor";
 import {
@@ -99,6 +106,7 @@ export interface ContainerConfig {
   webSearch: WebSearchPort;
   simLlmMode?: "cloud" | "fixtures" | "record";
   simKernelSharedSecret?: string;
+  thalamusTransportConfigProvider?: ConfigProvider<ThalamusTransportConfig>;
   /**
    * Voyage API key for the SSA embedder adapter. When undefined, the
    * adapter reports `isAvailable()=false` and the kernel falls through
@@ -282,6 +290,10 @@ export async function buildContainer(
   );
   setBudgetsConfigProvider(
     runtimeConfigService.provider("thalamus.budgets"),
+  );
+  setThalamusTransportConfigProvider(
+    config.thalamusTransportConfigProvider ??
+      new StaticConfigProvider(DEFAULT_THALAMUS_TRANSPORT_CONFIG),
   );
   setAutonomyConfigProvider(
     runtimeConfigService.provider("console.autonomy"),
