@@ -1,4 +1,3 @@
-import { CheerioCrawler, type CheerioCrawlerOptions } from "crawlee";
 import { createLogger } from "@interview/shared/observability";
 import { validateExternalUrl } from "@interview/shared";
 import {
@@ -13,6 +12,35 @@ const logger = createLogger("explorer-crawler");
 const MAX_URLS_PER_CYCLE = 50;
 const CYCLE_TIMEOUT_MS = 5 * 60 * 1000;
 const PAGE_TIMEOUT_MS = 15_000;
+const SCRAPER_USER_AGENT =
+  "Mozilla/5.0 (compatible; thalamus-explorer/1.0; +https://github.com/jeremienunez/thalamus-usecase-ssa-)";
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gi, " ")
+    .replace(/<header\b[^>]*>[\s\S]*?<\/header>/gi, " ")
+    .replace(/<aside\b[^>]*>[\s\S]*?<\/aside>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractHtmlTitle(html: string): string {
+  const h1 = html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1];
+  if (h1) return stripHtml(h1).slice(0, 200) || "Untitled";
+  const title = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+  if (title) return stripHtml(title).slice(0, 200) || "Untitled";
+  return "Untitled";
+}
 
 function extractDataPoints(text: string): string[] {
   const dpRe = new RegExp(DATA_POINT_RE.source, DATA_POINT_RE.flags);
@@ -410,63 +438,38 @@ Focus on space situational awareness: satellite operators, orbital regimes, conj
       return null;
     }
 
-    return new Promise((resolve) => {
-      let result: CrawledArticle | null = null;
-      const timeout = setTimeout(() => resolve(null), PAGE_TIMEOUT_MS);
-
-      const crawler = new CheerioCrawler({
-        maxRequestsPerCrawl: 1,
-        maxConcurrency: 1,
-        requestHandlerTimeoutSecs: 12,
-        async requestHandler({ $, request }) {
-          $(
-            "script, style, nav, footer, header, aside, .ad, .ads, .cookie, .popup",
-          ).remove();
-
-          const title =
-            $("h1").first().text().trim() ||
-            $("title").text().trim() ||
-            "Untitled";
-          const body = $("article, main, .content, .post, .entry, body")
-            .first()
-            .text()
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 5000);
-
-          if (body.length < 100) {
-            resolve(null);
-            return;
-          }
-
-          const entities = extractSatelliteEntities(body);
-          const dataPoints = extractDataPoints(body);
-
-          result = {
-            url: request.url,
-            title,
-            body: body.slice(0, 3000),
-            entities,
-            dataPoints,
-            sourceQuery,
-            depth,
-          };
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": SCRAPER_USER_AGENT,
+          Accept: "text/html,application/xhtml+xml",
         },
-        failedRequestHandler() {
-          resolve(null);
-        },
-      } satisfies CheerioCrawlerOptions);
+        redirect: "follow",
+        signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+      });
 
-      crawler
-        .run([url])
-        .then(() => {
-          clearTimeout(timeout);
-          resolve(result);
-        })
-        .catch(() => {
-          clearTimeout(timeout);
-          resolve(null);
-        });
-    });
+      if (!response.ok) return null;
+
+      const html = await response.text();
+      const title = extractHtmlTitle(html);
+      const body = stripHtml(html).slice(0, 5000);
+
+      if (body.length < 100) return null;
+
+      const entities = extractSatelliteEntities(body);
+      const dataPoints = extractDataPoints(body);
+
+      return {
+        url: response.url || url,
+        title,
+        body: body.slice(0, 3000),
+        entities,
+        dataPoints,
+        sourceQuery,
+        depth,
+      };
+    } catch {
+      return null;
+    }
   }
 }

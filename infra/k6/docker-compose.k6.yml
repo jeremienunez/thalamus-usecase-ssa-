@@ -1,49 +1,20 @@
-# Overlay that adds the api + k6 to the base compose (postgres + redis).
+# Overlay that adds only k6 runners.
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f infra/k6/docker-compose.k6.yml up --build console-api
-#   docker compose -f docker-compose.yml -f infra/k6/docker-compose.k6.yml \
+#   docker compose -f docker-compose.yml -f infra/docker-compose.prod.yml up -d --build nginx
+#   docker compose -f docker-compose.yml -f infra/docker-compose.prod.yml \
+#     -f infra/k6/docker-compose.k6.yml \
 #     run --rm k6 run /scripts/smoke.js
 #
 # Run a specific scenario:
 #   K6_SCRIPT=load.js docker compose ... run --rm k6
 
 services:
-  console-api:
-    build:
-      context: .
-      dockerfile: infra/docker/console-api.Dockerfile
-    image: thalamus/console-api:dev
-    container_name: thalamus-console-api
-    environment:
-      NODE_ENV: production
-      PORT: "4000"
-      DATABASE_URL: postgres://thalamus:thalamus@postgres:5432/thalamus
-      REDIS_URL: redis://redis:6379
-      THALAMUS_MODE: fixtures
-      LOG_LEVEL: info
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    ports:
-      - "4000:4000"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks: [default]
-
   k6:
     image: grafana/k6:0.54.0
     container_name: thalamus-k6
-    depends_on:
-      console-api:
-        condition: service_healthy
     environment:
-      BASE_URL: http://console-api:4000
+      BASE_URL: http://nginx
       K6_OUT: "json=/results/${K6_SCRIPT:-smoke.js}.json"
     volumes:
       - ./infra/k6/scripts:/scripts:ro
@@ -56,11 +27,8 @@ services:
     # Optional: live web dashboard. Browse http://localhost:5665 while a run is active.
     image: grafana/k6:0.54.0
     profiles: ["dashboard"]
-    depends_on:
-      console-api:
-        condition: service_healthy
     environment:
-      BASE_URL: http://console-api:4000
+      BASE_URL: http://nginx
       K6_WEB_DASHBOARD: "true"
       K6_WEB_DASHBOARD_EXPORT: /results/dashboard.html
       K6_WEB_DASHBOARD_HOST: 0.0.0.0

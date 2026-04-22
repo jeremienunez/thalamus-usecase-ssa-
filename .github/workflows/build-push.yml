@@ -96,12 +96,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Build smoke images
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f infra/docker-compose.prod.yml \
+            build console-api console
+
+      - name: Boot dependencies
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f infra/docker-compose.prod.yml \
+            up -d --wait --wait-timeout 180 postgres redis
+
+      - name: Migrate schema
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f infra/docker-compose.prod.yml \
+            run --rm migrate
+
       - name: Boot stack
         run: |
           docker compose \
             -f docker-compose.yml \
             -f infra/docker-compose.prod.yml \
-            up -d --build --wait --wait-timeout 180
+            up -d --wait --wait-timeout 180 console-api console nginx
 
       - name: k6 smoke
         run: |
@@ -110,7 +131,7 @@ jobs:
             -f docker-compose.yml \
             -f infra/docker-compose.prod.yml \
             -f infra/k6/docker-compose.k6.yml \
-            run --rm -e BASE_URL=http://nginx k6
+            run --rm --no-deps -e BASE_URL=http://nginx k6
 
       - name: Dump logs on failure
         if: failure()

@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import ts from "typescript";
 
 type Layer = "unit" | "integration" | "e2e" | "contract";
@@ -43,6 +43,12 @@ const EMPTY_GRANDFATHER: GrandfatherFile = {
 };
 
 const FORBIDDEN_SHORTCUT_RE = /\b(?:xit|xtest|xdescribe)\s*\(/g;
+const TEST_FILE_GLOBS = [
+  "*test.ts",
+  "*test.tsx",
+  "*spec.ts",
+  "*spec.tsx",
+];
 
 const VAGUE_TITLE_RULES: Array<{ re: RegExp; message: string }> = [
   { re: /\bworks\b/i, message: "use the expected behavior, not 'works'" },
@@ -101,18 +107,65 @@ const INTEGRATION_FORBIDDEN: Array<{ re: RegExp; detail: string }> = [
 ];
 
 function listTestFiles(): string[] {
-  const out = execSync(
-    "rg --files apps packages -g '*test.ts' -g '*test.tsx' -g '*spec.ts' -g '*spec.tsx'",
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-    },
-  );
-  return out
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .sort();
+  try {
+    const out = execSync(
+      "rg --files apps packages -g '*test.ts' -g '*test.tsx' -g '*spec.ts' -g '*spec.tsx'",
+      {
+        cwd: ROOT,
+        encoding: "utf8",
+      },
+    );
+    return out
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .sort();
+  } catch {
+    return ["apps", "packages"]
+      .flatMap((rootDir) => collectTestFiles(rootDir))
+      .sort((a, b) => a.localeCompare(b));
+  }
+}
+
+function collectTestFiles(rootDir: string): string[] {
+  const start = resolve(ROOT, rootDir);
+  if (!existsSync(start)) return [];
+
+  const files: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+
+      if (
+        entry.isFile() &&
+        TEST_FILE_GLOBS.some((glob) => matchesTestGlob(entry.name, glob))
+      ) {
+        files.push(fullPath.replace(`${ROOT}/`, ""));
+      }
+    }
+  };
+
+  walk(start);
+  return files;
+}
+
+function matchesTestGlob(fileName: string, glob: string): boolean {
+  switch (glob) {
+    case "*test.ts":
+      return fileName.endsWith("test.ts");
+    case "*test.tsx":
+      return fileName.endsWith("test.tsx");
+    case "*spec.ts":
+      return fileName.endsWith("spec.ts");
+    case "*spec.tsx":
+      return fileName.endsWith("spec.tsx");
+    default:
+      return false;
+  }
 }
 
 function inferLayer(file: string): Layer {

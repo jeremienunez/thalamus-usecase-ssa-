@@ -1,13 +1,15 @@
 import { describe, it, expect } from "vitest";
-import type { BuildQueryConfig, SQL } from "drizzle-orm";
+import { type BuildQueryConfig, SQL } from "drizzle-orm";
+import { CasingCache } from "drizzle-orm/casing";
 import { fieldSqlFor } from "../../../src/utils/sql-field";
 import { MISSION_WRITABLE_COLUMNS } from "../../../src/utils/field-constraints";
 
 function renderColumnSql(field: string): string {
   const fragment: SQL = fieldSqlFor(field);
   const config: BuildQueryConfig = {
+    casing: new CasingCache(),
     escapeName: (name) => `"${name}"`,
-    escapeParam: () => "?",
+    escapeParam: (num) => `$${num}`,
     escapeString: (value) => `'${value}'`,
   };
   return fragment.toQuery(config).sql;

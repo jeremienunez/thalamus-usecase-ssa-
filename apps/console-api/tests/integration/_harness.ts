@@ -51,14 +51,13 @@ export async function createIntegrationHarness(): Promise<IntegrationHarness> {
     connectionString: withDatabaseName(INTEGRATION_DATABASE_URL, databaseName),
     max: 1,
   });
-  const client = await pool.connect();
-  const db = drizzle<typeof schema>(client, { schema });
+  const db = drizzle<typeof schema>(pool, { schema });
 
   let cachedTables: string[] | null = null;
 
   async function listTables(): Promise<string[]> {
     if (cachedTables) return cachedTables;
-    const result = await client.query<{ tablename: string }>(
+    const result = await pool.query<{ tablename: string }>(
       `
         SELECT tablename
         FROM pg_tables
@@ -82,7 +81,6 @@ export async function createIntegrationHarness(): Promise<IntegrationHarness> {
 
   async function close(): Promise<void> {
     try {
-      client.release();
       await pool.end();
     } finally {
       await adminPool.query(
@@ -114,22 +112,34 @@ async function migrateIntoDatabase(databaseName: string): Promise<void> {
     connectionString: withDatabaseName(INTEGRATION_DATABASE_URL, databaseName),
     max: 1,
   });
-  const client = await migrationPool.connect();
 
   try {
-    await client.query(readFileSync(initSqlPath, "utf8"));
+    {
+      const client = await migrationPool.connect();
+      try {
+        await client.query(readFileSync(initSqlPath, "utf8"));
 
-    for (const fileName of PRE_DRIZZLE_SQL) {
-      await client.query(readFileSync(resolve(migrationsFolder, fileName), "utf8"));
+        for (const fileName of PRE_DRIZZLE_SQL) {
+          await client.query(readFileSync(resolve(migrationsFolder, fileName), "utf8"));
+        }
+      } finally {
+        client.release();
+      }
     }
 
-    await migrate(drizzle(client), { migrationsFolder });
+    await migrate(drizzle(migrationPool), { migrationsFolder });
 
-    for (const fileName of POST_DRIZZLE_SQL) {
-      await client.query(readFileSync(resolve(migrationsFolder, fileName), "utf8"));
+    {
+      const client = await migrationPool.connect();
+      try {
+        for (const fileName of POST_DRIZZLE_SQL) {
+          await client.query(readFileSync(resolve(migrationsFolder, fileName), "utf8"));
+        }
+      } finally {
+        client.release();
+      }
     }
   } finally {
-    client.release();
     await migrationPool.end();
   }
 }

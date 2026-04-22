@@ -3,6 +3,18 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 const RUN_LLM = process.env.RUN_LLM_E2E === "1";
 
+type AutonomyStatus = {
+  running: boolean;
+  dailySpendUsd: number;
+  thalamusCyclesToday: number;
+  stoppedReason:
+    | null
+    | "daily_budget_exhausted"
+    | "monthly_budget_exhausted"
+    | "max_thalamus_cycles_per_day"
+    | "stopped_by_operator";
+};
+
 async function patchAutonomy(body: Record<string, unknown>) {
   const res = await fetch(`${BASE}/api/config/runtime/console.autonomy`, {
     method: "PATCH",
@@ -22,7 +34,7 @@ async function resetAutonomy() {
 async function readStatus() {
   const res = await fetch(`${BASE}/api/autonomy/status`);
   expect(res.status).toBe(200);
-  return res.json();
+  return (await res.json()) as AutonomyStatus;
 }
 
 async function waitForStop(reason: string, deadlineMs: number) {

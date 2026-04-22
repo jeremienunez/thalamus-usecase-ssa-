@@ -51,6 +51,7 @@ COPY --from=build --chown=node:node /app/pnpm-workspace.yaml ./pnpm-workspace.ya
 COPY --from=build --chown=node:node /app/tsconfig.base.json  ./tsconfig.base.json
 COPY --from=build --chown=node:node /app/packages            ./packages
 COPY --from=build --chown=node:node /app/apps/console-api    ./apps/console-api
+COPY --chown=node:node infra/postgres/init.sql               ./infra/postgres/init.sql
 
 EXPOSE 4000
 USER node

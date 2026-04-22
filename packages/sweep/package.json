@@ -8,19 +8,19 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@interview/shared": "workspace:*",
     "@interview/db-schema": "workspace:*",
+    "@interview/shared": "workspace:*",
     "@interview/thalamus": "workspace:*",
-    "drizzle-orm": "^0.30.0",
-    "ioredis": "^5.3.0",
     "bullmq": "^5.4.0",
-    "fastify": "^4.26.0",
-    "zod": "^3.22.0",
-    "pg": "^8.11.0"
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.8.5",
+    "ioredis": "^5.3.0",
+    "pg": "^8.11.0",
+    "zod": "^3.22.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
+    "@types/pg": "^8.11.0",
     "tsx": "^4.21.0",
-    "@types/pg": "^8.11.0"
+    "typescript": "^5.4.0"
   }
 }

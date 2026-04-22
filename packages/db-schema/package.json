@@ -18,14 +18,14 @@
   },
   "dependencies": {
     "@interview/shared": "workspace:*",
-    "drizzle-orm": "^0.30.0",
+    "drizzle-orm": "^0.45.2",
     "pg": "^8.11.0",
     "satellite.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.14",
     "@types/pg": "^8.11.0",
-    "drizzle-kit": "^0.21.0",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.21.0",
     "typescript": "^5.4.0"
   }
