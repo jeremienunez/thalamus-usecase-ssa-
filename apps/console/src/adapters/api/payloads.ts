@@ -1,5 +1,5 @@
 import type { ApiFetcher } from "./client";
-import type { PayloadDTO } from "@/transformers/http";
+import type { PayloadDto } from "@/dto/http";
 
 /**
  * Per-satellite payload manifest port.
@@ -11,7 +11,7 @@ import type { PayloadDTO } from "@/transformers/http";
 export interface PayloadsApiPort {
   listForSatellite(
     satelliteId: number,
-  ): Promise<{ items: PayloadDTO[]; count: number }>;
+  ): Promise<{ items: PayloadDto[]; count: number }>;
 }
 
 export function createPayloadsApi(f: ApiFetcher): PayloadsApiPort {

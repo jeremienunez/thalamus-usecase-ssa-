@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { FindingDTO, FindingStatus } from "@/transformers/http";
+import type { FindingDto, FindingStatus } from "@/dto/http";
 import { STATUS_COLOR } from "@/shared/types/graph-colors";
 
 const STATUSES: FindingStatus[] = ["pending", "in-review", "accepted", "rejected"];
@@ -17,12 +17,12 @@ export function FindingsGraph({
   onSelect,
   selectedId,
 }: {
-  findings: FindingDTO[];
+  findings: FindingDto[];
   onSelect: (id: string) => void;
   selectedId: string | null;
 }) {
   const columns = useMemo(() => {
-    const byStatus = new Map<FindingStatus, FindingDTO[]>();
+    const byStatus = new Map<FindingStatus, FindingDto[]>();
     for (const s of STATUSES) byStatus.set(s, []);
     for (const f of findings) {
       const arr = byStatus.get(f.status);

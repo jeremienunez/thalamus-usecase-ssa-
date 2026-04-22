@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import * as satelliteJs from "satellite.js";
-import type { SatelliteDTO } from "@/transformers/http";
+import type { SatelliteDto } from "@/dto/http";
 
 /** Earth radius in km (scene uses km → units / 1000 for display). */
 export const EARTH_KM = 6378.137;
@@ -16,7 +16,7 @@ const DEG = Math.PI / 180;
  */
 export function satellitePosition(
   s: Pick<
-    SatelliteDTO,
+    SatelliteDto,
     | "semiMajorAxisKm"
     | "eccentricity"
     | "inclinationDeg"
@@ -64,7 +64,7 @@ export function satellitePosition(
  */
 export function orbitRing(
   s: Pick<
-    SatelliteDTO,
+    SatelliteDto,
     | "semiMajorAxisKm"
     | "eccentricity"
     | "inclinationDeg"
@@ -95,7 +95,7 @@ export function orbitRing(
  */
 export function satellitePositionAt(
   s: Pick<
-    SatelliteDTO,
+    SatelliteDto,
     | "semiMajorAxisKm"
     | "eccentricity"
     | "inclinationDeg"
@@ -122,7 +122,7 @@ const satrecByLine1 = new Map<string, satelliteJs.SatRec | null>();
  */
 export function propagateSgp4(
   s: Pick<
-    SatelliteDTO,
+    SatelliteDto,
     | "semiMajorAxisKm"
     | "eccentricity"
     | "inclinationDeg"

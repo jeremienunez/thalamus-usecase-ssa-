@@ -102,6 +102,7 @@ export interface ContainerConfig {
 }
 
 import { SatelliteRepository } from "./repositories/satellite.repository";
+import { SatelliteDimensionRepository } from "./repositories/satellite-dimension.repository";
 import { PayloadRepository } from "./repositories/payload.repository";
 import { ConjunctionRepository } from "./repositories/conjunction.repository";
 import { KgRepository } from "./repositories/kg.repository";
@@ -204,6 +205,7 @@ export async function buildContainer(
 
   // repos
   const satelliteRepo = new SatelliteRepository(db);
+  const satelliteDimensionRepo = new SatelliteDimensionRepository(db);
   const payloadRepo = new PayloadRepository(db);
   const conjunctionRepo = new ConjunctionRepository(db);
   const kgRepo = new KgRepository(db);
@@ -224,7 +226,7 @@ export async function buildContainer(
   const sourceDataService = new SourceDataService(sourceRepo);
   const satelliteAuditService = new SatelliteAuditService(satelliteAuditRepo);
   const satelliteEnrichmentService = new SatelliteEnrichmentService(
-    satelliteRepo,
+    satelliteDimensionRepo,
     satelliteEnrichmentRepo,
   );
   const orbitalAnalysisService = new OrbitalAnalysisService(
@@ -362,7 +364,7 @@ export async function buildContainer(
   const simTerminalRepo = new SimTerminalRepository(db);
   const simTargetService = new SimTargetService(
     simRunRepo,
-    satelliteRepo,
+    satelliteDimensionRepo,
     conjunctionRepo,
   );
   const ssaPersonaComposer = new SsaPersonaComposer();
@@ -515,7 +517,7 @@ export async function buildContainer(
     sim: {
       preflight: {
         canStartTelemetry: async (target: { satelliteId: number }) => {
-          const row = await satelliteRepo.findByIdFull(BigInt(target.satelliteId));
+          const row = await satelliteDimensionRepo.findByIdFull(BigInt(target.satelliteId));
           return row !== null && row.operatorId != null;
         },
         canStartPc: async (target: { conjunctionId: number }) => {
@@ -528,7 +530,7 @@ export async function buildContainer(
       launcher: {
         startTelemetry: (opts: { satelliteId: number; fishCount?: number }) =>
           startTelemetrySwarm(
-            { satelliteRepo, swarmService: sweep.sim!.swarmService },
+            { satelliteRepo: satelliteDimensionRepo, swarmService: sweep.sim!.swarmService },
             opts,
           ),
         startPc: (opts: { conjunctionId: number; fishCount?: number }) =>

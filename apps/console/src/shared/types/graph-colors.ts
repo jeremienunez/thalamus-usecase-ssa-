@@ -1,4 +1,4 @@
-import type { EntityClass, SourceClass } from "@/transformers/http";
+import type { EntityClass, SourceClass } from "@/dto/http";
 
 export const ENTITY_COLOR: Record<EntityClass, string> = {
   Satellite: "#60A5FA",

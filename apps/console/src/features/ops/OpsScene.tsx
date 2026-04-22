@@ -1,7 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import { Environment, OrbitControls, Stars } from "@react-three/drei";
 import { useRef, useState } from "react";
-import type { ConjunctionDTO, SatelliteDTO } from "@/transformers/http";
+import type { ConjunctionDto, SatelliteDto } from "@/dto/http";
 import { Globe } from "./Globe";
 import { SatelliteField } from "./SatelliteField";
 import { ConjunctionArcs } from "./ConjunctionArcs";
@@ -11,12 +11,12 @@ import { CameraFocus } from "./CameraFocus";
 import { OrbitTrails, type RegimeFilterKey } from "./OrbitTrails";
 
 type Props = {
-  filteredSats: SatelliteDTO[];
-  satellites: SatelliteDTO[];
+  filteredSats: SatelliteDto[];
+  satellites: SatelliteDto[];
   selectedId: number | null;
   labelIds: number[];
-  conjunctions: ConjunctionDTO[];
-  satellitesById: Map<number, SatelliteDTO>;
+  conjunctions: ConjunctionDto[];
+  satellitesById: Map<number, SatelliteDto>;
   focusId: number | null;
   trailMode: "off" | "tails" | "full";
   orbitRegimeFilter: RegimeFilterKey;

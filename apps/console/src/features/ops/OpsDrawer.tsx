@@ -10,19 +10,19 @@ import {
   fmtPct,
 } from "@/shared/types/units";
 import type {
-  ConjunctionDTO,
-  PayloadDTO,
-  SatelliteDTO,
-  TelemetryDTO,
-} from "@/transformers/http";
+  ConjunctionDto,
+  PayloadDto,
+  SatelliteDto,
+  TelemetryDto,
+} from "@/dto/http";
 import { useSatellitePayloadsQuery } from "@/usecases/useSatellitePayloadsQuery";
 
 export function OpsDrawer({
   satellite,
   conjunctions,
 }: {
-  satellite: SatelliteDTO | null;
-  conjunctions: ConjunctionDTO[];
+  satellite: SatelliteDto | null;
+  conjunctions: ConjunctionDto[];
 }) {
   const drawerId = useUiStore((s) => s.drawerId);
   const { data: payloadsData } = useSatellitePayloadsQuery(
@@ -283,7 +283,7 @@ export function OpsDrawer({
   );
 }
 
-function hasAnyTelemetry(t: TelemetryDTO): boolean {
+function hasAnyTelemetry(t: TelemetryDto): boolean {
   return Object.values(t).some((v) => typeof v === "number" && Number.isFinite(v));
 }
 
@@ -296,7 +296,7 @@ function HealthCell({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PayloadRow({ payload }: { payload: PayloadDTO }) {
+function PayloadRow({ payload }: { payload: PayloadDto }) {
   const budget: string[] = [];
   if (typeof payload.massKg === "number") {
     budget.push(`${payload.massKg.toFixed(0)} kg`);

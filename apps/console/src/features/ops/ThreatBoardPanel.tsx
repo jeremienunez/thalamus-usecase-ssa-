@@ -1,10 +1,10 @@
 import { HudPanel } from "@/shared/ui/HudPanel";
 import { Measure } from "@/shared/ui/Measure";
 import { fmtPcCompact, fmtRangeKm, fmtVelocity } from "@/shared/types/units";
-import type { ConjunctionDTO } from "@/transformers/http";
+import type { ConjunctionDto } from "@/dto/http";
 
 type Props = {
-  threats: ConjunctionDTO[];
+  threats: ConjunctionDto[];
 };
 
 function severityOf(pc: number): "hot" | "amber" | "dim" {

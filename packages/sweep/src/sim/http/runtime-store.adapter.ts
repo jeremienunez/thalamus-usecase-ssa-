@@ -1,97 +1,29 @@
 import type { SimRuntimeStore } from "../ports/runtime-store.port";
+import type {
+  CreateAgentDto,
+  CreateRunDto,
+  CreateSwarmDto,
+  GodEventDto,
+  IdCountDto,
+  LastTurnAtDto,
+  MemoryBatchWriteDto,
+  ObservableTurnDto,
+  PersistTurnBatchDto,
+  SimAgentDto,
+  SimMemoryRowDto,
+  SimRunDto,
+  SimTurnInsertDto,
+} from "@interview/shared/dto/sim-http.dto";
 import { SimHttpClient } from "./client";
-
-interface CreateSwarmDto {
-  swarmId: string;
-}
-
-interface CreateRunDto {
-  simRunId: string;
-}
-
-interface CreateAgentDto {
-  agentId: string;
-}
-
-interface SimRunDto {
-  swarmId: string;
-  kind: SimRuntimeStore["getRun"] extends (...args: never[]) => Promise<infer T>
-    ? T extends { kind: infer K }
-      ? K
-      : never
-    : never;
-  status: SimRuntimeStore["getRun"] extends (...args: never[]) => Promise<infer T>
-    ? T extends { status: infer S }
-      ? S
-      : never
-    : never;
-  config: SimRuntimeStore["getRun"] extends (...args: never[]) => Promise<infer T>
-    ? T extends { config: infer C }
-      ? C
-      : never
-    : never;
-}
-
-interface SimAgentDto {
-  id: string;
-  agentIndex: number;
-  persona: string;
-  goals: string[];
-  constraints: Record<string, unknown>;
-}
-
-interface SimTurnInsertDto {
-  simTurnId: string;
-}
-
-interface PersistTurnBatchDto {
-  simTurnIds: string[];
-}
-
-interface GodEventDto {
-  turnIndex: number;
-  observableSummary: string;
-  action: Record<string, unknown>;
-}
-
-interface LastTurnAtDto {
-  at: string | null;
-}
-
-interface IdCountDto {
-  count: number;
-}
-
-interface ObservableTurnDto {
-  turnIndex: number;
-  actorKind: "agent" | "god" | "system";
-  agentId: string | null;
-  observableSummary: string;
-}
-
-interface MemoryBatchWriteDto {
-  ids: string[];
-}
-
-interface SimMemoryRowDto {
-  id: string;
-  turnIndex: number;
-  kind: "self_action" | "observation" | "belief";
-  content: string;
-  score?: number;
-}
-
-function toNumber(value: string, label: string): number {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    throw new Error(`${label} must be a safe integer, got "${value}"`);
-  }
-  return parsed;
-}
-
-function toOptionalDate(value: string | null): Date | null {
-  return value === null ? null : new Date(value);
-}
+import {
+  fromGodEventDto,
+  fromObservableTurnDto,
+  fromSimAgentDto,
+  fromSimMemoryRowDto,
+  fromSimRunDto,
+  parseDtoId,
+  parseOptionalDtoDate,
+} from "./sim-http.transformer";
 
 export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
   constructor(private readonly http: SimHttpClient) {}
@@ -108,7 +40,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         ? {}
         : { createdBy: String(input.createdBy) }),
     });
-    return toNumber(dto.swarmId, "swarmId");
+    return parseDtoId(dto.swarmId, "swarmId");
   }
 
   async insertRun(input: Parameters<SimRuntimeStore["insertRun"]>[0]) {
@@ -120,7 +52,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
       perturbation: input.perturbation,
       config: input.config,
     });
-    return toNumber(dto.simRunId, "simRunId");
+    return parseDtoId(dto.simRunId, "simRunId");
   }
 
   async insertAgent(input: Parameters<SimRuntimeStore["insertAgent"]>[0]) {
@@ -136,28 +68,17 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         constraints: input.constraints,
       },
     );
-    return toNumber(dto.agentId, "agentId");
+    return parseDtoId(dto.agentId, "agentId");
   }
 
   async getRun(simRunId: number) {
     const dto = await this.http.get<SimRunDto>(`/api/sim/runs/${simRunId}`);
-    return {
-      swarmId: toNumber(dto.swarmId, "swarmId"),
-      kind: dto.kind,
-      status: dto.status,
-      config: dto.config,
-    };
+    return fromSimRunDto(dto);
   }
 
   async listAgents(simRunId: number) {
     const rows = await this.http.get<SimAgentDto[]>(`/api/sim/runs/${simRunId}/agents`);
-    return rows.map((row) => ({
-      id: toNumber(row.id, "agentId"),
-      agentIndex: row.agentIndex,
-      persona: row.persona,
-      goals: row.goals,
-      constraints: row.constraints,
-    }));
+    return rows.map(fromSimAgentDto);
   }
 
   async insertGodTurn(input: Parameters<SimRuntimeStore["insertGodTurn"]>[0]) {
@@ -170,7 +91,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         observableSummary: input.observableSummary,
       },
     );
-    return toNumber(dto.simTurnId, "simTurnId");
+    return parseDtoId(dto.simTurnId, "simTurnId");
   }
 
   async listGodEventsAtOrBefore(
@@ -184,14 +105,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         query: { beforeTurn: turnIndex, limit },
       },
     );
-    return rows.map((row) => ({
-      turnIndex: row.turnIndex,
-      observableSummary: row.observableSummary,
-      detail:
-        typeof row.action?.detail === "string"
-          ? row.action.detail
-          : undefined,
-    }));
+    return rows.map(fromGodEventDto);
   }
 
   async persistTurnBatch(input: Parameters<SimRuntimeStore["persistTurnBatch"]>[0]) {
@@ -215,7 +129,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         })),
       },
     );
-    return dto.simTurnIds.map((id) => toNumber(id, "simTurnId"));
+    return dto.simTurnIds.map((id) => parseDtoId(id, "simTurnId"));
   }
 
   async writeMemoryBatch(rows: Parameters<SimRuntimeStore["writeMemoryBatch"]>[0]) {
@@ -231,7 +145,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         embedding: row.embedding ?? null,
       })),
     );
-    return dto.ids.map((id) => toNumber(id, "memoryId"));
+    return dto.ids.map((id) => parseDtoId(id, "memoryId"));
   }
 
   async updateRunStatus(
@@ -258,7 +172,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
     const dto = await this.http.get<LastTurnAtDto>(
       `/api/sim/runs/${simRunId}/last-turn-at`,
     );
-    return toOptionalDate(dto.at);
+    return parseOptionalDtoDate(dto.at);
   }
 
   async recentObservable(
@@ -276,12 +190,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         },
       },
     );
-    return rows.map((row) => ({
-      turnIndex: row.turnIndex,
-      actorKind: row.actorKind,
-      agentId: row.agentId === null ? null : toNumber(row.agentId, "agentId"),
-      observableSummary: row.observableSummary,
-    }));
+    return rows.map(fromObservableTurnDto);
   }
 
   async topKByVector(
@@ -295,13 +204,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         k: opts.k,
       },
     );
-    return rows.map((row) => ({
-      id: toNumber(row.id, "memoryId"),
-      turnIndex: row.turnIndex,
-      kind: row.kind,
-      content: row.content,
-      score: row.score,
-    }));
+    return rows.map(fromSimMemoryRowDto);
   }
 
   async topKByRecency(
@@ -316,13 +219,7 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
         },
       },
     );
-    return rows.map((row) => ({
-      id: toNumber(row.id, "memoryId"),
-      turnIndex: row.turnIndex,
-      kind: row.kind,
-      content: row.content,
-      score: row.score,
-    }));
+    return rows.map(fromSimMemoryRowDto);
   }
 }
 

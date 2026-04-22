@@ -14,19 +14,7 @@ import type {
   LaunchCostView,
   PayloadContextView,
 } from "../types/satellite.types";
-
-// ---- shared helpers ----------------------------------------------------
-function toIso(v: Date | string | null | undefined): string | null {
-  if (v === null || v === undefined) return null;
-  const d = v instanceof Date ? v : new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function idOrNull(
-  v: bigint | number | string | null | undefined,
-): string | null {
-  return v === null || v === undefined ? null : String(v);
-}
+import { idOrNull, toIsoOrNull } from "../utils/serialize";
 
 // ---- shared DTO fragment ----------------------------------------------
 type OperatorHeader = {
@@ -82,7 +70,7 @@ export function toCatalogContextView(r: CatalogContextRow): CatalogContextView {
     platformClass: r.platformClass ?? null,
     orbitRegime: r.orbitRegime ?? null,
     launchYear: r.launchYear ?? null,
-    ingestedAt: toIso(r.ingestedAt),
+    ingestedAt: toIsoOrNull(r.ingestedAt),
   };
 }
 

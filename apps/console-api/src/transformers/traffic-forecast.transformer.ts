@@ -7,14 +7,8 @@ import type {
   LaunchManifestView,
   LaunchEpochWeatherRow,
   LaunchEpochWeatherView,
-} from "../types/traffic-forecast.types";
-
-// ---- shared helpers ----------------------------------------------------
-function toIso(v: Date | string | null | undefined): string | null {
-  if (v === null || v === undefined) return null;
-  const d = v instanceof Date ? v : new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
+} from "../types/orbital-analysis.types";
+import { toIsoOrNull } from "../utils/serialize";
 
 // ---- transformers ------------------------------------------------------
 export function toOrbitalTrafficView(
@@ -28,7 +22,7 @@ export function toOrbitalTrafficView(
     satelliteCount: r.satelliteCount ?? null,
     title: r.title ?? null,
     url: r.url ?? null,
-    publishedAt: toIso(r.publishedAt),
+    publishedAt: toIsoOrNull(r.publishedAt),
     baselines: r.baselines ?? null,
     branchFilterApplied: r.branchFilterApplied ?? null,
   };
@@ -48,7 +42,7 @@ export function toDebrisForecastView(
     abstract: r.abstract ?? null,
     authors: Array.isArray(r.authors) ? r.authors : [],
     url: r.url ?? null,
-    publishedAt: toIso(r.publishedAt),
+    publishedAt: toIsoOrNull(r.publishedAt),
     f107: r.f107 ?? null,
     apIndex: r.apIndex ?? null,
     kpIndex: r.kpIndex ?? null,
@@ -77,15 +71,15 @@ export function toLaunchManifestView(
     year: r.year ?? null,
     vehicle: r.vehicle ?? null,
     url: r.url ?? null,
-    publishedAt: toIso(r.publishedAt),
+    publishedAt: toIsoOrNull(r.publishedAt),
     externalLaunchId: r.externalLaunchId ?? null,
     operatorName: r.operatorName ?? null,
     operatorCountry: r.operatorCountry ?? null,
     padName: r.padName ?? null,
     padLocation: r.padLocation ?? null,
-    plannedNet: toIso(r.plannedNet),
-    plannedWindowStart: toIso(r.plannedWindowStart),
-    plannedWindowEnd: toIso(r.plannedWindowEnd),
+    plannedNet: toIsoOrNull(r.plannedNet),
+    plannedWindowStart: toIsoOrNull(r.plannedWindowStart),
+    plannedWindowEnd: toIsoOrNull(r.plannedWindowEnd),
     status: r.status ?? null,
     orbitName: r.orbitName ?? null,
     missionName: r.missionName ?? null,
@@ -94,8 +88,8 @@ export function toLaunchManifestView(
     notamId: r.notamId ?? null,
     notamState: r.notamState ?? null,
     notamType: r.notamType ?? null,
-    notamStart: toIso(r.notamStart),
-    notamEnd: toIso(r.notamEnd),
+    notamStart: toIsoOrNull(r.notamStart),
+    notamEnd: toIsoOrNull(r.notamEnd),
     ituFilingId: r.ituFilingId ?? null,
     ituConstellation: r.ituConstellation ?? null,
     ituAdministration: r.ituAdministration ?? null,

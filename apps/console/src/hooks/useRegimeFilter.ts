@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { SatelliteDTO } from "@/transformers/http";
+import type { SatelliteDto } from "@/dto/http";
 import { useOpsFilterStore, type RegimeKey } from "@/features/ops/opsFilterStore";
 
 type TrailMode = "off" | "tails" | "full";
@@ -14,7 +14,7 @@ type RegimeFilterKey = "ALL" | RegimeKey;
  * Regime visibility is sourced from the shared ops filter store so the HUD
  * regime toggles and the left-rail ops filters stay in sync.
  */
-export function useRegimeFilter(satellites: SatelliteDTO[]) {
+export function useRegimeFilter(satellites: SatelliteDto[]) {
   const regimeVisible = useOpsFilterStore((s) => s.regimeVisible);
   const toggleRegime = useOpsFilterStore((s) => s.toggleRegime);
 

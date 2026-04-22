@@ -1,6 +1,11 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import {
+  satelliteDimensionJoinsSql,
+  satelliteOrbitRegimeJoinSql,
+} from "./satellite-dimension.sql";
+import { SatelliteDimensionRepository } from "./satellite-dimension.repository";
 import type {
   CatalogContextRow,
   ReplacementCostRawRow,
@@ -16,39 +21,17 @@ export type {
 } from "../types/satellite.types";
 
 export class SatelliteEnrichmentRepository {
-  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+  private readonly dimensions: SatelliteDimensionRepository;
+
+  constructor(private readonly db: NodePgDatabase<typeof schema>) {
+    this.dimensions = new SatelliteDimensionRepository(db);
+  }
 
   /** Catalog ingestion view with operator / country / platform / regime. */
   async listCatalogContext(
     opts: { source?: string; sinceEpoch?: string; limit?: number } = {},
   ): Promise<CatalogContextRow[]> {
-    const sinceFilter = opts.sinceEpoch
-      ? sql`AND s.created_at > ${opts.sinceEpoch}::timestamptz`
-      : sql``;
-
-    const results = await this.db.execute<CatalogContextRow>(sql`
-      SELECT
-        s.id::int AS "satelliteId",
-        s.name,
-        s.norad_id AS "noradId",
-        op.name AS "operator",
-        oc.name AS "operatorCountry",
-        pc.name AS "platformClass",
-        orr.name AS "orbitRegime",
-        s.launch_year AS "launchYear",
-        s.created_at::text AS "ingestedAt"
-      FROM satellite s
-      LEFT JOIN operator op            ON op.id  = s.operator_id
-      LEFT JOIN operator_country oc    ON oc.id  = s.operator_country_id
-      LEFT JOIN platform_class pc      ON pc.id  = s.platform_class_id
-      LEFT JOIN orbit_regime orr       ON orr.id = oc.orbit_regime_id
-      WHERE 1 = 1
-        ${sinceFilter}
-      ORDER BY s.created_at DESC
-      LIMIT ${opts.limit ?? 50}
-    `);
-
-    return results.rows;
+    return this.dimensions.listCatalogContext(opts);
   }
 
   /** Raw bus/payload context for replacement-cost estimation. Math lives in the service. */
@@ -127,10 +110,8 @@ export class SatelliteEnrichmentRepository {
         NULL::real as "radiationIndex",
         COALESCE(manifest.src_count, 0)::int as "manifestSourceCount"
       FROM satellite s
-      JOIN operator_country oc ON oc.id = s.operator_country_id
-      JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
-      LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
-      LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
+      ${satelliteDimensionJoinsSql}
+      ${satelliteOrbitRegimeJoinSql}
       LEFT JOIN LATERAL (
         SELECT COUNT(DISTINCT si.source_id)::int as src_count
         FROM source_item si
@@ -142,6 +123,8 @@ export class SatelliteEnrichmentRepository {
           AND si.fetched_at > now() - interval '30 days'
       ) manifest ON true
       WHERE s.launch_cost IS NOT NULL AND s.launch_cost > 5
+        AND oc.id IS NOT NULL
+        AND orr.id IS NOT NULL
         ${regimeFilter}
         ${costFilter}
       ORDER BY COALESCE(manifest.src_count, 0) DESC, s.launch_cost ASC
@@ -181,13 +164,15 @@ export class SatelliteEnrichmentRepository {
       SELECT s.id, s.name,
         s.norad_id AS "noradId",
         s.mass_kg as "massKg",
-        oc.name as "operatorCountryName", orb.name as "orbitRegimeName",
+        oc.name as "operatorCountryName", orr.name as "orbitRegimeName",
         1.0 - (s.embedding <=> ${JSON.stringify(profile)}::halfvec(2048)) as similarity
       FROM satellite s
-      JOIN operator_country oc ON oc.id = s.operator_country_id
-      JOIN orbit_regime orb ON orb.id = oc.orbit_regime_id
+      ${satelliteDimensionJoinsSql}
+      ${satelliteOrbitRegimeJoinSql}
       WHERE s.embedding IS NOT NULL
-        ${orbitRegimeFilter}
+        AND oc.id IS NOT NULL
+        AND orr.id IS NOT NULL
+        ${opts.orbitRegime ? sql`AND orr.name = ${opts.orbitRegime}` : sql``}
       ORDER BY s.embedding <=> ${JSON.stringify(profile)}::halfvec(2048)
       LIMIT ${opts.limit ?? 20}
     `);

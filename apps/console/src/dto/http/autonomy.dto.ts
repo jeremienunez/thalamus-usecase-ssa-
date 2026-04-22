@@ -1,4 +1,4 @@
-export type AutonomyTickDTO = {
+export type AutonomyTickDto = {
   id: string;
   action: "thalamus" | "sweep-nullscan" | "fish-swarm";
   queryOrMode: string;
@@ -9,13 +9,13 @@ export type AutonomyTickDTO = {
   error?: string;
 };
 
-export type AutonomyStateDTO = {
+export type AutonomyStateDto = {
   running: boolean;
   intervalMs: number;
   startedAt: string | null;
   tickCount: number;
-  currentTick: AutonomyTickDTO | null;
-  history: AutonomyTickDTO[];
+  currentTick: AutonomyTickDto | null;
+  history: AutonomyTickDto[];
   dailySpendUsd: number;
   monthlySpendUsd: number;
   thalamusCyclesToday: number;

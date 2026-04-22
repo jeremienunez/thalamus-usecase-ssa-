@@ -188,73 +188,12 @@ export class SsaReplFollowUpExecutor {
       signal?: AbortSignal;
     },
   ): AsyncGenerator<ReplStreamEvent> {
-    if (!this.deps.sim?.launcher || !this.deps.sim?.swarm) {
-      yield* this.failUnavailable(item, input.parentCycleId);
-      return;
-    }
-    const conjunctionId = Number(
-      item.target?.refs?.conjunctionId ?? item.target?.entityId,
-    );
-    if (!Number.isFinite(conjunctionId)) {
-      yield* this.failUnavailable(item, input.parentCycleId);
-      return;
-    }
-
-    const startedAt = Date.now();
-    const fishCount = item.gateScore >= 0.85 ? 50 : undefined;
-    const launch = this.pump.pump(() =>
-      this.deps.sim!.launcher.startPc({ conjunctionId, fishCount }),
-    );
-
-    let swarmId: number | null = null;
-    let err: Error | null = null;
-    for (;;) {
-      if (input.signal?.aborted) return;
-      const next = await launch.next();
-      if (next.done === true) {
-        swarmId = next.value.result?.swarmId ?? null;
-        err = next.value.err;
-        break;
-      }
-      yield {
-        event: "followup.step",
-        data: {
-          parentCycleId: input.parentCycleId,
-          followupId: item.followupId,
-          kind: item.kind,
-          auto: item.auto,
-          step: next.value.step === "unknown" ? "swarm" : next.value.step,
-          phase: next.value.phase,
-          terminal: next.value.terminal,
-          elapsedMs: next.value.elapsedMs,
-          extra: next.value.extra,
-        },
-      };
-    }
-
-    if (err || swarmId === null) {
-      yield {
-        event: "followup.done",
-        data: {
-          parentCycleId: input.parentCycleId,
-          followupId: item.followupId,
-          kind: item.kind,
-          auto: item.auto,
-          provider: "system",
-          tookMs: Date.now() - startedAt,
-          status: "failed",
-        },
-      };
-      return;
-    }
-
-    yield* this.awaitSwarmTerminal(
-      item,
-      input.parentCycleId,
-      swarmId,
-      startedAt,
-      input.signal,
-    );
+    yield* this.executeSwarmVerification(item, input, {
+      resolveTargetId: (target) =>
+        Number(target?.refs?.conjunctionId ?? target?.entityId),
+      launch: (launcher, targetId, fishCount) =>
+        launcher.startPc({ conjunctionId: targetId, fishCount }),
+    });
   }
 
   private async *executeTelemetryVerification(
@@ -264,14 +203,35 @@ export class SsaReplFollowUpExecutor {
       signal?: AbortSignal;
     },
   ): AsyncGenerator<ReplStreamEvent> {
+    yield* this.executeSwarmVerification(item, input, {
+      resolveTargetId: (target) =>
+        Number(target?.refs?.satelliteId ?? target?.entityId),
+      launch: (launcher, targetId, fishCount) =>
+        launcher.startTelemetry({ satelliteId: targetId, fishCount }),
+    });
+  }
+
+  private async *executeSwarmVerification(
+    item: ReplFollowUpPlanItem,
+    input: {
+      parentCycleId: string;
+      signal?: AbortSignal;
+    },
+    spec: {
+      resolveTargetId(target: ReplFollowUpPlanItem["target"]): number;
+      launch(
+        launcher: NonNullable<SsaReplFollowUpDeps["sim"]>["launcher"],
+        targetId: number,
+        fishCount?: number,
+      ): Promise<{ swarmId: number }>;
+    },
+  ): AsyncGenerator<ReplStreamEvent> {
     if (!this.deps.sim?.launcher || !this.deps.sim?.swarm) {
       yield* this.failUnavailable(item, input.parentCycleId);
       return;
     }
-    const satelliteId = Number(
-      item.target?.refs?.satelliteId ?? item.target?.entityId,
-    );
-    if (!Number.isFinite(satelliteId)) {
+    const targetId = spec.resolveTargetId(item.target);
+    if (!Number.isFinite(targetId)) {
       yield* this.failUnavailable(item, input.parentCycleId);
       return;
     }
@@ -279,7 +239,7 @@ export class SsaReplFollowUpExecutor {
     const startedAt = Date.now();
     const fishCount = item.gateScore >= 0.85 ? 50 : undefined;
     const launch = this.pump.pump(() =>
-      this.deps.sim!.launcher.startTelemetry({ satelliteId, fishCount }),
+      spec.launch(this.deps.sim!.launcher, targetId, fishCount),
     );
 
     let swarmId: number | null = null;

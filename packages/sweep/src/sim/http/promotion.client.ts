@@ -1,31 +1,12 @@
 import type { SwarmAggregate } from "../aggregator.service";
+import type {
+  SimPromotionTelemetryDto,
+  TelemetryPromotionAggregateDto,
+} from "@interview/shared/dto/sim-promotion.dto";
 import { SimHttpClient } from "./client";
 
 export interface SimPromotionHttpClientOpts {
   kernelSecret?: string;
-}
-
-export interface TelemetryPromotionScalarStats {
-  median: number;
-  sigma: number;
-  min: number;
-  max: number;
-  mean: number;
-  n: number;
-  values: number[];
-  unit: string;
-  avgFishConfidence: number;
-}
-
-export interface TelemetryPromotionAggregate {
-  swarmId: number;
-  satelliteId: number;
-  totalFish: number;
-  succeededFish: number;
-  failedFish: number;
-  quorumMet: boolean;
-  scalars: Record<string, TelemetryPromotionScalarStats | undefined>;
-  simConfidence: number;
 }
 
 export class SimPromotionHttpClient {
@@ -56,14 +37,15 @@ export class SimPromotionHttpClient {
 
   async emitScalarSuggestions(input: {
     swarmId: number;
-    aggregate: TelemetryPromotionAggregate;
+    aggregate: TelemetryPromotionAggregateDto;
   }): Promise<void> {
+    const body: SimPromotionTelemetryDto = {
+      swarmId: String(input.swarmId),
+      aggregate: input.aggregate,
+    };
     await this.http.post(
       "/api/sim/promotions/scalars",
-      {
-        swarmId: String(input.swarmId),
-        aggregate: input.aggregate,
-      },
+      body,
       { headers: this.headers },
     );
   }

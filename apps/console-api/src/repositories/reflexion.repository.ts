@@ -2,6 +2,10 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import {
+  satelliteDimensionJoinsSql,
+  satelliteOrbitRegimeJoinSql,
+} from "./satellite-dimension.sql";
 import type {
   ReflexionTarget,
   CoplaneRow,
@@ -195,10 +199,8 @@ export class ReflexionRepository {
         aa.last_observed_at::text                           AS "lastAmateurObservedAt",
         s.opacity_score::float                              AS "opacityScore"
       FROM satellite s
-      LEFT JOIN operator op          ON op.id  = s.operator_id
-      LEFT JOIN operator_country oc  ON oc.id  = s.operator_country_id
-      LEFT JOIN platform_class pc    ON pc.id  = s.platform_class_id
-      LEFT JOIN orbit_regime orr     ON orr.id = oc.orbit_regime_id
+      ${satelliteDimensionJoinsSql}
+      ${satelliteOrbitRegimeJoinSql}
       LEFT JOIN amateur_agg aa       ON aa.satellite_id = s.id
       LEFT JOIN payload_agg pa       ON pa.satellite_id = s.id
       WHERE

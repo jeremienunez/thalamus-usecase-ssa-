@@ -1,4 +1,8 @@
 import { createLogger } from "@interview/shared/observability";
+import {
+  pickAllTagText,
+  pickFirstTagText,
+} from "@interview/shared/utils";
 import type { Source, NewSourceItem } from "@interview/db-schema";
 
 const logger = createLogger("source-arxiv");
@@ -20,40 +24,6 @@ export interface ArxivFetchOptions {
   limit?: number;
   timeoutMs?: number;
 }
-
-const decode = (s: string): string =>
-  s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&");
-
-const stripCdata = (s: string): string => {
-  const cdata = s.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-  return cdata ? cdata[1] : s;
-};
-
-const trim = (s: string): string =>
-  decode(stripCdata(s).replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ")
-    .trim();
-
-const pickFirst = (block: string, tag: string): string | null => {
-  const m = block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return m ? trim(m[1]) : null;
-};
-
-const pickAll = (block: string, tag: string): string[] => {
-  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
-  const out: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(block)) !== null) {
-    const v = trim(m[1]);
-    if (v) out.push(v);
-  }
-  return out;
-};
 
 export async function fetchArxivSource(
   source: Source,
@@ -92,13 +62,13 @@ export async function fetchArxivSource(
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml)) !== null && items.length < limit) {
     const block = m[1];
-    const id = pickFirst(block, "id");
-    const title = pickFirst(block, "title");
+    const id = pickFirstTagText(block, "id");
+    const title = pickFirstTagText(block, "title");
     if (!id || !title) continue;
 
-    const summary = pickFirst(block, "summary");
-    const published = pickFirst(block, "published");
-    const authors = pickAll(block, "name");
+    const summary = pickFirstTagText(block, "summary");
+    const published = pickFirstTagText(block, "published");
+    const authors = pickAllTagText(block, "name");
 
     // Pull primary link href (the <id> is also a usable URL on arXiv)
     const linkMatch = block.match(/<link\b[^>]*\bhref="([^"]+)"/i);

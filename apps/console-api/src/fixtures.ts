@@ -27,7 +27,7 @@ export type EntityClass =
   | "ConjunctionEvent"
   | "Maneuver";
 
-export type SatelliteDTO = {
+export type SatelliteDto = {
   id: number;
   name: string;
   noradId: number;
@@ -48,7 +48,7 @@ export type SatelliteDTO = {
   opacityDeficitReasons?: string[];
 };
 
-export type ConjunctionDTO = {
+export type ConjunctionDto = {
   id: number;
   primaryId: number;
   secondaryId: number;
@@ -65,7 +65,7 @@ export type ConjunctionDTO = {
   corroborated: boolean;
 };
 
-export type KgNodeDTO = {
+export type KgNodeDto = {
   id: string;
   label: string;
   class: EntityClass;
@@ -75,7 +75,7 @@ export type KgNodeDTO = {
   cortex: string;
 };
 
-export type KgEdgeDTO = {
+export type KgEdgeDto = {
   id: string;
   source: string;
   target: string;
@@ -84,7 +84,7 @@ export type KgEdgeDTO = {
   sourceClass: SourceClass;
 };
 
-export type FindingDTO = {
+export type FindingDto = {
   id: string;
   title: string;
   summary: string;
@@ -132,7 +132,7 @@ export function buildFixtures(seed = 42) {
   const rnd = mulberry32(seed);
   const now = Date.now();
 
-  const satellites: SatelliteDTO[] = [];
+  const satellites: SatelliteDto[] = [];
   for (let i = 0; i < 600; i++) {
     const regime = (["LEO", "LEO", "LEO", "LEO", "MEO", "GEO", "HEO"] as Regime[])[
       Math.floor(rnd() * 7)
@@ -191,7 +191,7 @@ export function buildFixtures(seed = 42) {
     });
   }
 
-  const conjunctions: ConjunctionDTO[] = [];
+  const conjunctions: ConjunctionDto[] = [];
   for (let i = 0; i < 180; i++) {
     const a = Math.floor(rnd() * satellites.length);
     let b = Math.floor(rnd() * satellites.length);
@@ -219,8 +219,8 @@ export function buildFixtures(seed = 42) {
   }
 
   // Knowledge graph: satellites + operators + payloads + orbits + conjunction events
-  const kgNodes: KgNodeDTO[] = [];
-  const kgEdges: KgEdgeDTO[] = [];
+  const kgNodes: KgNodeDto[] = [];
+  const kgEdges: KgEdgeDto[] = [];
   const operators = Array.from(new Set(satellites.map((s) => s.operator)));
   const regimes: Regime[] = ["LEO", "MEO", "GEO", "HEO"];
 
@@ -317,7 +317,7 @@ export function buildFixtures(seed = 42) {
   kgNodes.forEach((n) => (n.degree = degMap.get(n.id) ?? 0));
 
   // Findings — densify to ~1200 for SWEEP view
-  const findings: FindingDTO[] = [];
+  const findings: FindingDto[] = [];
   const statusBuckets: FindingStatus[] = [
     "pending",
     "pending",

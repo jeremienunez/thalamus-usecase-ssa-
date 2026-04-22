@@ -1,7 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { createLogger } from "@interview/shared/observability";
 import type { SatelliteSweepChatService } from "../services/satellite-sweep-chat.service";
-import { sweepChatMessageSchema } from "../transformers/satellite-sweep-chat.dto";
+import { sweepChatMessageSchema } from "../schemas/satellite-sweep-chat.schema";
 
 const logger = createLogger("satellite-sweep-chat-controller");
 

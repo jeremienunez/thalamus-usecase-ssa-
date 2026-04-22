@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApiClient } from "@/adapters/api/ApiClientContext";
-import type { FindingStatus } from "@/transformers/http";
+import type { FindingStatus } from "@/dto/http";
 
 export function useDecisionMutation() {
   const api = useApiClient();

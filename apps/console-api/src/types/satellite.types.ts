@@ -66,8 +66,8 @@ export type FindByIdFullRow = {
 
 export type ListByOperatorRow = FindByIdFullRow;
 
-export type CatalogContextRow = {
-  satelliteId: number;
+type CatalogContextShape<TSatelliteId, TIngestedAt> = {
+  satelliteId: TSatelliteId;
   name: string;
   noradId: number | null;
   operator: string | null;
@@ -75,8 +75,10 @@ export type CatalogContextRow = {
   platformClass: string | null;
   orbitRegime: string | null;
   launchYear: number | null;
-  ingestedAt: string;
+  ingestedAt: TIngestedAt;
 };
+
+export type CatalogContextRow = CatalogContextShape<number, string>;
 
 export type ReplacementCostRawRow = {
   satelliteId: number;
@@ -93,10 +95,19 @@ export type ReplacementCostRow = ReplacementCostRawRow & {
   breakdown: { bus: number; payload: number; launch: number };
 };
 
-export type LaunchCostRow = {
-  id: string;
+type ReplacementCostShape<TSatelliteId> = {
+  satelliteId: TSatelliteId;
   name: string;
-  noradId: number | null;
+  operatorName: string | null;
+  massKg: number | null;
+  busName: string | null;
+  payloadNames: string[];
+  estimatedCost: { low: number; mid: number; high: number; currency: "USD" };
+  breakdown: { bus: number; payload: number; launch: number };
+};
+
+type LaunchCostShape = {
+  name: string;
   launchCost: number | null;
   launchYear: number | null;
   operatorCountryName: string;
@@ -115,6 +126,11 @@ export type LaunchCostRow = {
   solarFluxIndex: number | null;
   kpIndex: number | null;
   radiationIndex: number | null;
+};
+
+export type LaunchCostRow = LaunchCostShape & {
+  id: string;
+  noradId: number | null;
 };
 
 export type PayloadContextRow = { type: string; [key: string]: unknown };
@@ -140,50 +156,12 @@ type OperatorHeader = {
 export type SatelliteFullView = OperatorHeader;
 export type SatelliteListView = OperatorHeader;
 
-export type CatalogContextView = {
-  satelliteId: string;
-  name: string;
-  noradId: number | null;
-  operator: string | null;
-  operatorCountry: string | null;
-  platformClass: string | null;
-  orbitRegime: string | null;
-  launchYear: number | null;
-  ingestedAt: string | null;
-};
+export type CatalogContextView = CatalogContextShape<string, string | null>;
 
-export type ReplacementCostView = {
-  satelliteId: string;
-  name: string;
-  operatorName: string | null;
-  massKg: number | null;
-  busName: string | null;
-  payloadNames: string[];
-  estimatedCost: { low: number; mid: number; high: number; currency: "USD" };
-  breakdown: { bus: number; payload: number; launch: number };
-};
+export type ReplacementCostView = ReplacementCostShape<string>;
 
-export type LaunchCostView = {
+export type LaunchCostView = LaunchCostShape & {
   id: string;
-  name: string;
-  launchCost: number | null;
-  launchYear: number | null;
-  operatorCountryName: string;
-  orbitRegimeName: string;
-  platformClass: string | null;
-  kMultiplier: number | null;
-  busName: string | null;
-  manifestSourceCount: number;
-  inclinationDeg: number | null;
-  altitudeKm: number | null;
-  eccentricity: number | null;
-  regimeType: string | null;
-  slotCapacityMax: string | null;
-  solarFluxZone: string | null;
-  radiationZone: string | null;
-  solarFluxIndex: number | null;
-  kpIndex: number | null;
-  radiationIndex: number | null;
 };
 
 export type PayloadContextView = {

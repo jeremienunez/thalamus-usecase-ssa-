@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/transformers/http";
+import type { SatelliteDto } from "@/dto/http";
 import { satellitePosition } from "@/adapters/propagator/sgp4";
 import { useRenderer } from "@/adapters/renderer/RendererContext";
 import type { TailsGeometry } from "@/adapters/renderer/orbit-geometry";
@@ -10,7 +10,7 @@ export type TrailMode = "off" | "tails" | "full";
 export type RegimeFilterKey = "ALL" | "LEO" | "MEO" | "GEO" | "HEO";
 
 type Props = {
-  satellites: SatelliteDTO[];
+  satellites: SatelliteDto[];
   regimeFilter: RegimeFilterKey;
   trailMode: TrailMode;
   timeScale: number;

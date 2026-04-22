@@ -122,6 +122,40 @@ async function findOperatorCountriesByName(
   return result.rows ?? [];
 }
 
+function noTargetSatellites() {
+  return { affectedRows: 0, errors: ["No target satellites found"] };
+}
+
+async function resolveTargetSatelliteIds(
+  db: SsaHandlerDbPort,
+  explicitSatelliteIds: string[],
+  operatorCountryId: string | null,
+): Promise<bigint[] | null> {
+  const satelliteIds = await resolveSatelliteIds(
+    db,
+    explicitSatelliteIds,
+    operatorCountryId,
+  );
+  return satelliteIds.length === 0 ? null : satelliteIds;
+}
+
+async function withTargetSatelliteIds<T extends { affectedRows: number; errors?: string[] }>(
+  deps: SsaHandlerDeps,
+  operatorCountryId: string | null,
+  explicitSatelliteIds: string[],
+  run: (satelliteIds: bigint[]) => Promise<T>,
+): Promise<T> {
+  const satelliteIds = await resolveTargetSatelliteIds(
+    deps.db,
+    explicitSatelliteIds,
+    operatorCountryId,
+  );
+  if (satelliteIds === null) {
+    return noTargetSatellites() as T;
+  }
+  return run(satelliteIds);
+}
+
 async function updateSatellitesScalar(
   deps: SsaHandlerDeps,
   operatorCountryId: string | null,
@@ -129,28 +163,27 @@ async function updateSatellitesScalar(
   field: string,
   value: number,
 ): Promise<{ affectedRows: number; errors?: string[] }> {
-  const satelliteIds = await resolveSatelliteIds(
-    deps.db,
-    explicitSatelliteIds,
+  return withTargetSatelliteIds(
+    deps,
     operatorCountryId,
+    explicitSatelliteIds,
+    async (satelliteIds) => {
+      let updated = 0;
+      for (const satelliteId of satelliteIds) {
+        try {
+          // console-api's updateField takes (id, field, value) rather than
+          // (id, partial). Single-field semantics match the handler's usage —
+          // sim_swarm telemetry updates one scalar at a time.
+          await deps.satelliteRepo.updateField(satelliteId, field, value);
+          updated++;
+        } catch {
+          // Unknown field / failed update — mirror the legacy behaviour of
+          // counting only successful updates.
+        }
+      }
+      return { affectedRows: updated };
+    },
   );
-  if (satelliteIds.length === 0) {
-    return { affectedRows: 0, errors: ["No target satellites found"] };
-  }
-  let updated = 0;
-  for (const satelliteId of satelliteIds) {
-    try {
-      // console-api's updateField takes (id, field, value) rather than
-      // (id, partial). Single-field semantics match the handler's usage —
-      // sim_swarm telemetry updates one scalar at a time.
-      await deps.satelliteRepo.updateField(satelliteId, field, value);
-      updated++;
-    } catch {
-      // Unknown field / failed update — mirror the legacy behaviour of
-      // counting only successful updates.
-    }
-  }
-  return { affectedRows: updated };
 }
 
 async function updateSatellitesFk(
@@ -160,31 +193,29 @@ async function updateSatellitesFk(
   field: string,
   value: bigint,
 ): Promise<{ affectedRows: number; errors?: string[] }> {
-  const satelliteIds = await resolveSatelliteIds(
-    deps.db,
-    explicitSatelliteIds,
+  return withTargetSatelliteIds(
+    deps,
     operatorCountryId,
+    explicitSatelliteIds,
+    async (satelliteIds) => {
+      const column =
+        field === "operator_country_id"
+          ? "operator_country_id"
+          : field === "orbit_regime_id"
+            ? "orbit_regime_id"
+            : "platform_class_id";
+
+      let updated = 0;
+      for (const satelliteId of satelliteIds) {
+        const result = await deps.db.execute(
+          sql`UPDATE satellite SET ${sql.identifier(column)} = ${value}, updated_at = NOW()
+              WHERE id = ${satelliteId}`,
+        );
+        if ((result as { rowCount?: number }).rowCount ?? 0 > 0) updated++;
+      }
+      return { affectedRows: updated };
+    },
   );
-  if (satelliteIds.length === 0) {
-    return { affectedRows: 0, errors: ["No target satellites found"] };
-  }
-
-  const column =
-    field === "operator_country_id"
-      ? "operator_country_id"
-      : field === "orbit_regime_id"
-        ? "orbit_regime_id"
-        : "platform_class_id";
-
-  let updated = 0;
-  for (const satelliteId of satelliteIds) {
-    const result = await deps.db.execute(
-      sql`UPDATE satellite SET ${sql.identifier(column)} = ${value}, updated_at = NOW()
-          WHERE id = ${satelliteId}`,
-    );
-    if ((result as { rowCount?: number }).rowCount ?? 0 > 0) updated++;
-  }
-  return { affectedRows: updated };
 }
 
 async function resolveAndUpdate(
@@ -465,16 +496,13 @@ export function createLinkPayloadHandler(
       if (disambig.kind === "result") return disambig.result;
       const payloadId = disambig.id;
 
-      const satelliteIds = await resolveSatelliteIds(
+      const satelliteIds = await resolveTargetSatelliteIds(
         deps.db,
         a.satelliteIds,
         operatorCountryId,
       );
-      if (satelliteIds.length === 0) {
-        return asResolutionResult({
-          affectedRows: 0,
-          errors: ["No target satellites found"],
-        });
+      if (satelliteIds === null) {
+        return asResolutionResult(noTargetSatellites());
       }
 
       let inserted = 0;
@@ -504,16 +532,13 @@ export function createUnlinkPayloadHandler(
       const a = action as unknown as UnlinkPayloadAction;
       const operatorCountryId = operatorCountryIdFrom(ctx);
 
-      const satelliteIds = await resolveSatelliteIds(
+      const satelliteIds = await resolveTargetSatelliteIds(
         deps.db,
         a.satelliteIds,
         operatorCountryId,
       );
-      if (satelliteIds.length === 0) {
-        return asResolutionResult({
-          affectedRows: 0,
-          errors: ["No target satellites found"],
-        });
+      if (satelliteIds === null) {
+        return asResolutionResult(noTargetSatellites());
       }
 
       const payloads = await findPayloadsByName(deps.db, a.payloadName);
@@ -566,16 +591,13 @@ export function createReassignOperatorCountryHandler(
       if (disambig.kind === "result") return disambig.result;
       const targetOcId = disambig.id;
 
-      const satelliteIds = await resolveSatelliteIds(
+      const satelliteIds = await resolveTargetSatelliteIds(
         deps.db,
         a.satelliteIds,
         operatorCountryId,
       );
-      if (satelliteIds.length === 0) {
-        return asResolutionResult({
-          affectedRows: 0,
-          errors: ["No target satellites found"],
-        });
+      if (satelliteIds === null) {
+        return asResolutionResult(noTargetSatellites());
       }
 
       let updated = 0;
@@ -598,16 +620,13 @@ export function createEnrichHandler(deps: SsaHandlerDeps): ResolutionHandler {
       const a = action as unknown as EnrichAction;
       const operatorCountryId = operatorCountryIdFrom(ctx);
 
-      const satelliteIds = await resolveSatelliteIds(
+      const satelliteIds = await resolveTargetSatelliteIds(
         deps.db,
         a.satelliteIds,
         operatorCountryId,
       );
-      if (satelliteIds.length === 0) {
-        return asResolutionResult({
-          affectedRows: 0,
-          errors: ["No target satellites found"],
-        });
+      if (satelliteIds === null) {
+        return asResolutionResult(noTargetSatellites());
       }
 
       if (!deps.satelliteEnrichmentQueue) {

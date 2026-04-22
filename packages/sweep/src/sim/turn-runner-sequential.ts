@@ -8,42 +8,25 @@
  */
 
 import type { TurnAction } from "./types";
-import type { CortexRegistry } from "@interview/thalamus";
-import { callNanoWithMode } from "@interview/thalamus";
-import { extractJsonObject } from "@interview/shared/utils";
-import { getSimFishConfig } from "../config/sim-fish-config";
 import { createLogger, stepLog } from "@interview/shared/observability";
-import type { AgentContext, TurnResponse } from "./types";
-import { buildTurnResponseSchema } from "./schema";
 import { MemoryService } from "./memory.service";
 import { isTerminal } from "./promote";
-import type {
-  SimActionSchemaProvider,
-  SimCortexSelector,
-  SimPromptComposer,
-  SimRuntimeStore,
-  SimScenarioContextProvider,
-  SimSubjectSnapshot,
-} from "./ports";
+import type { SimSubjectSnapshot } from "./ports";
+import {
+  callTurnAgent,
+  createTurnContextLoader,
+  loadTurnRunnerAgents,
+  type TurnRunnerDeps,
+  type TurnRunnerContextInput,
+} from "./turn-runner.utils";
 
 const logger = createLogger("sim-sequential");
+const SEQUENTIAL_MEMORY_QUERY =
+  "recent decisions and observations affecting this negotiation";
 
-const MAX_JSON_RETRIES = 2;
-
-export interface SequentialRunnerDeps {
-  store: SimRuntimeStore;
-  memory: MemoryService;
-  /** Cortex registry — used to resolve skill bodies as nano instructions. */
-  cortexRegistry: CortexRegistry;
+export interface SequentialRunnerDeps extends TurnRunnerDeps {
   llmMode: "cloud" | "fixtures" | "record";
   embed?: (text: string) => Promise<number[] | null>;
-  targets: SimScenarioContextProvider;
-  /** Plan 2 · B.4 — pack-provided prompt renderer. */
-  prompt: SimPromptComposer;
-  /** Plan 2 · B.4 — pack-provided cortex skill selector. */
-  cortexSelector: SimCortexSelector;
-  /** Plan 2 · B.5 — pack-provided action Zod schema. */
-  schemaProvider: SimActionSchemaProvider;
 }
 
 export interface RunTurnOpts {
@@ -61,7 +44,16 @@ export interface RunTurnResult {
 }
 
 export class SequentialTurnRunner {
-  constructor(private readonly deps: SequentialRunnerDeps) {}
+  private readonly buildContext: (
+    args: TurnRunnerContextInput,
+  ) => Promise<import("./types").AgentContext>;
+
+  constructor(private readonly deps: SequentialRunnerDeps) {
+    this.buildContext = createTurnContextLoader({
+      deps,
+      memoryQuery: SEQUENTIAL_MEMORY_QUERY,
+    });
+  }
 
   /**
    * Run exactly one turn: pick speaker by parity, call LLM, persist,
@@ -74,7 +66,7 @@ export class SequentialTurnRunner {
       driver: "sequential",
     });
     try {
-    const agents = await this.loadAgents(opts.simRunId);
+    const agents = await loadTurnRunnerAgents(this.deps.store, opts.simRunId);
     if (agents.length === 0) {
       throw new Error(`No agents for sim_run ${opts.simRunId}`);
     }
@@ -92,7 +84,7 @@ export class SequentialTurnRunner {
     const terminal = isTerminal(response.action);
 
     const selfMemory = `${response.action.kind} - ${response.rationale}`;
-    const batch: Parameters<SimRuntimeStore["persistTurnBatch"]>[0] = {
+    const batch: Parameters<SequentialRunnerDeps["store"]["persistTurnBatch"]>[0] = {
       agentTurns: [
         {
           simRunId: opts.simRunId,
@@ -186,167 +178,13 @@ export class SequentialTurnRunner {
   // LLM call + JSON parse + Zod validation
   // -------------------------------------------------------------------
 
-  private async callAgent(ctx: AgentContext): Promise<TurnResponse> {
-    const userPrompt = this.deps.prompt.render({
-      frame: {
-        turnIndex: ctx.turnIndex,
-        persona: ctx.persona,
-        goals: ctx.goals,
-        constraints: ctx.constraints,
-      },
-      domain: {
-        subjectSnapshot: ctx.subjectSnapshot,
-        scenarioContext: ctx.scenarioContext,
-      },
-      observable: ctx.observable,
-      godEvents: ctx.godEvents,
-      topMemories: ctx.topMemories,
+  private async callAgent(ctx: import("./types").AgentContext) {
+    return callTurnAgent({
+      deps: this.deps,
+      ctx,
+      logger,
+      includeValidationSnippet: true,
     });
-    const cortexName = this.deps.cortexSelector.pickCortexName({
-      simKind: "",
-      turnIndex: ctx.turnIndex,
-      hints: {
-        hasScenarioContext: ctx.scenarioContext !== null,
-      },
-    });
-    const skill = this.deps.cortexRegistry.get(cortexName);
-    if (!skill) {
-      throw new Error(
-        `Cortex skill '${cortexName}' not found in registry. Did you discover() skills at boot?`,
-      );
-    }
-    const instructions = skill.body;
-
-    const fishCfg = await getSimFishConfig();
-    let lastError: Error | null = null;
-    for (let attempt = 0; attempt <= MAX_JSON_RETRIES; attempt++) {
-      const res = await callNanoWithMode({
-        instructions,
-        input: userPrompt,
-        enableWebSearch: false,
-        overrides: {
-          model: fishCfg.model || undefined,
-          reasoningEffort: fishCfg.reasoningEffort,
-          maxOutputTokens: fishCfg.maxOutputTokens,
-          temperature: fishCfg.temperature,
-        },
-      });
-      if (!res.ok) {
-        lastError = new Error(res.error ?? "nano call failed");
-        logger.warn(
-          { simRunId: ctx.simRunId, agentId: ctx.agentId, turnIndex: ctx.turnIndex, attempt, err: res.error },
-          "nano call failed",
-        );
-        continue;
-      }
-      try {
-        const raw = extractJsonObject(res.text);
-        const responseSchema = buildTurnResponseSchema(
-          this.deps.schemaProvider.actionSchema(),
-        );
-        const parsed = responseSchema.parse(raw);
-        return parsed as TurnResponse;
-      } catch (err) {
-        lastError = err as Error;
-        logger.warn(
-          {
-            simRunId: ctx.simRunId,
-            agentId: ctx.agentId,
-            turnIndex: ctx.turnIndex,
-            attempt,
-            err: (err as Error).message,
-            snippet: res.text.slice(0, 200),
-          },
-          "agent response failed schema validation",
-        );
-      }
-    }
-    throw new Error(
-      `${cortexName} response invalid after ${MAX_JSON_RETRIES + 1} attempts: ${lastError?.message}`,
-    );
   }
 
-  // -------------------------------------------------------------------
-  // Context assembly
-  // -------------------------------------------------------------------
-
-  private async buildContext(args: {
-    simRunId: number;
-    agent: LoadedAgent;
-    turnIndex: number;
-    subjectSnapshot: SimSubjectSnapshot | null;
-  }): Promise<AgentContext> {
-    const [topMemories, observable] = await Promise.all([
-      this.deps.memory.topK({
-        simRunId: args.simRunId,
-        agentId: args.agent.id,
-        query: "recent decisions and observations affecting this negotiation",
-        k: 8,
-      }),
-      this.deps.memory.recentObservable({
-        simRunId: args.simRunId,
-        sinceTurnIndex: args.turnIndex - 6,
-        excludeAgentId: args.agent.id,
-        limit: 20,
-      }),
-    ]);
-
-    const godEvents = await this.loadGodEvents(args.simRunId, args.turnIndex);
-    const scenarioContext = await this.deps.targets.loadContext({
-      simRunId: args.simRunId,
-      seedHints: {},
-    });
-
-    return {
-      simRunId: args.simRunId,
-      agentId: args.agent.id,
-      agentIndex: args.agent.agentIndex,
-      turnIndex: args.turnIndex,
-      persona: args.agent.persona,
-      goals: args.agent.goals,
-      constraints: args.agent.constraints,
-      topMemories: topMemories.map((m) => ({
-        turnIndex: m.turnIndex,
-        kind: m.kind,
-        content: m.content,
-      })),
-      observable: observable.map((o) => ({
-        turnIndex: o.turnIndex,
-        actorKind: o.actorKind,
-        authorLabel: o.authorLabel ?? (o.actorKind === "god" ? "GOD" : "SYSTEM"),
-        observableSummary: o.observableSummary,
-      })),
-      godEvents,
-      subjectSnapshot: args.subjectSnapshot,
-      scenarioContext,
-    };
-  }
-
-  private async loadGodEvents(
-    simRunId: number,
-    turnIndex: number,
-  ): Promise<AgentContext["godEvents"]> {
-    const rows = await this.deps.store.listGodEventsAtOrBefore(
-      simRunId,
-      turnIndex,
-      10,
-    );
-    return rows.map((r) => ({
-      turnIndex: r.turnIndex,
-      summary: r.observableSummary,
-      detail: r.detail,
-    }));
-  }
-
-  private async loadAgents(simRunId: number): Promise<LoadedAgent[]> {
-    return this.deps.store.listAgents(simRunId);
-  }
-}
-
-interface LoadedAgent {
-  id: number;
-  agentIndex: number;
-  persona: string;
-  goals: string[];
-  constraints: Record<string, unknown>;
 }

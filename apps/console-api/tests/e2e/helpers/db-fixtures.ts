@@ -180,6 +180,32 @@ export async function seedKnnFixture(client: PoolClient): Promise<{
   };
 }
 
+export async function cleanupKnnFixture(client: PoolClient): Promise<void> {
+  const ids = [KNN_TARGET_ID, ...KNN_NEIGHBOUR_IDS].map(String);
+  await client.query(
+    `
+      DELETE FROM research_edge
+      WHERE entity_type = 'satellite'
+        AND entity_id = ANY($1::bigint[])
+    `,
+    [ids],
+  );
+  await client.query(
+    `
+      DELETE FROM research_finding
+      WHERE cortex = 'data_auditor'
+        AND title LIKE 'KNN fill%'
+    `,
+  );
+  await client.query(
+    `
+      DELETE FROM satellite
+      WHERE id = ANY($1::bigint[])
+    `,
+    [ids],
+  );
+}
+
 export async function seedConjunctionFixture(
   client: PoolClient,
 ): Promise<void> {
@@ -281,5 +307,39 @@ export async function seedConjunctionFixture(
       String(CONJUNCTION_PRIMARY_ID),
       String(CONJUNCTION_SECONDARY_ID),
     ],
+  );
+}
+
+export async function cleanupConjunctionFixture(client: PoolClient): Promise<void> {
+  await client.query(
+    `
+      DELETE FROM conjunction_event
+      WHERE id = $1::bigint
+    `,
+    [String(CONJUNCTION_ID)],
+  );
+  await client.query(
+    `
+      DELETE FROM satellite
+      WHERE id = ANY($1::bigint[])
+    `,
+    [[
+      String(CONJUNCTION_PRIMARY_ID),
+      String(CONJUNCTION_SECONDARY_ID),
+    ]],
+  );
+  await client.query(
+    `
+      DELETE FROM satellite_bus
+      WHERE id = $1::bigint
+    `,
+    [String(CONJUNCTION_BUS_ID)],
+  );
+  await client.query(
+    `
+      DELETE FROM operator
+      WHERE id = ANY($1::bigint[])
+    `,
+    [CONJUNCTION_OPERATOR_IDS.map(String)],
   );
 }

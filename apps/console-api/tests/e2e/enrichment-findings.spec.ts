@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, it, expect } from "vitest";
 import { Pool } from "pg";
 import {
   E2E_DATABASE_URL,
+  cleanupKnnFixture,
   KNN_NEIGHBOUR_IDS,
   KNN_TARGET_ID,
   seedKnnFixture,
@@ -33,7 +34,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pool.end();
+  const client = await pool.connect();
+  try {
+    await cleanupKnnFixture(client);
+  } finally {
+    client.release();
+    await pool.end();
+  }
 });
 
 describe("KNN fill emits research_finding + research_edge", () => {

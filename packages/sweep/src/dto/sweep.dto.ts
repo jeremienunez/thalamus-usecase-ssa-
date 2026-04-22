@@ -8,7 +8,7 @@
  */
 
 import { z } from "zod";
-import { paginationSchema } from "./shared.dto";
+import { paginationSchema } from "./pagination.dto";
 
 // ─── Generic list / review DTOs ─────────────────────────────────────
 

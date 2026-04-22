@@ -11,6 +11,11 @@
 
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import {
+  pickAllTagText,
+  pickFirstTagText,
+  pickTagAttr,
+} from "@interview/shared/utils";
 import { source, sourceItem, type NewSourceItem, type Source } from "../schema";
 
 // ─── Source registrations ────────────────────────────────────────────────────
@@ -147,51 +152,6 @@ export const SOURCE_SEEDS: SourceSeed[] = [
 
 // ─── Lightweight fetchers (keep in sync with apps/console-api/src/agent/ssa/sources) ─────
 
-const decodeEntities = (s: string): string =>
-  s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
-
-const stripTags = (s: string): string =>
-  decodeEntities(
-    s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " "),
-  )
-    .replace(/\s+/g, " ")
-    .trim();
-
-const pick = (block: string, tag: string): string | null => {
-  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
-  const m = block.match(re);
-  if (!m) return null;
-  const cdata = m[1].match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-  return stripTags(cdata ? cdata[1] : m[1]);
-};
-
-const pickAttr = (block: string, tag: string, attr: string): string | null => {
-  const re = new RegExp(
-    `<${tag}\\b[^>]*\\b${attr}="([^"]+)"[^>]*\\/?>`,
-    "i",
-  );
-  const m = block.match(re);
-  return m ? m[1] : null;
-};
-
-const pickAll = (block: string, tag: string): string[] => {
-  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
-  const out: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(block)) !== null) {
-    const v = stripTags(m[1]);
-    if (v) out.push(v);
-  }
-  return out;
-};
-
 const parseDate = (s: string | null | undefined): Date | null => {
   if (!s) return null;
   const d = new Date(s);
@@ -219,20 +179,24 @@ async function fetchRss(
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml)) !== null && items.length < limit) {
     const block = m[1];
-    const title = pick(block, "title");
+    const title = pickFirstTagText(block, "title");
     if (!title) continue;
-    const link = pick(block, "link") ?? pickAttr(block, "link", "href");
+    const link =
+      pickFirstTagText(block, "link") ?? pickTagAttr(block, "link", "href");
     const guid =
-      pick(block, "guid") ?? pick(block, "id") ?? link ?? title.slice(0, 200);
+      pickFirstTagText(block, "guid") ??
+      pickFirstTagText(block, "id") ??
+      link ??
+      title.slice(0, 200);
     const dateStr =
-      pick(block, "pubDate") ??
-      pick(block, "published") ??
-      pick(block, "updated") ??
-      pick(block, "dc:date");
+      pickFirstTagText(block, "pubDate") ??
+      pickFirstTagText(block, "published") ??
+      pickFirstTagText(block, "updated") ??
+      pickFirstTagText(block, "dc:date");
     const desc =
-      pick(block, "description") ??
-      pick(block, "summary") ??
-      pick(block, "content");
+      pickFirstTagText(block, "description") ??
+      pickFirstTagText(block, "summary") ??
+      pickFirstTagText(block, "content");
     items.push({
       sourceId: src.id,
       externalId: guid.slice(0, 500),
@@ -275,12 +239,12 @@ async function fetchArxiv(
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml)) !== null && items.length < limit) {
     const block = m[1];
-    const id = pick(block, "id");
-    const title = pick(block, "title");
+    const id = pickFirstTagText(block, "id");
+    const title = pickFirstTagText(block, "title");
     if (!id || !title) continue;
-    const summary = pick(block, "summary");
-    const published = pick(block, "published");
-    const authors = pickAll(block, "name");
+    const summary = pickFirstTagText(block, "summary");
+    const published = pickFirstTagText(block, "published");
+    const authors = pickAllTagText(block, "name");
     const linkMatch = block.match(/<link\b[^>]*\bhref="([^"]+)"/i);
     const link = linkMatch ? linkMatch[1] : id;
     items.push({

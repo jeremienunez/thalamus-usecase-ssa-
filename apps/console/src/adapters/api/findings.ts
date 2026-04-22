@@ -1,17 +1,17 @@
 import type { ApiFetcher } from "./client";
-import type { FindingDTO, FindingStatus } from "@/transformers/http";
+import type { FindingDto, FindingStatus } from "@/dto/http";
 
 export interface FindingsApiPort {
   list(params?: {
     status?: FindingStatus;
     cortex?: string;
-  }): Promise<{ items: FindingDTO[]; count: number }>;
-  findById(id: string): Promise<FindingDTO>;
+  }): Promise<{ items: FindingDto[]; count: number }>;
+  findById(id: string): Promise<FindingDto>;
   decide(
     id: string,
     decision: FindingStatus,
     reason?: string,
-  ): Promise<{ ok: boolean; finding: FindingDTO }>;
+  ): Promise<{ ok: boolean; finding: FindingDto }>;
 }
 
 export function createFindingsApi(f: ApiFetcher): FindingsApiPort {

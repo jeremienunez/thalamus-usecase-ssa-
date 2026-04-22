@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, X, Radar, Square } from "lucide-react";
 import { clsx } from "clsx";
-import type { SweepSuggestionDTO } from "@/transformers/http";
+import type { SweepSuggestionDto } from "@/dto/http";
 import {
   useSweepSuggestions,
   useReviewSuggestion,
@@ -10,7 +10,7 @@ import {
   useMissionStop,
 } from "@/usecases";
 
-const SEVERITY_COLOR: Record<SweepSuggestionDTO["severity"], string> = {
+const SEVERITY_COLOR: Record<SweepSuggestionDto["severity"], string> = {
   info: "#6E7681",
   warning: "#f1c40f",
   critical: "#e74c3c",

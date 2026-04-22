@@ -11,10 +11,7 @@ import type {
   ScreenedConjunctionView,
   KnnCandidateView,
 } from "../types/conjunction.types";
-
-function toIso(v: Date | string): string {
-  return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
-}
+import { toIsoStrict } from "../utils/serialize";
 
 export function toScreenedConjunctionView(
   r: ScreenedConjunctionRow,
@@ -36,14 +33,14 @@ export function toConjunctionView(r: ConjunctionRow): ConjunctionView {
     primaryName: r.primary_name ?? `sat-${r.primary_id}`,
     secondaryName: r.secondary_name ?? `sat-${r.secondary_id}`,
     regime: regimeFromMeanMotion(r.primary_mm),
-    epoch: toIso(r.epoch),
+    epoch: toIsoStrict(r.epoch),
     minRangeKm: r.min_range_km,
     relativeVelocityKmps: r.relative_velocity_kmps ?? 0,
     probabilityOfCollision: pc,
     combinedSigmaKm: sigma,
     hardBodyRadiusM: r.hard_body_radius_m ?? 20,
     pcMethod: r.pc_method ?? "foster-gaussian",
-    computedAt: toIso(r.computed_at),
+    computedAt: toIsoStrict(r.computed_at),
     covarianceQuality: deriveCovarianceQuality(sigma),
     action: deriveAction(pc),
   };

@@ -1,11 +1,11 @@
 import type { ApiFetcher } from "./client";
-import type { CycleDTO } from "@/transformers/http";
+import type { CycleDto } from "@/dto/http";
 
 export type CycleKind = "thalamus" | "fish" | "both";
 
 export interface CyclesApiPort {
-  list(): Promise<{ items: CycleDTO[] }>;
-  run(kind: CycleKind): Promise<{ cycle: CycleDTO }>;
+  list(): Promise<{ items: CycleDto[] }>;
+  run(kind: CycleKind): Promise<{ cycle: CycleDto }>;
 }
 
 export function createCyclesApi(f: ApiFetcher): CyclesApiPort {

@@ -1,4 +1,4 @@
-export type StatsDTO = {
+export type StatsDto = {
   satellites: number;
   conjunctions: number;
   kgNodes: number;

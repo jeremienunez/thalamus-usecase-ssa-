@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { SweepEntry } from "./Entry";
 import { WrapProviders, makeStubApi } from "../../../tests/wrap";
-import type { SweepSuggestionDTO, FindingDTO } from "@/transformers/http";
+import type { SweepSuggestionDto, FindingDto } from "@/dto/http";
 
 describe("SweepEntry", () => {
   it("renders tab bar with suggestions / overview / map / stats", async () => {
@@ -15,7 +15,7 @@ describe("SweepEntry", () => {
   });
 
   it("shows pending/accepted/rejected counts from useFindings", async () => {
-    const findings: FindingDTO[] = [
+    const findings: FindingDto[] = [
       {
         id: "f1",
         title: "t1",
@@ -68,7 +68,7 @@ describe("SweepEntry", () => {
   });
 
   it("SUGGESTIONS tab shows amber count badge when suggestions exist", async () => {
-    const suggestions: SweepSuggestionDTO[] = [
+    const suggestions: SweepSuggestionDto[] = [
       {
         id: "s1",
         title: "One",

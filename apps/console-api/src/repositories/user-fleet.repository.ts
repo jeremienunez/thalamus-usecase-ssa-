@@ -1,6 +1,10 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import {
+  satelliteDimensionJoinsSql,
+  satelliteOrbitRegimeJoinSql,
+} from "./satellite-dimension.sql";
 
 export class UserFleetRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -24,8 +28,8 @@ export class UserFleetRepository {
           s.k_multiplier
         FROM fleet f
         JOIN satellite s ON s.id = f.satellite_id
-        LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
-        LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
+        ${satelliteDimensionJoinsSql}
+        ${satelliteOrbitRegimeJoinSql}
         WHERE f.user_id = ${userId}
           AND f.status = 'in_fleet'
           AND s.launch_year IS NOT NULL
@@ -95,10 +99,8 @@ export class UserFleetRepository {
           'fleet' as source
         FROM fleet f
         JOIN satellite s ON s.id = f.satellite_id
-        LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
-        LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
-        LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
-        LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
+        ${satelliteDimensionJoinsSql}
+        ${satelliteOrbitRegimeJoinSql}
         WHERE f.user_id = ${userId}
           AND f.status = 'in_fleet'
         UNION ALL
@@ -110,10 +112,8 @@ export class UserFleetRepository {
           'watchlist' as source
         FROM watchlist wl
         JOIN satellite s ON s.id = wl.satellite_id
-        LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
-        LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
-        LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
-        LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
+        ${satelliteDimensionJoinsSql}
+        ${satelliteOrbitRegimeJoinSql}
         WHERE wl.user_id = ${userId}
       ),
       country_stats AS (

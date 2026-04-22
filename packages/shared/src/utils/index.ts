@@ -6,6 +6,7 @@ export * from "./async-handler";
 export * from "./error";
 export * from "./json";
 export * from "./string";
+export * from "./markup";
 export * from "./collection";
 export * from "./completeness-scorer";
 export * from "./concurrency";

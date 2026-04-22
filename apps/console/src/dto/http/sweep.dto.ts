@@ -1,4 +1,4 @@
-export type SweepSuggestionDTO = {
+export type SweepSuggestionDto = {
   id: string;
   title: string;
   description: string;
@@ -13,7 +13,7 @@ export type SweepSuggestionDTO = {
   hasPayload: boolean;
 };
 
-export type MissionTaskDTO = {
+export type MissionTaskDto = {
   suggestionId: string;
   field: string;
   operatorCountry: string;
@@ -26,7 +26,7 @@ export type MissionTaskDTO = {
   completedAt?: string;
 };
 
-export type MissionStateDTO = {
+export type MissionStateDto = {
   running: boolean;
   startedAt: string | null;
   total: number;
@@ -35,6 +35,6 @@ export type MissionStateDTO = {
   unobtainable: number;
   errors: number;
   cursor: number;
-  currentTask: MissionTaskDTO | null;
-  recent: MissionTaskDTO[];
+  currentTask: MissionTaskDto | null;
+  recent: MissionTaskDto[];
 };

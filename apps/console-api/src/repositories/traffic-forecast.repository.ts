@@ -6,14 +6,14 @@ import type {
   DebrisForecastRow,
   LaunchManifestRow,
   LaunchEpochWeatherRow,
-} from "../types/traffic-forecast.types";
+} from "../types/orbital-analysis.types";
 
 export type {
   OrbitalTrafficRow,
   DebrisForecastRow,
   LaunchManifestRow,
   LaunchEpochWeatherRow,
-} from "../types/traffic-forecast.types";
+} from "../types/orbital-analysis.types";
 
 export class TrafficForecastRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}

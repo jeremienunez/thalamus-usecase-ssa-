@@ -1,9 +1,9 @@
 import type { ApiFetcher } from "./client";
-import type { KgNodeDTO, KgEdgeDTO } from "@/transformers/http";
+import type { KgNodeDto, KgEdgeDto } from "@/dto/http";
 
 export interface KgApiPort {
-  listNodes(): Promise<{ items: KgNodeDTO[] }>;
-  listEdges(): Promise<{ items: KgEdgeDTO[] }>;
+  listNodes(): Promise<{ items: KgNodeDto[] }>;
+  listEdges(): Promise<{ items: KgEdgeDto[] }>;
 }
 
 export function createKgApi(f: ApiFetcher): KgApiPort {

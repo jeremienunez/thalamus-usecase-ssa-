@@ -1,13 +1,13 @@
 import Graph from "graphology";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { ENTITY_COLOR, SOURCE_COLOR } from "@/shared/types/graph-colors";
-import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/transformers/http";
+import type { EntityClass, KgEdgeDto, KgNodeDto } from "@/dto/http";
 
 export type GraphInstance = Graph;
 
 export interface KgGraphSpec {
-  nodes: KgNodeDTO[];
-  edges: KgEdgeDTO[];
+  nodes: KgNodeDto[];
+  edges: KgEdgeDto[];
   /** Class → ghost-fallback mapping already applied; pure layout coordinates. */
   layout: Map<string, { x: number; y: number }>;
   /** Map of `finding:NNN` → human title, used for ghost node labels. */
@@ -38,7 +38,7 @@ export function buildKgGraph(spec: KgGraphSpec): GraphInstance {
   }
 
   const knownIds = new Set(nodes.map((n) => n.id));
-  const ghosts: KgNodeDTO[] = [];
+  const ghosts: KgNodeDto[] = [];
   const seenGhost = new Set<string>();
   const ghostNeighbours = new Map<string, { peer: string; relation: string }[]>();
   for (const e of edges) {
@@ -155,7 +155,7 @@ export function buildKgGraph(spec: KgGraphSpec): GraphInstance {
 export function incidentEdgesFor(
   graph: GraphInstance,
   nodeId: string,
-): KgEdgeDTO[] {
+): KgEdgeDto[] {
   return graph.edges(nodeId).map((eid) => {
     const a = graph.getEdgeAttributes(eid);
     const [src, tgt] = graph.extremities(eid);

@@ -1,8 +1,8 @@
 import type { ApiFetcher } from "./client";
-import type { StatsDTO } from "@/transformers/http";
+import type { StatsDto } from "@/dto/http";
 
 export interface StatsApiPort {
-  get(): Promise<StatsDTO>;
+  get(): Promise<StatsDto>;
 }
 
 export function createStatsApi(f: ApiFetcher): StatsApiPort {

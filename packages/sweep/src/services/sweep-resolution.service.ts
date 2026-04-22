@@ -26,7 +26,7 @@ import {
   type ResolutionPayload,
   type ResolutionResult,
   type PendingSelection,
-} from "../transformers/sweep.dto";
+} from "../dto/sweep.dto";
 
 const logger = createLogger("sweep-resolution");
 

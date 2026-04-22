@@ -14,7 +14,7 @@ import type { GraphInstance } from "@/adapters/graph/graph-builder";
 import type { SigmaRendererHandle } from "@/adapters/graph/sigma-renderer";
 import { FindingReadout } from "./FindingReadout";
 import { ThalamusDrawer } from "./ThalamusDrawer";
-import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/transformers/http";
+import type { EntityClass, KgEdgeDto, KgNodeDto } from "@/dto/http";
 
 const CLASSES: EntityClass[] = [
   "Satellite",
@@ -29,8 +29,8 @@ const CLASSES: EntityClass[] = [
 /** Deterministic class-sector layout: every class sits in its own pie slice
  *  around the origin; within a slice, nodes are ordered by degree (inner =
  *  more connected) and spread across the slice angle. No randomness, no FA2. */
-function layoutByClass(nodes: KgNodeDTO[]): Map<string, { x: number; y: number }> {
-  const byClass = new Map<EntityClass, KgNodeDTO[]>();
+function layoutByClass(nodes: KgNodeDto[]): Map<string, { x: number; y: number }> {
+  const byClass = new Map<EntityClass, KgNodeDto[]>();
   for (const n of nodes) {
     const arr = byClass.get(n.class) ?? [];
     arr.push(n);
@@ -73,7 +73,7 @@ export function ThalamusEntry() {
   const { data: findingsData } = useFindings();
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<SigmaRendererHandle | null>(null);
-  const [selected, setSelected] = useState<KgNodeDTO | null>(null);
+  const [selected, setSelected] = useState<KgNodeDto | null>(null);
   const [selectedFindingNumeric, setSelectedFindingNumeric] = useState<number | null>(null);
   const openDrawer = useUiStore((s) => s.openDrawer);
   const closeDrawer = useUiStore((s) => s.closeDrawer);
@@ -166,7 +166,7 @@ export function ThalamusEntry() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, graphAdapter, openDrawer, closeDrawer]);
 
-  const incidentEdges = useMemo<KgEdgeDTO[]>(() => {
+  const incidentEdges = useMemo<KgEdgeDto[]>(() => {
     if (!graph || !selected) return [];
     return graphAdapter.incidentEdgesFor(graph, selected.id);
   }, [graph, selected, graphAdapter]);

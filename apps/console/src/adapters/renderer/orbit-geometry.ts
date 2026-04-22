@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/transformers/http";
+import type { SatelliteDto } from "@/dto/http";
 import { orbitRing } from "@/adapters/propagator/sgp4";
 
 /**
@@ -11,13 +11,13 @@ type RingCacheEntry = { ring: Float32Array };
 const RING_CACHE = new Map<string, RingCacheEntry>();
 const RING_CACHE_CAP = 2000;
 
-function ringCacheKey(s: SatelliteDTO): string {
+function ringCacheKey(s: SatelliteDto): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const epoch = (s as any).tleEpoch ?? (s as any).tle_epoch ?? "";
   return `${s.id}:${epoch}`;
 }
 
-function getCachedRing(s: SatelliteDTO): Float32Array | null {
+function getCachedRing(s: SatelliteDto): Float32Array | null {
   const key = ringCacheKey(s);
   const hit = RING_CACHE.get(key);
   if (hit) {
@@ -52,7 +52,7 @@ export function clearRingCache(): void {
  * ring. One segment per ring sample pair, closed loop. Returns null if none of
  * the inputs had a propagate-able TLE.
  */
-export function buildFullRingsGeometry(sats: SatelliteDTO[]): THREE.BufferGeometry | null {
+export function buildFullRingsGeometry(sats: SatelliteDto[]): THREE.BufferGeometry | null {
   if (sats.length === 0) return null;
   const segPerRing = 128;
   const vertsPerRing = segPerRing * 2;
@@ -84,7 +84,7 @@ export function buildFullRingsGeometry(sats: SatelliteDTO[]): THREE.BufferGeomet
 /** Shape returned by {@link buildTailsGeometry} — the `_sats` slot is consumed
  *  by the per-frame writer to keep geometry-row order stable. */
 export type TailsGeometry = THREE.BufferGeometry & {
-  _sats: SatelliteDTO[];
+  _sats: SatelliteDto[];
   _satIds: number[];
 };
 
@@ -94,7 +94,7 @@ export type TailsGeometry = THREE.BufferGeometry & {
  * attributes zero-initialised. The per-frame writer mutates both arrays.
  */
 export function buildTailsGeometry(
-  sats: SatelliteDTO[],
+  sats: SatelliteDto[],
   tailLen: number,
 ): TailsGeometry {
   const segPerSat = tailLen - 1;

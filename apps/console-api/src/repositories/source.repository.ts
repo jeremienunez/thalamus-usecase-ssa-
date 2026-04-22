@@ -9,6 +9,7 @@ import type {
   CorrelationMergeRow,
   OrbitalPrimerRow,
 } from "../types/source-data.types";
+import { sourceItemBaseSql } from "./queries/source-item-base";
 
 export type {
   AdvisoryRow,
@@ -47,8 +48,7 @@ export class SourceRepository {
         si.url                        AS "url",
         si.published_at::text         AS "publishedAt",
         si.score                      AS "score"
-      FROM source_item si
-      JOIN source s ON s.id = si.source_id
+      ${sourceItemBaseSql}
       WHERE s.kind IN ('rss','press','field','osint')
         AND (
           s.category ILIKE '%advisor%'
@@ -82,8 +82,7 @@ export class SourceRepository {
         si.title, si.abstract as "summary", si.url as "link",
         si.published_at as "publishedAt",
         si.score
-      FROM source_item si
-      JOIN source s ON s.id = si.source_id
+      ${sourceItemBaseSql}
       WHERE s.kind = 'rss'
         AND si.fetched_at > now() - ${days + " days"}::interval
         ${categoryFilter}
@@ -110,8 +109,7 @@ export class SourceRepository {
         si.abstract                    AS "summary",
         si.url                         AS "url",
         si.published_at::text          AS "publishedAt"
-      FROM source_item si
-      JOIN source s ON s.id = si.source_id
+      ${sourceItemBaseSql}
       WHERE
         si.title    ILIKE '%maneuver%'
         OR si.title ILIKE '%burn%'
@@ -144,8 +142,7 @@ export class SourceRepository {
         si.abstract             AS "summary",
         si.url                  AS "url",
         si.published_at::text   AS "publishedAt"
-      FROM source_item si
-      JOIN source s ON s.id = si.source_id
+      ${sourceItemBaseSql}
       WHERE s.kind IN ('radar','field')
       ORDER BY si.published_at DESC NULLS LAST
       LIMIT ${limit}
@@ -163,8 +160,7 @@ export class SourceRepository {
         si.abstract             AS "summary",
         si.url                  AS "url",
         si.published_at::text   AS "publishedAt"
-      FROM source_item si
-      JOIN source s ON s.id = si.source_id
+      ${sourceItemBaseSql}
       WHERE s.kind = 'rss'
         AND (
           si.title    ILIKE '%tracking%'
@@ -200,8 +196,7 @@ export class SourceRepository {
           si.url                          AS "url",
           si.published_at::text           AS "publishedAt",
           si.score                        AS "score"
-        FROM source_item si
-        JOIN source s ON s.id = si.source_id
+        ${sourceItemBaseSql}
         WHERE s.kind IN ('field','radar')
         ORDER BY si.published_at DESC NULLS LAST
         LIMIT ${perBranchLimit}
@@ -216,8 +211,7 @@ export class SourceRepository {
           si.url                          AS "url",
           si.published_at::text           AS "publishedAt",
           si.score                        AS "score"
-        FROM source_item si
-        JOIN source s ON s.id = si.source_id
+        ${sourceItemBaseSql}
         WHERE s.kind IN ('rss','press','osint')
         ORDER BY si.published_at DESC NULLS LAST
         LIMIT ${perBranchLimit}
@@ -254,8 +248,7 @@ export class SourceRepository {
           si.url                        AS "url",
           si.published_at::text         AS "publishedAt",
           s.name                        AS "sourceName"
-        FROM source_item si
-        JOIN source s ON s.id = si.source_id
+        ${sourceItemBaseSql}
         WHERE s.kind IN ('arxiv','ntrs')
           ${topicFilter}
         ORDER BY si.published_at DESC NULLS LAST
@@ -271,8 +264,7 @@ export class SourceRepository {
           si.url                        AS "url",
           si.published_at::text         AS "publishedAt",
           s.name                        AS "sourceName"
-        FROM source_item si
-        JOIN source s ON s.id = si.source_id
+        ${sourceItemBaseSql}
         WHERE s.kind = 'rss'
           ${topicFilter}
         ORDER BY si.published_at DESC NULLS LAST

@@ -9,11 +9,17 @@ import { resolve } from "node:path";
  */
 const root = resolve(__dirname, "..", "..");
 const alias = {
+  "@interview/shared/observability/": resolve(
+    root,
+    "packages/shared/src/observability/",
+  ),
   "@interview/shared/observability": resolve(
     root,
     "packages/shared/src/observability/index.ts",
   ),
+  "@interview/shared/enum/": resolve(root, "packages/shared/src/enum/"),
   "@interview/shared/enum": resolve(root, "packages/shared/src/enum/index.ts"),
+  "@interview/shared/utils/": resolve(root, "packages/shared/src/utils/"),
   "@interview/shared/utils": resolve(
     root,
     "packages/shared/src/utils/index.ts",

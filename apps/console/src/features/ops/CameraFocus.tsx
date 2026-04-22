@@ -1,7 +1,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/transformers/http";
+import type { SatelliteDto } from "@/dto/http";
 import { satellitePosition } from "@/adapters/propagator/sgp4";
 
 /**
@@ -21,7 +21,7 @@ export function CameraFocus({
   onDone,
 }: {
   focusId: number | null;
-  satellites: SatelliteDTO[];
+  satellites: SatelliteDto[];
   orbitControlsRef: React.MutableRefObject<any>;
   timeScale: number;
   onDone: () => void;

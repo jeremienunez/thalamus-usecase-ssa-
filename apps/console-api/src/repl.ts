@@ -2,7 +2,7 @@
  * REPL turn engine — inlined parser + fixture-backed adapters.
  * Mirrors packages/cli/src/router for a deterministic demo backend.
  */
-import type { FindingDTO, KgEdgeDTO, KgNodeDTO, SatelliteDTO } from "./fixtures";
+import type { FindingDto, KgEdgeDto, KgNodeDto, SatelliteDto } from "./fixtures";
 // Inline minimal mirror of STEP_REGISTRY from @interview/shared. Keeping it inline
 // avoids Node ESM named-export analysis failures on a .ts-main workspace package.
 type StepName =
@@ -232,10 +232,10 @@ function hashSeed(s: string): number {
 
 // ---------- Adapters backed by fixtures ----------
 export type Fixtures = {
-  satellites: SatelliteDTO[];
-  kgNodes: KgNodeDTO[];
-  kgEdges: KgEdgeDTO[];
-  findings: FindingDTO[];
+  satellites: SatelliteDto[];
+  kgNodes: KgNodeDto[];
+  kgEdges: KgEdgeDto[];
+  findings: FindingDto[];
 };
 
 const TELEM_TEMPLATES: Array<{ name: string; unit: string; base: number; jitter: number }> = [
@@ -287,7 +287,7 @@ export function makeAdapters(fx: Fixtures) {
         ? fx.findings.filter((f) => f.title.toLowerCase().includes(keyword) || f.cortex.toLowerCase().includes(keyword))
         : fx.findings;
       const picked = (pool.length > 0 ? pool : fx.findings).slice(0, 200);
-      const chosen: FindingDTO[] = [];
+      const chosen: FindingDto[] = [];
       for (let i = 0; i < n && picked.length > 0; i++) {
         const idx = Math.floor(rnd() * picked.length);
         const f = picked[idx]!;

@@ -50,7 +50,7 @@ export type { Queue as BullQueue } from "bullmq";
 export { registerSchedulers } from "./jobs/schedulers";
 
 // Transformers / DTOs
-export * from "./transformers/sweep.dto";
+export * from "./dto/sweep.dto";
 
 // Config helpers
 export { redis, getRedis, setRedisClient } from "./config/redis";
@@ -142,3 +142,10 @@ export type {
 } from "./sim/swarm.service";
 export { rngFromSeed, applyPerturbation } from "./sim/perturbation";
 export type { Rng } from "./sim/perturbation";
+export {
+  average,
+  clamp,
+  mostFrequent,
+  percentile,
+  sampleStddev,
+} from "./sim/utils/stats";

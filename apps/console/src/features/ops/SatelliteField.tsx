@@ -2,13 +2,13 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useFrame, ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
-import type { SatelliteDTO } from "@/transformers/http";
+import type { SatelliteDto } from "@/dto/http";
 import { classifySatellite } from "@/shared/types/satellite-classification";
 import { propagateSgp4 } from "@/adapters/propagator/sgp4";
 import { useRenderer } from "@/adapters/renderer/RendererContext";
 
 type Props = {
-  satellites: SatelliteDTO[];
+  satellites: SatelliteDto[];
   selectedId?: number | null;
   onSelect: (id: number) => void;
   timeScale: number;

@@ -14,14 +14,9 @@ import type {
   CorrelationView,
   OrbitalPrimerView,
 } from "../types/source-data.types";
+import { toIsoOrNull } from "../utils/serialize";
 
 // ---- shared helpers ----------------------------------------------------
-function toIso(v: Date | string | null | undefined): string | null {
-  if (v === null || v === undefined) return null;
-  const d = v instanceof Date ? v : new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
 function sourceHeader(r: {
   sourceName: string;
   title: string;
@@ -35,7 +30,7 @@ function sourceHeader(r: {
     title: r.title,
     summary: r.summary ?? null,
     url: (r.url ?? r.link ?? null) as string | null,
-    publishedAt: toIso(r.publishedAt),
+    publishedAt: toIsoOrNull(r.publishedAt),
   };
 }
 
@@ -105,7 +100,7 @@ export function toOrbitalPrimerView(
     abstract: r.abstract ?? null,
     authors: Array.isArray(r.authors) ? r.authors : [],
     url: r.url ?? null,
-    publishedAt: toIso(r.publishedAt),
+    publishedAt: toIsoOrNull(r.publishedAt),
     sourceName: r.sourceName ?? null,
   };
 }
