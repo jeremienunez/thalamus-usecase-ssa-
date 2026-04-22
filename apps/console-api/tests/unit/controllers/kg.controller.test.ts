@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { registerKgRoutes } from "../../../src/routes/kg.routes";
 
 describe("registerKgRoutes", () => {
-  it("wires /api/kg/nodes and /api/kg/edges to the matching service methods", async () => {
+  it("wires kg routes to the matching service methods", async () => {
     const service: Parameters<typeof registerKgRoutes>[1] = {
       listNodes: vi.fn().mockResolvedValue({
         items: [{ id: "sat:42", label: "SAT-42", class: "Satellite" }],
@@ -19,12 +19,21 @@ describe("registerKgRoutes", () => {
           },
         ],
       }),
+      getNeighbourhood: vi.fn().mockResolvedValue({
+        root: "finding:4",
+        nodes: [{ id: "finding:4", label: "Finding 4", class: "Finding" }],
+        edges: [],
+      }),
     };
     const app = Fastify({ logger: false });
     registerKgRoutes(app, service);
 
     const nodes = await app.inject({ method: "GET", url: "/api/kg/nodes" });
     const edges = await app.inject({ method: "GET", url: "/api/kg/edges" });
+    const graph = await app.inject({
+      method: "GET",
+      url: "/api/kg/graph/finding:4?depth=3",
+    });
 
     expect(nodes.statusCode).toBe(200);
     expect(nodes.json()).toEqual({
@@ -42,8 +51,15 @@ describe("registerKgRoutes", () => {
         },
       ],
     });
+    expect(graph.statusCode).toBe(200);
+    expect(graph.json()).toEqual({
+      root: "finding:4",
+      nodes: [{ id: "finding:4", label: "Finding 4", class: "Finding" }],
+      edges: [],
+    });
     expect(service.listNodes).toHaveBeenCalledTimes(1);
     expect(service.listEdges).toHaveBeenCalledTimes(1);
+    expect(service.getNeighbourhood).toHaveBeenCalledWith("finding:4", 3);
     await app.close();
   });
 });
