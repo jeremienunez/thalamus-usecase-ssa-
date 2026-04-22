@@ -3,7 +3,7 @@ import type {
   SimTargetsDto,
   TelemetryTargetDto,
 } from "@interview/shared/dto/sim-target.dto";
-import type { SimTargetsBag } from "../services/sim-target.service";
+import type { SimTargetsBag } from "../types/sim-target.types";
 
 export function toSimTargetsDto(bag: SimTargetsBag): SimTargetsDto {
   return {

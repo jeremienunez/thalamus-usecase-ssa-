@@ -11,19 +11,11 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
+import type { OperatorFleetSnapshot } from "../types/sim-fleet.types";
 import {
   operatorFleetRollupSql,
   type OperatorFleetRollupRow,
 } from "./queries/operator-fleet-rollup";
-
-export interface OperatorFleetSnapshot {
-  operatorName: string;
-  operatorCountry: string | null;
-  satelliteCount: number;
-  regimeMix: Array<{ regime: string; count: number }>;
-  platformMix: Array<{ platform: string; count: number }>;
-  avgLaunchYear: number | null;
-}
 
 export class SatelliteFleetRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}

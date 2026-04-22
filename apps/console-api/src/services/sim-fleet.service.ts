@@ -17,25 +17,16 @@
  * Introduced: Plan 5 Task 1.B.7 (DIP-refactored by 1.B cleanup).
  */
 
-export interface OperatorFleetSnapshot {
-  operatorName: string;
-  operatorCountry: string | null;
-  satelliteCount: number;
-  regimeMix: Array<{ regime: string; count: number }>;
-  platformMix: Array<{ platform: string; count: number }>;
-  avgLaunchYear: number | null;
-}
+import type {
+  OperatorFleetSnapshot,
+  SimAgentSubjectSnapshot,
+} from "../types/sim-fleet.types";
 
 // ── Ports (structural — repos satisfy these by duck typing) ─────────
 
 export interface OperatorFleetReadPort {
   getOperatorFleetSnapshot(operatorId: number): Promise<OperatorFleetSnapshot>;
   getSimAgentAuthorLabels(agentIds: number[]): Promise<Map<number, string>>;
-}
-
-export interface SimAgentSubjectSnapshot {
-  displayName: string;
-  attributes: Record<string, unknown>;
 }
 
 export class SimFleetService {

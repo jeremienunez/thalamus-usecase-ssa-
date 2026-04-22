@@ -1,5 +1,5 @@
 import type { AuthorLabelsDto, SimSubjectDto } from "@interview/shared/dto/sim-subject.dto";
-import type { SimAgentSubjectSnapshot } from "../services/sim-fleet.service";
+import type { SimAgentSubjectSnapshot } from "../types/sim-fleet.types";
 
 export function toSimSubjectDto(
   snap: SimAgentSubjectSnapshot,

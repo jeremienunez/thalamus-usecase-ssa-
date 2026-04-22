@@ -14,3 +14,5 @@ export * from "./stats.types";
 export * from "./sweep.types";
 export * from "./orbital-analysis.types";
 export * from "./repl-chat.types";
+export * from "./sim-fleet.types";
+export * from "./sim-target.types";
