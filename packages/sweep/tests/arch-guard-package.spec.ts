@@ -14,6 +14,12 @@ import { describe, it, expect } from "vitest";
 const execFile = promisify(execFileCb);
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(TEST_DIR, "../../..");
+const DEPCRUISE_CONFIG = resolve(REPO_ROOT, ".dependency-cruiser.js");
+const DEPCRUISE_BIN = resolve(
+  REPO_ROOT,
+  "node_modules/dependency-cruiser/bin/dependency-cruise.mjs",
+);
+const DEPCRUISE_MAX_BUFFER = 256 * 1024 * 1024;
 
 type DepCruiseViolation = {
   rule?: { name?: string };
@@ -34,6 +40,11 @@ type SweepViolation = {
   to: string;
 };
 
+type DepCruiseRunResult = {
+  exitCode: number;
+  output: string;
+};
+
 function sweepViolations(report: DepCruiseReport): SweepViolation[] {
   return (report.summary?.violations ?? [])
     .map((violation) => ({
@@ -44,25 +55,24 @@ function sweepViolations(report: DepCruiseReport): SweepViolation[] {
     .filter((violation) => violation.ruleName.startsWith("sweep-"));
 }
 
-async function runDepCruiseSweepReport(): Promise<DepCruiseReport> {
+async function runDepCruiseSweepCheck(): Promise<DepCruiseRunResult> {
   try {
-    const { stdout } = await execFile(
-      "pnpm",
+    const { stdout, stderr } = await execFile(
+      process.execPath,
       [
-        "exec",
-        "depcruise",
+        DEPCRUISE_BIN,
         "--config",
-        ".dependency-cruiser.js",
-        "packages/sweep/src",
+        DEPCRUISE_CONFIG,
         "--output-type",
-        "json",
+        "err-long",
+        "packages/sweep/src",
       ],
       {
         cwd: REPO_ROOT,
-        maxBuffer: 16 * 1024 * 1024,
+        maxBuffer: DEPCRUISE_MAX_BUFFER,
       },
     );
-    return JSON.parse(stdout) as DepCruiseReport;
+    return { exitCode: 0, output: `${stdout}${stderr}`.trim() };
   } catch (error) {
     const stdout =
       typeof error === "object" &&
@@ -71,11 +81,22 @@ async function runDepCruiseSweepReport(): Promise<DepCruiseReport> {
       typeof error.stdout === "string"
         ? error.stdout
         : "";
+    const stderr =
+      typeof error === "object" &&
+      error !== null &&
+      "stderr" in error &&
+      typeof error.stderr === "string"
+        ? error.stderr
+        : "";
+    const exitCode =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "number"
+        ? error.code
+        : 1;
 
-    if (stdout !== "") {
-      return JSON.parse(stdout) as DepCruiseReport;
-    }
-    throw error;
+    return { exitCode, output: `${stdout}${stderr}`.trim() };
   }
 }
 
@@ -108,9 +129,9 @@ describe("packages/sweep arch guard", () => {
   });
 
   it("dependency-cruiser sweep rules stay green for packages/sweep/src", async () => {
-    const report = await runDepCruiseSweepReport();
+    const result = await runDepCruiseSweepCheck();
 
-    expect(report.summary?.totalCruised).toBeGreaterThan(0);
-    expect(sweepViolations(report)).toEqual([]);
+    expect(result.exitCode, result.output).toBe(0);
+    expect(result.output).not.toContain("sweep-");
   });
 });

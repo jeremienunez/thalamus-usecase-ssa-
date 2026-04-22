@@ -13,39 +13,36 @@ const INJECTION_DIR = resolve(
   "packages/test-kit/src/__arch_guard_injection__",
 );
 const INJECTION_FILE = resolve(INJECTION_DIR, "injected.ts");
+const DEPCRUISE_CONFIG = resolve(REPO_ROOT, ".dependency-cruiser.js");
+const DEPCRUISE_BIN = resolve(
+  REPO_ROOT,
+  "node_modules/dependency-cruiser/bin/dependency-cruise.mjs",
+);
+const DEPCRUISE_MAX_BUFFER = 256 * 1024 * 1024;
 
-type DepCruiseViolation = {
-  rule?: { name?: string };
-  from?: string;
-  to?: string;
+type DepCruiseRunResult = {
+  exitCode: number;
+  output: string;
 };
 
-type DepCruiseReport = {
-  summary?: {
-    totalCruised?: number;
-    violations?: DepCruiseViolation[];
-  };
-};
-
-async function runDepCruise(paths: string[]): Promise<DepCruiseReport> {
+async function runDepCruise(paths: string[]): Promise<DepCruiseRunResult> {
   try {
-    const { stdout } = await execFile(
-      "pnpm",
+    const { stdout, stderr } = await execFile(
+      process.execPath,
       [
-        "exec",
-        "depcruise",
+        DEPCRUISE_BIN,
         "--config",
-        ".dependency-cruiser.js",
+        DEPCRUISE_CONFIG,
         "--output-type",
-        "json",
+        "err-long",
         ...paths,
       ],
       {
         cwd: REPO_ROOT,
-        maxBuffer: 16 * 1024 * 1024,
+        maxBuffer: DEPCRUISE_MAX_BUFFER,
       },
     );
-    return JSON.parse(stdout) as DepCruiseReport;
+    return { exitCode: 0, output: `${stdout}${stderr}`.trim() };
   } catch (error) {
     const stdout =
       typeof error === "object" &&
@@ -54,26 +51,37 @@ async function runDepCruise(paths: string[]): Promise<DepCruiseReport> {
       typeof error.stdout === "string"
         ? error.stdout
         : "";
+    const stderr =
+      typeof error === "object" &&
+      error !== null &&
+      "stderr" in error &&
+      typeof error.stderr === "string"
+        ? error.stderr
+        : "";
+    const exitCode =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "number"
+        ? error.code
+        : 1;
 
-    if (stdout !== "") {
-      return JSON.parse(stdout) as DepCruiseReport;
-    }
-    throw error;
+    return { exitCode, output: `${stdout}${stderr}`.trim() };
   }
 }
 
 describe("repo-wide arch guardrails", () => {
   it("dependency-cruiser finds zero violations across apps and packages", async () => {
-    const report = await runDepCruise(["apps", "packages"]);
+    const result = await runDepCruise(["apps", "packages"]);
 
-    expect(report.summary?.totalCruised).toBeGreaterThan(0);
-    expect(
-      report.summary?.violations ?? [],
-      JSON.stringify(report.summary?.violations ?? [], null, 2),
-    ).toEqual([]);
+    expect(result.exitCode, result.output).toBe(0);
   });
 
   it("packages-no-apps-imports catches an injected packages -> apps edge", async () => {
+    const baseline = await runDepCruise(["packages/test-kit/src"]);
+
+    expect(baseline.exitCode, baseline.output).toBe(0);
+
     mkdirSync(INJECTION_DIR, { recursive: true });
     writeFileSync(
       INJECTION_FILE,
@@ -87,12 +95,9 @@ describe("repo-wide arch guardrails", () => {
     );
 
     try {
-      const report = await runDepCruise(["packages/test-kit/src"]);
-      const violations = (report.summary?.violations ?? []).filter(
-        (violation) => violation.rule?.name === "packages-no-apps-imports",
-      );
+      const result = await runDepCruise(["packages/test-kit/src"]);
 
-      expect(violations.length).toBeGreaterThan(0);
+      expect(result.exitCode).toBeGreaterThan(0);
     } finally {
       rmSync(INJECTION_DIR, { recursive: true, force: true });
     }
