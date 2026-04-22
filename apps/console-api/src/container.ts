@@ -387,7 +387,6 @@ export async function buildContainer(
   const ssaAggregationStrategy = new SsaAggregationStrategy();
   const ssaKindGuard = new SsaKindGuard();
   const simSwarmStoreService = new SimSwarmStoreService(
-    db,
     simSwarmRepo,
     simRunRepo,
     simTerminalRepo,

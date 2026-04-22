@@ -1,26 +1,14 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type * as schema from "@interview/db-schema";
-import type { SimRunStatus, SimSwarm } from "@interview/db-schema";
-import { simRun, simSwarm } from "@interview/db-schema";
 import type { SimSwarmStore } from "@interview/sweep";
 import type { SimRunRepository } from "../repositories/sim-run.repository";
 import type { SimSwarmRepository } from "../repositories/sim-swarm.repository";
 import type { SimTerminalRepository } from "../repositories/sim-terminal.repository";
 
-function aggregatePathLiteral(
-  key: string,
-): string {
-  if (!/^[A-Za-z0-9_]+$/.test(key)) {
-    throw new Error(`invalid aggregate path key: ${key}`);
-  }
-  return `'{${key}}'::text[]`;
-}
-
 export class SimSwarmStoreService implements SimSwarmStore {
   constructor(
-    private readonly db: NodePgDatabase<typeof schema>,
-    private readonly swarmRepo: Pick<SimSwarmRepository, "findById">,
+    private readonly swarmRepo: Pick<
+      SimSwarmRepository,
+      "abortSwarm" | "closeSwarm" | "findById" | "snapshotAggregate"
+    >,
     private readonly runRepo: Pick<SimRunRepository, "countFishByStatus">,
     private readonly terminalRepo: Pick<
       SimTerminalRepository,
@@ -53,21 +41,7 @@ export class SimSwarmStoreService implements SimSwarmStore {
   }
 
   async abortSwarm(swarmId: number): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      await tx
-        .update(simSwarm)
-        .set({ status: "failed", completedAt: new Date() })
-        .where(eq(simSwarm.id, BigInt(swarmId)));
-      await tx
-        .update(simRun)
-        .set({ status: "failed", completedAt: new Date() })
-        .where(
-          and(
-            eq(simRun.swarmId, BigInt(swarmId)),
-            inArray(simRun.status, ["pending", "running"] as SimRunStatus[]),
-          ),
-        );
-    });
+    await this.swarmRepo.abortSwarm(BigInt(swarmId));
   }
 
   async listTerminalsForSwarm(swarmId: number) {
@@ -99,16 +73,11 @@ export class SimSwarmStoreService implements SimSwarmStore {
     key: string;
     value: Record<string, unknown>;
   }): Promise<void> {
-    await this.db.execute(sql`
-      UPDATE sim_swarm
-      SET config = jsonb_set(
-            config,
-            ${sql.raw(aggregatePathLiteral(input.key))},
-            ${JSON.stringify(input.value)}::jsonb,
-            true
-          )
-      WHERE id = ${BigInt(input.swarmId)}
-    `);
+    await this.swarmRepo.snapshotAggregate({
+      swarmId: BigInt(input.swarmId),
+      key: input.key,
+      value: input.value,
+    });
   }
 
   async closeSwarm(input: {
@@ -118,23 +87,22 @@ export class SimSwarmStoreService implements SimSwarmStore {
     reportFindingId?: number | null;
     completedAt?: Date;
   }): Promise<void> {
-    const patch: Partial<SimSwarm> = {
+    await this.swarmRepo.closeSwarm({
+      swarmId: BigInt(input.swarmId),
       status: input.status,
       completedAt: input.completedAt ?? new Date(),
-    };
-    if (input.suggestionId !== undefined) {
-      patch.suggestionId =
-        input.suggestionId === null ? null : BigInt(input.suggestionId);
-    }
-    if (input.reportFindingId !== undefined) {
-      patch.outcomeReportFindingId =
-        input.reportFindingId === null
-          ? null
-          : BigInt(input.reportFindingId);
-    }
-    await this.db
-      .update(simSwarm)
-      .set(patch)
-      .where(eq(simSwarm.id, BigInt(input.swarmId)));
+      suggestionId:
+        input.suggestionId === undefined
+          ? undefined
+          : input.suggestionId === null
+            ? null
+            : BigInt(input.suggestionId),
+      reportFindingId:
+        input.reportFindingId === undefined
+          ? undefined
+          : input.reportFindingId === null
+            ? null
+            : BigInt(input.reportFindingId),
+    });
   }
 }

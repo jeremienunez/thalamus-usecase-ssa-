@@ -37,3 +37,17 @@ export interface LinkOutcomeInput {
   reportFindingId?: bigint | null;
   suggestionId?: bigint | null;
 }
+
+export interface SnapshotAggregateInput {
+  swarmId: bigint;
+  key: string;
+  value: Record<string, unknown>;
+}
+
+export interface CloseSimSwarmInput {
+  swarmId: bigint;
+  status: "done" | "failed";
+  suggestionId?: bigint | null;
+  reportFindingId?: bigint | null;
+  completedAt?: Date;
+}
