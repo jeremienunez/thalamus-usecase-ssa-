@@ -173,7 +173,7 @@ export interface RealAdapterDeps {
  * 1. thalamus.runCycle   — POST /api/cycles/run via {@link ThalamusHttpClient}
  * 2. telemetry.start     — disabled pending Plan 3 (POST /api/sim/telemetry/start)
  * 3. logs.tail           — pino ring buffer (unchanged)
- * 4. graph.neighbourhood — inline SQL over research_edge
+ * 4. graph.neighbourhood — GET /api/kg/graph/:id via {@link ThalamusHttpClient}
  * 5. resolution.accept   — SweepResolutionService.resolve (accept then resolve)
  * 6. why.build           — compose from research_finding + research_edge + source_item
  *
@@ -229,35 +229,10 @@ export async function buildRealAdapters(
     // --- 3. logs.tail ---------------------------------------------------
     logs: new LogsAdapter(ctx.ring),
 
-    // --- 4. graph.neighbourhood (research_edge lookup) ------------------
+    // --- 4. graph.neighbourhood -----------------------------------------
     graph: {
       neighbourhood: async (entity: string) => {
-        // entity format: `${entityType}:${entityId}` (fallback: satellite:N).
-        const [etype, eidRaw] = entity.includes(":")
-          ? entity.split(":", 2)
-          : ["satellite", entity];
-        const eid = Number(eidRaw);
-        if (!Number.isFinite(eid)) {
-          return { root: entity, levels: [{ depth: 0, nodes: [entity] }] };
-        }
-        const rows = await db
-          .select({
-            findingId: researchEdge.findingId,
-            relation: researchEdge.relation,
-          })
-          .from(researchEdge)
-          .where(
-            sql`${researchEdge.entityType} = ${etype} AND ${researchEdge.entityId} = ${BigInt(eid)}`,
-          )
-          .limit(50);
-        const nodes = rows.map((r) => `finding:${r.findingId}(${r.relation})`);
-        return {
-          root: entity,
-          levels: [
-            { depth: 0, nodes: [entity] },
-            ...(nodes.length > 0 ? [{ depth: 1, nodes }] : []),
-          ],
-        };
+        return thalamusHttp.getGraphNeighbourhood({ entity });
       },
     },
 

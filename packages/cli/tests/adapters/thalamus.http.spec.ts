@@ -171,3 +171,59 @@ describe("ThalamusHttpClient.runCycle", () => {
     );
   });
 });
+
+describe("ThalamusHttpClient.getGraphNeighbourhood", () => {
+  it("given a graph response, when getGraphNeighbourhood is called, then it maps nodes+edges to levels", async () => {
+    const fetchStub = stubFetch({
+      ok: true,
+      jsonBody: {
+        root: "finding:4",
+        nodes: [
+          { id: "finding:4" },
+          { id: "sat:3" },
+          { id: "op:ESA" },
+          { id: "regime:LEO" },
+        ],
+        edges: [
+          { id: "10", source: "finding:4", target: "sat:3" },
+          { id: "11", source: "finding:4", target: "op:ESA" },
+          { id: "12", source: "sat:3", target: "regime:LEO" },
+        ],
+      },
+    });
+
+    const client = new ThalamusHttpClient("http://api.local");
+    const out = await client.getGraphNeighbourhood({
+      entity: "finding:4",
+      depth: 3,
+    });
+
+    expect(fetchStub).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchStub.mock.calls[0] as [URL, RequestInit];
+    expect(url.toString()).toBe(
+      "http://api.local/api/kg/graph/finding%3A4?depth=3",
+    );
+    expect(init.headers).toEqual({});
+    expect(out).toEqual({
+      root: "finding:4",
+      levels: [
+        { depth: 0, nodes: ["finding:4"] },
+        { depth: 1, nodes: ["sat:3", "op:ESA"] },
+        { depth: 2, nodes: ["regime:LEO"] },
+      ],
+    });
+  });
+
+  it("given a failing graph response, when getGraphNeighbourhood is called, then it throws with the server error", async () => {
+    stubFetch({
+      ok: false,
+      status: 404,
+      jsonBody: { error: "graph not found" },
+    });
+
+    const client = new ThalamusHttpClient("http://api.local");
+    await expect(
+      client.getGraphNeighbourhood({ entity: "missing:1" }),
+    ).rejects.toThrow(/graph not found/);
+  });
+});
