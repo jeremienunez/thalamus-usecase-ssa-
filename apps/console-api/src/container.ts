@@ -48,7 +48,9 @@ import {
   ingestionQueue,
   registerSchedulers,
   registerSweepConfigDomains,
+  setSimEmbeddingConfigProvider,
   setSimFishConfigProvider,
+  setSimSwarmConfigProvider,
   SimSubjectHttpAdapter,
   SimHttpClient,
   type SimHttpTransport,
@@ -285,6 +287,10 @@ export async function buildContainer(
     runtimeConfigService.provider("console.autonomy"),
   );
   setSimFishConfigProvider(runtimeConfigService.provider("sim.fish"));
+  setSimSwarmConfigProvider(runtimeConfigService.provider("sim.swarm"));
+  setSimEmbeddingConfigProvider(
+    runtimeConfigService.provider("sim.embedding"),
+  );
 
   // Inject SSA domain profile into the (agnostic) thalamus package.
   // Package ships generic defaults; console-api owns the métier.

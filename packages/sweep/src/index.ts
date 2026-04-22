@@ -7,6 +7,14 @@ export {
   setSimFishConfigProvider,
   getSimFishConfig,
 } from "./config/sim-fish-config";
+export {
+  setSimSwarmConfigProvider,
+  getSimSwarmConfig,
+} from "./config/sim-swarm-config";
+export {
+  setSimEmbeddingConfigProvider,
+  getSimEmbeddingConfig,
+} from "./config/sim-embedding-config";
 
 // Services
 export { NanoSweepService } from "./services/nano-sweep.service";

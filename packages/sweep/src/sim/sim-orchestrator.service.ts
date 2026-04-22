@@ -1,4 +1,5 @@
 import { createLogger } from "@interview/shared/observability";
+import { getSimSwarmConfig } from "../config/sim-swarm-config";
 import type {
   SeedRefs,
   SimConfig,
@@ -90,6 +91,7 @@ export class SimOrchestrator {
     if (opts.subjectIds.length < 1) {
       throw new Error("startStandalone requires at least 1 subjectId");
     }
+    const swarmDefaults = await getSimSwarmConfig();
 
     const maxTurns =
       opts.maxTurns ??
@@ -99,9 +101,9 @@ export class SimOrchestrator {
 
     const swarmConfig: SwarmConfig = {
       llmMode: opts.llmMode,
-      quorumPct: 1.0,
+      quorumPct: readQuorumPct(swarmDefaults.defaultQuorumPct, 1.0),
       perFishTimeoutMs: 5 * 60_000,
-      fishConcurrency: 1,
+      fishConcurrency: readPositiveInt(swarmDefaults.defaultFishConcurrency, 1),
       nanoModel: opts.nanoModel ?? "gpt-5.4-nano",
       seed: opts.seed ?? 42,
     };
@@ -356,6 +358,12 @@ export class SimOrchestrator {
 function readPositiveInt(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? Math.floor(value)
+    : fallback;
+}
+
+function readQuorumPct(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
     : fallback;
 }
 
