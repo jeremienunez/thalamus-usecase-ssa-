@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { typedSpy } from "@interview/test-kit";
 import {
   ReflexionService,
   type CyclesPort,
@@ -13,10 +14,6 @@ import type {
   ReflexionTarget,
 } from "../../../src/types/reflexion.types";
 import { HttpError } from "../../../src/utils/http-error";
-
-function typedSpy<Fn extends (...args: never[]) => unknown>() {
-  return vi.fn<Parameters<Fn>, ReturnType<Fn>>();
-}
 
 function target(overrides: Partial<ReflexionTarget> = {}): ReflexionTarget {
   return {

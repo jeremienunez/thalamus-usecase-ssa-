@@ -3,21 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 import { registerSweepRoutes } from "../../../src/routes/sweep.routes";
 
 function missionStub() {
-  return {
+  const mission: Parameters<typeof registerSweepRoutes>[2] = {
     start: vi.fn(),
     stop: vi.fn(),
     publicState: vi.fn(),
   };
+  return mission;
 }
 
 describe("registerSweepRoutes suggestions endpoints", () => {
   it("returns the public suggestions list payload", async () => {
-    const service = {
+    const service: Parameters<typeof registerSweepRoutes>[1] = {
       list: vi.fn().mockResolvedValue({ items: [{ id: "s:1" }], count: 1 }),
       review: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, service as never, missionStub() as never);
+    registerSweepRoutes(app, service, missionStub());
 
     const res = await app.inject({
       method: "GET",
@@ -31,9 +32,12 @@ describe("registerSweepRoutes suggestions endpoints", () => {
   });
 
   it("returns 400 when the matched public route carries an empty id param", async () => {
-    const service = { review: vi.fn(), list: vi.fn() };
+    const service: Parameters<typeof registerSweepRoutes>[1] = {
+      review: vi.fn(),
+      list: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, service as never, missionStub() as never);
+    registerSweepRoutes(app, service, missionStub());
 
     const res = await app.inject({
       method: "POST",
@@ -47,9 +51,12 @@ describe("registerSweepRoutes suggestions endpoints", () => {
   });
 
   it("returns 400 on an invalid public review body and does not call the service", async () => {
-    const service = { review: vi.fn(), list: vi.fn() };
+    const service: Parameters<typeof registerSweepRoutes>[1] = {
+      review: vi.fn(),
+      list: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, service as never, missionStub() as never);
+    registerSweepRoutes(app, service, missionStub());
 
     const badBody = await app.inject({
       method: "POST",
@@ -63,12 +70,12 @@ describe("registerSweepRoutes suggestions endpoints", () => {
   });
 
   it("returns 404 when the service reports notFound on the public review route", async () => {
-    const service = {
+    const service: Parameters<typeof registerSweepRoutes>[1] = {
       review: vi.fn().mockResolvedValue({ ok: false, notFound: true }),
       list: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, service as never, missionStub() as never);
+    registerSweepRoutes(app, service, missionStub());
 
     const res = await app.inject({
       method: "POST",
@@ -82,7 +89,7 @@ describe("registerSweepRoutes suggestions endpoints", () => {
   });
 
   it("returns the service review payload on the public success path", async () => {
-    const service = {
+    const service: Parameters<typeof registerSweepRoutes>[1] = {
       review: vi.fn().mockResolvedValue({
         ok: true,
         reviewed: true,
@@ -91,7 +98,7 @@ describe("registerSweepRoutes suggestions endpoints", () => {
       list: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, service as never, missionStub() as never);
+    registerSweepRoutes(app, service, missionStub());
 
     const res = await app.inject({
       method: "POST",
@@ -110,12 +117,12 @@ describe("registerSweepRoutes suggestions endpoints", () => {
   });
 
   it("does not expose stale non-api suggestions paths", async () => {
-    const service = {
+    const service: Parameters<typeof registerSweepRoutes>[1] = {
       review: vi.fn(),
       list: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, service as never, missionStub() as never);
+    registerSweepRoutes(app, service, missionStub());
 
     const list = await app.inject({ method: "GET", url: "/suggestions" });
     const review = await app.inject({

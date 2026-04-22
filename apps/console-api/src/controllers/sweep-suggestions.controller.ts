@@ -5,13 +5,18 @@ import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 import { SweepReviewParamsSchema, SweepReviewBodySchema } from "../schemas";
 
+export type SweepSuggestionsControllerPort = Pick<
+  SweepSuggestionsService,
+  "list" | "review"
+>;
+
 export function sweepSuggestionsListController(
-  service: SweepSuggestionsService,
+  service: SweepSuggestionsControllerPort,
 ) {
   return asyncHandler(() => service.list());
 }
 
-export function sweepReviewController(service: SweepSuggestionsService) {
+export function sweepReviewController(service: SweepSuggestionsControllerPort) {
   return asyncHandler<FastifyRequest<{ Params: unknown; Body: unknown }>>(
     async (req, reply) => {
       const params = parseOrReply(req.params, SweepReviewParamsSchema, reply);

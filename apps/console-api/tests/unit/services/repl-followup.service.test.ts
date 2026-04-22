@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ReplStreamEvent } from "@interview/shared";
+import { typedSpy } from "@interview/test-kit";
 import { ReplFollowUpService } from "../../../src/services/repl-followup.service";
 import { CycleStreamPump } from "../../../src/services/cycle-stream-pump.service";
 import { CycleSummariser } from "../../../src/services/cycle-summariser.service";
@@ -13,10 +14,6 @@ import type { EdgeRow } from "../../../src/types/finding.types";
 
 type SimDeps = NonNullable<SsaReplFollowUpDeps["sim"]>;
 type SweepDeps = NonNullable<SsaReplFollowUpDeps["sweep"]>;
-
-function typedSpy<Fn extends (...args: never[]) => unknown>() {
-  return vi.fn<Parameters<Fn>, ReturnType<Fn>>();
-}
 
 function buildSummariser(
   text = "summary",

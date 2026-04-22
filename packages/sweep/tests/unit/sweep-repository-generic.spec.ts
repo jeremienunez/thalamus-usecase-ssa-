@@ -11,7 +11,6 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import Redis from "ioredis-mock";
-import type IORedis from "ioredis";
 import { SweepRepository } from "../../src/repositories/sweep.repository";
 import type { FindingDomainSchema } from "../../src/ports";
 
@@ -52,10 +51,10 @@ const exampleSchema: FindingDomainSchema = {
 
 // Shared redis so beforeEach can flush state (ioredis-mock keeps data
 // global across instances unless explicitly cleared).
-let redis: IORedis;
+let redis: Redis;
 
 beforeEach(async () => {
-  redis = new Redis() as unknown as IORedis;
+  redis = new Redis();
   await redis.flushall();
 });
 

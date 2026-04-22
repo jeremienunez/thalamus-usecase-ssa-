@@ -12,6 +12,7 @@
  * per-env tests and dynamically import a fresh copy.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { PassThrough } from "node:stream";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -132,12 +133,10 @@ describe("SPEC-SH-005 createLogger — redaction (AC-5)", () => {
     // so we can inspect what pino actually emits.
     const pino = (await import("pino")).default;
     const chunks: string[] = [];
-    const dest = {
-      write: (s: string) => {
-        chunks.push(s);
-        return true;
-      },
-    };
+    const dest = new PassThrough();
+    dest.on("data", (chunk) => {
+      chunks.push(String(chunk));
+    });
     const logger = pino(
       {
         base: { service: "api", env: "development" },
@@ -146,7 +145,7 @@ describe("SPEC-SH-005 createLogger — redaction (AC-5)", () => {
           remove: true,
         },
       },
-      dest as unknown as NodeJS.WritableStream,
+      dest,
     );
 
     logger.info({
@@ -161,7 +160,7 @@ describe("SPEC-SH-005 createLogger — redaction (AC-5)", () => {
     });
 
     expect(chunks.length).toBeGreaterThan(0);
-    const record = JSON.parse(chunks[0]);
+    const record = JSON.parse(chunks.join(""));
     expect(record.req.headers.authorization).toBeUndefined();
     expect(record.req.headers.cookie).toBeUndefined();
     expect(record.req.headers["x-trace"]).toBe("keep-me");

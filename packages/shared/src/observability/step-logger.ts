@@ -14,7 +14,7 @@ export type { StepName, StepEntry } from "./steps";
  * `cortex`, `fishId`, `cycleId`) are forwarded verbatim.
  */
 export function stepLog(
-  logger: Logger,
+  logger: Pick<Logger, "info">,
   step: StepName,
   phase: StepPhase,
   extra: Record<string, unknown> = {},

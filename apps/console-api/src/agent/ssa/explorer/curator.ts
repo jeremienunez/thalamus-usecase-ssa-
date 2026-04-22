@@ -4,9 +4,26 @@ import {
 } from "@interview/thalamus";
 import { extractJsonArray } from "@interview/shared/utils";
 import { createLogger } from "@interview/shared/observability";
-import type { CrawledArticle } from "./crawler";
+import type { LlmTransportFactory } from "../../../services/llm-transport.port";
+import type { SatelliteEntities } from "./satellite-entity-patterns";
 
 const logger = createLogger("explorer-curator");
+
+const defaultLlmTransportFactory: LlmTransportFactory = {
+  create(systemPrompt: string) {
+    return createLlmTransport(systemPrompt);
+  },
+};
+
+export interface CuratorArticle {
+  url: string;
+  title: string;
+  body: string;
+  entities: SatelliteEntities;
+  dataPoints: string[];
+  sourceQuery: string;
+  depth: number;
+}
 
 export interface CuratedItem {
   url: string;
@@ -17,7 +34,7 @@ export interface CuratedItem {
   action: "inject" | "promote" | "discard";
   category: string;
   reason: string;
-  entities: CrawledArticle["entities"];
+  entities: CuratorArticle["entities"];
 }
 
 // Domain-specific rubric injected by console-api at container boot.
@@ -28,11 +45,21 @@ export function setCuratorPrompt(prompt: string): void {
   curatorPrompt = prompt;
 }
 
+export interface ExplorerCuratorDeps {
+  llm?: LlmTransportFactory;
+}
+
 export class ExplorerCurator {
-  async curate(articles: CrawledArticle[]): Promise<CuratedItem[]> {
+  private readonly llm: LlmTransportFactory;
+
+  constructor(deps: ExplorerCuratorDeps = {}) {
+    this.llm = deps.llm ?? defaultLlmTransportFactory;
+  }
+
+  async curate(articles: CuratorArticle[]): Promise<CuratedItem[]> {
     if (articles.length === 0) return [];
 
-    const batches: CrawledArticle[][] = [];
+    const batches: CuratorArticle[][] = [];
     for (let i = 0; i < articles.length; i += 10) {
       batches.push(articles.slice(i, i + 10));
     }
@@ -64,8 +91,8 @@ export class ExplorerCurator {
     return results;
   }
 
-  private async scoreBatch(articles: CrawledArticle[]): Promise<CuratedItem[]> {
-    const transport = createLlmTransport(curatorPrompt);
+  private async scoreBatch(articles: CuratorArticle[]): Promise<CuratedItem[]> {
+    const transport = this.llm.create(curatorPrompt);
 
     const payload = articles.map((a, i) => ({
       index: i,
@@ -111,7 +138,7 @@ export class ExplorerCurator {
    * Heuristic scoring when LLM is unavailable.
    * Uses entity count, data points, and body length as proxies.
    */
-  private heuristicScore(article: CrawledArticle): CuratedItem {
+  private heuristicScore(article: CuratorArticle): CuratedItem {
     const e = article.entities;
     const entityCount =
       e.satellites.length + e.operators.length + e.orbitRegimes.length;

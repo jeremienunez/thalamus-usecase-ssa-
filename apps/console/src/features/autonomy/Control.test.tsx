@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { WrapProviders, makeStubApi } from "../../../tests/wrap";
+import {
+  EMPTY_AUTONOMY_STATE,
+  WrapProviders,
+  makeStubApi,
+} from "../../../tests/wrap";
 import { AutonomyControl } from "./Control";
 import { useUiStore } from "@/shared/ui/uiStore";
 
@@ -17,7 +21,7 @@ describe("AutonomyControl", () => {
     const user = userEvent.setup();
     const start = vi.fn(async () => ({
       ok: true,
-      state: {} as never,
+      state: EMPTY_AUTONOMY_STATE,
     }));
     const api = makeStubApi({
       autonomy: {
@@ -35,8 +39,8 @@ describe("AutonomyControl", () => {
           nextTickInMs: null,
         }),
         start,
-        stop: async () => ({ ok: true, state: {} as never }),
-        reset: async () => ({ ok: true, state: {} as never }),
+        stop: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
+        reset: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
       },
     });
 
@@ -53,7 +57,7 @@ describe("AutonomyControl", () => {
 
   it("shows autonomy telemetry, stop reason, tick cost, and reset control in the feed", async () => {
     const user = userEvent.setup();
-    const reset = vi.fn(async () => ({ ok: true, state: {} as never }));
+    const reset = vi.fn(async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }));
     const api = makeStubApi({
       stats: {
         get: async () => ({
@@ -94,8 +98,8 @@ describe("AutonomyControl", () => {
           stoppedReason: "daily_budget_exhausted",
           nextTickInMs: null,
         }),
-        start: async () => ({ ok: true, state: {} as never }),
-        stop: async () => ({ ok: true, state: {} as never }),
+        start: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
+        stop: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
         reset,
       },
     });

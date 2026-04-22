@@ -1,10 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import type { StatsService } from "../services/stats.service";
-import { statsController } from "../controllers/stats.controller";
+import { type StatsControllerPort, statsController } from "../controllers/stats.controller";
 
 export function registerStatsRoutes(
   app: FastifyInstance,
-  service: StatsService,
+  service: StatsControllerPort,
 ): void {
   app.get("/api/stats", statsController(service));
 }

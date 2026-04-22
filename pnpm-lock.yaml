@@ -181,6 +181,9 @@ importers:
         specifier: ^3.22.0
         version: 3.25.76
     devDependencies:
+      '@interview/test-kit':
+        specifier: workspace:*
+        version: link:../../packages/test-kit
       '@types/geojson':
         specifier: ^7946.0.16
         version: 7946.0.16
@@ -358,6 +361,25 @@ importers:
         version: 4.21.0
       typescript:
         specifier: ^5.4.0
+        version: 5.9.3
+
+  packages/test-kit:
+    dependencies:
+      '@interview/thalamus':
+        specifier: workspace:*
+        version: link:../thalamus
+      pino:
+        specifier: ^8.17.0
+        version: 8.21.0
+      vitest:
+        specifier: ^1.6.1
+        version: 1.6.1(@types/node@20.19.39)(jsdom@25.0.1)
+      zod:
+        specifier: ^3.22.0
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
         version: 5.9.3
 
   packages/thalamus:

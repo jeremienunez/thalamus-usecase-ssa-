@@ -8,7 +8,12 @@ import {
   KnnCandidatesQuerySchema,
 } from "../schemas";
 
-export function conjunctionsController(service: ConjunctionViewService) {
+export type ConjunctionsControllerPort = Pick<
+  ConjunctionViewService,
+  "list" | "screen" | "knnCandidates"
+>;
+
+export function conjunctionsController(service: ConjunctionsControllerPort) {
   return asyncHandler<FastifyRequest<{ Querystring: unknown }>>(
     async (req, reply) => {
       const q = parseOrReply(req.query, ConjunctionsQuerySchema, reply);
@@ -18,7 +23,7 @@ export function conjunctionsController(service: ConjunctionViewService) {
   );
 }
 
-export function screenController(service: ConjunctionViewService) {
+export function screenController(service: ConjunctionsControllerPort) {
   return asyncHandler<FastifyRequest<{ Querystring: unknown }>>(
     async (req, reply) => {
       const q = parseOrReply(req.query, ScreenQuerySchema, reply);
@@ -28,7 +33,7 @@ export function screenController(service: ConjunctionViewService) {
   );
 }
 
-export function knnCandidatesController(service: ConjunctionViewService) {
+export function knnCandidatesController(service: ConjunctionsControllerPort) {
   return asyncHandler<FastifyRequest<{ Querystring: unknown }>>(
     async (req, reply) => {
       const q = parseOrReply(req.query, KnnCandidatesQuerySchema, reply);

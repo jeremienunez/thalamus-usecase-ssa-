@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import type { FindingViewService } from "../services/finding-view.service";
 import {
+  type FindingsControllerPort,
   findingsListController,
   findingByIdController,
   findingDecisionController,
@@ -8,7 +8,7 @@ import {
 
 export function registerFindingsRoutes(
   app: FastifyInstance,
-  service: FindingViewService,
+  service: FindingsControllerPort,
 ): void {
   app.get<{ Querystring: { status?: string; cortex?: string } }>(
     "/api/findings",

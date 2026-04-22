@@ -1,14 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import type { AcceptedSuggestionInput } from "@interview/sweep";
+import { fakePort, typedSpy } from "@interview/test-kit";
 import { SsaPromotionAdapter } from "../../../../../src/agent/ssa/sweep/promotion.ssa";
-import type { SweepAuditRepository } from "../../../../../src/repositories/sweep-audit.repository";
+import type { SsaSweepAuditPort } from "../../../../../src/agent/ssa/sweep/promotion.ssa";
 
 function fakeAuditRepo() {
+  const insertResolutionAudit = typedSpy<
+    SsaSweepAuditPort["insertResolutionAudit"]
+  >().mockResolvedValue(undefined);
   return {
-    insertResolutionAudit: vi.fn().mockResolvedValue(undefined),
-    insertEnrichmentSuccess: vi.fn().mockResolvedValue(undefined),
-  } as unknown as SweepAuditRepository & {
-    insertResolutionAudit: ReturnType<typeof vi.fn>;
+    repo: fakePort<SsaSweepAuditPort>({
+      insertResolutionAudit,
+    }),
+    insertResolutionAudit,
   };
 }
 
@@ -36,7 +40,7 @@ describe("SsaPromotionAdapter.promote", () => {
 
   it("calls SweepAuditRepository.insertResolutionAudit with the full payload", async () => {
     const audit = fakeAuditRepo();
-    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit });
+    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
 
     const result = await adapter.promote(input);
     expect(result.ok).toBe(true);
@@ -67,7 +71,7 @@ describe("SsaPromotionAdapter.promote", () => {
   it("skips confidence promotion when confidence is null or omitted", async () => {
     const audit = fakeAuditRepo();
     const adapter = new SsaPromotionAdapter({
-      sweepAuditRepo: audit,
+      sweepAuditRepo: audit.repo,
       confidence: null,
     });
     const result = await adapter.promote(input);
@@ -77,7 +81,7 @@ describe("SsaPromotionAdapter.promote", () => {
   it("returns ok with a soft errors[] when audit write throws (non-fatal)", async () => {
     const audit = fakeAuditRepo();
     audit.insertResolutionAudit.mockRejectedValueOnce(new Error("DB down"));
-    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit });
+    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
 
     const result = await adapter.promote(input);
     // Matches legacy writeAudit behaviour: the mutation already landed, the
@@ -89,7 +93,7 @@ describe("SsaPromotionAdapter.promote", () => {
 
   it("handles null operatorCountryId + missing webEvidence", async () => {
     const audit = fakeAuditRepo();
-    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit });
+    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
     await adapter.promote({
       ...input,
       domainFields: {
@@ -105,7 +109,7 @@ describe("SsaPromotionAdapter.promote", () => {
 
   it("handles a null resolutionPayload", async () => {
     const audit = fakeAuditRepo();
-    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit });
+    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
     await adapter.promote({ ...input, resolutionPayload: null });
     const call = audit.insertResolutionAudit.mock.calls[0]?.[0];
     expect(call.resolutionPayload).toBeNull();

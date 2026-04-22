@@ -12,7 +12,6 @@ import { StandardStrategy } from "../src/cortices/strategies/standard-strategy";
 import { NoopSourceFetcher } from "../src";
 import type {
   SourceFetcherPort,
-  SourceResult,
 } from "../src/ports/source-fetcher.port";
 import type {
   CortexDataProvider,
@@ -21,12 +20,13 @@ import type {
 } from "../src/cortices/types";
 import { noopDomainConfig } from "../src/cortices/types";
 import type { WebSearchPort } from "../src/ports/web-search.port";
+import type { CortexSkill as RegistrySkill } from "../src/cortices/registry";
 
 const noWebSearch: WebSearchPort = {
   search: async () => "",
 };
 
-function mkSkill(name: string = "any_cortex") {
+function mkSkill(name: string = "any_cortex"): RegistrySkill {
   return {
     header: {
       name,
@@ -35,7 +35,8 @@ function mkSkill(name: string = "any_cortex") {
       params: {},
     },
     body: "Analyze the data.",
-  } as never;
+    filePath: "test://any_cortex.md",
+  };
 }
 
 function mkInput(cortex: string = "any_cortex"): CortexInput {
@@ -52,7 +53,7 @@ describe("StandardStrategy — source aggregation via SourceFetcherPort", () => 
     const port: SourceFetcherPort = {
       fetchForCortex: async (cortex, params) => {
         calls.push({ cortex, params });
-        return [] as SourceResult[];
+        return [];
       },
     };
     // Force cortex execution short-circuit: userScoped cortex w/o userId
@@ -74,8 +75,7 @@ describe("StandardStrategy — source aggregation via SourceFetcherPort", () => 
       )
       .mockResolvedValue({
         findings: [],
-        tokensUsed: 0,
-        duration: 0,
+        tokensEstimate: 0,
         model: "mock",
       });
 
@@ -102,8 +102,7 @@ describe("StandardStrategy — source aggregation via SourceFetcherPort", () => 
       )
       .mockResolvedValue({
         findings: [],
-        tokensUsed: 0,
-        duration: 0,
+        tokensEstimate: 0,
         model: "mock",
       });
     const out = await strat.execute(mkSkill(), mkInput());

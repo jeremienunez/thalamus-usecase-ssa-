@@ -10,8 +10,6 @@
  * restart) must never kill the boot. Failing probes report ok=false and
  * null counts; the banner renders a red dot instead of a green one.
  */
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type Redis from "ioredis";
 import { sql } from "drizzle-orm";
 
 export type HealthSnapshot = {
@@ -21,9 +19,17 @@ export type HealthSnapshot = {
   catalog: { satellites: number | null; regimes: number | null };
 };
 
+export type HealthDbPort = {
+  execute(query: unknown): unknown;
+};
+
+export type HealthRedisPort = {
+  ping(): unknown;
+};
+
 export async function snapshotHealth(
-  db: NodePgDatabase<Record<string, unknown>>,
-  redis: Redis,
+  db: HealthDbPort,
+  redis: HealthRedisPort,
   corticesCount: number,
 ): Promise<HealthSnapshot> {
   const [postgres, catalog, redisOk] = await Promise.all([
@@ -40,7 +46,7 @@ export async function snapshotHealth(
 }
 
 async function probePostgres(
-  db: NodePgDatabase<Record<string, unknown>>,
+  db: HealthDbPort,
 ): Promise<HealthSnapshot["postgres"]> {
   try {
     const res = await db.execute(
@@ -54,7 +60,7 @@ async function probePostgres(
 }
 
 async function probeCatalog(
-  db: NodePgDatabase<Record<string, unknown>>,
+  db: HealthDbPort,
 ): Promise<HealthSnapshot["catalog"]> {
   try {
     const sats = await db.execute(
@@ -74,7 +80,7 @@ async function probeCatalog(
   }
 }
 
-async function probeRedis(redis: Redis): Promise<boolean> {
+async function probeRedis(redis: HealthRedisPort): Promise<boolean> {
   try {
     return (await redis.ping()) === "PONG";
   } catch {

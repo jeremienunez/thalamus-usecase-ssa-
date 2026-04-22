@@ -40,6 +40,17 @@ export const OPERATOR_PATTERNS =
 export const DATA_POINT_RE =
   /(\d+[.,]?\d*)\s*(km|m|deg|°|rad|m\/s|km\/s|dB|dBW|W|kW|kg|Hz|kHz|MHz|GHz|Pa|hPa|bar|years?|days?|minutes?|mins?|s|seconds?|%|arcsec)\b/g;
 
+export interface SatelliteEntities {
+  noradIds: string[];
+  cosparIds: string[];
+  satellites: string[];
+  launchVehicles: string[];
+  orbitRegimes: string[];
+  operators: string[];
+  dataPoints: string[];
+  hasSatelliteContent: boolean;
+}
+
 // --- Helpers ----------------------------------------------------------------
 
 /**
@@ -65,7 +76,7 @@ export function uniqueMatches(text: string, pattern: RegExp): string[] {
  * drop it in without refactors: top-level keys remain primitive arrays
  * plus a boolean `hasSatelliteContent` gate.
  */
-export function extractSatelliteEntities(text: string) {
+export function extractSatelliteEntities(text: string): SatelliteEntities {
   const noradIds = uniqueMatches(text, NORAD_ID_PATTERNS);
   const cosparIds = uniqueMatches(text, COSPAR_PATTERNS);
   const satellites = uniqueMatches(text, SATELLITE_NAME_PATTERNS);

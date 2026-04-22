@@ -101,7 +101,8 @@ describe("SPEC-TH-020 Layer 1 — sanitizeText strips prompt injections", () => 
     expect(sanitizeText("").injections).toBe(0);
     expect(sanitizeText("").clean).toBe("");
     // Implementation accepts non-string via `String(text)` coercion; just ensure no throw.
-    expect(() => sanitizeText(undefined as unknown as string)).not.toThrow();
+    // @ts-expect-error Intentional runtime coverage for JS callers.
+    expect(() => sanitizeText(undefined)).not.toThrow();
   });
 });
 
@@ -209,6 +210,17 @@ describe("SPEC-TH-020 Layer 3 — sanitizeDataPayload", () => {
     }));
     const { sanitized } = sanitizeDataPayload(big, { maxItems: 500 });
     expect(sanitized.length).toBeLessThanOrEqual(15000);
+  });
+
+  it("payload remains valid JSON after truncation to MAX_PAYLOAD_LENGTH", () => {
+    const big = Array.from({ length: 500 }, (_, i) => ({
+      id: i,
+      title: "x".repeat(400),
+      summary: "y".repeat(400),
+    }));
+    const { sanitized } = sanitizeDataPayload(big, { maxItems: 500 });
+    expect(sanitized.length).toBeLessThanOrEqual(15000);
+    expect(() => JSON.parse(sanitized)).not.toThrow();
   });
 
   it("does not mutate the input array", () => {

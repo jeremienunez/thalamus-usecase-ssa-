@@ -5,7 +5,7 @@ import type { StatsView } from "../../../src/types/stats.types";
 
 describe("registerStatsRoutes", () => {
   it("wires the public /api/stats route to the stats snapshot service", async () => {
-    const service = {
+    const service: Parameters<typeof registerStatsRoutes>[1] = {
       snapshot: vi.fn().mockResolvedValue({
         satellites: 10,
         conjunctions: 3,
@@ -18,7 +18,7 @@ describe("registerStatsRoutes", () => {
       } satisfies StatsView),
     };
     const app = Fastify({ logger: false });
-    registerStatsRoutes(app, service as never);
+    registerStatsRoutes(app, service);
 
     const res = await app.inject({ method: "GET", url: "/api/stats" });
 
@@ -38,11 +38,11 @@ describe("registerStatsRoutes", () => {
   });
 
   it("does not expose the stale non-api /stats path", async () => {
-    const service = {
+    const service: Parameters<typeof registerStatsRoutes>[1] = {
       snapshot: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerStatsRoutes(app, service as never);
+    registerStatsRoutes(app, service);
 
     const res = await app.inject({ method: "GET", url: "/stats" });
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createMissionApi } from "./mission";
+import { EMPTY_MISSION_STATE } from "../../../tests/wrap";
 
 describe("createMissionApi", () => {
   it("status + start + stop", async () => {
@@ -7,11 +8,11 @@ describe("createMissionApi", () => {
     const api = createMissionApi({
       getJson: vi.fn(async (p: string) => {
         calls.push(["GET", p]);
-        return {} as never;
+        return EMPTY_MISSION_STATE;
       }),
       postJson: vi.fn(async (p: string, b: unknown) => {
         calls.push(["POST", p, b]);
-        return {} as never;
+        return { ok: true, state: EMPTY_MISSION_STATE };
       }),
     });
     await api.status();

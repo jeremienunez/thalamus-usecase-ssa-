@@ -12,7 +12,9 @@ export type SourceClass =
   | "OSINT_UNCORROBORATED"
   // Multi-agent simulation inferences (sweep × sim-fish). These sit BELOW
   // OSINT in both bands and class ordering: a simulation is a structured
-  // prior, not an observation. Only reviewer acceptance can promote them.
+  // prior, not an observation. In particular, even the strongest
+  // SIM_CORROBORATED output must stay below the OSINT_UNCORROBORATED cap, so
+  // sim evidence cannot outrank open-source observation.
   | "SIM_CORROBORATED"
   | "SIM_UNCORROBORATED";
 
@@ -92,11 +94,12 @@ export class InvalidPromotion extends Error {
 }
 
 const BANDS: Record<SourceClass, { min: number; typical: number; max: number }> = {
-  // Simulation inferences live strictly below OSINT: a structured prior is
-  // not an observation. Bands are deliberately tight so sim can never
-  // masquerade as corroborated open-source signal.
+  // Simulation inferences live strictly below OSINT in both class ordering
+  // and numeric caps. A structured prior is not an observation, so even
+  // maximal SIM_CORROBORATED confidence must remain below
+  // OSINT_UNCORROBORATED.max.
   SIM_UNCORROBORATED: { min: 0.1, typical: 0.2, max: 0.35 },
-  SIM_CORROBORATED: { min: 0.3, typical: 0.42, max: 0.55 },
+  SIM_CORROBORATED: { min: 0.3, typical: 0.42, max: 0.49 },
   OSINT_UNCORROBORATED: { min: 0.1, typical: 0.3, max: 0.5 },
   OSINT_CORROBORATED: { min: 0.4, typical: 0.55, max: 0.75 },
   FIELD_LOW: { min: 0.65, typical: 0.75, max: 0.85 },

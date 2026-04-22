@@ -49,6 +49,10 @@ export interface TelemetrySwarmTargetReadPort {
   findByIdFull(id: bigint | number): Promise<FindByIdFullRow | null>;
 }
 
+export interface TelemetrySwarmLaunchPort {
+  launchSwarm: SwarmService["launchSwarm"];
+}
+
 async function loadTargetContext(
   satelliteRepo: TelemetrySwarmTargetReadPort,
   satelliteId: number,
@@ -69,7 +73,7 @@ async function loadTargetContext(
 export async function startTelemetrySwarm(
   deps: {
     satelliteRepo: TelemetrySwarmTargetReadPort;
-    swarmService: SwarmService;
+    swarmService: TelemetrySwarmLaunchPort;
   },
   opts: TelemetrySwarmOpts,
 ): Promise<LaunchSwarmResult> {

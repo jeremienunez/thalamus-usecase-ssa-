@@ -5,9 +5,11 @@ import type { PropagateStats } from "../../../src/services/knn-propagation.servi
 
 describe("registerKnnPropagationRoutes", () => {
   it("returns 400 on invalid public body and does not call the service", async () => {
-    const service = { propagate: vi.fn() };
+    const service: Parameters<typeof registerKnnPropagationRoutes>[1] = {
+      propagate: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    registerKnnPropagationRoutes(app, service as never);
+    registerKnnPropagationRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",
@@ -21,7 +23,7 @@ describe("registerKnnPropagationRoutes", () => {
   });
 
   it("forwards the validated body on the public knn route", async () => {
-    const service = {
+    const service: Parameters<typeof registerKnnPropagationRoutes>[1] = {
       propagate: vi.fn().mockResolvedValue({
         field: "lifetime",
         k: 3,
@@ -35,7 +37,7 @@ describe("registerKnnPropagationRoutes", () => {
       } satisfies PropagateStats),
     };
     const app = Fastify({ logger: false });
-    registerKnnPropagationRoutes(app, service as never);
+    registerKnnPropagationRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",
@@ -66,11 +68,11 @@ describe("registerKnnPropagationRoutes", () => {
   });
 
   it("does not expose the stale non-api knn route", async () => {
-    const service = {
+    const service: Parameters<typeof registerKnnPropagationRoutes>[1] = {
       propagate: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerKnnPropagationRoutes(app, service as never);
+    registerKnnPropagationRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",

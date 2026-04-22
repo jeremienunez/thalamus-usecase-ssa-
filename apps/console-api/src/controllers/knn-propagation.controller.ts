@@ -5,7 +5,12 @@ import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 import { KnnPropagateBodySchema } from "../schemas";
 
-export function knnPropagateController(service: KnnPropagationService) {
+export type KnnPropagationControllerPort = Pick<
+  KnnPropagationService,
+  "propagate"
+>;
+
+export function knnPropagateController(service: KnnPropagationControllerPort) {
   return asyncHandler<FastifyRequest<{ Body: unknown }>>(async (req, reply) => {
     const body = parseOrReply(req.body, KnnPropagateBodySchema, reply);
     if (body === null) return;

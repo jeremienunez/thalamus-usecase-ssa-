@@ -19,8 +19,12 @@ import type {
 } from "@interview/sweep";
 import type { SweepAuditRepository } from "../../../repositories/sweep-audit.repository";
 
+export interface SsaSweepAuditPort {
+  insertResolutionAudit: SweepAuditRepository["insertResolutionAudit"];
+}
+
 export interface SsaPromotionDeps {
-  sweepAuditRepo: SweepAuditRepository;
+  sweepAuditRepo: SsaSweepAuditPort;
   /**
    * Optional by design — pass null in Plan 1 wiring. When absent, confidence
    * promotion is a no-op (the sim hook in sweep's container still runs).

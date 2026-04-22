@@ -4,9 +4,13 @@ import { registerConjunctionRoutes } from "../../../src/routes/conjunctions.rout
 
 describe("registerConjunctionRoutes", () => {
   it("returns 400 on invalid /api/conjunctions query and does not call the service", async () => {
-    const service = { list: vi.fn(), screen: vi.fn(), knnCandidates: vi.fn() };
+    const service: Parameters<typeof registerConjunctionRoutes>[1] = {
+      list: vi.fn(),
+      screen: vi.fn(),
+      knnCandidates: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    registerConjunctionRoutes(app, service as never);
+    registerConjunctionRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",
@@ -21,13 +25,13 @@ describe("registerConjunctionRoutes", () => {
   });
 
   it("defaults and clamps minPc on the public conjunction list route", async () => {
-    const service = {
+    const service: Parameters<typeof registerConjunctionRoutes>[1] = {
       list: vi.fn().mockResolvedValue({ items: [], count: 0 }),
       screen: vi.fn(),
       knnCandidates: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerConjunctionRoutes(app, service as never);
+    registerConjunctionRoutes(app, service);
 
     const first = await app.inject({ method: "GET", url: "/api/conjunctions" });
     const second = await app.inject({
@@ -44,13 +48,13 @@ describe("registerConjunctionRoutes", () => {
   });
 
   it("parses and clamps the public /api/conjunctions/screen query", async () => {
-    const service = {
+    const service: Parameters<typeof registerConjunctionRoutes>[1] = {
       list: vi.fn(),
       screen: vi.fn().mockResolvedValue({ items: [], count: 0 }),
       knnCandidates: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerConjunctionRoutes(app, service as never);
+    registerConjunctionRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",
@@ -69,13 +73,13 @@ describe("registerConjunctionRoutes", () => {
   });
 
   it("parses knn candidate params and keeps them on the dedicated public route", async () => {
-    const service = {
+    const service: Parameters<typeof registerConjunctionRoutes>[1] = {
       list: vi.fn(),
       screen: vi.fn(),
       knnCandidates: vi.fn().mockResolvedValue({ items: [], count: 0 }),
     };
     const app = Fastify({ logger: false });
-    registerConjunctionRoutes(app, service as never);
+    registerConjunctionRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",
@@ -101,9 +105,13 @@ describe("registerConjunctionRoutes", () => {
   });
 
   it("does not expose stale non-api conjunction routes", async () => {
-    const service = { list: vi.fn(), screen: vi.fn(), knnCandidates: vi.fn() };
+    const service: Parameters<typeof registerConjunctionRoutes>[1] = {
+      list: vi.fn(),
+      screen: vi.fn(),
+      knnCandidates: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    registerConjunctionRoutes(app, service as never);
+    registerConjunctionRoutes(app, service);
 
     const list = await app.inject({ method: "GET", url: "/conjunctions" });
     const screen = await app.inject({

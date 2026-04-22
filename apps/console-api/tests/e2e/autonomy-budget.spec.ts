@@ -35,7 +35,7 @@ async function waitForStop(reason: string, deadlineMs: number) {
   throw new Error(`autonomy did not stop with reason ${reason}`);
 }
 
-describe.skipIf(!RUN_LLM)("AutonomyService budget caps (RUN_LLM_E2E=1)", () => {
+describe("AutonomyService budget caps (RUN_LLM_E2E=1)", () => {
   beforeEach(async () => {
     await resetAutonomy();
   });
@@ -44,7 +44,7 @@ describe.skipIf(!RUN_LLM)("AutonomyService budget caps (RUN_LLM_E2E=1)", () => {
     await resetAutonomy();
   });
 
-  it(
+  it.skipIf(!RUN_LLM)(
     "auto-stops with daily_budget_exhausted once spend crosses the cap",
     async () => {
       await patchAutonomy({
@@ -68,7 +68,7 @@ describe.skipIf(!RUN_LLM)("AutonomyService budget caps (RUN_LLM_E2E=1)", () => {
     120_000,
   );
 
-  it(
+  it.skipIf(!RUN_LLM)(
     "auto-stops with max_thalamus_cycles_per_day",
     async () => {
       await patchAutonomy({

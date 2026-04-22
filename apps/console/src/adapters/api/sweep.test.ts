@@ -7,11 +7,11 @@ describe("createSweepApi", () => {
     const api = createSweepApi({
       getJson: vi.fn(async (p: string) => {
         calls.push(["GET", p]);
-        return { items: [], count: 0 } as never;
+        return { items: [], count: 0 };
       }),
       postJson: vi.fn(async (p: string, b: unknown) => {
         calls.push(["POST", p, b]);
-        return { ok: true, reviewed: true, resolution: null } as never;
+        return { ok: true, reviewed: true, resolution: null };
       }),
     });
     await api.listSuggestions();

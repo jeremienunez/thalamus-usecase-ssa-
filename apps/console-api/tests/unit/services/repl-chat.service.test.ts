@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReplStreamEvent } from "@interview/shared";
 import { stepLog } from "@interview/shared";
+import { typedSpy } from "@interview/test-kit";
 import { ReplChatService } from "../../../src/services/repl-chat.service";
 import { ReplFollowUpService } from "../../../src/services/repl-followup.service";
 import { IntentClassifier } from "../../../src/services/intent-classifier.service";
@@ -42,10 +43,6 @@ function parseSummariserQuery(systemPrompt: string): string | null {
   const start = SUMMARISER_PROMPT_PREFIX.length;
   const end = systemPrompt.indexOf('"\n', start);
   return end === -1 ? null : systemPrompt.slice(start, end);
-}
-
-function typedSpy<Fn extends (...args: never[]) => unknown>() {
-  return vi.fn<Parameters<Fn>, ReturnType<Fn>>();
 }
 
 function makeFakeFactory(state: FakeLlmState): LlmTransportFactory {
@@ -183,7 +180,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
 
   it("emits classified → cycle.start → step* → finding* → summary.complete → done", async () => {
     const runCycle = vi.fn(async () => {
-      const logger = { info: () => {} } as unknown as Parameters<typeof stepLog>[0];
+      const logger = { info: () => {} } satisfies Parameters<typeof stepLog>[0];
       stepLog(logger, "cycle", "start", { cycleId: "cyc:42" });
       await Promise.resolve();
       stepLog(logger, "planner", "start");

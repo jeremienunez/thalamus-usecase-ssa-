@@ -46,6 +46,7 @@ const aliases = {
     "packages/thalamus/src/services/research-graph.service.ts",
   ),
   "@interview/db-schema": resolve(__dirname, "packages/db-schema/src/index.ts"),
+  "@interview/test-kit": resolve(__dirname, "packages/test-kit/src/index.ts"),
   "@interview/thalamus": resolve(__dirname, "packages/thalamus/src/index.ts"),
   "@interview/sweep": resolve(__dirname, "packages/sweep/src/index.ts"),
 };

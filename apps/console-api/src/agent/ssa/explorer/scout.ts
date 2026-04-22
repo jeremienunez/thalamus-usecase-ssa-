@@ -6,12 +6,13 @@ import { extractJsonArray } from "@interview/shared/utils";
 import { createLogger } from "@interview/shared/observability";
 import type { Database } from "@interview/db-schema";
 import { sql } from "drizzle-orm";
+import type { LlmTransportFactory } from "../../../services/llm-transport.port";
 
 const logger = createLogger("explorer-scout");
 
 export type { ExplorationQuery };
 
-interface ScoutInput {
+export interface ScoutInput {
   recentFindings: Array<{ title: string; summary: string; cortex: string }>;
   recentRssTrends: Array<{ title: string; sourceName: string }>;
   previousExplorations: Array<{
@@ -22,7 +23,7 @@ interface ScoutInput {
   trackedDomains: string[];
 }
 
-const SCOUT_PROMPT = `You are the curiosity engine of a Space Situational Awareness (SSA) research brain called Thalamus.
+export const SCOUT_PROMPT = `You are the curiosity engine of a Space Situational Awareness (SSA) research brain called Thalamus.
 
 Given recent research findings, RSS trends, and past exploration results, generate 5-8 exploration queries that would EXPAND our knowledge surface — new satellite operators, orbital regimes, conjunction and maneuver data, launch manifests, radar/telemetry sources, and scientific insights we don't yet track.
 
@@ -39,11 +40,32 @@ Avoid:
 
 Respond with ONLY a JSON array: [{ "query": "...", "type": "web|academic|market", "signal": "what triggered this", "priority": 1-10, "maxDepth": 1-2 }]`;
 
+const defaultLlmTransportFactory: LlmTransportFactory = {
+  create(systemPrompt: string) {
+    return createLlmTransport(systemPrompt);
+  },
+};
+
+export interface ExplorerScoutDeps {
+  llm?: LlmTransportFactory;
+}
+
+export interface ScoutSignalDbPort {
+  execute<T extends Record<string, unknown> = Record<string, unknown>>(
+    query: unknown,
+  ): Promise<{ rows: T[] }>;
+}
+
 export class ExplorerScout {
+  private readonly llm: LlmTransportFactory;
+
+  constructor(deps: ExplorerScoutDeps = {}) {
+    this.llm = deps.llm ?? defaultLlmTransportFactory;
+  }
+
   async generateQueries(input: ScoutInput): Promise<ExplorationQuery[]> {
     const context = this.buildContext(input);
-
-    const transport = createLlmTransport(SCOUT_PROMPT);
+    const transport = this.llm.create(SCOUT_PROMPT);
 
     try {
       const response = await transport.call(context);
@@ -66,7 +88,9 @@ export class ExplorerScout {
     }
   }
 
-  static async gatherSignals(db: Database): Promise<ScoutInput> {
+  static async gatherSignals(
+    db: Database | ScoutSignalDbPort,
+  ): Promise<ScoutInput> {
     const findingsResult = await db.execute(sql`
       SELECT title, summary, cortex
       FROM research_finding

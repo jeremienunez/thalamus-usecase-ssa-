@@ -280,6 +280,14 @@ module.exports = {
           "|opacity-scout|voyage-embedder",
       },
     },
+    {
+      name: "packages-no-apps-imports",
+      severity: "error",
+      comment:
+        "CLAUDE.md §3.1: packages/* must not import from apps/*. If a capability crosses the app boundary, it flows through a public seam, not a private in-process shortcut.",
+      from: { path: "^packages/" },
+      to: { path: "^apps/" },
+    },
 
     // ───── Frontend layer rules (apps/console) ─────
     {

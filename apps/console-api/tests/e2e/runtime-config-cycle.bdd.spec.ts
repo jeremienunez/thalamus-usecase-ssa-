@@ -3,10 +3,11 @@
  * with REAL LLM calls (no fixtures), parametrized across every supported
  * provider so per-provider config-routing bugs are caught.
  *
- * Opt-in: gated on RUN_LLM_E2E. Unset => everything skipped, no API calls.
- * Each provider block is additionally gated on the relevant API key env var
- * via `providerKeyPresent(p)`, so running the suite with only OPENAI_API_KEY
- * will skip kimi / minimax / local smokes.
+ * Opt-in: real-LLM tests are gated on RUN_LLM_E2E. The file itself is always
+ * collected so skips stay visible per test. Each provider block is additionally
+ * gated on the relevant API key env var via `providerKeyPresent(p)`, so
+ * running the suite with only OPENAI_API_KEY will skip kimi / minimax / local
+ * smokes.
  *
  * Structure:
  *   1. Provider smoke matrix — one test per provider in
@@ -36,9 +37,6 @@ const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 const PROVIDERS = ["openai", "kimi", "minimax", "local"] as const;
 type Provider = (typeof PROVIDERS)[number];
 
-// Cheapest model per provider used by the smoke matrix. Sending both
-// `provider` and `model` together keeps the chain reorder AND the in-flight
-// request payload aligned.
 const CHEAPEST_MODEL: Record<Provider, string> = {
   openai: "gpt-5.4-nano",
   kimi: "kimi-k2",
@@ -59,6 +57,10 @@ function providerKeyPresent(p: string): boolean {
     default:
       return false;
   }
+}
+
+function llmEnabledForProvider(p: Provider): boolean {
+  return RUN_LLM && providerKeyPresent(p);
 }
 
 type CycleResponse = {
@@ -129,153 +131,112 @@ async function listFindings(
   return body.items ?? [];
 }
 
-describe.skipIf(!RUN_LLM)(
-  "runtime-config cycle BDD (real LLM, multi-provider)",
-  () => {
-    afterEach(async () => {
-      await resetAllConfig();
-    });
+describe("runtime-config cycle BDD (real LLM, multi-provider)", () => {
+  afterEach(async () => {
+    await resetAllConfig();
+  });
 
-    // ── Provider smoke matrix ───────────────────────────────────────────
-    // One test per provider. Nested `describe.skipIf(!providerKeyPresent)`
-    // means a provider without credentials simply reports its inner test
-    // as skipped rather than failing.
-    describe.each(PROVIDERS)("provider %s", (p) => {
-      describe.skipIf(!providerKeyPresent(p))("[enabled]", () => {
-        it(
-          `given thalamus.planner.provider ${p} with matching model, when a minimal cycle runs, then the cycle completes without error`,
-          async () => {
-            const patch = await patchConfig("thalamus.planner", {
-              provider: p,
-              model: CHEAPEST_MODEL[p],
-              reasoningEffort: "low",
-              maxCortices: 2,
-              maxCostUsd: 0.05,
-            });
-            expect(patch.status).toBe(200);
+  describe.each(PROVIDERS)("provider %s", (p) => {
+    it.skipIf(!llmEnabledForProvider(p))(
+      `given thalamus.planner.provider ${p} with matching model, when a minimal cycle runs, then the cycle completes without error`,
+      async () => {
+        const patch = await patchConfig("thalamus.planner", {
+          provider: p,
+          model: CHEAPEST_MODEL[p],
+          reasoningEffort: "low",
+          maxCortices: 2,
+          maxCostUsd: 0.05,
+        });
+        expect(patch.status).toBe(200);
 
-            const result = await runCycle("liste 2 opérateurs LEO");
+        const result = await runCycle("liste 2 opérateurs LEO");
 
-            // Structural proof that the reordered chain reached the `p`
-            // transport end-to-end: no error + cycle produced a finding
-            // count (0 is acceptable — we only prove the chain ran).
-            expect(result.error).toBeUndefined();
-            expect(result.findingsEmitted).toBeGreaterThanOrEqual(0);
-          },
-          180_000,
+        expect(result.error).toBeUndefined();
+        expect(result.findingsEmitted).toBeGreaterThanOrEqual(0);
+      },
+      180_000,
+    );
+  });
+
+  describe("universal behavioral (via openai gpt-5.4-nano)", () => {
+    it.skipIf(!llmEnabledForProvider("openai"))(
+      "given thalamus.planner.maxCostUsd 0.20 and reasoningEffort medium, when a heavier cycle runs, then cycle completes and findingsEmitted is at least one",
+      async () => {
+        const patch = await patchConfig("thalamus.planner", {
+          provider: "openai",
+          model: CHEAPEST_MODEL.openai,
+          maxCostUsd: 0.2,
+          maxCortices: 2,
+          reasoningEffort: "medium",
+        });
+        expect(patch.status).toBe(200);
+
+        const cycle = await runCycle(
+          "briefing LEO conjonctions + débris + lancements prochains",
         );
-      });
-    });
 
-    // ── Universal behavioral tests ──────────────────────────────────────
-    // Run once against the cheapest config. Gated on openai credentials
-    // at the `it.skipIf` level (vitest does not support a synchronous
-    // describe-level env check tied to `.skipIf`+callback nesting without
-    // the same nested pattern — using `it.skipIf` keeps this block flat).
-    describe("universal behavioral (via openai gpt-5.4-nano)", () => {
-      it.skipIf(!providerKeyPresent("openai"))(
-        "given thalamus.planner.maxCostUsd 0.20 and reasoningEffort medium, when a heavier cycle runs, then cycle completes and findingsEmitted is at least one",
-        async () => {
-          // This test deliberately budgets above the $0.10 hardcoded
-          // safety cap to prove the runtime knob overrides it. Max spend
-          // is still clamped by maxCostUsd=0.20 at the planner layer.
-          const patch = await patchConfig("thalamus.planner", {
-            provider: "openai",
-            model: CHEAPEST_MODEL.openai,
-            maxCostUsd: 0.2,
-            maxCortices: 2,
-            reasoningEffort: "medium",
-          });
-          expect(patch.status).toBe(200);
+        expect(cycle.error).toBeUndefined();
+        expect(cycle.findingsEmitted).toBeGreaterThanOrEqual(1);
+      },
+      180_000,
+    );
 
-          const cycle = await runCycle(
-            "briefing LEO conjonctions + débris + lancements prochains",
-          );
+    it.skipIf(!llmEnabledForProvider("openai"))(
+      "given cortex override conjunction_analysis enabled false, when a cycle runs, then no new finding has cortex equals conjunction_analysis",
+      async () => {
+        const plannerPatch = await patchConfig("thalamus.planner", {
+          provider: "openai",
+          model: CHEAPEST_MODEL.openai,
+          reasoningEffort: "low",
+          maxCortices: 2,
+          maxCostUsd: 0.05,
+        });
+        expect(plannerPatch.status).toBe(200);
 
-          // HTTP surface does not emit costUsd. Structural invariants:
-          //   • cycle completes without error (the $0.10 default would
-          //     have tripped the inner loop before yielding findings on
-          //     a medium-effort multi-cortex query).
-          //   • findings are actually emitted (proves budget override
-          //     propagated to the loop service).
-          expect(cycle.error).toBeUndefined();
-          expect(cycle.findingsEmitted).toBeGreaterThanOrEqual(1);
-        },
-        180_000,
-      );
+        const cortexPatch = await patchConfig("thalamus.cortex", {
+          overrides: { conjunction_analysis: { enabled: false } },
+        });
+        expect(cortexPatch.status).toBe(200);
 
-      it.skipIf(!providerKeyPresent("openai"))(
-        "given cortex override conjunction_analysis enabled false, when a cycle runs, then no new finding has cortex equals conjunction_analysis",
-        async () => {
-          const plannerPatch = await patchConfig("thalamus.planner", {
-            provider: "openai",
-            model: CHEAPEST_MODEL.openai,
-            reasoningEffort: "low",
-            maxCortices: 2,
-            maxCostUsd: 0.05,
-          });
-          expect(plannerPatch.status).toBe(200);
+        const before = await listFindings({
+          cortex: "conjunction_analysis",
+        });
 
-          const cortexPatch = await patchConfig("thalamus.cortex", {
-            overrides: { conjunction_analysis: { enabled: false } },
-          });
-          expect(cortexPatch.status).toBe(200);
+        const cycle = await runCycle("analyse conjonctions COSMOS-2390");
 
-          // The findings endpoint does not expose cycleId filtering, so
-          // kill-switch verification uses a baseline + delta: snapshot
-          // the pre-cycle count, run, and assert no new conjunction_analysis
-          // findings were appended. Historical DB rows from earlier cycles
-          // are allowed.
-          const before = await listFindings({
-            cortex: "conjunction_analysis",
-          });
+        expect(cycle.error).toBeUndefined();
+        const after = await listFindings({
+          cortex: "conjunction_analysis",
+        });
+        expect(after.length).toBe(before.length);
+      },
+      180_000,
+    );
 
-          const cycle = await runCycle("analyse conjonctions COSMOS-2390");
+    it.skipIf(!llmEnabledForProvider("openai"))(
+      "given thalamus.reflexion.maxIterations 1, when a cycle runs on an audit query, then the cycle completes without error",
+      async () => {
+        const plannerPatch = await patchConfig("thalamus.planner", {
+          provider: "openai",
+          model: CHEAPEST_MODEL.openai,
+          reasoningEffort: "low",
+          maxCortices: 2,
+          maxCostUsd: 0.05,
+        });
+        expect(plannerPatch.status).toBe(200);
 
-          expect(cycle.error).toBeUndefined();
-          const after = await listFindings({
-            cortex: "conjunction_analysis",
-          });
-          // Kill switch proof: zero new findings with the disabled cortex.
-          // We do NOT assert findingsEmitted >= 1 — with maxCortices=2 +
-          // mandatoryStrategist, a conjunction-only query that disables
-          // conjunction_analysis legitimately leaves only strategist,
-          // which on its own synthesizes nothing from empty upstream.
-          expect(after.length).toBe(before.length);
-        },
-        180_000,
-      );
+        const reflexionPatch = await patchConfig("thalamus.reflexion", {
+          maxIterations: 1,
+        });
+        expect(reflexionPatch.status).toBe(200);
 
-      it.skipIf(!providerKeyPresent("openai"))(
-        "given thalamus.reflexion.maxIterations 1, when a cycle runs on an audit query, then the cycle completes without error",
-        async () => {
-          const plannerPatch = await patchConfig("thalamus.planner", {
-            provider: "openai",
-            model: CHEAPEST_MODEL.openai,
-            reasoningEffort: "low",
-            maxCortices: 2,
-            maxCostUsd: 0.05,
-          });
-          expect(plannerPatch.status).toBe(200);
+        const cycle = await runCycle("audit complet catalogue LEO");
 
-          const reflexionPatch = await patchConfig("thalamus.reflexion", {
-            maxIterations: 1,
-          });
-          expect(reflexionPatch.status).toBe(200);
-
-          const cycle = await runCycle("audit complet catalogue LEO");
-
-          // HTTP surface does not emit iteration count. Structural proof
-          // that the cap propagated: (a) cycle completes, (b) completedAt
-          // is populated, (c) no error. If maxIterations=1 wasn't honored
-          // the replan loop would extend runtime and/or trip the $0.05
-          // cost cap.
-          expect(cycle.error).toBeUndefined();
-          expect(cycle.completedAt.length).toBeGreaterThan(0);
-          expect(cycle.findingsEmitted).toBeGreaterThanOrEqual(0);
-        },
-        180_000,
-      );
-    });
-  },
-);
+        expect(cycle.error).toBeUndefined();
+        expect(cycle.completedAt.length).toBeGreaterThan(0);
+        expect(cycle.findingsEmitted).toBeGreaterThanOrEqual(0);
+      },
+      180_000,
+    );
+  });
+});

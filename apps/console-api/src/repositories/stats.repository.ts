@@ -11,11 +11,11 @@ export class StatsRepository {
   async aggregates(): Promise<AggregateCounts> {
     const r = await this.db.execute<AggregateCounts>(sql`
       SELECT
-        (SELECT count(*) FROM satellite)            AS satellites,
-        (SELECT count(*) FROM conjunction_event)    AS conjunctions,
-        (SELECT count(*) FROM research_finding)     AS findings,
-        (SELECT count(*) FROM research_edge)        AS kg_edges,
-        (SELECT count(*) FROM research_cycle)       AS research_cycles
+        (SELECT count(*)::int FROM satellite)            AS satellites,
+        (SELECT count(*)::int FROM conjunction_event)    AS conjunctions,
+        (SELECT count(*)::int FROM research_finding)     AS findings,
+        (SELECT count(*)::int FROM research_edge)        AS kg_edges,
+        (SELECT count(*)::int FROM research_cycle)       AS research_cycles
     `);
     return r.rows[0]!;
   }

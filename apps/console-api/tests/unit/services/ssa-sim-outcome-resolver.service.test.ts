@@ -1,28 +1,37 @@
 import { describe, expect, it, vi } from "vitest";
-import { SsaSimOutcomeResolverService } from "../../../src/services/ssa-sim-outcome-resolver.service";
+import type { Cluster, SwarmAggregate } from "@interview/sweep";
+import {
+  SsaSimOutcomeResolverService,
+  type SsaSimOutcomeResolverDeps,
+} from "../../../src/services/ssa-sim-outcome-resolver.service";
+
+const emptyClusters: Cluster[] = [];
 
 describe("SsaSimOutcomeResolverService", () => {
   it("resolves a modal narrative swarm and triggers promotion", async () => {
     const emitSuggestionFromModal = vi.fn(async () => 123);
     const emitTelemetrySuggestions = vi.fn(async (): Promise<number[]> => []);
-    const service = new SsaSimOutcomeResolverService({
+    const deps: SsaSimOutcomeResolverDeps = {
       aggregator: {
-        aggregate: vi.fn(async () => ({
-          swarmId: 42,
-          totalFish: 3,
-          quorumMet: true,
-          succeededFish: 3,
-          failedFish: 0,
-          clusters: [] as unknown[],
-          modal: {
-            actionKind: "accept",
-            fraction: 0.67,
-            exemplarSimRunId: 77,
-            exemplarAction: { kind: "accept", reason: "ok" },
-          },
-          divergenceScore: 0.33,
-        })),
-      } as never,
+        aggregate: vi.fn(async () => {
+          const aggregate: SwarmAggregate = {
+            swarmId: 42,
+            totalFish: 3,
+            quorumMet: true,
+            succeededFish: 3,
+            failedFish: 0,
+            clusters: emptyClusters,
+            modal: {
+              actionKind: "accept",
+              fraction: 0.67,
+              exemplarSimRunId: 77,
+              exemplarAction: { kind: "accept", reason: "ok" },
+            },
+            divergenceScore: 0.33,
+          };
+          return aggregate;
+        }),
+      },
       telemetryAggregator: {
         aggregate: vi.fn(),
       },
@@ -33,7 +42,8 @@ describe("SsaSimOutcomeResolverService", () => {
         emitSuggestionFromModal,
         emitTelemetrySuggestions,
       },
-    });
+    };
+    const service = new SsaSimOutcomeResolverService(deps);
 
     const result = await service.resolve({
       swarmId: 42,
@@ -62,10 +72,10 @@ describe("SsaSimOutcomeResolverService", () => {
     const emitTelemetrySuggestions = vi.fn(
       async (): Promise<number[]> => [11, 12],
     );
-    const service = new SsaSimOutcomeResolverService({
+    const deps: SsaSimOutcomeResolverDeps = {
       aggregator: {
         aggregate: vi.fn(),
-      } as never,
+      },
       telemetryAggregator: {
         aggregate: vi.fn(async () => ({
           swarmId: 7,
@@ -97,7 +107,8 @@ describe("SsaSimOutcomeResolverService", () => {
         emitSuggestionFromModal: vi.fn(async (): Promise<null> => null),
         emitTelemetrySuggestions,
       },
-    });
+    };
+    const service = new SsaSimOutcomeResolverService(deps);
 
     const result = await service.resolve({
       swarmId: 7,
@@ -120,19 +131,22 @@ describe("SsaSimOutcomeResolverService", () => {
 
   it("marks a narrative swarm failed when quorum is not met", async () => {
     const emitSuggestionFromModal = vi.fn(async () => 123);
-    const service = new SsaSimOutcomeResolverService({
+    const deps: SsaSimOutcomeResolverDeps = {
       aggregator: {
-        aggregate: vi.fn(async () => ({
-          swarmId: 99,
-          totalFish: 4,
-          quorumMet: false,
-          succeededFish: 1,
-          failedFish: 3,
-          clusters: [] as unknown[],
-          modal: null as null,
-          divergenceScore: 1,
-        })),
-      } as never,
+        aggregate: vi.fn(async () => {
+          const aggregate: SwarmAggregate = {
+            swarmId: 99,
+            totalFish: 4,
+            quorumMet: false,
+            succeededFish: 1,
+            failedFish: 3,
+            clusters: emptyClusters,
+            modal: null,
+            divergenceScore: 1,
+          };
+          return aggregate;
+        }),
+      },
       telemetryAggregator: {
         aggregate: vi.fn(),
       },
@@ -143,7 +157,8 @@ describe("SsaSimOutcomeResolverService", () => {
         emitSuggestionFromModal,
         emitTelemetrySuggestions: vi.fn(async (): Promise<number[]> => []),
       },
-    });
+    };
+    const service = new SsaSimOutcomeResolverService(deps);
 
     const result = await service.resolve({
       swarmId: 99,

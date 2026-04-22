@@ -1,107 +1,116 @@
 /**
  * packages/sweep/ arch-guard for the non-sim surface.
  *
- * Sim-specific checks live in `tests/sim/arch-guard.spec.ts`.
+ * This guard is intentionally wired to the real dependency-cruiser rules so
+ * the test fails on the same `sweep-*` policy edges enforced by repo checks.
  */
 
+import { execFile as execFileCb } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { describe, it, expect } from "vitest";
-import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
 
-const ROOT = new URL("../src/", import.meta.url).pathname;
-const SIM = join(ROOT, "sim/");
+const execFile = promisify(execFileCb);
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(TEST_DIR, "../../..");
 
-const FORBIDDEN_DB_SYMBOLS = [
-  "satellite",
-  "operator",
-  "operatorCountry",
-  "orbitRegime",
-  "platformClass",
-  "satelliteBus",
-  "conjunctionEvent",
-];
+type DepCruiseViolation = {
+  rule?: { name?: string };
+  from?: string;
+  to?: string;
+};
 
-const FORBIDDEN_FILE_NAMES = [
-  "satellite.service.ts",
-  "satellite-sweep-chat.service.ts",
-  "satellite-sweep-chat.repository.ts",
-  "satellite-sweep-chat.controller.ts",
-  "satellite-sweep-chat.routes.ts",
-  "satellite-sweep-chat.dto.ts",
-  "doctrine-parser.ts",
-  "finding-routing.ts",
-  "fragmentation-events-fetcher.ts",
-  "itu-filings-fetcher.ts",
-  "launch-manifest-fetcher.ts",
-  "tle-history-fetcher.ts",
-  "notam-fetcher.ts",
-  "space-weather-fetcher.ts",
-];
+type DepCruiseReport = {
+  summary?: {
+    totalCruised?: number;
+    violations?: DepCruiseViolation[];
+  };
+};
 
-/**
- * Files allowed to retain SSA-flavoured imports / raw SQL for Plan 1.
- * Plan 2 removes all of them when the UC3 E2E fixture moves to console-api.
- */
-const PLAN2_DEFERRED_ALLOWLIST: string[] = [];
+type SweepViolation = {
+  ruleName: string;
+  from: string;
+  to: string;
+};
 
-function isAllowlisted(file: string): boolean {
-  return PLAN2_DEFERRED_ALLOWLIST.some((suffix) => file.endsWith(suffix));
+function sweepViolations(report: DepCruiseReport): SweepViolation[] {
+  return (report.summary?.violations ?? [])
+    .map((violation) => ({
+      ruleName: violation.rule?.name ?? "",
+      from: violation.from ?? "",
+      to: violation.to ?? "",
+    }))
+    .filter((violation) => violation.ruleName.startsWith("sweep-"));
 }
 
-async function walk(dir: string, out: string[] = []): Promise<string[]> {
-  for (const ent of await readdir(dir, { withFileTypes: true })) {
-    const full = join(dir, ent.name);
-    if (ent.isDirectory()) await walk(full, out);
-    else if (ent.name.endsWith(".ts") && !ent.name.endsWith(".d.ts")) {
-      out.push(full);
+async function runDepCruiseSweepReport(): Promise<DepCruiseReport> {
+  try {
+    const { stdout } = await execFile(
+      "pnpm",
+      [
+        "exec",
+        "depcruise",
+        "--config",
+        ".dependency-cruiser.js",
+        "packages/sweep/src",
+        "--output-type",
+        "json",
+      ],
+      {
+        cwd: REPO_ROOT,
+        maxBuffer: 16 * 1024 * 1024,
+      },
+    );
+    return JSON.parse(stdout) as DepCruiseReport;
+  } catch (error) {
+    const stdout =
+      typeof error === "object" &&
+      error !== null &&
+      "stdout" in error &&
+      typeof error.stdout === "string"
+        ? error.stdout
+        : "";
+
+    if (stdout !== "") {
+      return JSON.parse(stdout) as DepCruiseReport;
     }
+    throw error;
   }
-  return out;
 }
 
-describe("packages/sweep outside sim stays domain-neutral", () => {
-  it("no domain-flavoured file names exist outside sim/", async () => {
-    const files = await walk(ROOT);
-    const violations = files
-      .filter((f) => !f.startsWith(SIM))
-      .filter((f) => FORBIDDEN_FILE_NAMES.some((n) => f.endsWith(`/${n}`)))
-      .filter((f) => !isAllowlisted(f));
-    expect(violations).toEqual([]);
+describe("packages/sweep arch guard", () => {
+  it("detects sweep-* rule violations from dependency-cruiser JSON", () => {
+    const report: DepCruiseReport = {
+      summary: {
+        violations: [
+          {
+            rule: { name: "console-api-services-no-http-imports" },
+            from: "apps/console-api/src/services/foo.ts",
+            to: "apps/console-api/src/routes/bar.ts",
+          },
+          {
+            rule: { name: "sweep-services-no-new-db-coupling" },
+            from: "packages/sweep/src/services/foo.ts",
+            to: "packages/db-schema/src/index.ts",
+          },
+        ],
+      },
+    };
+
+    expect(sweepViolations(report)).toEqual([
+      {
+        ruleName: "sweep-services-no-new-db-coupling",
+        from: "packages/sweep/src/services/foo.ts",
+        to: "packages/db-schema/src/index.ts",
+      },
+    ]);
   });
 
-  it("no imports of domain symbols from @interview/db-schema outside sim/", async () => {
-    const files = (await walk(ROOT))
-      .filter((f) => !f.startsWith(SIM))
-      .filter((f) => !isAllowlisted(f));
-    const violations: string[] = [];
-    for (const f of files) {
-      const src = await readFile(f, "utf8");
-      const blocks = src.match(
-        /import\s*(?:type\s*)?\{[^}]+\}\s*from\s*["']@interview\/db-schema["']/g,
-      ) ?? [];
-      for (const block of blocks) {
-        for (const sym of FORBIDDEN_DB_SYMBOLS) {
-          if (new RegExp(`\\b${sym}\\b`).test(block)) {
-            violations.push(`${f}: ${sym}`);
-          }
-        }
-      }
-    }
-    expect(violations).toEqual([]);
-  });
+  it("dependency-cruiser sweep rules stay green for packages/sweep/src", async () => {
+    const report = await runDepCruiseSweepReport();
 
-  it("no raw SQL against domain tables outside sim/", async () => {
-    const files = (await walk(ROOT))
-      .filter((f) => !f.startsWith(SIM))
-      .filter((f) => !isAllowlisted(f));
-    const violations: string[] = [];
-    const re =
-      /FROM\s+(satellite|operator|conjunction_event|operator_country|orbit_regime|platform_class|satellite_bus)\b/i;
-    for (const f of files) {
-      if (re.test(await readFile(f, "utf8"))) {
-        violations.push(f);
-      }
-    }
-    expect(violations).toEqual([]);
+    expect(report.summary?.totalCruised).toBeGreaterThan(0);
+    expect(sweepViolations(report)).toEqual([]);
   });
 });

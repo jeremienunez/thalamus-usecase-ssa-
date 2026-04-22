@@ -17,8 +17,8 @@ const CONJUNCTION_BUS_ID = 9902010n;
 const CONJUNCTION_PRIMARY_ID = 9902100n;
 const CONJUNCTION_SECONDARY_ID = 9902200n;
 const CONJUNCTION_ID = 9902300n;
-const CONJUNCTION_PRIMARY_NORAD_ID = 9925544;
-const CONJUNCTION_SECONDARY_NORAD_ID = 9950001;
+export const CONJUNCTION_PRIMARY_NORAD_ID = 9925544;
+export const CONJUNCTION_SECONDARY_NORAD_ID = 9950001;
 
 function halfvecLiteral(head: number[]): string {
   const values = Array.from({ length: 2048 }, (_, index) => head[index] ?? 0);

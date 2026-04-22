@@ -13,8 +13,16 @@ export interface SseClient {
 }
 
 export interface CreateSseClientOpts {
-  EventSource?: typeof EventSource;
+  EventSource?: EventSourceCtor;
 }
+
+export interface EventSourceLike {
+  onmessage: ((ev: MessageEvent) => void) | null;
+  onerror: (() => void) | null;
+  close(): void;
+}
+
+export type EventSourceCtor = new (url: string) => EventSourceLike;
 
 export function createSseClient(opts: CreateSseClientOpts = {}): SseClient {
   const ES = opts.EventSource ?? globalThis.EventSource;

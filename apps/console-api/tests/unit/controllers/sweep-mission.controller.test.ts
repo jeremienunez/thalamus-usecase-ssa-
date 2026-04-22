@@ -3,18 +3,23 @@ import { describe, expect, it, vi } from "vitest";
 import { registerSweepRoutes } from "../../../src/routes/sweep.routes";
 
 function suggestionsStub() {
-  return {
+  const suggestions: Parameters<typeof registerSweepRoutes>[1] = {
     list: vi.fn(),
     review: vi.fn(),
   };
+  return suggestions;
 }
 
 describe("registerSweepRoutes mission endpoints", () => {
   it("returns 400 on invalid body and does not call the mission service", async () => {
-    const service = { start: vi.fn() };
+    const service: Parameters<typeof registerSweepRoutes>[2] = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      publicState: vi.fn(),
+    };
     const suggestions = suggestionsStub();
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, suggestions as never, service as never);
+    registerSweepRoutes(app, suggestions, service);
 
     const res = await app.inject({
       method: "POST",
@@ -29,12 +34,14 @@ describe("registerSweepRoutes mission endpoints", () => {
   });
 
   it("forwards the parsed public mission-start body with clamping applied", async () => {
-    const mission = {
+    const mission: Parameters<typeof registerSweepRoutes>[2] = {
       start: vi.fn().mockResolvedValue({ ok: true, state: { total: 3 } }),
+      stop: vi.fn(),
+      publicState: vi.fn(),
     };
     const suggestions = suggestionsStub();
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, suggestions as never, mission as never);
+    registerSweepRoutes(app, suggestions, mission);
 
     const res = await app.inject({
       method: "POST",
@@ -49,13 +56,14 @@ describe("registerSweepRoutes mission endpoints", () => {
   });
 
   it("wires the public stop and status routes to the mission service", async () => {
-    const mission = {
+    const mission: Parameters<typeof registerSweepRoutes>[2] = {
+      start: vi.fn(),
       stop: vi.fn().mockReturnValue({ ok: true, state: { running: false } }),
       publicState: vi.fn().mockReturnValue({ running: true, total: 4 }),
     };
     const suggestions = suggestionsStub();
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, suggestions as never, mission as never);
+    registerSweepRoutes(app, suggestions, mission);
 
     const stop = await app.inject({
       method: "POST",
@@ -78,14 +86,14 @@ describe("registerSweepRoutes mission endpoints", () => {
   });
 
   it("does not expose the stale non-api mission paths", async () => {
-    const mission = {
+    const mission: Parameters<typeof registerSweepRoutes>[2] = {
       start: vi.fn(),
       stop: vi.fn(),
       publicState: vi.fn(),
     };
     const suggestions = suggestionsStub();
     const app = Fastify({ logger: false });
-    registerSweepRoutes(app, suggestions as never, mission as never);
+    registerSweepRoutes(app, suggestions, mission);
 
     const start = await app.inject({ method: "POST", url: "/mission/start" });
     const stop = await app.inject({ method: "POST", url: "/mission/stop" });

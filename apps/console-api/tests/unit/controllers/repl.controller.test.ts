@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import type { ReplStreamEvent } from "@interview/shared";
+import { typedSpy } from "@interview/test-kit";
 import type { ReplChatService } from "../../../src/services/repl-chat.service";
 import { ReplFollowUpService } from "../../../src/services/repl-followup.service";
 import type { ReplTurnService } from "../../../src/services/repl-turn.service";
@@ -18,15 +19,13 @@ import {
 } from "../../../src/controllers/repl.controller";
 import { registerReplRoutes } from "../../../src/routes/repl.routes";
 
-function typedSpy<Fn extends (...args: never[]) => unknown>() {
-  return vi.fn<Parameters<Fn>, ReturnType<Fn>>();
-}
-
 describe("replChatStreamController", () => {
   it("returns 400 on invalid body and does not call the service", async () => {
-    const service = { handleStream: vi.fn() };
+    const service: Parameters<typeof replChatStreamController>[0] = {
+      handleStream: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    app.post("/chat", replChatStreamController(service as never));
+    app.post("/chat", replChatStreamController(service));
 
     const res = await app.inject({
       method: "POST",
@@ -52,9 +51,11 @@ describe("replChatStreamController", () => {
         data: { provider: "mock", costUsd: 0, tookMs: 1, findingsCount: 0 },
       };
     }
-    const service = { handleStream: vi.fn(() => gen()) };
+    const service: Parameters<typeof replChatStreamController>[0] = {
+      handleStream: vi.fn(() => gen()),
+    };
     const app = Fastify({ logger: false });
-    app.post("/chat", replChatStreamController(service as never));
+    app.post("/chat", replChatStreamController(service));
 
     const res = await app.inject({
       method: "POST",
@@ -82,9 +83,11 @@ describe("replChatStreamController", () => {
       yield { event: "classified", data: { action: "chat" } };
       throw new Error("boom");
     }
-    const service = { handleStream: vi.fn(() => gen()) };
+    const service: Parameters<typeof replChatStreamController>[0] = {
+      handleStream: vi.fn(() => gen()),
+    };
     const app = Fastify({ logger: false });
-    app.post("/chat", replChatStreamController(service as never));
+    app.post("/chat", replChatStreamController(service));
 
     const res = await app.inject({
       method: "POST",
@@ -173,22 +176,17 @@ describe("registerReplRoutes", () => {
       };
     }
 
-    const chat = {
+    const chat: Parameters<typeof registerReplRoutes>[1] = {
       handleStream: vi.fn(() => gen()),
-    } satisfies Pick<ReplChatService, "handleStream">;
-    const followUps = {
+    };
+    const followUps: Parameters<typeof registerReplRoutes>[2] = {
       executeSelected: vi.fn(() => gen()),
-    } satisfies Pick<ReplFollowUpService, "executeSelected">;
-    const turn = {
+    };
+    const turn: Parameters<typeof registerReplRoutes>[3] = {
       handle: vi.fn(),
-    } satisfies Pick<ReplTurnService, "handle">;
+    };
     const app = Fastify({ logger: false });
-    registerReplRoutes(
-      app,
-      chat as unknown as ReplChatService,
-      followUps as unknown as ReplFollowUpService,
-      turn as unknown as ReplTurnService,
-    );
+    registerReplRoutes(app, chat, followUps, turn);
 
     const res = await app.inject({
       method: "POST",
@@ -214,20 +212,15 @@ describe("registerReplRoutes", () => {
       };
     }
 
-    const chat = {
+    const chat: Parameters<typeof registerReplRoutes>[1] = {
       handleStream: vi.fn(() => gen()),
-    } satisfies Pick<ReplChatService, "handleStream">;
+    };
     const { service: followUps, runCycle, findByCycleId } = buildRealFollowUps();
-    const turn = {
+    const turn: Parameters<typeof registerReplRoutes>[3] = {
       handle: vi.fn(),
-    } satisfies Pick<ReplTurnService, "handle">;
+    };
     const app = Fastify({ logger: false });
-    registerReplRoutes(
-      app,
-      chat as unknown as ReplChatService,
-      followUps as unknown as ReplFollowUpService,
-      turn as unknown as ReplTurnService,
-    );
+    registerReplRoutes(app, chat, followUps, turn);
 
     const payload = {
       query: "scan conjonctions",
@@ -271,22 +264,17 @@ describe("registerReplRoutes", () => {
   });
 
   it("wires /api/repl/turn to the turn service", async () => {
-    const chat = {
+    const chat: Parameters<typeof registerReplRoutes>[1] = {
       handleStream: vi.fn(),
-    } satisfies Pick<ReplChatService, "handleStream">;
-    const followUps = {
+    };
+    const followUps: Parameters<typeof registerReplRoutes>[2] = {
       executeSelected: vi.fn(),
-    } satisfies Pick<ReplFollowUpService, "executeSelected">;
-    const turn = {
+    };
+    const turn: Parameters<typeof registerReplRoutes>[3] = {
       handle: vi.fn().mockResolvedValue({ ok: true }),
-    } satisfies Pick<ReplTurnService, "handle">;
+    };
     const app = Fastify({ logger: false });
-    registerReplRoutes(
-      app,
-      chat as unknown as ReplChatService,
-      followUps as unknown as ReplFollowUpService,
-      turn as unknown as ReplTurnService,
-    );
+    registerReplRoutes(app, chat, followUps, turn);
 
     const res = await app.inject({
       method: "POST",
@@ -303,9 +291,11 @@ describe("registerReplRoutes", () => {
 
 describe("replTurnController", () => {
   it("defaults sessionId and forwards input to the turn service", async () => {
-    const service = { handle: vi.fn().mockResolvedValue({ ok: true }) };
+    const service: Parameters<typeof replTurnController>[0] = {
+      handle: vi.fn().mockResolvedValue({ ok: true }),
+    };
     const app = Fastify({ logger: false });
-    app.post("/turn", replTurnController(service as never));
+    app.post("/turn", replTurnController(service));
 
     const res = await app.inject({
       method: "POST",

@@ -1,15 +1,15 @@
 // apps/console-api/src/routes/cycles.routes.ts
 import type { FastifyInstance } from "fastify";
 import type { CycleKind } from "../types";
-import type { CycleRunnerService } from "../services/cycle-runner.service";
 import {
+  type CyclesControllerPort,
   cycleRunController,
   cycleHistoryController,
 } from "../controllers/cycles.controller";
 
 export function registerCyclesRoutes(
   app: FastifyInstance,
-  service: CycleRunnerService,
+  service: CyclesControllerPort,
 ): void {
   app.post<{ Body: { kind?: CycleKind; query?: string } }>(
     "/api/cycles/run",

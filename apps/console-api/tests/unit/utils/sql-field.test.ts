@@ -1,23 +1,16 @@
 import { describe, it, expect } from "vitest";
+import type { BuildQueryConfig, SQL } from "drizzle-orm";
 import { fieldSqlFor } from "../../../src/utils/sql-field";
 import { MISSION_WRITABLE_COLUMNS } from "../../../src/utils/field-constraints";
 
-type SqlRenderer = {
-  toQuery: (config: {
-    escapeName: (name: string) => string;
-    escapeParam: () => string;
-    escapeString: (value: string) => string;
-    casing: { getColumnCasing: (column: string) => string };
-  }) => { sql: string };
-};
-
 function renderColumnSql(field: string): string {
-  return (fieldSqlFor(field) as unknown as SqlRenderer).toQuery({
+  const fragment: SQL = fieldSqlFor(field);
+  const config: BuildQueryConfig = {
     escapeName: (name) => `"${name}"`,
     escapeParam: () => "?",
     escapeString: (value) => `'${value}'`,
-    casing: { getColumnCasing: (column) => column },
-  }).sql;
+  };
+  return fragment.toQuery(config).sql;
 }
 
 describe("fieldSqlFor", () => {

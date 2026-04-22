@@ -56,7 +56,7 @@ describe("snapshotHealth", () => {
     const db = mockDb({ pgvector: "0.8.0", satellites: 500, regimes: 37 });
     const redis = mockRedis("PONG");
 
-    const s = await snapshotHealth(db as never, redis as never, 29);
+    const s = await snapshotHealth(db, redis, 29);
 
     expect(s.postgres.ok).toBe(true);
     expect(s.postgres.pgvector).toBe("0.8.0");
@@ -75,7 +75,7 @@ describe("snapshotHealth", () => {
     });
     const redis = mockRedis("PONG");
 
-    const s = await snapshotHealth(db as never, redis as never, 29);
+    const s = await snapshotHealth(db, redis, 29);
 
     expect(s.postgres.ok).toBe(false);
     expect(s.postgres.pgvector).toBeNull();
@@ -88,7 +88,7 @@ describe("snapshotHealth", () => {
     const db = mockDb({ pgvector: "0.8.0", satellites: 0, regimes: 0 });
     const redis = mockRedis(new Error("redis down"));
 
-    const s = await snapshotHealth(db as never, redis as never, 0);
+    const s = await snapshotHealth(db, redis, 0);
 
     expect(s.redis.ok).toBe(false);
     expect(s.postgres.ok).toBe(true);

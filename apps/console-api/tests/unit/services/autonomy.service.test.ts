@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { fakePort, stubLogger } from "@interview/test-kit";
 import type { FastifyBaseLogger } from "fastify";
 import {
   AutonomyService,
@@ -19,18 +20,7 @@ function mockCycleRunner(): CycleOrchestratorPort {
 }
 
 function mockLogger(): FastifyBaseLogger {
-  const l = {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    fatal: vi.fn(),
-    child: () => l,
-    level: "info",
-    silent: vi.fn(),
-  };
-  return l as unknown as FastifyBaseLogger;
+  return fakePort<FastifyBaseLogger>({ ...stubLogger() });
 }
 
 describe("AutonomyService.start intervalSec guards", () => {

@@ -1,14 +1,22 @@
 #!/usr/bin/env tsx
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import ts from "typescript";
 
 type Layer = "unit" | "integration" | "e2e" | "contract";
+type GrandfatherRule = "NO_AS_NEVER" | "NO_AS_UNKNOWN_AS";
 type Violation = {
   file: string;
   kind: string;
   detail: string;
   line?: number;
+};
+type GrandfatherFile = Record<GrandfatherRule, string[]>;
+type CastSite = {
+  file: string;
+  line: number;
+  kind: GrandfatherRule;
 };
 
 type InvocationKind = "describe" | "it" | "test" | null;
@@ -28,6 +36,11 @@ type DescribeRecord = {
 };
 
 const ROOT = process.cwd();
+const GRANDFATHER_PATH = resolve(ROOT, "scripts/test-policy-grandfather.json");
+const EMPTY_GRANDFATHER: GrandfatherFile = {
+  NO_AS_NEVER: [],
+  NO_AS_UNKNOWN_AS: [],
+};
 
 const FORBIDDEN_SHORTCUT_RE = /\b(?:xit|xtest|xdescribe)\s*\(/g;
 
@@ -145,6 +158,101 @@ function titleFromExpression(expr: ts.Expression | undefined, sf: ts.SourceFile)
   return null;
 }
 
+function locationKey(file: string, line: number): string {
+  return `${file}:${line}`;
+}
+
+function parseArgs() {
+  const args = new Set(process.argv.slice(2));
+  return {
+    seedGrandfather: args.has("--seed-grandfather"),
+    showGrandfatherStats: args.has("--grandfather-stats"),
+  };
+}
+
+function sortUnique(items: string[]): string[] {
+  return [...new Set(items)].sort((a, b) => a.localeCompare(b));
+}
+
+function normalizeGrandfather(data: Partial<GrandfatherFile> | null | undefined): GrandfatherFile {
+  return {
+    NO_AS_NEVER: sortUnique(data?.NO_AS_NEVER ?? []),
+    NO_AS_UNKNOWN_AS: sortUnique(data?.NO_AS_UNKNOWN_AS ?? []),
+  };
+}
+
+function loadGrandfather(): GrandfatherFile {
+  if (!existsSync(GRANDFATHER_PATH)) return EMPTY_GRANDFATHER;
+  const parsed = JSON.parse(readFileSync(GRANDFATHER_PATH, "utf8")) as
+    | Partial<GrandfatherFile>
+    | undefined;
+  return normalizeGrandfather(parsed);
+}
+
+function writeGrandfather(data: GrandfatherFile): void {
+  writeFileSync(
+    GRANDFATHER_PATH,
+    `${JSON.stringify(normalizeGrandfather(data), null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function collectCastSites(file: string, sf: ts.SourceFile): CastSite[] {
+  const sites: CastSite[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isAsExpression(node)) {
+      if (node.type.kind === ts.SyntaxKind.NeverKeyword) {
+        sites.push({
+          file,
+          line: lineOfSourcePos(sf, node.getStart(sf)),
+          kind: "NO_AS_NEVER",
+        });
+      }
+
+      if (
+        node.type.kind === ts.SyntaxKind.UnknownKeyword &&
+        ts.isAsExpression(node.parent)
+      ) {
+        sites.push({
+          file,
+          line: lineOfSourcePos(sf, node.getStart(sf)),
+          kind: "NO_AS_UNKNOWN_AS",
+        });
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sf);
+  return sites;
+}
+
+function checkCastRules(
+  file: string,
+  sf: ts.SourceFile,
+  grandfather: GrandfatherFile,
+): Violation[] {
+  const violations: Violation[] = [];
+
+  for (const site of collectCastSites(file, sf)) {
+    const entry = locationKey(site.file, site.line);
+    if (grandfather[site.kind].includes(entry)) continue;
+
+    violations.push({
+      file: site.file,
+      kind: site.kind,
+      detail:
+        site.kind === "NO_AS_NEVER"
+          ? "test files must not use `as never`; prefer a typed fake or helper"
+          : "test files must not use `as unknown as`; prefer a typed fake, schema parse, or narrower fixture",
+      line: site.line,
+    });
+  }
+
+  return violations;
+}
+
 function extractCalleeParts(expr: ts.Expression): string[] | null {
   if (ts.isIdentifier(expr)) return [expr.text];
   if (ts.isPropertyAccessExpression(expr)) {
@@ -222,7 +330,7 @@ function checkLayerRules(file: string, layer: Layer, src: string): Violation[] {
   return violations;
 }
 
-function checkFile(file: string): Violation[] {
+function checkFile(file: string, grandfather: GrandfatherFile): Violation[] {
   const src = readFileSync(file, "utf8");
   const layer = inferLayer(file);
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, scriptKindFor(file));
@@ -486,10 +594,12 @@ function checkFile(file: string): Violation[] {
   }
 
   violations.push(...checkLayerRules(file, layer, src));
+  violations.push(...checkCastRules(file, sf, grandfather));
   return violations;
 }
 
 function main() {
+  const options = parseArgs();
   const files = listTestFiles();
   const counts: Record<Layer, number> = {
     unit: 0,
@@ -497,10 +607,50 @@ function main() {
     e2e: 0,
     contract: 0,
   };
+  const grandfather = loadGrandfather();
 
   for (const file of files) counts[inferLayer(file)] += 1;
 
-  const violations = files.flatMap(checkFile);
+  if (options.seedGrandfather) {
+    const seeded = normalizeGrandfather({
+      NO_AS_NEVER: files.flatMap((file) => {
+        const src = readFileSync(file, "utf8");
+        const sf = ts.createSourceFile(
+          file,
+          src,
+          ts.ScriptTarget.Latest,
+          true,
+          scriptKindFor(file),
+        );
+        return collectCastSites(file, sf)
+          .filter((site) => site.kind === "NO_AS_NEVER")
+          .map((site) => locationKey(site.file, site.line));
+      }),
+      NO_AS_UNKNOWN_AS: files.flatMap((file) => {
+        const src = readFileSync(file, "utf8");
+        const sf = ts.createSourceFile(
+          file,
+          src,
+          ts.ScriptTarget.Latest,
+          true,
+          scriptKindFor(file),
+        );
+        return collectCastSites(file, sf)
+          .filter((site) => site.kind === "NO_AS_UNKNOWN_AS")
+          .map((site) => locationKey(site.file, site.line));
+      }),
+    });
+    writeGrandfather(seeded);
+    const total = seeded.NO_AS_NEVER.length + seeded.NO_AS_UNKNOWN_AS.length;
+    console.log(
+      `seeded ${GRANDFATHER_PATH} with ${seeded.NO_AS_NEVER.length} NO_AS_NEVER + ${seeded.NO_AS_UNKNOWN_AS.length} NO_AS_UNKNOWN_AS = ${total} entries`,
+    );
+    return;
+  }
+
+  const violations = files.flatMap((file) => checkFile(file, grandfather));
+  const grandfatherTotal =
+    grandfather.NO_AS_NEVER.length + grandfather.NO_AS_UNKNOWN_AS.length;
 
   console.log(
     [
@@ -510,11 +660,17 @@ function main() {
       `    integration: ${counts.integration}`,
       `    e2e: ${counts.e2e}`,
       `    contract: ${counts.contract}`,
+      `    grandfather: ${grandfatherTotal} cast site(s) (${grandfather.NO_AS_NEVER.length} as never, ${grandfather.NO_AS_UNKNOWN_AS.length} as unknown as)`,
       "",
     ].join("\n"),
   );
 
   if (violations.length === 0) {
+    if (options.showGrandfatherStats) {
+      console.log("  grandfather stats:");
+      console.log(`    - NO_AS_NEVER: ${grandfather.NO_AS_NEVER.length}`);
+      console.log(`    - NO_AS_UNKNOWN_AS: ${grandfather.NO_AS_UNKNOWN_AS.length}`);
+    }
     console.log("  ✓ test policy holds\n");
     return;
   }
@@ -530,12 +686,19 @@ function main() {
   }
 
   console.log(`\n  ✗ ${sorted.length} violation(s) — CI must stay red until they are fixed.\n`);
+  if (options.showGrandfatherStats) {
+    console.log("  grandfather stats:");
+    console.log(`    - NO_AS_NEVER: ${grandfather.NO_AS_NEVER.length}`);
+    console.log(`    - NO_AS_UNKNOWN_AS: ${grandfather.NO_AS_UNKNOWN_AS.length}`);
+    console.log("");
+  }
   console.log("  Fix:");
   console.log("    - every file needs describe(...) naming the seam under test");
   console.log("    - every executable test must live under describe(...) and assert directly with expect(...)");
   console.log("    - remove `.skip` / `.todo` / `.only` / `.failing` and x-prefixed aliases");
   console.log("    - replace vague or duplicate titles with explicit expected-behavior titles");
   console.log("    - move the test to the right layer if it crosses the wrong boundary");
+  console.log("    - replace `as never` / `as unknown as` with typed helpers or schema-backed fixtures");
   console.log("    - see docs/testing/README.md for the testability contract\n");
   process.exit(1);
 }

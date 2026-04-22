@@ -14,7 +14,7 @@ import type { SimPromotionService } from "./sim-promotion.service";
 const MODAL_SUGGESTION_THRESHOLD = 0.5;
 
 export interface SsaSimOutcomeResolverDeps {
-  aggregator: AggregatorService;
+  aggregator: Pick<AggregatorService, "aggregate">;
   telemetryAggregator: Pick<TelemetryAggregatorService, "aggregate">;
   pcAggregator: Pick<PcAggregatorService, "aggregate">;
   promotionService: Pick<

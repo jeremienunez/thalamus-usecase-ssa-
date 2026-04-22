@@ -30,7 +30,7 @@ export class SatelliteEnrichmentRepository {
       SELECT
         s.id::int AS "satelliteId",
         s.name,
-        NULLIF(s.telemetry_summary->>'noradId', '')::int AS "noradId",
+        s.norad_id AS "noradId",
         op.name AS "operator",
         oc.name AS "operatorCountry",
         pc.name AS "platformClass",
@@ -122,16 +122,15 @@ export class SatelliteEnrichmentRepository {
         oc.doctrine->>'slot_capacity_max' as "slotCapacityMax",
         oc.doctrine->'regime'->'environment'->'classification'->>'solar_flux_zone' as "solarFluxZone",
         oc.doctrine->'regime'->'environment'->'classification'->>'radiation_zone' as "radiationZone",
-        le.solar_flux_index as "solarFluxIndex",
-        le.kp_index as "kpIndex",
-        le.radiation_index as "radiationIndex",
+        NULL::real as "solarFluxIndex",
+        NULL::real as "kpIndex",
+        NULL::real as "radiationIndex",
         COALESCE(manifest.src_count, 0)::int as "manifestSourceCount"
       FROM satellite s
       JOIN operator_country oc ON oc.id = s.operator_country_id
       JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
       LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
       LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
-      LEFT JOIN launch_epoch le ON le.operator_country_id = oc.id AND le.year = s.launch_year
       LEFT JOIN LATERAL (
         SELECT COUNT(DISTINCT si.source_id)::int as src_count
         FROM source_item si
@@ -151,7 +150,7 @@ export class SatelliteEnrichmentRepository {
     return results.rows;
   }
 
-  /** Cosine similarity search on telemetry_14d vectors. */
+  /** Cosine similarity search on the catalog embedding vector. */
   async searchByTelemetry(
     profile: number[],
     opts: { orbitRegime?: string; limit?: number },
@@ -183,13 +182,13 @@ export class SatelliteEnrichmentRepository {
         s.norad_id AS "noradId",
         s.mass_kg as "massKg",
         oc.name as "operatorCountryName", orb.name as "orbitRegimeName",
-        1.0 - (s.telemetry_14d <=> ${JSON.stringify(profile)}::vector) as similarity
+        1.0 - (s.embedding <=> ${JSON.stringify(profile)}::halfvec(2048)) as similarity
       FROM satellite s
       JOIN operator_country oc ON oc.id = s.operator_country_id
       JOIN orbit_regime orb ON orb.id = oc.orbit_regime_id
-      WHERE s.signal_power_dbw IS NOT NULL
+      WHERE s.embedding IS NOT NULL
         ${orbitRegimeFilter}
-      ORDER BY s.telemetry_14d <=> ${JSON.stringify(profile)}::vector
+      ORDER BY s.embedding <=> ${JSON.stringify(profile)}::halfvec(2048)
       LIMIT ${opts.limit ?? 20}
     `);
     return results.rows;
@@ -216,18 +215,23 @@ export class SatelliteEnrichmentRepository {
           'batch_target' AS type,
           p.id AS "payloadId",
           p.name AS "payloadName",
-          p.profile_confidence AS "profileConfidence",
+          CASE
+            WHEN p.technical_profile IS NULL
+              OR jsonb_typeof(p.technical_profile) = 'null'
+              THEN NULL::real
+            ELSE 1::real
+          END AS "profileConfidence",
           p.technical_profile->>'lastUpdated' AS "lastUpdated",
           COUNT(sp.satellite_id)::int AS "satelliteCount"
         FROM payload p
         LEFT JOIN satellite_payload sp ON sp.payload_id = p.id
-        WHERE p.profile_confidence IS DISTINCT FROM -1
         GROUP BY p.id
         ORDER BY
           CASE
-            WHEN p.profile_confidence IS NULL THEN 0
-            WHEN p.profile_confidence < 0.75 THEN 1
-            ELSE 2
+            WHEN p.technical_profile IS NULL
+              OR jsonb_typeof(p.technical_profile) = 'null'
+              THEN 0
+            ELSE 1
           END,
           COUNT(sp.satellite_id) DESC
         LIMIT ${limit}
@@ -262,7 +266,12 @@ export class SatelliteEnrichmentRepository {
         p.id AS "payloadId",
         p.name,
         p.technical_profile AS "existingProfile",
-        p.profile_confidence AS "profileConfidence",
+        CASE
+          WHEN p.technical_profile IS NULL
+            OR jsonb_typeof(p.technical_profile) = 'null'
+            THEN NULL::real
+          ELSE 1::real
+        END AS "profileConfidence",
         p.photo_url AS "photoUrl"
       FROM payload p
       WHERE ${payloadFilter}

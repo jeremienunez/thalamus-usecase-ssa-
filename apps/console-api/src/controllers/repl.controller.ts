@@ -12,7 +12,11 @@ import {
   ReplTurnBodySchema,
 } from "../schemas";
 
-export function replChatStreamController(service: ReplChatService) {
+export type ReplChatStreamPort = Pick<ReplChatService, "handleStream">;
+export type ReplFollowUpRunPort = Pick<ReplFollowUpService, "executeSelected">;
+export type ReplTurnPort = Pick<ReplTurnService, "handle">;
+
+export function replChatStreamController(service: ReplChatStreamPort) {
   return async (
     req: FastifyRequest<{ Body: unknown }>,
     reply: FastifyReply,
@@ -60,7 +64,7 @@ export function replChatStreamController(service: ReplChatService) {
   };
 }
 
-export function replTurnController(service: ReplTurnService) {
+export function replTurnController(service: ReplTurnPort) {
   return asyncHandler<FastifyRequest<{ Body: unknown }>>(async (req, reply) => {
     const body = parseOrReply(req.body, ReplTurnBodySchema, reply);
     if (body === null) return;
@@ -68,7 +72,7 @@ export function replTurnController(service: ReplTurnService) {
   });
 }
 
-export function replFollowUpRunStreamController(service: ReplFollowUpService) {
+export function replFollowUpRunStreamController(service: ReplFollowUpRunPort) {
   return async (
     req: FastifyRequest<{ Body: unknown }>,
     reply: FastifyReply,

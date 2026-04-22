@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GenericSuggestionRow } from "@interview/sweep";
+import { fakePort, stubLogger } from "@interview/test-kit";
 import type { FastifyBaseLogger } from "fastify";
 import { MissionService, type SweepListProvider } from "../../../src/services/mission.service";
 import { SweepTaskPlanner } from "../../../src/services/sweep-task-planner.service";
@@ -50,24 +51,24 @@ function failVote(reason: string): NanoResult {
 }
 
 function mockSatellites(): SatelliteRepository {
-  return {
+  return fakePort<SatelliteRepository>({
     findPayloadNamesByIds: vi.fn(),
     updateField: vi.fn().mockResolvedValue(undefined),
-  } as unknown as SatelliteRepository;
+  });
 }
 
 function mockAudit(): SweepAuditRepository {
-  return {
+  return fakePort<SweepAuditRepository>({
     insertEnrichmentSuccess: vi.fn().mockResolvedValue(undefined),
-  } as unknown as SweepAuditRepository;
+  });
 }
 
 function mockNano(): NanoResearchService {
-  return {
+  return fakePort<NanoResearchService>({
     singleVote: vi.fn(),
     votesAgree: vi.fn(),
     summary: vi.fn((vote: NanoResult) => (vote.ok ? "ok" : vote.reason)),
-  } as unknown as NanoResearchService;
+  });
 }
 
 function mockEnrichment(): EnrichmentEmitPort {
@@ -121,18 +122,7 @@ function sweepRow(
 }
 
 function mockLogger(): FastifyBaseLogger {
-  const l = {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    fatal: vi.fn(),
-    child: () => l,
-    level: "info",
-    silent: vi.fn(),
-  };
-  return l as unknown as FastifyBaseLogger;
+  return fakePort<FastifyBaseLogger>({ ...stubLogger() });
 }
 
 describe("MissionService", () => {

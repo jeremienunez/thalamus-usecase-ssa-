@@ -10,7 +10,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { ThalamusPlanner } from "../../src/services/thalamus-planner.service";
-import type { CortexRegistry } from "../../src/cortices/registry";
+import { CortexRegistry } from "../../src/cortices/registry";
 import type { DAGNode } from "../../src/cortices/types";
 
 // ---------------------------------------------------------------------------
@@ -30,7 +30,9 @@ function mkRegistry(
   ],
 ): CortexRegistry {
   const set = new Set(knownNames);
-  return { has: (name: string) => set.has(name) } as unknown as CortexRegistry;
+  const registry = new CortexRegistry("/tmp/test-apply-runtime-filters");
+  registry.has = (name: string) => set.has(name);
+  return registry;
 }
 
 function mkPlannerCfg(

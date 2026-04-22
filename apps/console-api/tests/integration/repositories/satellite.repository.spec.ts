@@ -301,7 +301,7 @@ async function seedFixtures(): Promise<Fixtures> {
 
 beforeAll(async () => {
   pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
-  db = drizzle(pool, { schema }) as unknown as NodePgDatabase<typeof schema>;
+  db = drizzle<typeof schema>(pool, { schema });
   await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS vector"));
   repo = new SatelliteRepository(db);
 });

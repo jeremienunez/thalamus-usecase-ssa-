@@ -100,6 +100,20 @@ export function domainRelevance(
 const MAX_ITEM_LENGTH = 500;
 const MAX_PAYLOAD_LENGTH = 15000;
 
+function serializeWithinPayloadLimit(
+  items: Record<string, unknown>[],
+): string {
+  const bounded = items.slice();
+  let payload = JSON.stringify(bounded, null, 2);
+
+  while (payload.length > MAX_PAYLOAD_LENGTH && bounded.length > 0) {
+    bounded.pop();
+    payload = JSON.stringify(bounded, null, 2);
+  }
+
+  return payload;
+}
+
 /**
  * Sanitize an array of data items before sending to LLM.
  * Strips injections, filters off-topic items, truncates. Callers pass
@@ -149,10 +163,7 @@ export function sanitizeDataPayload(
     if (cleanItems.length >= maxItems) break;
   }
 
-  const payload = JSON.stringify(cleanItems, null, 2).slice(
-    0,
-    MAX_PAYLOAD_LENGTH,
-  );
+  const payload = serializeWithinPayloadLimit(cleanItems);
 
   if (totalInjections > 0) {
     logger.warn(

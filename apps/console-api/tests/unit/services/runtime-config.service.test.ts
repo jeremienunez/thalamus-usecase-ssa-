@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
+import { fakePort } from "@interview/test-kit";
 import { RuntimeConfigService } from "../../../src/services/runtime-config.service";
 import { ValidationError } from "../../../src/services/runtime-config.service";
 import type { RuntimeConfigRepository } from "../../../src/repositories/runtime-config.repository";
@@ -19,7 +20,7 @@ import { registerSweepConfigDomains } from "@interview/sweep";
 
 function makeRepo(): RuntimeConfigRepository {
   const store = new Map<string, Record<string, string>>();
-  return {
+  return fakePort<RuntimeConfigRepository>({
     async read(domain: RuntimeConfigDomain) {
       return store.get(domain) ?? {};
     },
@@ -30,7 +31,7 @@ function makeRepo(): RuntimeConfigRepository {
     async clear(domain: RuntimeConfigDomain) {
       store.delete(domain);
     },
-  } as unknown as RuntimeConfigRepository;
+  });
 }
 
 describe("RuntimeConfigService", () => {

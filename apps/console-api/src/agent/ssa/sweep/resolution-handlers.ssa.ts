@@ -13,8 +13,6 @@
 
 import { randomUUID as _ignoreUnused } from "node:crypto";
 import { sql } from "drizzle-orm";
-import type { Database } from "@interview/db-schema";
-import type { SatelliteRepository } from "../../../repositories/satellite.repository";
 import type {
   ResolutionHandler,
   ResolutionHandlerRegistry,
@@ -42,9 +40,23 @@ export type OnSimUpdateAccepted = (event: {
   nextSourceClass: string;
 }) => Promise<void>;
 
+export interface SsaHandlerDbPort {
+  execute<T extends Record<string, unknown> = Record<string, unknown>>(
+    query: unknown,
+  ): Promise<{ rows?: T[]; rowCount?: number }>;
+}
+
+export interface SsaHandlerSatelliteRepoPort {
+  updateField(
+    satelliteId: bigint,
+    field: string,
+    value: number,
+  ): Promise<unknown>;
+}
+
 export interface SsaHandlerDeps {
-  db: Database;
-  satelliteRepo: SatelliteRepository;
+  db: SsaHandlerDbPort;
+  satelliteRepo: SsaHandlerSatelliteRepoPort;
   /**
    * Optional sim-provenance callback. When set, the update_field handler
    * fires it for sim_swarm_telemetry-sourced suggestions (matches legacy
@@ -64,7 +76,7 @@ export interface SsaHandlerDeps {
 // ─── Shared helpers ──────────────────────────────────────────────
 
 async function resolveSatelliteIds(
-  db: Database,
+  db: SsaHandlerDbPort,
   explicitIds: string[],
   operatorCountryId: string | null,
 ): Promise<bigint[]> {
@@ -79,7 +91,7 @@ async function resolveSatelliteIds(
 }
 
 async function findPayloadsByName(
-  db: Database,
+  db: SsaHandlerDbPort,
   name: string,
 ): Promise<Array<{ id: bigint; name: string }>> {
   const result = await db.execute<{ id: bigint; name: string }>(
@@ -92,7 +104,7 @@ async function findPayloadsByName(
 }
 
 async function findOperatorCountriesByName(
-  db: Database,
+  db: SsaHandlerDbPort,
   name: string,
 ): Promise<Array<{ id: bigint; name: string; orbitRegime: string | null }>> {
   const result = await db.execute<{

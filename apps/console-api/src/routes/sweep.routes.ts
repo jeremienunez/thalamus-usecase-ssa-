@@ -1,12 +1,12 @@
 // apps/console-api/src/routes/sweep.routes.ts
 import type { FastifyInstance } from "fastify";
-import type { MissionService } from "../services/mission.service";
-import type { SweepSuggestionsService } from "../services/sweep-suggestions.service";
 import {
+  type SweepSuggestionsControllerPort,
   sweepSuggestionsListController,
   sweepReviewController,
 } from "../controllers/sweep-suggestions.controller";
 import {
+  type MissionControllerPort,
   missionStartController,
   missionStopController,
   missionStatusController,
@@ -14,8 +14,8 @@ import {
 
 export function registerSweepRoutes(
   app: FastifyInstance,
-  suggestions: SweepSuggestionsService,
-  mission: MissionService,
+  suggestions: SweepSuggestionsControllerPort,
+  mission: MissionControllerPort,
 ): void {
   app.get(
     "/api/sweep/suggestions",

@@ -13,13 +13,11 @@
 
 import { describe, it, expect } from "vitest";
 import { ThalamusPlanner } from "../src/services/thalamus-planner.service";
-import type { CortexRegistry } from "../src/cortices/registry";
+import { CortexRegistry } from "../src/cortices/registry";
 import type { DAGPlan } from "../src/cortices/types";
 
 function mkRegistry(): CortexRegistry {
-  // resolveFallbackPlan + buildSystemPrompt don't touch the registry; a
-  // stub that satisfies the type is enough.
-  return {} as unknown as CortexRegistry;
+  return new CortexRegistry("/tmp/test-planner-config-seams");
 }
 
 describe("ThalamusPlanner.resolveFallbackPlan — selection order", () => {

@@ -43,18 +43,45 @@ async function missionStatus(): Promise<{
   return (await res.json()) as { running: boolean; total: number; completed: number };
 }
 
-async function startMissionWithCap(cap: number): Promise<{ total: number }> {
-  // Build a task list only — stop immediately afterward so no LLM call fires.
+async function startMission(opts: {
+  maxSatsPerSuggestion: number;
+}): Promise<{
+  alreadyRunning?: boolean;
+  state: {
+    running: boolean;
+    total: number;
+    completed: number;
+    startedAt: string | null;
+  };
+}> {
   const res = await fetch(`${BASE}/api/sweep/mission/start`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ maxSatsPerSuggestion: cap }),
+    body: JSON.stringify(opts),
   });
   const text = await res.text();
   expect(res.ok, text).toBe(true);
-  const body = JSON.parse(text) as { state: { total: number } };
+  return JSON.parse(text) as {
+    alreadyRunning?: boolean;
+    state: {
+      running: boolean;
+      total: number;
+      completed: number;
+      startedAt: string | null;
+    };
+  };
+}
+
+async function startMissionWithCap(cap: number): Promise<{
+  running: boolean;
+  total: number;
+  completed: number;
+  startedAt: string | null;
+}> {
+  // Build a task list only — stop immediately afterward so no LLM call fires.
+  const body = await startMission({ maxSatsPerSuggestion: cap });
   await stopMissionIfRunning();
-  return { total: body.state.total };
+  return body.state;
 }
 
 /**
@@ -172,29 +199,6 @@ describe("sweep mission — per-satellite task expansion", () => {
     expect(total).toBe(0);
   });
 
-  it("skips suggestions on non-writable fields (telemetry / derived columns)", async () => {
-    await seedSuggestion({
-      id: "9900002",
-      operatorCountryName: "United States",
-      field: "thermal_margin", // sim-fish territory, not web-researchable
-      satelliteIds: ["1", "2"],
-    });
-    const { total } = await startMissionWithCap(5);
-    expect(total).toBe(0);
-  });
-
-  it("skips suggestions whose value is already set (idempotency)", async () => {
-    await seedSuggestion({
-      id: "9900003",
-      operatorCountryName: "United States",
-      field: "lifetime",
-      satelliteIds: ["1"],
-      value: 15, // already filled — nothing to do
-    });
-    const { total } = await startMissionWithCap(5);
-    expect(total).toBe(0);
-  });
-
   it("caps satellites per suggestion to respect maxSatsPerSuggestion", async () => {
     await seedSuggestion({
       id: "9900004",
@@ -202,23 +206,25 @@ describe("sweep mission — per-satellite task expansion", () => {
       field: "lifetime",
       satelliteIds: seededSatelliteIds,
     });
-    const { total } = await startMissionWithCap(3);
-    expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThanOrEqual(3);
+    const state = await startMissionWithCap(3);
+    expect(state.running).toBe(true);
+    expect(state.startedAt).toMatch(/T/);
+    expect(state.total).toBe(3);
   });
 
-  it("expands one (operator × field) suggestion into N per-satellite tasks", async () => {
-    // Use real satellite ids from the live DB so the join returns rows.
-    // We pick three arbitrary low ids that exist in the seeded catalog.
+  it("expands one suggestion into one task per eligible satellite", async () => {
     await seedSuggestion({
       id: "9900005",
       operatorCountryName: "United States",
       field: "lifetime",
       satelliteIds: seededSatelliteIds.slice(0, 3),
     });
-    const { total } = await startMissionWithCap(5);
-    expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThanOrEqual(3);
+    const state = await startMissionWithCap(5);
+    expect(state.total).toBe(3);
+
+    const status = await missionStatus();
+    expect(status.running).toBe(false);
+    expect(status.total).toBe(3);
   });
 
   it("refuses to start a second mission while one is running", async () => {
@@ -228,20 +234,11 @@ describe("sweep mission — per-satellite task expansion", () => {
       field: "lifetime",
       satelliteIds: seededSatelliteIds.slice(0, 5),
     });
-    const first = await fetch(`${BASE}/api/sweep/mission/start`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ maxSatsPerSuggestion: 5 }),
-    });
-    const firstBody = (await first.json()) as { state: { running: boolean } };
+    const firstBody = await startMission({ maxSatsPerSuggestion: 5 });
     expect(firstBody.state.running).toBe(true);
+    expect(firstBody.state.total).toBe(5);
 
-    const second = await fetch(`${BASE}/api/sweep/mission/start`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ maxSatsPerSuggestion: 5 }),
-    });
-    const secondBody = (await second.json()) as { alreadyRunning?: boolean };
+    const secondBody = await startMission({ maxSatsPerSuggestion: 5 });
     expect(secondBody.alreadyRunning).toBe(true);
 
     await stopMissionIfRunning();

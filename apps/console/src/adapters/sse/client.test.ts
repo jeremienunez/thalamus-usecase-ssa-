@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { createSseClient, type SseClient } from "./client";
+import {
+  createSseClient,
+  type EventSourceCtor,
+  type SseClient,
+} from "./client";
 
 function makeFakeES() {
   const instances: FakeES[] = [];
@@ -14,7 +18,7 @@ function makeFakeES() {
       this.closed = true;
     }
   }
-  return { FakeES: FakeES as unknown as typeof EventSource, instances };
+  return { FakeES: FakeES as EventSourceCtor, instances };
 }
 
 describe("createSseClient", () => {

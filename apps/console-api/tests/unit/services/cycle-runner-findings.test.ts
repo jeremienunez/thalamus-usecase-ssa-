@@ -10,6 +10,7 @@
  * ThalamusContainer — hence the additive fields.
  */
 import { describe, it, expect, vi } from "vitest";
+import { fakePort, stubLogger } from "@interview/test-kit";
 import type { FastifyBaseLogger } from "fastify";
 import {
   CycleRunnerService,
@@ -18,18 +19,7 @@ import {
 } from "../../../src/services/cycle-runner.service";
 
 function mockLogger(): FastifyBaseLogger {
-  const l = {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    fatal: vi.fn(),
-    child: () => l,
-    level: "info",
-    silent: vi.fn(),
-  };
-  return l as unknown as FastifyBaseLogger;
+  return fakePort<FastifyBaseLogger>({ ...stubLogger() });
 }
 
 const sampleFindings = [

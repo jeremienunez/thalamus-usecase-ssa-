@@ -1,10 +1,10 @@
 // apps/console-api/src/routes/repl.routes.ts
 import type { FastifyInstance } from "fastify";
-import type { ReplChatService } from "../services/repl-chat.service";
-import type { ReplFollowUpService } from "../services/repl-followup.service";
-import type { ReplTurnService } from "../services/repl-turn.service";
 import { authenticate } from "../middleware/auth.middleware";
 import {
+  type ReplChatStreamPort,
+  type ReplFollowUpRunPort,
+  type ReplTurnPort,
   replFollowUpRunStreamController,
   replChatStreamController,
   replTurnController,
@@ -12,9 +12,9 @@ import {
 
 export function registerReplRoutes(
   app: FastifyInstance,
-  chat: ReplChatService,
-  followUps: ReplFollowUpService,
-  turn: ReplTurnService,
+  chat: ReplChatStreamPort,
+  followUps: ReplFollowUpRunPort,
+  turn: ReplTurnPort,
 ): void {
   app.post<{ Body: { input: string } }>(
     "/api/repl/chat",

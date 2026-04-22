@@ -57,15 +57,13 @@ function fakeRegistry(skills: Record<string, Partial<CortexSkill>>) {
       },
     });
   }
-  return {
-    get: (n: string) => map.get(n),
-    has: (n: string) => map.has(n),
-    names: () => [...map.keys()],
-    size: () => map.size,
-  } as unknown as CortexRegistry;
+  const registry = new CortexRegistry("/tmp/test-cortex-pattern");
+  registry.get = (name: string) => map.get(name);
+  registry.has = (name: string) => map.has(name);
+  registry.names = () => [...map.keys()];
+  registry.size = () => map.size;
+  return registry;
 }
-
-const fakeDb = {} as never;
 
 // Test domain config — matches the historic SSA defaults the tests were
 // written against (FleetAnalyst user-scoped, AdvisoryRadar / DebrisForecaster
@@ -157,7 +155,7 @@ describe("SPEC-TH-003 AC-1 / AC-3 — nominal execution normalises findings", ()
       findings: rawFindings,
       tokensEstimate: 100,
       model: "test-nano",
-    } as never);
+    });
 
     // Make external sources non-empty so the executor reaches the LLM path.
     const sourceFetcher: SourceFetcherPort = {
@@ -239,9 +237,9 @@ describe("SPEC-TH-003 AC-5 — helper throw is swallowed, executor keeps going",
     // did not propagate the helper failure and still processed source data.
     vi.mocked(analyzeCortexData).mockResolvedValue({
       findings: [],
-      tokensUsed: 0,
+      tokensEstimate: 0,
       model: "test-nano",
-    } as never);
+    });
 
     const explodingHelper = vi.fn(async () => {
       throw new Error("db down");

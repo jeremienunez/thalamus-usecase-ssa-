@@ -9,7 +9,12 @@ import { toCycleRunResponseDto } from "../transformers/cycle-run.transformer";
 const DEFAULT_QUERY =
   "Current SSA situation — upcoming conjunctions, catalog anomalies, debris forecast";
 
-export function cycleRunController(service: CycleRunnerService) {
+export type CyclesControllerPort = Pick<
+  CycleRunnerService,
+  "runUserCycle" | "listHistory"
+>;
+
+export function cycleRunController(service: CyclesControllerPort) {
   return asyncHandler<FastifyRequest<{ Body: unknown }>>(async (req, reply) => {
     const body = parseOrReply(req.body, CycleRunBodySchema, reply);
     if (body === null) return;
@@ -25,6 +30,6 @@ export function cycleRunController(service: CycleRunnerService) {
   });
 }
 
-export function cycleHistoryController(service: CycleRunnerService) {
+export function cycleHistoryController(service: CyclesControllerPort) {
   return asyncHandler(async () => ({ items: service.listHistory() }));
 }

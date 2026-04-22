@@ -4,9 +4,11 @@ import { registerSatelliteRoutes } from "../../../src/routes/satellites.routes";
 
 describe("registerSatelliteRoutes", () => {
   it("returns 400 on invalid public query params and does not call the service", async () => {
-    const service = { list: vi.fn() };
+    const service: Parameters<typeof registerSatelliteRoutes>[1] = {
+      list: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    registerSatelliteRoutes(app, service as never);
+    registerSatelliteRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",
@@ -19,11 +21,11 @@ describe("registerSatelliteRoutes", () => {
   });
 
   it("parses and clamps the public /api/satellites query before calling the service", async () => {
-    const service = {
+    const service: Parameters<typeof registerSatelliteRoutes>[1] = {
       list: vi.fn().mockResolvedValue({ items: [], count: 0 }),
     };
     const app = Fastify({ logger: false });
-    registerSatelliteRoutes(app, service as never);
+    registerSatelliteRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",
@@ -37,11 +39,11 @@ describe("registerSatelliteRoutes", () => {
   });
 
   it("does not accidentally expose the stale non-api /satellites path", async () => {
-    const service = {
+    const service: Parameters<typeof registerSatelliteRoutes>[1] = {
       list: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerSatelliteRoutes(app, service as never);
+    registerSatelliteRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",

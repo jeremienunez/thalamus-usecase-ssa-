@@ -18,6 +18,12 @@ import type {
   EntityRef,
 } from "../src/ports/entity-catalog.port";
 import { NullEmbedder } from "../src/entities/null-embedder";
+import {
+  ResearchFindingType,
+  ResearchRelation,
+  ResearchStatus,
+} from "@interview/shared/enum";
+import type { ResearchFinding } from "../src/types/research.types";
 
 // Phase 4 · Task 4.1: the kernel ships NullEmbedder as the default port
 // implementation, so tests can use it directly instead of shape-casting
@@ -27,7 +33,28 @@ const nullEmbedder = new NullEmbedder();
 function mkFindingRepo(overrides: Partial<FindingsGraphPort> = {}): FindingsGraphPort {
   return {
     upsertByDedupHash: async () => ({
-      finding: {} as never,
+      finding: {
+        id: 1n,
+        researchCycleId: 1n,
+        cortex: "catalog",
+        findingType: ResearchFindingType.Insight,
+        status: ResearchStatus.Active,
+        urgency: null,
+        title: "stub",
+        summary: "stub",
+        evidence: null,
+        reasoning: null,
+        confidence: 0.5,
+        impactScore: null,
+        extensions: null,
+        reflexionNotes: null,
+        iteration: 0,
+        dedupHash: null,
+        embedding: null,
+        expiresAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
       inserted: true,
     }),
     findSimilar: async () => [],
@@ -95,13 +122,13 @@ describe("ResearchGraphService.getKnowledgeGraph — delegates name resolution",
       cleanOrphans: async () => 0,
     };
     const findingRepo = mkFindingRepo({
-      findActive: async () => [
+      findActive: async (): Promise<ResearchFinding[]> => [
         {
           id: 1n,
           researchCycleId: 1n,
-          cortex: "fleet_analyst" as never,
-          findingType: "insight" as never,
-          status: "active" as never,
+          cortex: "fleet_analyst",
+          findingType: ResearchFindingType.Insight,
+          status: ResearchStatus.Active,
           urgency: null,
           title: "F1",
           summary: "s",
@@ -125,9 +152,9 @@ describe("ResearchGraphService.getKnowledgeGraph — delegates name resolution",
         {
           id: 1n,
           findingId: 1n,
-          entityType: "satellite" as never,
+          entityType: "satellite",
           entityId: 1n,
-          relation: "about" as never,
+          relation: ResearchRelation.About,
           weight: null,
           context: null,
           createdAt: new Date(),

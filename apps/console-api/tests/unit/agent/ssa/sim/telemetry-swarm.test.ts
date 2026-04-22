@@ -6,14 +6,27 @@
  * the right shape. The SwarmService is mocked — we don't boot BullMQ here.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fakePort, typedSpy } from "@interview/test-kit";
 import { startTelemetrySwarm } from "../../../../../src/agent/ssa/sim/swarms/telemetry";
 import { __resetBusDatasheetCache } from "../../../../../src/agent/ssa/sim/bus-datasheets/loader";
-import type { SwarmService, LaunchSwarmResult } from "@interview/sweep";
+import type { LaunchSwarmResult } from "@interview/sweep";
 import type { FindByIdFullRow } from "../../../../../src/types/satellite.types";
+import type { TelemetrySwarmLaunchPort } from "../../../../../src/agent/ssa/sim/swarms/telemetry";
 
 beforeEach(() => {
   __resetBusDatasheetCache();
 });
+
+function hasBusDatasheetPrior(
+  value: unknown,
+): value is { busArchetype: string; scalars: Record<string, unknown> } {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "busArchetype" in value &&
+    "scalars" in value
+  );
+}
 
 function mockSatelliteRepo(sat: {
   id: number;
@@ -47,14 +60,13 @@ function mockSatelliteRepo(sat: {
 }
 
 function mockSwarmService() {
-  const launch = vi.fn(
-    async (_opts: unknown): Promise<LaunchSwarmResult> => ({
+  const launch = typedSpy<TelemetrySwarmLaunchPort["launchSwarm"]>()
+    .mockResolvedValue({
       swarmId: 42,
       fishCount: 5,
       firstSimRunId: 100,
-    }),
-  );
-  const svc = { launchSwarm: launch } as unknown as SwarmService;
+    } satisfies LaunchSwarmResult);
+  const svc = fakePort<TelemetrySwarmLaunchPort>({ launchSwarm: launch });
   return { svc, launch };
 }
 
@@ -75,25 +87,21 @@ describe("startTelemetrySwarm", () => {
     expect(result.swarmId).toBe(42);
     expect(launch).toHaveBeenCalledOnce();
 
-    const arg = launch.mock.calls[0]![0] as {
-      kind: string;
-      title: string;
-      baseSeed: {
-        subjectIds?: number[];
-        subjectKind?: string;
-        telemetryTargetSatelliteId?: number;
-        busDatasheetPrior?: { busArchetype: string; scalars: Record<string, unknown> };
-      };
-      perturbations: unknown[];
-    };
+    const arg = launch.mock.calls[0]![0];
 
     expect(arg.kind).toBe("uc_telemetry_inference");
     expect(arg.title).toContain("Intelsat 23");
     expect(arg.baseSeed.subjectIds).toEqual([77]);
     expect(arg.baseSeed.subjectKind).toBe("operator");
     expect(arg.baseSeed.telemetryTargetSatelliteId).toBe(1);
-    expect(arg.baseSeed.busDatasheetPrior?.busArchetype).toBe("SSL-1300");
-    expect(Object.keys(arg.baseSeed.busDatasheetPrior?.scalars ?? {})).toContain("powerDraw");
+    expect(hasBusDatasheetPrior(arg.baseSeed.busDatasheetPrior)).toBe(true);
+    if (!hasBusDatasheetPrior(arg.baseSeed.busDatasheetPrior)) {
+      throw new Error("expected busDatasheetPrior to be present");
+    }
+    expect(arg.baseSeed.busDatasheetPrior.busArchetype).toBe("SSL-1300");
+    expect(Object.keys(arg.baseSeed.busDatasheetPrior.scalars)).toContain(
+      "powerDraw",
+    );
     expect(arg.perturbations.length).toBe(5);
   });
 
@@ -111,9 +119,7 @@ describe("startTelemetrySwarm", () => {
       { satelliteId: 2, fishCount: 3 },
     );
 
-    const arg = launch.mock.calls[0]![0] as {
-      baseSeed: { busDatasheetPrior?: unknown };
-    };
+    const arg = launch.mock.calls[0]![0];
     expect(arg.baseSeed.busDatasheetPrior).toBeUndefined();
   });
 
@@ -161,11 +167,9 @@ describe("startTelemetrySwarm", () => {
       { satelliteId: 4, fishCount: 5 },
     );
 
-    const arg = launch.mock.calls[0]![0] as {
-      perturbations: Array<{ kind: string; riskProfile?: string }>;
-    };
+    const arg = launch.mock.calls[0]![0];
     const profiles = arg.perturbations
-      .map((p) => p.riskProfile)
+      .map((p) => (typeof p.riskProfile === "string" ? p.riskProfile : null))
       .filter((p): p is string => !!p);
     expect(profiles).toContain("conservative");
     expect(profiles).toContain("balanced");

@@ -6,7 +6,9 @@ import { parseOrReply } from "../utils/parse-request";
 import { ReflexionPassBodySchema } from "../schemas";
 import type { ReflexionPassInput } from "../types/reflexion.types";
 
-export function reflexionController(service: ReflexionService) {
+export type ReflexionControllerPort = Pick<ReflexionService, "runPass">;
+
+export function reflexionController(service: ReflexionControllerPort) {
   return asyncHandler<FastifyRequest<{ Body: unknown }>>(async (req, reply) => {
     const body = parseOrReply(req.body, ReflexionPassBodySchema, reply);
     if (body === null) return;

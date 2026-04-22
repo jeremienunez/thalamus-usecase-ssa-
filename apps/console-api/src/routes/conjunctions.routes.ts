@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import type { ConjunctionViewService } from "../services/conjunction-view.service";
 import {
+  type ConjunctionsControllerPort,
   conjunctionsController,
   screenController,
   knnCandidatesController,
@@ -8,7 +8,7 @@ import {
 
 export function registerConjunctionRoutes(
   app: FastifyInstance,
-  service: ConjunctionViewService,
+  service: ConjunctionsControllerPort,
 ): void {
   app.get<{ Querystring: { minPc?: string } }>(
     "/api/conjunctions",

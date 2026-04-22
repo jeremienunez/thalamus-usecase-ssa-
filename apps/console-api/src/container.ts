@@ -9,6 +9,7 @@
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { SQLWrapper } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type Redis from "ioredis";
 import type * as schema from "@interview/db-schema";
@@ -316,7 +317,19 @@ export async function buildContainer(
     confidence: null,
   });
   const ssaResolutionRegistry = createSsaResolutionRegistry({
-    db,
+    db: {
+      execute: async <
+        T extends Record<string, unknown> = Record<string, unknown>,
+      >(
+        query: SQLWrapper,
+      ) => {
+        const result = await db.execute(query);
+        return {
+          rows: (result.rows ?? []) as T[],
+          rowCount: result.rowCount ?? undefined,
+        };
+      },
+    },
     satelliteRepo,
   });
   // `SsaAuditProvider` needs `sweep.sweepRepo.loadPastFeedback`, but the

@@ -1,39 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { ApiClientProvider, useApiClient } from "./ApiClientContext";
-import type { ApiClient } from "./index";
+import { makeStubApi } from "../../../tests/wrap";
 
-const stub: ApiClient = {
-  satellites: { list: async () => ({ items: [], count: 0 }) },
-  payloads: { listForSatellite: async () => ({ items: [], count: 0 }) },
-  conjunctions: { list: async () => ({ items: [], count: 0 }) },
-  kg: {
-    listNodes: async () => ({ items: [] }),
-    listEdges: async () => ({ items: [] }),
-  },
-  findings: {
-    list: async () => ({ items: [], count: 0 }),
-    findById: async () => ({}) as never,
-    decide: async () => ({}) as never,
-  },
-  stats: { get: async () => ({}) as never },
-  cycles: { list: async () => ({ items: [] }), run: async () => ({}) as never },
-  sweep: {
-    listSuggestions: async () => ({ items: [], count: 0 }),
-    review: async () => ({}) as never,
-  },
-  mission: {
-    status: async () => ({}) as never,
-    start: async () => ({}) as never,
-    stop: async () => ({}) as never,
-  },
-  autonomy: {
-    status: async () => ({}) as never,
-    start: async () => ({}) as never,
-    stop: async () => ({}) as never,
-    reset: async () => ({}) as never,
-  },
-};
+const stub = makeStubApi();
 
 describe("ApiClientContext", () => {
   it("useApiClient returns the provided client", () => {

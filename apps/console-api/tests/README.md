@@ -32,6 +32,12 @@ Convention: `.spec.ts` extension. Requires `DATABASE_URL` reachable.
 
 - `integration/repositories/` — repo methods against a live DB (verifies SQL correctness).
 
+For Postgres-backed repository specs, use
+`tests/integration/_harness.ts`. It provisions a migrated ephemeral database
+per spec file and resets the public schema between tests. Avoid local
+hand-crafted temp-table schemas; they drifted from production and were the main
+source of false-green integration tests.
+
 ## `tests/e2e/` (top — smallest, slowest)
 
 Full HTTP surface via `startServer(0)` on an ephemeral port. Tests the whole stack.

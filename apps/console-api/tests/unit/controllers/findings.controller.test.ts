@@ -18,13 +18,13 @@ const findingView: FindingView = {
 
 describe("registerFindingsRoutes", () => {
   it("parses filters on the public findings list route", async () => {
-    const service = {
+    const service: Parameters<typeof registerFindingsRoutes>[1] = {
       list: vi.fn().mockResolvedValue({ items: [], count: 0 }),
       findById: vi.fn(),
       updateDecision: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerFindingsRoutes(app, service as never);
+    registerFindingsRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",
@@ -43,13 +43,13 @@ describe("registerFindingsRoutes", () => {
   });
 
   it("returns 400 when the public path id is malformed", async () => {
-    const service = {
+    const service: Parameters<typeof registerFindingsRoutes>[1] = {
       list: vi.fn(),
       findById: vi.fn(),
       updateDecision: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerFindingsRoutes(app, service as never);
+    registerFindingsRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",
@@ -62,7 +62,7 @@ describe("registerFindingsRoutes", () => {
   });
 
   it("maps HttpError.notFound from the service to 404 on the public by-id route", async () => {
-    const service = {
+    const service: Parameters<typeof registerFindingsRoutes>[1] = {
       list: vi.fn(),
       findById: vi
         .fn()
@@ -70,7 +70,7 @@ describe("registerFindingsRoutes", () => {
       updateDecision: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerFindingsRoutes(app, service as never);
+    registerFindingsRoutes(app, service);
 
     const res = await app.inject({
       method: "GET",
@@ -84,13 +84,13 @@ describe("registerFindingsRoutes", () => {
   });
 
   it("wraps the updated finding inside {ok:true,finding} on the public decision route", async () => {
-    const service = {
+    const service: Parameters<typeof registerFindingsRoutes>[1] = {
       list: vi.fn(),
       findById: vi.fn(),
       updateDecision: vi.fn().mockResolvedValue(findingView),
     };
     const app = Fastify({ logger: false });
-    registerFindingsRoutes(app, service as never);
+    registerFindingsRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",
@@ -108,13 +108,13 @@ describe("registerFindingsRoutes", () => {
   });
 
   it("does not expose stale non-api findings paths", async () => {
-    const service = {
+    const service: Parameters<typeof registerFindingsRoutes>[1] = {
       list: vi.fn(),
       findById: vi.fn(),
       updateDecision: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerFindingsRoutes(app, service as never);
+    registerFindingsRoutes(app, service);
 
     const list = await app.inject({ method: "GET", url: "/findings" });
     const byId = await app.inject({ method: "GET", url: "/findings/f:42" });

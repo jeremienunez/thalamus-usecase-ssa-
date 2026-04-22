@@ -22,6 +22,8 @@
       "@interview/shared/*": ["./packages/shared/src/*"],
       "@interview/db-schema": ["./packages/db-schema/src/index.ts"],
       "@interview/db-schema/*": ["./packages/db-schema/src/*"],
+      "@interview/test-kit": ["./packages/test-kit/src/index.ts"],
+      "@interview/test-kit/*": ["./packages/test-kit/src/*"],
       "@interview/thalamus": ["./packages/thalamus/src/index.ts"],
       "@interview/thalamus/*": ["./packages/thalamus/src/*"],
       "@interview/sweep": ["./packages/sweep/src/index.ts"],

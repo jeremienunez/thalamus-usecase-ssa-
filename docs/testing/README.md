@@ -37,7 +37,10 @@ Observable outcomes are limited to behavior visible at the seam:
 - disabled or focused suites/tests (`skip`, `only`, `failing`, `xit`, `xtest`, `xdescribe`),
 - hidden live infrastructure inside unit or contract tests.
 
-No grandfathering applies. If an existing test violates this strategy, CI is expected to fail until the test is replaced with an executable behavior test or removed.
+Structural behavior rules are not grandfathered. The one temporary exception is
+type-cast drift in tests: `as never` and `as unknown as` are blocked for *new*
+sites by `scripts/test-policy-grandfather.json`, and the count is expected to
+burn down over time.
 
 ## Structural rules
 
@@ -61,6 +64,13 @@ Use deterministic inputs, fakes, mocks, in-memory harnesses, or static repo fixt
 ### Integration tests
 
 May use real infrastructure such as Postgres or Redis, but must stay below the HTTP boundary. Their job is to prove wiring and persistence contracts, not transport behavior.
+
+For `apps/console-api`, prefer the shared harness in
+`apps/console-api/tests/integration/_harness.ts`. It creates one ephemeral
+Postgres database per spec file, runs the production migration stack into it,
+and truncates the migrated public schema between tests. Do not reintroduce
+hand-written temp-table schemas unless the spec is explicitly proving a seam
+that does not exist in the migrated runtime schema.
 
 ### E2E tests
 
@@ -107,6 +117,45 @@ If the integration project matches zero tests, the command fails loudly.
 
 `pnpm test:e2e` runs only HTTP-stack tests. It requires both Postgres and
 Redis, and it boots the real `console-api` app through Vitest global setup.
+
+## Test Kit
+
+Use `@interview/test-kit` instead of hand-rolled casts when a test needs a
+typed fake or fixture parser.
+
+```ts
+import { typedSpy, fakePort, parseFixture } from "@interview/test-kit";
+
+const runCycle = typedSpy<Port["runCycle"]>();
+const port = fakePort<Port>({ runCycle });
+const action = parseFixture(schema, rawFixture);
+```
+
+Available helpers:
+
+- `typedSpy<Fn>()` — binds `vi.fn()` to the real `Parameters<Fn>` and `ReturnType<Fn>`
+- `fakePort<T>()` / `fakeRepo<T>()` — Proxy-backed typed fake that throws on unimplemented methods
+- `parseFixture(schema, data)` — schema-backed fixture parser with formatted zod errors
+- `stubLogger()` — no-op typed logger with spy methods
+- `stubNanoCaller()` — structural nano-caller stub for tests that need `callWaves(...)`
+- `stubCortexLlm()` — lazy named `CortexDataProvider` stub for Thalamus cortex tests
+
+Reference usage lives in:
+
+- `packages/test-kit/tests/*.spec.ts`
+- `apps/console-api/tests/unit/agent/ssa/sweep/audit-provider/__fixtures.ts`
+
+## Arch Guardrails
+
+Architecture boundaries are enforced in three layers:
+
+- `.dependency-cruiser.js` encodes the forbidden edges
+- `pnpm arch:check:repo` runs the real dependency-cruiser gate across `apps` and `packages`
+- `packages/test-kit/tests/arch/packages-do-not-import-apps.spec.ts` proves the repo-wide rule and its injected-red case
+
+The repo-wide package boundary now includes `packages-no-apps-imports`: code
+under `packages/*` must not import from `apps/*`. Cross-boundary capabilities
+flow through public seams, not private in-process shortcuts.
 
 ## Local Infra
 

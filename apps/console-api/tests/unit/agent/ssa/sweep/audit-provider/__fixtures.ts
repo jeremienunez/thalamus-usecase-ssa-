@@ -14,7 +14,8 @@
  * argument shape. Untyped `vi.fn()` gives `Mock<any[], any>` and
  * skips that validation.
  */
-import { vi } from "vitest";
+import { typedSpy, stubNanoCaller } from "@interview/test-kit";
+export { typedSpy };
 import type {
   AuditSatellitePort,
   NullScanRow,
@@ -23,18 +24,8 @@ import type {
 } from "../../../../../../src/agent/ssa/sweep/audit-provider.ssa";
 import type {
   NanoCaller,
-  NanoResponse,
 } from "../../../../../../src/agent/ssa/sweep/nano-caller.port";
 import type { AuditCycleContext } from "@interview/sweep";
-
-/**
- * Create a mock whose Parameters/ReturnType are bound to `Fn`. Use this
- * for any spy that will later appear in a `toHaveBeenCalledWith(...)`
- * assertion — it propagates the port's real signature into the matcher.
- */
-export function typedSpy<Fn extends (...args: never[]) => unknown>() {
-  return vi.fn<Parameters<Fn>, ReturnType<Fn>>();
-}
 
 export function fakeSatellitePort(
   overrides: Partial<AuditSatellitePort> = {},
@@ -70,15 +61,13 @@ export function fakeSweepRepo(): SsaAuditDeps["sweepRepo"] {
  */
 export function makeEmptyCaller(): {
   caller: NanoCaller;
-  spy: ReturnType<typeof vi.fn>;
+  spy: ReturnType<typeof stubNanoCaller>["_spy"];
 } {
-  const spy = vi
-    .fn()
-    .mockResolvedValue([] as Array<NanoResponse & { index: number }>);
-  const caller: NanoCaller = {
-    callWaves: spy as unknown as NanoCaller["callWaves"],
+  const caller = stubNanoCaller();
+  return {
+    caller,
+    spy: caller._spy,
   };
-  return { caller, spy };
 }
 
 export function ctxNullScan(

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createAutonomyApi } from "./autonomy";
+import { EMPTY_AUTONOMY_STATE } from "../../../tests/wrap";
 
 describe("createAutonomyApi", () => {
   it("status + start + stop + reset with optional intervalSec", async () => {
@@ -7,11 +8,11 @@ describe("createAutonomyApi", () => {
     const api = createAutonomyApi({
       getJson: vi.fn(async (p: string) => {
         calls.push(["GET", p]);
-        return {} as never;
+        return EMPTY_AUTONOMY_STATE;
       }),
       postJson: vi.fn(async (p: string, b: unknown) => {
         calls.push(["POST", p, b]);
-        return {} as never;
+        return { ok: true, state: EMPTY_AUTONOMY_STATE };
       }),
     });
     await api.status();

@@ -4,6 +4,7 @@ import { validateExternalUrl } from "@interview/shared";
 import {
   extractSatelliteEntities,
   DATA_POINT_RE,
+  type SatelliteEntities,
 } from "./satellite-entity-patterns";
 import type { ExplorationQuery } from "./scout";
 
@@ -13,17 +14,61 @@ const MAX_URLS_PER_CYCLE = 50;
 const CYCLE_TIMEOUT_MS = 5 * 60 * 1000;
 const PAGE_TIMEOUT_MS = 15_000;
 
+function extractDataPoints(text: string): string[] {
+  const dpRe = new RegExp(DATA_POINT_RE.source, DATA_POINT_RE.flags);
+  const dataPoints: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = dpRe.exec(text)) !== null) {
+    dataPoints.push(match[0]);
+  }
+  return dataPoints;
+}
+
 export interface CrawledArticle {
   url: string;
   title: string;
   body: string;
-  entities: ReturnType<typeof extractSatelliteEntities>;
+  entities: SatelliteEntities;
   dataPoints: string[];
   sourceQuery: string;
   depth: number;
 }
 
+export interface SearchArticle {
+  url: string;
+  title: string;
+  body: string;
+}
+
+export interface ExplorerCrawlerDeps {
+  webSearchWithContent?: (query: string) => Promise<SearchArticle[]>;
+  googleScrapeSearch?: (query: string) => Promise<string[]>;
+  scrapeUrl?: (
+    url: string,
+    sourceQuery: string,
+    depth: number,
+  ) => Promise<CrawledArticle | null>;
+}
+
 export class ExplorerCrawler {
+  private readonly webSearchWithContentImpl: (
+    query: string,
+  ) => Promise<SearchArticle[]>;
+  private readonly googleScrapeSearchImpl: (query: string) => Promise<string[]>;
+  private readonly scrapeUrlImpl: (
+    url: string,
+    sourceQuery: string,
+    depth: number,
+  ) => Promise<CrawledArticle | null>;
+
+  constructor(deps: ExplorerCrawlerDeps = {}) {
+    this.webSearchWithContentImpl =
+      deps.webSearchWithContent ?? this.webSearchWithContent.bind(this);
+    this.googleScrapeSearchImpl =
+      deps.googleScrapeSearch ?? this.googleScrapeSearch.bind(this);
+    this.scrapeUrlImpl = deps.scrapeUrl ?? this.scrapeUrl.bind(this);
+  }
+
   async crawl(queries: ExplorationQuery[]): Promise<{
     articles: CrawledArticle[];
     urlsCrawled: number;
@@ -46,7 +91,7 @@ export class ExplorerCrawler {
 
       try {
         // Strategy 1: OpenAI web search — get content + URLs directly (no scraping needed)
-        const searchResults = await this.webSearchWithContent(query.query);
+        const searchResults = await this.webSearchWithContentImpl(query.query);
 
         if (searchResults.length > 0) {
           for (const sr of searchResults) {
@@ -55,10 +100,7 @@ export class ExplorerCrawler {
             seenUrls.add(sr.url);
 
             const entities = extractSatelliteEntities(sr.body);
-            const dpRe = new RegExp(DATA_POINT_RE.source, DATA_POINT_RE.flags);
-            const dataPoints: string[] = [];
-            let m: RegExpExecArray | null;
-            while ((m = dpRe.exec(sr.body)) !== null) dataPoints.push(m[0]);
+            const dataPoints = extractDataPoints(sr.body);
 
             articles.push({
               url: sr.url,
@@ -87,7 +129,7 @@ export class ExplorerCrawler {
         }
 
         // Strategy 2: Google scrape + CheerioCrawler fallback
-        const urls = await this.googleScrapeSearch(query.query);
+        const urls = await this.googleScrapeSearchImpl(query.query);
         logger.info(
           { query: query.query.slice(0, 50), urlCount: urls.length },
           "Google fallback",
@@ -98,7 +140,7 @@ export class ExplorerCrawler {
           seenUrls.add(url);
 
           try {
-            const article = await this.scrapeUrl(url, query.query, 0);
+            const article = await this.scrapeUrlImpl(url, query.query, 0);
             if (article) {
               articles.push(article);
               urlsCrawled++;
@@ -134,7 +176,7 @@ export class ExplorerCrawler {
    */
   private async webSearchWithContent(
     query: string,
-  ): Promise<Array<{ url: string; title: string; body: string }>> {
+  ): Promise<SearchArticle[]> {
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!openaiKey) return [];
 
@@ -398,12 +440,7 @@ Focus on space situational awareness: satellite operators, orbital regimes, conj
           }
 
           const entities = extractSatelliteEntities(body);
-          const dpRe = new RegExp(DATA_POINT_RE.source, DATA_POINT_RE.flags);
-          const dataPoints: string[] = [];
-          let m: RegExpExecArray | null;
-          while ((m = dpRe.exec(body)) !== null) {
-            dataPoints.push(m[0]);
-          }
+          const dataPoints = extractDataPoints(body);
 
           result = {
             url: request.url,

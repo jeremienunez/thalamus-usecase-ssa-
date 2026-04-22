@@ -10,8 +10,8 @@
  *        load test; here we assert a single event routes through promote()
  *        within the budget and sets FIELD_HIGH)
  *   AC-4 contradicting field event demotes FIELD_* edge
- *   AC-5 OSINT demotion of FIELD_HIGH is rejected (enforced by ConfidenceService
- *        contract — demote() called with analyst-override never reaches FIELD_*)
+ *   AC-5 analyst override demotes FIELD_HIGH; plain OSINT corroboration
+ *        does not spoof a field promotion
  *   AC-6 replay of same FieldEvent.id is a no-op
  *   AC-7 miss routes to bounded unmatched queue, match_miss metric emitted
  *   AC-8 every mutation emits an EdgeProvenanceEvent with actor=field-correlation
@@ -107,9 +107,30 @@ describe("SPEC-TH-041 AC-4 — contradicting field event demotes FIELD_*", () =>
   });
 });
 
-describe("SPEC-TH-041 AC-5 — OSINT cannot demote FIELD_HIGH", () => {
-  it("analyst-override on a FIELD_HIGH edge (OSINT intent) degrades to OSINT_UNCORROBORATED, while no field actor can be spoofed by OSINT", async () => {
+describe("SPEC-TH-041 AC-5 — analyst override demotes FIELD_HIGH, but OSINT corroboration does not spoof field authority", () => {
+  it("analyst-override on a FIELD_HIGH edge demotes it to OSINT_UNCORROBORATED", async () => {
     // First promote to FIELD_HIGH via a field event.
+    const correlator = new FieldCorrelator(svc, async () => [1]);
+    await correlator.process(criticalEvent({ id: "fe-promote" }));
+    const before = await svc.read(1);
+    expect(before.sourceClass).toBe("FIELD_HIGH");
+
+    await svc.demote({
+      edgeId: 1,
+      evidence: {
+        kind: "analyst-override",
+        analystId: 7,
+        note: "manual downgrade",
+      },
+    });
+
+    const after = await svc.read(1);
+    expect(after.sourceClass).toBe("OSINT_UNCORROBORATED");
+    expect(after.value).toBeLessThanOrEqual(0.5);
+    expect(after.value).toBeLessThan(before.value);
+  });
+
+  it("plain OSINT corroboration leaves a FIELD_HIGH edge unchanged", async () => {
     const correlator = new FieldCorrelator(svc, async () => [1]);
     await correlator.process(criticalEvent({ id: "fe-promote" }));
     const before = await svc.read(1);

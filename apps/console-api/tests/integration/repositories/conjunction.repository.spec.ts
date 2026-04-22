@@ -113,7 +113,7 @@ async function seedFixtures(): Promise<void> {
 
 beforeAll(async () => {
   pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
-  db = drizzle(pool, { schema }) as unknown as NodePgDatabase<typeof schema>;
+  db = drizzle<typeof schema>(pool, { schema });
   repo = new ConjunctionRepository(db);
 });
 

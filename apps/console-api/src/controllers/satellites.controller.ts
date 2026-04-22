@@ -4,7 +4,9 @@ import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 import { SatellitesQuerySchema } from "../schemas";
 
-export function satellitesController(service: SatelliteViewService) {
+export type SatellitesControllerPort = Pick<SatelliteViewService, "list">;
+
+export function satellitesController(service: SatellitesControllerPort) {
   return asyncHandler<FastifyRequest<{ Querystring: unknown }>>(
     async (req, reply) => {
       const q = parseOrReply(req.query, SatellitesQuerySchema, reply);

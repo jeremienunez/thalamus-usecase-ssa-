@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { parseFixture } from "@interview/test-kit";
 import {
   computePcAggregate,
   aggregateToSuggestion,
@@ -24,7 +25,7 @@ function est(
   mode: EstimatePcMode = "unknown",
   flags: EstimatePcFlag[] = [],
 ) {
-  return turnActionSchema.parse({
+  return parseFixture(turnActionSchema, {
     kind: "estimate_pc",
     conjunctionId: 42,
     pcEstimate: pc,

@@ -5,7 +5,12 @@ import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 import { MissionStartBodySchema } from "../schemas";
 
-export function missionStartController(service: MissionService) {
+export type MissionControllerPort = Pick<
+  MissionService,
+  "start" | "stop" | "publicState"
+>;
+
+export function missionStartController(service: MissionControllerPort) {
   return asyncHandler<FastifyRequest<{ Body: unknown }>>(async (req, reply) => {
     const body = parseOrReply(req.body, MissionStartBodySchema, reply);
     if (body === null) return;
@@ -13,10 +18,10 @@ export function missionStartController(service: MissionService) {
   });
 }
 
-export function missionStopController(service: MissionService) {
+export function missionStopController(service: MissionControllerPort) {
   return asyncHandler(async () => service.stop());
 }
 
-export function missionStatusController(service: MissionService) {
+export function missionStatusController(service: MissionControllerPort) {
   return asyncHandler(async () => service.publicState());
 }

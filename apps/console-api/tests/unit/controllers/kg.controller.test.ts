@@ -4,7 +4,7 @@ import { registerKgRoutes } from "../../../src/routes/kg.routes";
 
 describe("registerKgRoutes", () => {
   it("wires /api/kg/nodes and /api/kg/edges to the matching service methods", async () => {
-    const service = {
+    const service: Parameters<typeof registerKgRoutes>[1] = {
       listNodes: vi.fn().mockResolvedValue({
         items: [{ id: "sat:42", label: "SAT-42", class: "Satellite" }],
       }),
@@ -21,7 +21,7 @@ describe("registerKgRoutes", () => {
       }),
     };
     const app = Fastify({ logger: false });
-    registerKgRoutes(app, service as never);
+    registerKgRoutes(app, service);
 
     const nodes = await app.inject({ method: "GET", url: "/api/kg/nodes" });
     const edges = await app.inject({ method: "GET", url: "/api/kg/edges" });

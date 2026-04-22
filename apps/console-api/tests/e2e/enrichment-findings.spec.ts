@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, it, expect } from "vitest";
 import { Pool } from "pg";
-import { E2E_DATABASE_URL, seedKnnFixture } from "./helpers/db-fixtures";
+import {
+  E2E_DATABASE_URL,
+  KNN_NEIGHBOUR_IDS,
+  KNN_TARGET_ID,
+  seedKnnFixture,
+} from "./helpers/db-fixtures";
 
 /**
  * Integration — enrichment findings emitted by KNN-propagation.
@@ -47,18 +52,15 @@ describe("KNN fill emits research_finding + research_edge", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           field: "mass_kg",
-          k: 5,
+          k: 3,
           minSim: 0.85,
-          limit: 30,
+          limit: 10_000,
           dryRun: false,
         }),
       });
       const body = (await res.json()) as { filled: number; attempted: number };
       expect(body.attempted).toBeGreaterThan(0);
-      if (body.filled === 0) {
-        // Catalogue too sparse in this slice — nothing to assert; skip cleanly.
-        return;
-      }
+      expect(body.filled).toBeGreaterThan(0);
 
       const afterRes = await client.query<{ n: string }>(
         `SELECT count(*)::text AS n FROM research_finding
@@ -67,27 +69,41 @@ describe("KNN fill emits research_finding + research_edge", () => {
       const after = Number(afterRes.rows[0]!.n);
       expect(after - before).toBe(body.filled);
 
-      // For the newest finding, assert edges present + similar_to edges exist.
-      const latest = await client.query<{ id: string }>(
-        `SELECT id::text AS id FROM research_finding
-         WHERE cortex = 'data_auditor' AND title LIKE 'KNN fill%'
+      const latest = await client.query<{ id: string; title: string; summary: string }>(
+        `SELECT id::text AS id, title::text, summary::text
+         FROM research_finding
+         WHERE cortex = 'data_auditor'
+           AND title = 'KNN fill · mass_kg=100'
+           AND summary LIKE $1
          ORDER BY id DESC LIMIT 1`,
+        [`%#${String(KNN_TARGET_ID)}%`],
       );
+      expect(latest.rows[0]).toBeDefined();
+      expect(latest.rows[0]!.summary).toContain(`#${String(KNN_TARGET_ID)}`);
       const fid = latest.rows[0]!.id;
 
-      const edges = await client.query<{ relation: string; entity_type: string; n: string }>(
-        `SELECT relation::text, entity_type::text, count(*)::text AS n
-         FROM research_edge WHERE finding_id = $1::bigint
-         GROUP BY relation, entity_type`,
+      const edges = await client.query<{
+        relation: string;
+        entity_type: string;
+        entity_id: string;
+      }>(
+        `SELECT relation::text, entity_type::text, entity_id::text
+         FROM research_edge
+         WHERE finding_id = $1::bigint`,
         [fid],
       );
 
-      const byRelation: Record<string, number> = {};
-      for (const e of edges.rows) byRelation[e.relation] = Number(e.n);
-      // Every KNN fill must have at least one 'about' edge to the target sat.
-      expect(byRelation.about ?? 0).toBeGreaterThanOrEqual(1);
-      // And at least one 'similar_to' edge to a neighbour that caused the fill.
-      expect(byRelation.similar_to ?? 0).toBeGreaterThanOrEqual(1);
+      const aboutIds = edges.rows
+        .filter((edge) => edge.relation === "about")
+        .map((edge) => edge.entity_id);
+      expect(aboutIds).toContain(String(KNN_TARGET_ID));
+
+      const similarIds = edges.rows
+        .filter((edge) => edge.relation === "similar_to")
+        .map((edge) => edge.entity_id);
+      for (const neighbourId of KNN_NEIGHBOUR_IDS) {
+        expect(similarIds).toContain(String(neighbourId));
+      }
     } finally {
       client.release();
     }

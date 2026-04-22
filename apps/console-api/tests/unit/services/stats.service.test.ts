@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { fakePort } from "@interview/test-kit";
 import { StatsService } from "../../../src/services/stats.service";
 import type { StatsRepository } from "../../../src/repositories/stats.repository";
 
@@ -11,11 +12,11 @@ function deferred<T>() {
 }
 
 function mockRepo(): StatsRepository {
-  return {
+  return fakePort<StatsRepository>({
     aggregates: vi.fn(),
     findingsByStatus: vi.fn(),
     findingsByCortex: vi.fn(),
-  } as unknown as StatsRepository;
+  });
 }
 
 describe("StatsService.snapshot", () => {

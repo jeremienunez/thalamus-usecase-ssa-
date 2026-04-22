@@ -2,6 +2,13 @@ import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiClientProvider } from "@/adapters/api/ApiClientContext";
 import type { ApiClient } from "@/adapters/api";
+import type {
+  AutonomyStateDTO,
+  CycleDTO,
+  FindingDTO,
+  MissionStateDTO,
+  StatsDTO,
+} from "@/transformers/http";
 import { SseClientProvider } from "@/adapters/sse/SseClientContext";
 import type { SseClient } from "@/adapters/sse/client";
 import {
@@ -20,6 +27,64 @@ import {
   type GraphAdapter,
 } from "@/adapters/graph/GraphContext";
 
+export const EMPTY_FINDING: FindingDTO = {
+  id: "f:0",
+  title: "",
+  summary: "",
+  cortex: "test",
+  status: "pending",
+  priority: 0,
+  createdAt: "1970-01-01T00:00:00.000Z",
+  linkedEntityIds: [],
+  evidence: [],
+};
+
+export const EMPTY_STATS: StatsDTO = {
+  satellites: 0,
+  conjunctions: 0,
+  kgNodes: 0,
+  kgEdges: 0,
+  findings: 0,
+  byStatus: {},
+  byCortex: {},
+};
+
+export const EMPTY_CYCLE: CycleDTO = {
+  id: "cycle-0",
+  kind: "thalamus",
+  startedAt: "1970-01-01T00:00:00.000Z",
+  completedAt: "1970-01-01T00:00:00.000Z",
+  findingsEmitted: 0,
+  cortices: [],
+};
+
+export const EMPTY_MISSION_STATE: MissionStateDTO = {
+  running: false,
+  startedAt: null,
+  total: 0,
+  completed: 0,
+  filled: 0,
+  unobtainable: 0,
+  errors: 0,
+  cursor: 0,
+  currentTask: null,
+  recent: [],
+};
+
+export const EMPTY_AUTONOMY_STATE: AutonomyStateDTO = {
+  running: false,
+  intervalMs: 0,
+  startedAt: null,
+  tickCount: 0,
+  currentTick: null,
+  history: [],
+  dailySpendUsd: 0,
+  monthlySpendUsd: 0,
+  thalamusCyclesToday: 0,
+  stoppedReason: null,
+  nextTickInMs: null,
+};
+
 /** Minimal stub ApiClient: every port returns an empty-shaped value. */
 export function makeStubApi(overrides: Partial<ApiClient> = {}): ApiClient {
   const base: ApiClient = {
@@ -32,61 +97,28 @@ export function makeStubApi(overrides: Partial<ApiClient> = {}): ApiClient {
     },
     findings: {
       list: async () => ({ items: [], count: 0 }),
-      findById: async () => ({}) as never,
-      decide: async () => ({ ok: true, finding: {} as never }),
+      findById: async () => EMPTY_FINDING,
+      decide: async () => ({ ok: true, finding: EMPTY_FINDING }),
     },
-    stats: {
-      get: async () => ({
-        satellites: 0,
-        conjunctions: 0,
-        kgNodes: 0,
-        kgEdges: 0,
-        findings: 0,
-        byStatus: {},
-        byCortex: {},
-      }),
-    },
+    stats: { get: async () => EMPTY_STATS },
     cycles: {
       list: async () => ({ items: [] }),
-      run: async () => ({ cycle: {} as never }),
+      run: async () => ({ cycle: EMPTY_CYCLE }),
     },
     sweep: {
       listSuggestions: async () => ({ items: [], count: 0 }),
       review: async () => ({ ok: true, reviewed: true, resolution: null }),
     },
     mission: {
-      status: async () => ({
-        running: false,
-        startedAt: null,
-        total: 0,
-        completed: 0,
-        filled: 0,
-        unobtainable: 0,
-        errors: 0,
-        cursor: 0,
-        currentTask: null,
-        recent: [],
-      }),
-      start: async () => ({ ok: true, state: {} as never }),
-      stop: async () => ({ ok: true, state: {} as never }),
+      status: async () => EMPTY_MISSION_STATE,
+      start: async () => ({ ok: true, state: EMPTY_MISSION_STATE }),
+      stop: async () => ({ ok: true, state: EMPTY_MISSION_STATE }),
     },
     autonomy: {
-      status: async () => ({
-        running: false,
-        intervalMs: 0,
-        startedAt: null,
-        tickCount: 0,
-        currentTick: null,
-        history: [],
-        dailySpendUsd: 0,
-        monthlySpendUsd: 0,
-        thalamusCyclesToday: 0,
-        stoppedReason: null,
-        nextTickInMs: null,
-      }),
-      start: async () => ({ ok: true, state: {} as never }),
-      stop: async () => ({ ok: true, state: {} as never }),
-      reset: async () => ({ ok: true, state: {} as never }),
+      status: async () => EMPTY_AUTONOMY_STATE,
+      start: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
+      stop: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
+      reset: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
     },
   };
   return { ...base, ...overrides };

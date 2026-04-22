@@ -3,11 +3,14 @@ import { z } from "zod";
 import { parseOrReply } from "../../../src/utils/parse-request";
 
 function mockReply() {
+  type ReplyPort = Parameters<typeof parseOrReply>[2];
+  const code = vi.fn();
+  const send = vi.fn();
   const reply = {
-    code: vi.fn(),
-    send: vi.fn(),
-  };
-  reply.code.mockReturnValue(reply);
+    code,
+    send,
+  } satisfies ReplyPort;
+  code.mockReturnValue(reply);
   return reply;
 }
 
@@ -18,7 +21,7 @@ describe("parseOrReply", () => {
       limit: z.coerce.number().int().positive(),
     });
 
-    const parsed = parseOrReply({ limit: "5" }, schema, reply as never);
+    const parsed = parseOrReply({ limit: "5" }, schema, reply);
 
     expect(parsed).toEqual({ limit: 5 });
     expect(reply.code).not.toHaveBeenCalled();
@@ -37,7 +40,7 @@ describe("parseOrReply", () => {
     const parsed = parseOrReply(
       { filters: { minPc: -1 }, ids: ["bad-id"] },
       schema,
-      reply as never,
+      reply,
     );
 
     expect(parsed).toBeNull();

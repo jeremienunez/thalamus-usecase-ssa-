@@ -5,9 +5,11 @@ import { HttpError } from "../../../src/utils/http-error";
 
 describe("registerReflexionRoutes", () => {
   it("returns 400 on invalid public body before calling the service", async () => {
-    const service = { runPass: vi.fn() };
+    const service: Parameters<typeof registerReflexionRoutes>[1] = {
+      runPass: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    registerReflexionRoutes(app, service as never);
+    registerReflexionRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",
@@ -21,7 +23,7 @@ describe("registerReflexionRoutes", () => {
   });
 
   it("applies schema defaults and clamping on the public reflexion route", async () => {
-    const service = {
+    const service: Parameters<typeof registerReflexionRoutes>[1] = {
       runPass: vi.fn().mockResolvedValue({
         target: {
           noradId: 32958,
@@ -47,7 +49,7 @@ describe("registerReflexionRoutes", () => {
       }),
     };
     const app = Fastify({ logger: false });
-    registerReflexionRoutes(app, service as never);
+    registerReflexionRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",
@@ -75,13 +77,13 @@ describe("registerReflexionRoutes", () => {
   });
 
   it("maps HttpError.notFound from the service to a 404 response on the public route", async () => {
-    const service = {
+    const service: Parameters<typeof registerReflexionRoutes>[1] = {
       runPass: vi
         .fn()
         .mockRejectedValue(HttpError.notFound("satellite not found")),
     };
     const app = Fastify({ logger: false });
-    registerReflexionRoutes(app, service as never);
+    registerReflexionRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",
@@ -95,11 +97,11 @@ describe("registerReflexionRoutes", () => {
   });
 
   it("does not expose the stale non-api reflexion path", async () => {
-    const service = {
+    const service: Parameters<typeof registerReflexionRoutes>[1] = {
       runPass: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerReflexionRoutes(app, service as never);
+    registerReflexionRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createFindingsApi } from "./findings";
+import { EMPTY_FINDING } from "../../../tests/wrap";
 
 describe("createFindingsApi", () => {
   it("list() builds query from filter args", async () => {
@@ -26,7 +27,7 @@ describe("createFindingsApi", () => {
     const api = createFindingsApi({
       getJson: vi.fn(async (p: string) => {
         paths.push(p);
-        return {} as never;
+        return EMPTY_FINDING;
       }),
       postJson: vi.fn(),
     });
@@ -40,7 +41,7 @@ describe("createFindingsApi", () => {
       getJson: vi.fn(),
       postJson: vi.fn(async (p: string, b: unknown) => {
         calls.push([p, b]);
-        return { ok: true } as never;
+        return { ok: true, finding: EMPTY_FINDING };
       }),
     });
     await api.decide("f1", "accepted", "ok");

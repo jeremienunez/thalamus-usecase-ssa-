@@ -1,7 +1,6 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import type { AutonomyTick } from "../../../src/types/autonomy.types";
-import type { AutonomyService } from "../../../src/services/autonomy.service";
 import { registerAutonomyRoutes } from "../../../src/routes/autonomy.routes";
 
 const tick = {
@@ -14,7 +13,9 @@ const tick = {
   costUsd: 0.03,
 } satisfies AutonomyTick;
 
-const fullState: ReturnType<AutonomyService["publicState"]> = {
+const fullState: Awaited<
+  ReturnType<Parameters<typeof registerAutonomyRoutes>[1]["publicState"]>
+> = {
   running: true,
   intervalMs: 45_000,
   startedAt: "2026-04-21T00:00:00.000Z",
@@ -30,9 +31,14 @@ const fullState: ReturnType<AutonomyService["publicState"]> = {
 
 describe("registerAutonomyRoutes", () => {
   it("returns 400 on invalid public body and does not call the service", async () => {
-    const service = { start: vi.fn() };
+    const service: Parameters<typeof registerAutonomyRoutes>[1] = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      resetSpend: vi.fn(),
+      publicState: vi.fn(),
+    };
     const app = Fastify({ logger: false });
-    registerAutonomyRoutes(app, service as never);
+    registerAutonomyRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",
@@ -46,11 +52,14 @@ describe("registerAutonomyRoutes", () => {
   });
 
   it("forwards the clamped intervalSec on the public start route", async () => {
-    const service = {
+    const service: Parameters<typeof registerAutonomyRoutes>[1] = {
       start: vi.fn().mockReturnValue({ ok: true, state: fullState }),
+      stop: vi.fn(),
+      resetSpend: vi.fn(),
+      publicState: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerAutonomyRoutes(app, service as never);
+    registerAutonomyRoutes(app, service);
 
     const res = await app.inject({
       method: "POST",
@@ -65,7 +74,7 @@ describe("registerAutonomyRoutes", () => {
   });
 
   it("wires the public stop, reset and status routes to the autonomy service", async () => {
-    const service = {
+    const service: Parameters<typeof registerAutonomyRoutes>[1] = {
       stop: vi.fn().mockReturnValue({
         ok: true,
         state: {
@@ -80,9 +89,10 @@ describe("registerAutonomyRoutes", () => {
         state: { ...fullState, dailySpendUsd: 0, monthlySpendUsd: 0 },
       }),
       publicState: vi.fn().mockReturnValue(fullState),
+      start: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerAutonomyRoutes(app, service as never);
+    registerAutonomyRoutes(app, service);
 
     const stop = await app.inject({ method: "POST", url: "/api/autonomy/stop" });
     const reset = await app.inject({
@@ -118,14 +128,14 @@ describe("registerAutonomyRoutes", () => {
   });
 
   it("does not expose stale non-api autonomy paths", async () => {
-    const service = {
+    const service: Parameters<typeof registerAutonomyRoutes>[1] = {
       start: vi.fn(),
       stop: vi.fn(),
       resetSpend: vi.fn(),
       publicState: vi.fn(),
     };
     const app = Fastify({ logger: false });
-    registerAutonomyRoutes(app, service as never);
+    registerAutonomyRoutes(app, service);
 
     const start = await app.inject({ method: "POST", url: "/autonomy/start" });
     const stop = await app.inject({ method: "POST", url: "/autonomy/stop" });

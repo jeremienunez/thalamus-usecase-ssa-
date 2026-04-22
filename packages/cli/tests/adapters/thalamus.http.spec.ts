@@ -17,17 +17,19 @@ import { ThalamusHttpClient } from "../../src/adapters/thalamus.http";
 function stubFetch(
   res: Partial<Response> & { jsonBody: unknown },
 ): ReturnType<typeof vi.fn> {
-  const fn = vi.fn().mockResolvedValue({
-    ok: res.ok ?? true,
-    status: res.status ?? 200,
-    json: async () => res.jsonBody,
-  });
-  globalThis.fetch = fn as unknown as typeof globalThis.fetch;
+  const fn = vi.fn(async () =>
+    new Response(JSON.stringify(res.jsonBody), {
+      status: res.status ?? (res.ok === false ? 500 : 200),
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  vi.stubGlobal("fetch", fn);
   return fn;
 }
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("ThalamusHttpClient.runCycle", () => {

@@ -210,7 +210,7 @@ beforeAll(async () => {
           emitTelemetrySuggestions: async (aggregate) => {
             await promotion.emitScalarSuggestions({
               swarmId: aggregate.swarmId,
-              aggregate: aggregate as unknown as Record<string, unknown>,
+              aggregate,
             });
             return [];
           },

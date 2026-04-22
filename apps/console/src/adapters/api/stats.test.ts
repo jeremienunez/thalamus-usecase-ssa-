@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createStatsApi } from "./stats";
+import { EMPTY_STATS } from "../../../tests/wrap";
 
 describe("createStatsApi", () => {
   it("get() hits /api/stats", async () => {
@@ -7,7 +8,7 @@ describe("createStatsApi", () => {
     const api = createStatsApi({
       getJson: vi.fn(async (p: string) => {
         paths.push(p);
-        return {} as never;
+        return EMPTY_STATS;
       }),
       postJson: vi.fn(),
     });

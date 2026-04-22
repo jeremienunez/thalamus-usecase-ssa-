@@ -8,7 +8,12 @@ import {
   FindingDecisionBodySchema,
 } from "../schemas";
 
-export function findingsListController(service: FindingViewService) {
+export type FindingsControllerPort = Pick<
+  FindingViewService,
+  "list" | "findById" | "updateDecision"
+>;
+
+export function findingsListController(service: FindingsControllerPort) {
   return asyncHandler<FastifyRequest<{ Querystring: unknown }>>(
     async (req, reply) => {
       const q = parseOrReply(req.query, FindingsListQuerySchema, reply);
@@ -18,7 +23,7 @@ export function findingsListController(service: FindingViewService) {
   );
 }
 
-export function findingByIdController(service: FindingViewService) {
+export function findingByIdController(service: FindingsControllerPort) {
   return asyncHandler<FastifyRequest<{ Params: unknown }>>(
     async (req, reply) => {
       const params = parseOrReply(req.params, FindingIdParamsSchema, reply);
@@ -29,7 +34,7 @@ export function findingByIdController(service: FindingViewService) {
   );
 }
 
-export function findingDecisionController(service: FindingViewService) {
+export function findingDecisionController(service: FindingsControllerPort) {
   return asyncHandler<FastifyRequest<{ Params: unknown; Body: unknown }>>(
     async (req, reply) => {
       const params = parseOrReply(req.params, FindingIdParamsSchema, reply);

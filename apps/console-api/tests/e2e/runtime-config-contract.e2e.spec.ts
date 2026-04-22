@@ -3,7 +3,7 @@
  *
  * No LLM calls, no kernel side effects. Each spec resets every registered
  * domain in afterEach because the e2e harness runs singleFork (see
- * apps/console-api/vitest.config.ts) and Redis override state leaks.
+ * `vitest.workspace.ts`) and Redis override state leaks.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import {
@@ -13,7 +13,10 @@ import {
   resetAllConfig,
   getAllConfig,
 } from "./helpers/runtime-config";
-import { RUNTIME_CONFIG_DOMAINS } from "@interview/shared/config";
+import {
+  RUNTIME_CONFIG_DEFAULTS,
+  RUNTIME_CONFIG_DOMAINS,
+} from "@interview/shared/config";
 
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 
@@ -87,13 +90,54 @@ describe("runtime-config HTTP contract", () => {
     expect(read2.value.overrides).toBe("sentinel-string");
   });
 
-  it("given the server is up, when GET /api/config/runtime is called, then domains has the 11 registered keys with contract shape", async () => {
+  it("given a nested budgets patch, when PATCH is round-tripped through GET, then sibling budget fields are preserved", async () => {
+    await resetConfig("thalamus.budgets");
+
+    const patchRes = await patchConfig("thalamus.budgets", {
+      deep: { maxCost: 0.25 },
+    });
+    expect(patchRes.status).toBe(200);
+    const patched = (await patchRes.json()) as {
+      value: {
+        deep: {
+          maxCost: number;
+          maxIterations: number;
+          confidenceTarget: number;
+        };
+        simple: { maxCost: number };
+      };
+    };
+    expect(patched.value.deep.maxCost).toBe(0.25);
+    expect(patched.value.deep.maxIterations).toBe(8);
+    expect(patched.value.deep.confidenceTarget).toBe(0.8);
+    expect(patched.value.simple.maxCost).toBe(0.03);
+
+    const read = await getConfig("thalamus.budgets");
+    expect(read.value.deep).toEqual(
+      expect.objectContaining({
+        maxCost: 0.25,
+        maxIterations: 8,
+        confidenceTarget: 0.8,
+      }),
+    );
+    expect(read.value.simple).toEqual(
+      expect.objectContaining({
+        maxCost: 0.03,
+      }),
+    );
+  });
+
+  it("given the server is up, when GET /api/config/runtime is called, then every registered domain exposes the expected top-level keys", async () => {
     const { domains } = await getAllConfig();
     expect(new Set(Object.keys(domains))).toEqual(
       new Set(RUNTIME_CONFIG_DOMAINS),
     );
     expect(Object.keys(domains)).toHaveLength(11);
-    for (const entry of Object.values(domains)) {
+
+    for (const domain of RUNTIME_CONFIG_DOMAINS) {
+      const entry = domains[domain];
+      const expectedKeys = Object.keys(RUNTIME_CONFIG_DEFAULTS[domain]).sort();
+
       expect(entry).toEqual(
         expect.objectContaining({
           value: expect.any(Object),
@@ -102,6 +146,10 @@ describe("runtime-config HTTP contract", () => {
           hasOverrides: expect.any(Boolean),
         }),
       );
+      expect(Object.keys(entry.value).sort()).toEqual(expectedKeys);
+      expect(Object.keys(entry.defaults).sort()).toEqual(expectedKeys);
+      expect(Object.keys(entry.schema).sort()).toEqual(expectedKeys);
+      expect(entry.hasOverrides).toBe(false);
     }
   });
 });

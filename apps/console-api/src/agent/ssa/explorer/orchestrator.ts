@@ -1,11 +1,29 @@
 import { createLogger } from "@interview/shared/observability";
-import type { Database } from "@interview/db-schema";
 import { sql } from "drizzle-orm";
-import { NanoSwarm, type SwarmStats } from "@interview/thalamus";
-import { ExplorerScout } from "./scout";
-import { ExplorerCrawler, type CrawledArticle } from "./crawler";
-import { ExplorerCurator, type CuratedItem } from "./curator";
-import { ExplorationRepository } from "./exploration.repository";
+import {
+  NanoSwarm,
+  type NanoArticle,
+  type SwarmStats,
+} from "@interview/thalamus";
+import {
+  ExplorerScout,
+  type ExplorationQuery,
+  type ScoutInput,
+} from "./scout";
+import {
+  ExplorerCrawler,
+  type CrawledArticle,
+} from "./crawler";
+import {
+  ExplorerCurator,
+  type CuratedItem,
+  type CuratorArticle,
+} from "./curator";
+import {
+  ExplorationRepository,
+  type CreateExplorationLogInput,
+} from "./exploration.repository";
+import type { SatelliteEntities } from "./satellite-entity-patterns";
 
 const logger = createLogger("explorer-orchestrator");
 
@@ -19,16 +37,210 @@ export interface ExplorationResult {
   swarmStats?: SwarmStats;
 }
 
+export interface ExplorerOrchestratorDbPort {
+  execute<T extends Record<string, unknown> = Record<string, unknown>>(
+    query: unknown,
+  ): Promise<{ rows: T[]; rowCount?: number }>;
+}
+
+export interface ExplorationLogWriterPort {
+  create(input: CreateExplorationLogInput): Promise<unknown>;
+}
+
+export interface ExplorerScoutPort {
+  generateQueries(input: ScoutInput): Promise<ExplorationQuery[]>;
+}
+
+export interface ExplorerSwarmPort {
+  crawl(queries: ExplorationQuery[]): Promise<{
+    articles: NanoArticle[];
+    urlsCrawled: number;
+    stats: SwarmStats;
+  }>;
+}
+
+export interface ExplorerCrawlerPort {
+  crawl(queries: ExplorationQuery[]): Promise<{
+    articles: CrawledArticle[];
+    urlsCrawled: number;
+  }>;
+}
+
+export interface ExplorerCuratorPort {
+  curate(articles: CuratorArticle[]): Promise<CuratedItem[]>;
+}
+
+export interface ExplorerSourceOps {
+  getOrCreateExplorerSource(db: ExplorerOrchestratorDbPort): Promise<bigint>;
+  injectFeedItem(
+    db: ExplorerOrchestratorDbPort,
+    item: CuratedItem,
+    sourceId: bigint,
+  ): Promise<void>;
+  promoteToPermanentSource(
+    db: ExplorerOrchestratorDbPort,
+    item: CuratedItem,
+  ): Promise<boolean>;
+}
+
+export interface ExplorerOrchestratorDeps {
+  gatherSignals?: (db: ExplorerOrchestratorDbPort) => Promise<ScoutInput>;
+  scout?: ExplorerScoutPort;
+  nanoSwarm?: ExplorerSwarmPort;
+  crawler?: ExplorerCrawlerPort;
+  curator?: ExplorerCuratorPort;
+  sourceOps?: ExplorerSourceOps;
+}
+
+const defaultSourceOps: ExplorerSourceOps = {
+  async getOrCreateExplorerSource(db) {
+    const existing = await db.execute<{ id: string | bigint }>(sql`
+      SELECT id FROM source WHERE slug = 'thalamus-explorer' LIMIT 1
+    `);
+
+    if (existing.rows.length > 0) {
+      return BigInt(existing.rows[0]!.id);
+    }
+
+    const result = await db.execute<{ id: string | bigint }>(sql`
+      INSERT INTO source (name, slug, kind, url, category, is_enabled)
+      VALUES ('Thalamus Explorer', 'thalamus-explorer', 'osint', 'internal://explorer', 'DISCOVERY', true)
+      ON CONFLICT (slug) DO UPDATE SET name = 'Thalamus Explorer'
+      RETURNING id
+    `);
+
+    return BigInt(result.rows[0]!.id);
+  },
+
+  async injectFeedItem(db, item, sourceId) {
+    const guid = `explorer:${item.url}`;
+    await db.execute(sql`
+      INSERT INTO source_item (
+        source_id, external_id, title, abstract, url,
+        raw_metadata, fetched_at
+      ) VALUES (
+        ${sourceId},
+        ${guid},
+        ${item.title.slice(0, 500)},
+        ${item.body.slice(0, 2000)},
+        ${item.url},
+        ${JSON.stringify({
+          category: "DISCOVERY",
+          satellites: item.entities.satellites,
+          operators: item.entities.operators,
+          orbitRegimes: item.entities.orbitRegimes,
+        })}::jsonb,
+        now()
+      )
+      ON CONFLICT (source_id, external_id) DO NOTHING
+    `);
+  },
+
+  async promoteToPermanentSource(db, item) {
+    const domain = new URL(item.url).hostname;
+    const slug = `discovered-${domain.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+
+    const existing = await db.execute(sql`
+      SELECT id FROM source WHERE url LIKE ${"%" + domain + "%"} LIMIT 1
+    `);
+
+    if (existing.rows.length > 0) return false;
+
+    await db.execute(sql`
+      INSERT INTO source (name, slug, kind, url, category, is_enabled)
+      VALUES (
+        ${`[Discovered] ${domain}`},
+        ${slug},
+        'osint',
+        ${item.url},
+        ${item.category ?? "DISCOVERY"},
+        true
+      )
+      ON CONFLICT (slug) DO NOTHING
+    `);
+
+    logger.info(
+      { domain, category: item.category },
+      "Promoted to permanent source",
+    );
+    return true;
+  },
+};
+
+function normalizeEntities(value: unknown): SatelliteEntities {
+  const entityMap =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  const array = (key: string): string[] =>
+    Array.isArray(entityMap[key])
+      ? entityMap[key].filter((item): item is string => typeof item === "string")
+      : [];
+
+  const satellites = array("satellites");
+  const operators = array("operators");
+  const orbitRegimes = array("orbitRegimes");
+  const noradIds = array("noradIds");
+  const cosparIds = array("cosparIds");
+  const launchVehicles = array("launchVehicles");
+  const dataPoints = array("dataPoints");
+  const hasSatelliteContent =
+    typeof entityMap.hasSatelliteContent === "boolean"
+      ? entityMap.hasSatelliteContent
+      : noradIds.length > 0 ||
+        cosparIds.length > 0 ||
+        satellites.length > 0 ||
+        operators.length > 0;
+
+  return {
+    noradIds,
+    cosparIds,
+    satellites,
+    launchVehicles,
+    orbitRegimes,
+    operators,
+    dataPoints,
+    hasSatelliteContent,
+  };
+}
+
+function toCuratorArticle(article: CrawledArticle | NanoArticle): CuratorArticle {
+  return {
+    url: article.url,
+    title: article.title,
+    body: article.body,
+    entities: normalizeEntities(article.entities),
+    dataPoints: Array.isArray(article.dataPoints) ? article.dataPoints : [],
+    sourceQuery: article.sourceQuery,
+    depth: article.depth,
+  };
+}
+
 export class ExplorerOrchestrator {
-  private scout = new ExplorerScout();
-  private crawler = new ExplorerCrawler();
-  private nanoSwarm = new NanoSwarm();
-  private curator = new ExplorerCurator();
+  private readonly scout: ExplorerScoutPort;
+  private readonly crawler: ExplorerCrawlerPort;
+  private readonly nanoSwarm: ExplorerSwarmPort;
+  private readonly curator: ExplorerCuratorPort;
+  private readonly gatherSignals: (
+    db: ExplorerOrchestratorDbPort,
+  ) => Promise<ScoutInput>;
+  private readonly sourceOps: ExplorerSourceOps;
 
   constructor(
-    private db: Database,
-    private explorationRepo: ExplorationRepository,
-  ) {}
+    private readonly db: ExplorerOrchestratorDbPort,
+    private readonly explorationRepo:
+      | ExplorationRepository
+      | ExplorationLogWriterPort,
+    deps: ExplorerOrchestratorDeps = {},
+  ) {
+    this.gatherSignals =
+      deps.gatherSignals ?? ((db) => ExplorerScout.gatherSignals(db));
+    this.scout = deps.scout ?? new ExplorerScout();
+    this.crawler = deps.crawler ?? new ExplorerCrawler();
+    this.nanoSwarm = deps.nanoSwarm ?? new NanoSwarm();
+    this.curator = deps.curator ?? new ExplorerCurator();
+    this.sourceOps = deps.sourceOps ?? defaultSourceOps;
+  }
 
   async explore(): Promise<ExplorationResult> {
     logger.info(">>> [STEP 0] Resource Explorer cycle starting");
@@ -37,7 +249,7 @@ export class ExplorerOrchestrator {
     logger.info(">>> [STEP 1a] Gathering signals from DB...");
     let signals;
     try {
-      signals = await ExplorerScout.gatherSignals(this.db);
+      signals = await this.gatherSignals(this.db);
       logger.info(
         {
           findings: signals.recentFindings.length,
@@ -146,13 +358,12 @@ export class ExplorerOrchestrator {
     }
 
     // 3. Curator: score articles -> decide action.
-    // NanoSwarm emits NanoArticle[] with opaque `entities`; the SSA curator
-    // narrows to CrawledArticle["entities"] shape at read sites. Safe here
-    // because the entity extractor (setEntityExtractor at boot) produces
-    // SSA-shaped payloads in this deployment.
+    // NanoSwarm emits opaque `entities`; normalize them into the SSA article
+    // shape the curator expects so tests can use structural fakes without
+    // leaning on unsafe casts.
     logger.info(">>> [STEP 4a] Curator scoring articles...");
     const curated = await this.curator.curate(
-      articles as unknown as CrawledArticle[],
+      articles.map((article) => toCuratorArticle(article)),
     );
     logger.info(
       {
@@ -173,11 +384,13 @@ export class ExplorerOrchestrator {
     let itemsInjected = 0;
     let itemsPromoted = 0;
 
-    const explorerSourceId = await this.getOrCreateExplorerSource();
+    const explorerSourceId = await this.sourceOps.getOrCreateExplorerSource(
+      this.db,
+    );
 
     for (const item of toInject) {
       try {
-        await this.injectFeedItem(item, explorerSourceId);
+        await this.sourceOps.injectFeedItem(this.db, item, explorerSourceId);
         itemsInjected++;
       } catch (err) {
         logger.debug({ url: item.url, err }, "Failed to inject feed item");
@@ -186,7 +399,10 @@ export class ExplorerOrchestrator {
 
     for (const item of toPromote) {
       try {
-        const promoted = await this.promoteToPermanentSource(item);
+        const promoted = await this.sourceOps.promoteToPermanentSource(
+          this.db,
+          item,
+        );
         if (promoted) itemsPromoted++;
       } catch (err) {
         logger.debug({ url: item.url, err }, "Failed to promote source");
@@ -245,81 +461,5 @@ export class ExplorerOrchestrator {
 
     logger.info(result, "Resource Explorer cycle complete");
     return result;
-  }
-
-  private async getOrCreateExplorerSource(): Promise<bigint> {
-    const existing = await this.db.execute<{ id: string | bigint }>(sql`
-      SELECT id FROM source WHERE slug = 'thalamus-explorer' LIMIT 1
-    `);
-
-    if (existing.rows.length > 0) {
-      return BigInt(existing.rows[0]!.id);
-    }
-
-    const result = await this.db.execute<{ id: string | bigint }>(sql`
-      INSERT INTO source (name, slug, kind, url, category, is_enabled)
-      VALUES ('Thalamus Explorer', 'thalamus-explorer', 'osint', 'internal://explorer', 'DISCOVERY', true)
-      ON CONFLICT (slug) DO UPDATE SET name = 'Thalamus Explorer'
-      RETURNING id
-    `);
-
-    return BigInt(result.rows[0]!.id);
-  }
-
-  private async injectFeedItem(
-    item: CuratedItem,
-    sourceId: bigint,
-  ): Promise<void> {
-    const guid = `explorer:${item.url}`;
-    await this.db.execute(sql`
-      INSERT INTO source_item (
-        source_id, external_id, title, abstract, url,
-        raw_metadata, fetched_at
-      ) VALUES (
-        ${sourceId},
-        ${guid},
-        ${item.title.slice(0, 500)},
-        ${item.body.slice(0, 2000)},
-        ${item.url},
-        ${JSON.stringify({
-          category: "DISCOVERY",
-          satellites: item.entities.satellites,
-          operators: item.entities.operators,
-          orbitRegimes: item.entities.orbitRegimes,
-        })}::jsonb,
-        now()
-      )
-      ON CONFLICT (source_id, external_id) DO NOTHING
-    `);
-  }
-
-  private async promoteToPermanentSource(item: CuratedItem): Promise<boolean> {
-    const domain = new URL(item.url).hostname;
-    const slug = `discovered-${domain.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
-
-    const existing = await this.db.execute(sql`
-      SELECT id FROM source WHERE url LIKE ${"%" + domain + "%"} LIMIT 1
-    `);
-
-    if (existing.rows.length > 0) return false;
-
-    await this.db.execute(sql`
-      INSERT INTO source (name, slug, kind, url, category, is_enabled)
-      VALUES (
-        ${`[Discovered] ${domain}`},
-        ${slug},
-        'osint',
-        ${item.url},
-        ${item.category ?? "DISCOVERY"},
-        true
-      )
-      ON CONFLICT (slug) DO NOTHING
-    `);
-
-    logger.info(
-      { domain, category: item.category },
-      "Promoted to permanent source",
-    );
-    return true;
   }
 }

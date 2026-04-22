@@ -5,6 +5,29 @@ export interface SimPromotionHttpClientOpts {
   kernelSecret?: string;
 }
 
+export interface TelemetryPromotionScalarStats {
+  median: number;
+  sigma: number;
+  min: number;
+  max: number;
+  mean: number;
+  n: number;
+  values: number[];
+  unit: string;
+  avgFishConfidence: number;
+}
+
+export interface TelemetryPromotionAggregate {
+  swarmId: number;
+  satelliteId: number;
+  totalFish: number;
+  succeededFish: number;
+  failedFish: number;
+  quorumMet: boolean;
+  scalars: Record<string, TelemetryPromotionScalarStats | undefined>;
+  simConfidence: number;
+}
+
 export class SimPromotionHttpClient {
   private readonly headers: Record<string, string> | undefined;
 
@@ -33,7 +56,7 @@ export class SimPromotionHttpClient {
 
   async emitScalarSuggestions(input: {
     swarmId: number;
-    aggregate: Record<string, unknown>;
+    aggregate: TelemetryPromotionAggregate;
   }): Promise<void> {
     await this.http.post(
       "/api/sim/promotions/scalars",

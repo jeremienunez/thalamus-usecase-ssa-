@@ -1,7 +1,7 @@
 // apps/console-api/src/routes/autonomy.routes.ts
 import type { FastifyInstance } from "fastify";
-import type { AutonomyService } from "../services/autonomy.service";
 import {
+  type AutonomyControllerPort,
   autonomyResetController,
   autonomyStartController,
   autonomyStopController,
@@ -10,7 +10,7 @@ import {
 
 export function registerAutonomyRoutes(
   app: FastifyInstance,
-  service: AutonomyService,
+  service: AutonomyControllerPort,
 ): void {
   app.post<{ Body: { intervalSec?: number } }>(
     "/api/autonomy/start",

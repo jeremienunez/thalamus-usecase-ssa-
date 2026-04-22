@@ -307,15 +307,32 @@ describe("SPEC-TH-040 bounded confidence (I-4)", () => {
     expect(ec.value).toBeLessThanOrEqual(1);
   });
 
-  it("class ordering respected: OSINT_UNCORROBORATED ≤ OSINT_CORROBORATED < FIELD_LOW ≤ FIELD_HIGH", () => {
+  it("zero-dispersion sim inference stays below the OSINT_UNCORROBORATED cap", async () => {
+    svc.initialWrite(1);
+    const sim = await svc.promote({
+      edgeId: 1,
+      evidence: {
+        kind: "sim-inference",
+        fishCount: 8,
+        dispersion: 0,
+      },
+    });
+
+    expect(sim.sourceClass).toBe("SIM_CORROBORATED");
+    expect(sim.value).toBeLessThan(0.5);
+  });
+
+  it("class ordering respected: SIM_* ≤ OSINT_* < FIELD_*", () => {
     const order: SourceClass[] = [
+      "SIM_UNCORROBORATED",
+      "SIM_CORROBORATED",
       "OSINT_UNCORROBORATED",
       "OSINT_CORROBORATED",
       "FIELD_LOW",
       "FIELD_HIGH",
     ];
     // Sanity: the band maxes are monotonically non-decreasing.
-    const maxes = [0.5, 0.75, 0.85, 1.0];
+    const maxes = [0.35, 0.49, 0.5, 0.75, 0.85, 1.0];
     for (let i = 1; i < order.length; i++) {
       expect(maxes[i]).toBeGreaterThanOrEqual(maxes[i - 1]!);
     }
