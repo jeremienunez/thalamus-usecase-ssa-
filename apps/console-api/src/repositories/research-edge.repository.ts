@@ -4,8 +4,13 @@ import type * as schema from "@interview/db-schema";
 import type {
   EdgeRow,
   EdgeInsertInput,
+  FindingEdgeDisplayRow,
+  GraphNeighbourhoodRow,
 } from "../types/finding.types";
 import {
+  researchEdgeEntityDisplayLabelExprSql,
+  researchEdgeEntityDisplayLabelJoinsSql,
+  researchEdgeEntityDisplayLabelSql,
   researchEdgeEntityLabelJoinsSql,
   researchEdgeEntityLabelSql,
 } from "./research-edge-label.sql";
@@ -13,6 +18,8 @@ import {
 export type {
   EdgeRow,
   EdgeInsertInput,
+  FindingEdgeDisplayRow,
+  GraphNeighbourhoodRow,
 } from "../types/finding.types";
 
 export class ResearchEdgeRepository {
@@ -59,50 +66,50 @@ export class ResearchEdgeRepository {
   async findEdgesByFindingId(
     findingId: bigint,
     limit = 10,
-  ): Promise<Array<{ from_name: string; relation: string; to_name: string }>> {
-    const rows = await this.db
-      .execute(sql`
-        SELECT from_name, relation, to_name
-        FROM research_edge WHERE finding_id = ${findingId}
-        LIMIT ${limit}
-      `)
-      .catch(() => ({ rows: [] as Array<unknown> }));
-    return rows.rows as Array<{
-      from_name: string;
-      relation: string;
-      to_name: string;
-    }>;
+  ): Promise<FindingEdgeDisplayRow[]> {
+    const rows = await this.db.execute<FindingEdgeDisplayRow>(sql`
+      SELECT
+        rf.title AS from_name,
+        re.relation::text AS relation,
+        ${researchEdgeEntityDisplayLabelSql}
+      FROM research_edge re
+      JOIN research_finding rf
+        ON rf.id = re.finding_id
+      ${researchEdgeEntityDisplayLabelJoinsSql}
+      WHERE re.finding_id = ${findingId}
+      ORDER BY re.created_at DESC, re.id DESC
+      LIMIT ${limit}
+    `);
+    return rows.rows;
   }
 
   async findNeighbourhood(
     entity: string,
     limit = 20,
-  ): Promise<
-    Array<{
-      from_name: string;
-      from_type: string;
-      relation: string;
-      to_name: string;
-      to_type: string;
-      confidence: number;
-    }>
-  > {
-    const rows = await this.db.execute(sql`
-      SELECT from_name, from_type, relation, to_name, to_type,
-             confidence::real AS confidence
-      FROM research_edge
-      WHERE from_name ILIKE ${`%${entity}%`} OR to_name ILIKE ${`%${entity}%`}
-      ORDER BY created_at DESC
+  ): Promise<GraphNeighbourhoodRow[]> {
+    const pattern = `%${entity}%`;
+    const rows = await this.db.execute<GraphNeighbourhoodRow>(sql`
+      SELECT
+        rf.title AS from_name,
+        'finding'::text AS from_type,
+        re.relation::text AS relation,
+        ${researchEdgeEntityDisplayLabelSql},
+        re.entity_type::text AS to_type,
+        rf.confidence::real AS confidence
+      FROM research_edge re
+      JOIN research_finding rf
+        ON rf.id = re.finding_id
+      ${researchEdgeEntityDisplayLabelJoinsSql}
+      WHERE rf.title ILIKE ${pattern}
+         OR rf.summary ILIKE ${pattern}
+         OR (
+           re.entity_type <> 'finding'
+           AND ${researchEdgeEntityDisplayLabelExprSql} ILIKE ${pattern}
+         )
+      ORDER BY rf.confidence DESC NULLS LAST, re.created_at DESC, re.id DESC
       LIMIT ${limit}
     `);
-    return rows.rows as Array<{
-      from_name: string;
-      from_type: string;
-      relation: string;
-      to_name: string;
-      to_type: string;
-      confidence: number;
-    }>;
+    return rows.rows;
   }
 
   async insert(input: EdgeInsertInput): Promise<void> {

@@ -32,6 +32,21 @@ export type EdgeRow = {
   entity_id: string;
 };
 
+export type FindingEdgeDisplayRow = {
+  from_name: string;
+  relation: string;
+  to_name: string;
+};
+
+export type GraphNeighbourhoodRow = {
+  from_name: string;
+  from_type: string;
+  relation: string;
+  to_name: string;
+  to_type: string;
+  confidence: number;
+};
+
 export type EdgeInsertInput = {
   findingId: bigint;
   entityType:
