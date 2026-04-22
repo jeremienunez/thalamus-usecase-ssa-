@@ -7,8 +7,6 @@ export type AggregateCounts = {
   research_cycles: number;
 };
 
-export type GroupedCount = { key: string; count: number };
-
 export type StatsView = {
   satellites: number;
   conjunctions: number;

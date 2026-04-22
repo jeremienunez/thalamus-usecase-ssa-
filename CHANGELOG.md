@@ -4,6 +4,79 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Runtime contracts + graph recovery hardening — 2026-04-22
+
+`2cf9dc9` lands the object-unification pass that was worth keeping:
+shared transport DTOs, boundary cleanup around `sim-*`, route / SQL
+dedup where the abstraction stays honest, and a hardening fix for the
+e2e graph pipeline after tests were found to be touching real
+`research_*` rows.
+
+**Shared DTO contracts**
+
+- `packages/shared/src/dto/*` is now the canonical home for cross-package
+  transport shapes used by `console-api`, `@interview/sweep`, and the CLI.
+- `sim-http`, `sim-subject`, `sim-target`, `sim-promotion`,
+  `sim-orchestrator`, `sim-god-channel`, and `cycle-run` contracts were
+  moved out of local app/package declarations into shared DTO modules.
+- `apps/console-api/src/transformers/*` now stays focused on `toXxx(...)`
+  mappers, while small agnostic request / serialization helpers live in
+  `apps/console-api/src/utils/*`.
+
+**Runtime / sim cleanup**
+
+- pure sim math/stat helpers now live in
+  `packages/sweep/src/sim/utils/stats.ts`, while SSA-specific aggregators
+  stay in `apps/console-api/src/agent/ssa/**`;
+- common turn-runner mechanics moved into
+  `packages/sweep/src/sim/turn-runner.utils.ts`, while `turn-runner-dag`
+  and `turn-runner-sequential` keep their own orchestration role;
+- `repl-followup-executor.ssa.ts` now shares one local
+  `executeSwarmVerification(...)` flow for telemetry / PC verification
+  without introducing a controller-style skeleton.
+
+**Routes / repositories / parsing**
+
+- `sim.routes.ts` is now a mount point only; route wiring is split into
+  explicit `sim-run`, `sim-swarm`, `sim-launcher`, `sim-control`, and
+  `sim-kernel` modules.
+- repeated SQL was reduced with honest shared modules instead of fake
+  repositories: `source-item-base.ts`, `satellite-dimension.sql.ts`, and
+  `research-edge-label.sql.ts`.
+- a real `satellite-dimension.repository.ts` now owns canonical satellite
+  dimension reads instead of letting fragments drift across repositories.
+- RSS / Atom markup parsing was centralized in
+  `packages/shared/src/utils/markup.ts` and reused by `console-api` source
+  fetchers and `db-schema` seed code.
+- `sim-terminal.repository.ts` dropped duplicated `WITH latest` scaffolding
+  and correlated counts; `satellite.repository.ts` removed the
+  `getOperatorCountrySweepStats()` `N+1`.
+
+**Graph / RAG test hardening**
+
+- e2e runs now use an isolated migrated Postgres database instead of
+  mutating the real dev DB.
+- fixture cleanup for KNN / conjunction / swarm e2e coverage is now scoped
+  to each test seed instead of broad `sim_swarm:%` deletion.
+- the `swarm-uc3` cleanup bug that could wipe real `research_cycle`,
+  `research_finding`, and `research_edge` rows was fixed.
+- local recovery was verified by restoring catalog embeddings and rerunning
+  live Thalamus / fish cycles against dev: the graph repopulates, embeddings
+  are present again, and sweep suggestions are re-emitted from Redis.
+
+**Dedup outcome**
+
+- jscpd clone density dropped from `1.39%` (`62` clones / `1026` duplicated
+  lines) to `0.95%` (`48` clones / `702` duplicated lines) without forcing
+  abstractions past the business boundary.
+
+**Verification**
+
+- pre-merge gate green: `arch:check`, `typecheck`, `test:policy`,
+  `spec:check`, `test`
+- final landing run: `207 passed | 2 skipped` files,
+  `1024 passed | 9 skipped` tests
+
 ### CI bedrock + real-contract test hardening — 2026-04-21
 
 `15356bb` lands SP-0 test execution in CI and a broad cleanup of

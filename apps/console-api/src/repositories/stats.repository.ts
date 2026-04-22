@@ -3,7 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
 import type { AggregateCounts } from "../types/stats.types";
 
-export type { AggregateCounts, GroupedCount } from "../types/stats.types";
+export type { AggregateCounts } from "../types/stats.types";
 
 export class StatsRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}

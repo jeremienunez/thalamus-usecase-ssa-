@@ -44,12 +44,6 @@ export function parseBigIntId(value: string, label: string): bigint {
   }
 }
 
-export function parseOptionalBigIntId(
-  value: string | undefined,
-): bigint | undefined {
-  return value === undefined ? undefined : parseBigIntId(value, "id");
-}
-
 export function parseSafeNumberId(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
