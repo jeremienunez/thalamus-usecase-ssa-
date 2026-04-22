@@ -249,7 +249,7 @@ Full details in [docs/refactor/architecture-audit-2026-04-19.md#Pass-2](docs/ref
 ### Minor
 
 - [ ] **M5** — `packages/thalamus/src/repositories/research-edge.repository.ts:31-38` — 8-line `void <import>` tree-shake hack. Either use `sql\`${tableName}\`` with imports or drop the imports (tsc doesn't tree-shake; bundler drops side-effect-free imports anyway). Also another C4 instance (thalamus knows SSA tables).
-- [ ] **M6** — `apps/console-api/src/server.ts:43` — `process.env.SIM_KERNEL_SHARED_SECRET ??= "interview-local-kernel-secret"` mutates global `process.env` at boot. Move default to config object.
+- [x] **M6 (DONE 2026-04-22)** — `apps/console-api/src/server.ts` no longer mutates global `process.env` to seed the sim kernel secret. `readServerEnv()` now applies the default inside the returned config object, the sim route auth middleware receives that value explicitly, and the e2e swarm harness reads the same constant instead of relying on boot-time env mutation.
 - [ ] **M7** — `apps/console-api/src/transformers/sim-fleet.transformer.ts:1` + `sim-target.transformer.ts:5` — transformers import service-layer types. Move types to `types/` to clean the layer.
 - [ ] **M8** — `packages/sweep/src/repositories/sweep.repository.ts:179,362` — `zrevrange(IDX_ALL, 0, -1)` unbounded. Apply `opts.limit` to the range call when `reviewed !== false`; sample for `getStats`.
 - [ ] **M9** — `apps/console-api/src/repositories/sim-memory.repository.ts:50-71` — N+1 inside transaction: loop of single-row `.insert().values().returning()`. Replace with batch `.insert(table).values(inserts).returning()`.

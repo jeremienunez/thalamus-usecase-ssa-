@@ -12,9 +12,14 @@ import { registerSimKernelRoutes } from "./sim-kernel.routes";
 export type { SimRouteServices } from "./sim-route-services";
 import type { SimRouteServices } from "./sim-route-services";
 
+type SimRouteConfig = {
+  simKernelSharedSecret?: string;
+};
+
 export function registerSimRoutes(
   app: FastifyInstance,
   s: SimRouteServices,
+  config: SimRouteConfig = {},
 ): void {
   app.register((simApp, _opts, done) => {
     simApp.addHook("preHandler", authenticate);
@@ -28,7 +33,10 @@ export function registerSimRoutes(
   });
 
   app.register((queueApp, _opts, done) => {
-    queueApp.addHook("preHandler", requireSimKernelSecret());
+    queueApp.addHook(
+      "preHandler",
+      requireSimKernelSecret(config.simKernelSharedSecret),
+    );
     registerSimKernelRoutes(queueApp, s);
     done();
   });

@@ -38,7 +38,6 @@ import {
   CortexRegistry,
   setThalamusTransportConfigProvider,
 } from "@interview/thalamus";
-
 import {
   buildSweepContainer,
   SimSubjectHttpAdapter,
@@ -71,6 +70,7 @@ import { SsaKindGuard } from "../../src/agent/ssa/sim/kind-guard";
 import { PcAggregatorService } from "../../src/agent/ssa/sim/aggregators/pc";
 import { TelemetryAggregatorService } from "../../src/agent/ssa/sim/aggregators/telemetry";
 import { SsaSimOutcomeResolverService } from "../../src/services/ssa-sim-outcome-resolver.service";
+import { DEFAULT_SIM_KERNEL_SHARED_SECRET } from "../../src/server";
 
 // -----------------------------------------------------------------------
 // Test config
@@ -81,6 +81,8 @@ const DB_URL =
   "postgres://thalamus:thalamus@localhost:5433/thalamus";
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6380";
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
+const KERNEL_SECRET =
+  process.env.SIM_KERNEL_SHARED_SECRET ?? DEFAULT_SIM_KERNEL_SHARED_SECRET;
 
 const FIXTURES_DIR = resolve(__dirname, "..", "fixtures");
 
@@ -166,14 +168,14 @@ beforeAll(async () => {
   const ssaKindGuard = new SsaKindGuard();
   const simHttp = new SimHttpClient(createFetchSimTransport(BASE));
   const queue = new SimQueueHttpAdapter(simHttp, {
-    kernelSecret: process.env.SIM_KERNEL_SHARED_SECRET,
+    kernelSecret: KERNEL_SECRET,
   });
   const runtimeStore = new SimRuntimeStoreHttpAdapter(simHttp);
   const swarmStore = new SimSwarmStoreHttpAdapter(simHttp);
   const subjects = new SimSubjectHttpAdapter(simHttp);
   const scenarioContext = new SimScenarioContextHttpAdapter(simHttp);
   const promotion = new SimPromotionHttpClient(simHttp, {
-    kernelSecret: process.env.SIM_KERNEL_SHARED_SECRET,
+    kernelSecret: KERNEL_SECRET,
   });
   const telemetryAggregator = new TelemetryAggregatorService({ swarmStore });
   const pcAggregator = new PcAggregatorService({ swarmStore });

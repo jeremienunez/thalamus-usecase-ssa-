@@ -77,9 +77,14 @@ export type AppServices = {
   satelliteSweepChat: SatelliteSweepChatController;
 };
 
+type RouteConfig = {
+  simKernelSharedSecret?: string;
+};
+
 export function registerAllRoutes(
   app: FastifyInstance,
   s: AppServices,
+  config: RouteConfig = {},
 ): void {
   registerHealthRoutes(app);
   registerSatelliteRoutes(app, s.satelliteView);
@@ -101,7 +106,9 @@ export function registerAllRoutes(
   registerOrbitalRoutes(app, s.orbitalAnalysis);
   registerOpacityRoutes(app, s.opacity);
   registerIngestionRoutes(app, s.ingestion);
-  registerSimRoutes(app, s.sim);
+  registerSimRoutes(app, s.sim, {
+    simKernelSharedSecret: config.simKernelSharedSecret,
+  });
   registerRuntimeConfigRoutes(app, s.runtimeConfig);
 
   // Per-satellite chat with its own auth scope (authenticate + requireTier).

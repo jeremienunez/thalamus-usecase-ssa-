@@ -30,12 +30,12 @@ export function requireRoles(..._roles: string[]) {
   return async (_req: FastifyRequest, _reply: FastifyReply): Promise<void> => {};
 }
 
-export function requireSimKernelSecret() {
+export function requireSimKernelSecret(expectedSecret?: string) {
   return async (
     req: FastifyRequest,
     reply: FastifyReply,
   ): Promise<void> => {
-    const expected = process.env.SIM_KERNEL_SHARED_SECRET;
+    const expected = expectedSecret;
     if (!expected) {
       await reply
         .code(500)

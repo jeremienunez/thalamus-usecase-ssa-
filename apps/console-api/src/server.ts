@@ -39,6 +39,9 @@ export interface ServerEnv {
   thalamusTransportConfigProvider: ConfigProvider<ThalamusTransportConfig>;
 }
 
+export const DEFAULT_SIM_KERNEL_SHARED_SECRET =
+  "interview-local-kernel-secret";
+
 function readSimLlmMode(
   value: string | undefined,
 ): "cloud" | "fixtures" | "record" | undefined {
@@ -118,7 +121,6 @@ function readThalamusTransportConfigFromEnv(
 }
 
 export function readServerEnv(): ServerEnv {
-  process.env.SIM_KERNEL_SHARED_SECRET ??= "interview-local-kernel-secret";
   return {
     databaseUrl:
       process.env.DATABASE_URL ??
@@ -127,7 +129,9 @@ export function readServerEnv(): ServerEnv {
     openaiApiKey: process.env.OPENAI_API_KEY,
     voyageApiKey: process.env.VOYAGE_API_KEY,
     simLlmMode: readSimLlmMode(process.env.SIM_LLM_MODE),
-    simKernelSharedSecret: process.env.SIM_KERNEL_SHARED_SECRET,
+    simKernelSharedSecret:
+      process.env.SIM_KERNEL_SHARED_SECRET ??
+      DEFAULT_SIM_KERNEL_SHARED_SECRET,
     thalamusTransportConfigProvider: {
       get: async () => readThalamusTransportConfigFromEnv(),
     },
@@ -358,7 +362,9 @@ export async function createApp(
   const infra = buildInfra(env);
   const simTransport = createSimRouteTransport(app);
   const container = await buildContainer(infra.config, app.log, simTransport);
-  registerAllRoutes(app, container.services);
+  registerAllRoutes(app, container.services, {
+    simKernelSharedSecret: env.simKernelSharedSecret,
+  });
 
   // Clear interval-driven services on Fastify shutdown so tests (and hot-
   // reload) don't leak timers that tick against torn-down infra.
