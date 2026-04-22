@@ -1,8 +1,6 @@
-import { eq } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type * as schema from "@interview/db-schema";
 import {
   researchCycle,
+  researchCycleFinding,
   researchEdge,
   researchFinding,
 } from "@interview/db-schema";
@@ -49,7 +47,7 @@ type SsaAction =
   | { kind: "hold" };
 
 export interface SimPromotionServiceDeps {
-  db: NodePgDatabase<typeof schema>;
+  store: SimPromotionStorePort;
   sweepRepo: Pick<SweepRepository, "insertGeneric">;
   satelliteRepo: Pick<
     SatelliteRepository,
@@ -57,6 +55,23 @@ export interface SimPromotionServiceDeps {
   >;
   swarmRepo: Pick<SimSwarmRepository, "linkOutcome">;
   embed?: (text: string) => Promise<number[] | null>;
+}
+
+export interface SimPromotionStorePort {
+  createCycle(
+    value: typeof researchCycle.$inferInsert,
+  ): Promise<{ id: bigint }>;
+  createFinding(
+    value: typeof researchFinding.$inferInsert,
+  ): Promise<{ id: bigint }>;
+  linkCycleFinding(
+    value: typeof researchCycleFinding.$inferInsert,
+  ): Promise<void>;
+  createEdge(value: typeof researchEdge.$inferInsert): Promise<void>;
+  updateCycleFindingsCount(
+    cycleId: bigint,
+    findingsCount: number,
+  ): Promise<void>;
 }
 
 export class SimPromotionService {
@@ -122,9 +137,7 @@ export class SimPromotionService {
     const description = composeDescription(aggregate, operatorName);
     const severity = aggregate.modal.fraction >= 0.8 ? "critical" : "warning";
 
-    const [cycleRow] = await this.deps.db
-      .insert(researchCycle)
-      .values({
+    const cycleRow = await this.deps.store.createCycle({
         triggerType: ResearchCycleTrigger.System,
         triggerSource: `sim_swarm:${swarmId}`,
         corticesUsed: [ResearchCortex.ConjunctionAnalysis],
@@ -141,9 +154,7 @@ export class SimPromotionService {
             exemplarSimRunId: aggregate.modal.exemplarSimRunId,
           },
         },
-      })
-      .returning({ id: researchCycle.id });
-    if (!cycleRow) throw new Error("insert research_cycle returned no row");
+      });
 
     let findingId: bigint | null = null;
     if (isKgPromotable(aggregate.modal.exemplarAction)) {
@@ -156,9 +167,7 @@ export class SimPromotionService {
           ? ResearchUrgency.Critical
           : ResearchUrgency.High;
 
-      const [findingRow] = await this.deps.db
-        .insert(researchFinding)
-        .values({
+      const findingRow = await this.deps.store.createFinding({
           researchCycleId: cycleRow.id,
           cortex: ResearchCortex.ConjunctionAnalysis,
           findingType: ResearchFindingType.Strategy,
@@ -189,16 +198,17 @@ export class SimPromotionService {
           confidence: aggregate.modal.fraction,
           impactScore: aggregate.modal.fraction,
           embedding: embedding ?? null,
-        })
-        .returning({ id: researchFinding.id });
-      if (!findingRow) {
-        throw new Error("insert research_finding returned no row");
-      }
+        });
       findingId = findingRow.id;
+
+      await this.deps.store.linkCycleFinding({
+        researchCycleId: cycleRow.id,
+        researchFindingId: findingId,
+      });
 
       const targetEntity = actionTarget(modalAction);
       if (targetEntity) {
-        await this.deps.db.insert(researchEdge).values({
+        await this.deps.store.createEdge({
           findingId,
           entityType: targetEntity.entityType,
           entityId: BigInt(targetEntity.entityId),
@@ -212,10 +222,7 @@ export class SimPromotionService {
         });
       }
 
-      await this.deps.db
-        .update(researchCycle)
-        .set({ findingsCount: 1 })
-        .where(eq(researchCycle.id, cycleRow.id));
+      await this.deps.store.updateCycleFindingsCount(cycleRow.id, 1);
     }
 
     const simDistribution = JSON.stringify({

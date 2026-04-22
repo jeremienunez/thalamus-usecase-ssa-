@@ -9,9 +9,15 @@
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SQLWrapper } from "drizzle-orm";
+import { eq, type SQLWrapper } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type Redis from "ioredis";
+import {
+  researchCycle,
+  researchCycleFinding,
+  researchEdge,
+  researchFinding,
+} from "@interview/db-schema";
 import type * as schema from "@interview/db-schema";
 import type { FastifyBaseLogger } from "fastify";
 import {
@@ -504,7 +510,36 @@ export async function buildContainer(
   const simMemoryService = new SimMemoryService(simMemoryRepo);
   const simTerminalService = new SimTerminalService(simTerminalRepo);
   const simPromotionService = new SimPromotionService({
-    db,
+    store: {
+      async createCycle(value) {
+        const [row] = await db
+          .insert(researchCycle)
+          .values(value)
+          .returning({ id: researchCycle.id });
+        if (!row) throw new Error("insert research_cycle returned no row");
+        return row;
+      },
+      async createFinding(value) {
+        const [row] = await db
+          .insert(researchFinding)
+          .values(value)
+          .returning({ id: researchFinding.id });
+        if (!row) throw new Error("insert research_finding returned no row");
+        return row;
+      },
+      async linkCycleFinding(value) {
+        await db.insert(researchCycleFinding).values(value);
+      },
+      async createEdge(value) {
+        await db.insert(researchEdge).values(value);
+      },
+      async updateCycleFindingsCount(cycleId, findingsCount) {
+        await db
+          .update(researchCycle)
+          .set({ findingsCount })
+          .where(eq(researchCycle.id, cycleId));
+      },
+    },
     sweepRepo: sweep.sweepRepo,
     satelliteRepo,
     swarmRepo: simSwarmRepo,
