@@ -11,6 +11,11 @@ export const SWEEP_MISSION_SATELLITE_IDS = Array.from(
 
 export const KNN_TARGET_ID = 9901001n;
 export const KNN_NEIGHBOUR_IDS = [9901002n, 9901003n, 9901004n] as const;
+export const HTTP_SMOKE_CYCLE_ID = 9903000n;
+export const HTTP_SMOKE_FINDING_ID = 9903001n;
+export const HTTP_SMOKE_SATELLITE_ID = 9903002n;
+export const HTTP_SMOKE_OPERATOR_ID = 9903003n;
+export const HTTP_SMOKE_REGIME_ID = 9903004n;
 
 const CONJUNCTION_OPERATOR_IDS = [9902001n, 9902002n] as const;
 const CONJUNCTION_BUS_ID = 9902010n;
@@ -341,5 +346,216 @@ export async function cleanupConjunctionFixture(client: PoolClient): Promise<voi
       WHERE id = ANY($1::bigint[])
     `,
     [CONJUNCTION_OPERATOR_IDS.map(String)],
+  );
+}
+
+export async function seedHttpSmokeFixture(client: PoolClient): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO operator (id, name, slug)
+      VALUES ($1, 'Smoke Operator', 'smoke-operator')
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        slug = EXCLUDED.slug
+    `,
+    [String(HTTP_SMOKE_OPERATOR_ID)],
+  );
+
+  await client.query(
+    `
+      INSERT INTO orbit_regime (id, name)
+      VALUES ($1, 'SMOKE-LEO')
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name
+    `,
+    [String(HTTP_SMOKE_REGIME_ID)],
+  );
+
+  await upsertPayloadSatellite(client, {
+    id: HTTP_SMOKE_SATELLITE_ID,
+    name: "smoke-sat",
+    slug: "smoke-sat",
+    noradId: 883002,
+    operatorId: HTTP_SMOKE_OPERATOR_ID,
+    telemetrySummary: {
+      regime: "SMOKE-LEO",
+      meanMotion: 15.2,
+    },
+  });
+
+  await client.query(
+    `
+      INSERT INTO research_cycle (
+        id,
+        trigger_type,
+        trigger_source,
+        cortices_used,
+        status,
+        findings_count,
+        started_at,
+        completed_at
+      )
+      VALUES (
+        $1,
+        'system',
+        'http-smoke',
+        ARRAY['catalog'],
+        'completed',
+        1,
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        trigger_source = EXCLUDED.trigger_source,
+        cortices_used = EXCLUDED.cortices_used,
+        status = EXCLUDED.status,
+        findings_count = EXCLUDED.findings_count,
+        completed_at = EXCLUDED.completed_at
+    `,
+    [String(HTTP_SMOKE_CYCLE_ID)],
+  );
+
+  await client.query(
+    `
+      INSERT INTO research_finding (
+        id,
+        research_cycle_id,
+        cortex,
+        finding_type,
+        status,
+        urgency,
+        title,
+        summary,
+        evidence,
+        reasoning,
+        confidence,
+        impact_score
+      )
+      VALUES (
+        $1,
+        $2,
+        'catalog',
+        'insight',
+        'active',
+        'high',
+        'Smoke Finding',
+        'Synthetic finding for HTTP smoke coverage',
+        $3::jsonb,
+        'smoke reasoning',
+        0.88,
+        0.88
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        research_cycle_id = EXCLUDED.research_cycle_id,
+        title = EXCLUDED.title,
+        summary = EXCLUDED.summary,
+        evidence = EXCLUDED.evidence,
+        reasoning = EXCLUDED.reasoning,
+        confidence = EXCLUDED.confidence,
+        impact_score = EXCLUDED.impact_score
+    `,
+    [
+      String(HTTP_SMOKE_FINDING_ID),
+      String(HTTP_SMOKE_CYCLE_ID),
+      JSON.stringify([
+        {
+          source: "osint",
+          data: {
+            url: "https://example.org/smoke-finding",
+            snippet: "Synthetic smoke evidence",
+          },
+        },
+      ]),
+    ],
+  );
+
+  await client.query(
+    `
+      INSERT INTO research_cycle_finding (
+        research_cycle_id,
+        research_finding_id,
+        iteration,
+        is_dedup_hit
+      )
+      VALUES ($1, $2, 0, false)
+      ON CONFLICT (research_cycle_id, research_finding_id) DO NOTHING
+    `,
+    [String(HTTP_SMOKE_CYCLE_ID), String(HTTP_SMOKE_FINDING_ID)],
+  );
+
+  await client.query(
+    `
+      INSERT INTO research_edge (
+        finding_id,
+        entity_type,
+        entity_id,
+        relation,
+        weight,
+        context
+      )
+      VALUES
+        ($1, 'satellite', $2, 'about', 1, '{"source":"http-smoke"}'::jsonb),
+        ($1, 'operator', $3, 'supports', 1, '{"source":"http-smoke"}'::jsonb),
+        ($1, 'orbit_regime', $4, 'about', 1, '{"source":"http-smoke"}'::jsonb)
+    `,
+    [
+      String(HTTP_SMOKE_FINDING_ID),
+      String(HTTP_SMOKE_SATELLITE_ID),
+      String(HTTP_SMOKE_OPERATOR_ID),
+      String(HTTP_SMOKE_REGIME_ID),
+    ],
+  );
+}
+
+export async function cleanupHttpSmokeFixture(client: PoolClient): Promise<void> {
+  await client.query(
+    `
+      DELETE FROM research_edge
+      WHERE finding_id = $1::bigint
+    `,
+    [String(HTTP_SMOKE_FINDING_ID)],
+  );
+  await client.query(
+    `
+      DELETE FROM research_cycle_finding
+      WHERE research_cycle_id = $1::bigint
+         OR research_finding_id = $2::bigint
+    `,
+    [String(HTTP_SMOKE_CYCLE_ID), String(HTTP_SMOKE_FINDING_ID)],
+  );
+  await client.query(
+    `
+      DELETE FROM research_finding
+      WHERE id = $1::bigint
+    `,
+    [String(HTTP_SMOKE_FINDING_ID)],
+  );
+  await client.query(
+    `
+      DELETE FROM research_cycle
+      WHERE id = $1::bigint
+    `,
+    [String(HTTP_SMOKE_CYCLE_ID)],
+  );
+  await client.query(
+    `
+      DELETE FROM satellite
+      WHERE id = $1::bigint
+    `,
+    [String(HTTP_SMOKE_SATELLITE_ID)],
+  );
+  await client.query(
+    `
+      DELETE FROM operator
+      WHERE id = $1::bigint
+    `,
+    [String(HTTP_SMOKE_OPERATOR_ID)],
+  );
+  await client.query(
+    `
+      DELETE FROM orbit_regime
+      WHERE id = $1::bigint
+    `,
+    [String(HTTP_SMOKE_REGIME_ID)],
   );
 }
