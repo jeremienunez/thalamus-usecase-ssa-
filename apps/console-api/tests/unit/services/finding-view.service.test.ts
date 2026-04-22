@@ -175,4 +175,113 @@ describe("FindingViewService.list status translation", () => {
       ],
     });
   });
+
+  it("builds a why tree from finding detail, linked entities, and evidence", async () => {
+    (findings.findById as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "42",
+      title: "Conjunction finding",
+      summary: "Alert summary",
+      cortex: "catalog",
+      status: "active",
+      confidence: 0.82,
+      created_at: "2026-04-21T00:00:00.000Z",
+      research_cycle_id: "7",
+      evidence: [
+        {
+          source: "osint",
+          data: {
+            url: "https://example.org/finding",
+            snippet: "Grounded snippet",
+          },
+        },
+        {
+          source: "field",
+          data: {
+            uri: "sensor://alpha",
+          },
+        },
+      ],
+    });
+    (edges.findByFindingId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { entity_type: "satellite", entity_id: "123" },
+      { entity_type: "operator", entity_id: "ESA" },
+    ]);
+
+    const result = await svc.buildWhyTree("f:42");
+
+    expect(result).toEqual({
+      id: "finding:42",
+      label: "Conjunction finding",
+      kind: "finding",
+      children: [
+        {
+          id: "edge:42:0",
+          label: "satellite:123",
+          kind: "edge",
+          children: [
+            {
+              id: "source_item:42:0",
+              label: "https://example.org/finding",
+              kind: "source_item",
+              sourceClass: "osint",
+              children: [],
+            },
+          ],
+        },
+        {
+          id: "edge:42:1",
+          label: "operator:ESA",
+          kind: "edge",
+          children: [
+            {
+              id: "source_item:42:1",
+              label: "sensor://alpha",
+              kind: "source_item",
+              sourceClass: "field",
+              children: [],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("falls back to source items directly under the finding when there are no linked entities", async () => {
+    (findings.findById as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "42",
+      title: "Conjunction finding",
+      summary: "Alert summary",
+      cortex: "catalog",
+      status: "active",
+      confidence: 0.82,
+      created_at: "2026-04-21T00:00:00.000Z",
+      research_cycle_id: "7",
+      evidence: [
+        {
+          source: "derived",
+          data: {
+            url: "https://example.org/finding",
+          },
+        },
+      ],
+    });
+    (edges.findByFindingId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const result = await svc.buildWhyTree("f:42");
+
+    expect(result).toEqual({
+      id: "finding:42",
+      label: "Conjunction finding",
+      kind: "finding",
+      children: [
+        {
+          id: "source_item:42:0",
+          label: "https://example.org/finding",
+          kind: "source_item",
+          sourceClass: "derived",
+          children: [],
+        },
+      ],
+    });
+  });
 });

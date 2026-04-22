@@ -37,6 +37,17 @@ export interface EdgesReadPort {
   ): Promise<Array<{ entity_type: string; entity_id: string }>>;
 }
 
+export type WhySourceClass = "field" | "osint" | "sim" | "derived";
+
+export type WhyNode = {
+  id: string;
+  label: string;
+  kind: "finding" | "edge" | "source_item";
+  sha256?: string;
+  sourceClass?: WhySourceClass;
+  children: WhyNode[];
+};
+
 const KNOWN_DTO_STATUSES = new Set([
   "pending",
   "accepted",
@@ -90,5 +101,66 @@ export class FindingViewService {
     const ok = await this.findings.updateStatus(fid, toDbStatus(decision));
     if (!ok) throw HttpError.notFound("finding not found");
     return this.findById(idRaw);
+  }
+
+  async buildWhyTree(idRaw: string): Promise<WhyNode> {
+    const fid = parseFindingId(idRaw);
+    if (fid === null) throw HttpError.badRequest("invalid id");
+    const row = await this.findings.findById(fid);
+    if (!row) throw HttpError.notFound("finding not found");
+    const edgeRows = await this.edges.findByFindingId(fid, 20);
+
+    const evidence: WhyNode[] = Array.isArray(row.evidence)
+      ? (
+          row.evidence as Array<{
+            source?: string;
+            data?: { url?: string; uri?: string; snippet?: string };
+          }>
+        ).map((entry, index) => {
+          const source = String(entry.source ?? "derived").toLowerCase();
+          const sourceClass: WhySourceClass =
+            source === "field"
+              ? "field"
+              : source === "osint"
+                ? "osint"
+                : source === "sim"
+                  ? "sim"
+                  : "derived";
+          return {
+            id: `source_item:${fid}:${index}`,
+            label: entry.data?.url ?? entry.data?.uri ?? "—",
+            kind: "source_item" as const,
+            sourceClass,
+            children: [] as WhyNode[],
+          };
+        })
+      : [];
+
+    const edges: WhyNode[] = edgeRows.map((edge, index) => ({
+      id: `edge:${fid}:${index}`,
+      label: `${edge.entity_type}:${edge.entity_id}`,
+      kind: "edge" as const,
+      children: [] as WhyNode[],
+    }));
+
+    if (edges.length === 0) {
+      return {
+        id: `finding:${row.id}`,
+        label: row.title,
+        kind: "finding",
+        children: evidence,
+      };
+    }
+
+    evidence.forEach((sourceItem, index) => {
+      edges[index % edges.length]!.children.push(sourceItem);
+    });
+
+    return {
+      id: `finding:${row.id}`,
+      label: row.title,
+      kind: "finding",
+      children: edges,
+    };
   }
 }

@@ -30,6 +30,7 @@ import { registerPayloadsRoutes } from "./payloads.routes";
 import { registerConjunctionRoutes } from "./conjunctions.routes";
 import { registerKgRoutes } from "./kg.routes";
 import { registerFindingsRoutes } from "./findings.routes";
+import { registerWhyRoutes } from "./why.routes";
 import { registerStatsRoutes } from "./stats.routes";
 import { registerSweepRoutes } from "./sweep.routes";
 import { registerReflexionRoutes } from "./reflexion.routes";
@@ -86,6 +87,7 @@ export function registerAllRoutes(
   registerConjunctionRoutes(app, s.conjunctionView);
   registerKgRoutes(app, s.kgView);
   registerFindingsRoutes(app, s.findingView);
+  registerWhyRoutes(app, s.findingView);
   registerStatsRoutes(app, s.stats);
   registerSweepRoutes(app, s.sweepSuggestions, s.mission);
   registerReflexionRoutes(app, s.reflexion);
