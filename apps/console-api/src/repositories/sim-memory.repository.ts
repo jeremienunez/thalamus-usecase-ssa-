@@ -47,28 +47,22 @@ export class SimMemoryRepository {
    */
   async writeMany(rows: SimMemoryWriteRow[]): Promise<bigint[]> {
     if (rows.length === 0) return [];
-    return this.db.transaction(async (tx) => {
-      const ids: bigint[] = [];
-      for (const r of rows) {
-        const insert: NewSimAgentMemory = {
-          simRunId: r.simRunId,
-          agentId: r.agentId,
-          turnIndex: r.turnIndex,
-          kind: r.kind,
-          content: r.content,
-          embedding: r.embedding ?? null,
-        };
-        const [inserted] = await tx
-          .insert(simAgentMemory)
-          .values(insert)
-          .returning({ id: simAgentMemory.id });
-        if (!inserted) {
-          throw new Error("writeMany: insert sim_agent_memory returned no row");
-        }
-        ids.push(inserted.id);
-      }
-      return ids;
-    });
+    const inserts: NewSimAgentMemory[] = rows.map((r) => ({
+      simRunId: r.simRunId,
+      agentId: r.agentId,
+      turnIndex: r.turnIndex,
+      kind: r.kind,
+      content: r.content,
+      embedding: r.embedding ?? null,
+    }));
+    const inserted = await this.db
+      .insert(simAgentMemory)
+      .values(inserts)
+      .returning({ id: simAgentMemory.id });
+    if (inserted.length !== rows.length) {
+      throw new Error("writeMany: insert sim_agent_memory returned fewer rows");
+    }
+    return inserted.map((row) => row.id);
   }
 
   /**
