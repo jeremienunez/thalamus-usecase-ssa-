@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import type { SimOrchestrator } from "@interview/sweep";
+import type { SimOrchestrator } from "@interview/sweep/internal";
 import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 import { SimRunIdParamsSchema } from "../schemas/sim.schema";

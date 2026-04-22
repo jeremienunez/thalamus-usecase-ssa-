@@ -54,6 +54,10 @@ const aliases = {
   "@interview/db-schema": resolve(__dirname, "packages/db-schema/src/index.ts"),
   "@interview/test-kit": resolve(__dirname, "packages/test-kit/src/index.ts"),
   "@interview/thalamus": resolve(__dirname, "packages/thalamus/src/index.ts"),
+  "@interview/sweep/internal": resolve(
+    __dirname,
+    "packages/sweep/src/internal.ts",
+  ),
   "@interview/sweep": resolve(__dirname, "packages/sweep/src/index.ts"),
 };
 

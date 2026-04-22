@@ -2,7 +2,7 @@ import type {
   SimRunExecutionStatusDto,
   SimScheduleNextDto,
 } from "@interview/shared/dto/sim-orchestrator.dto";
-import type { SimStatus } from "@interview/sweep";
+import type { SimStatus } from "@interview/sweep/internal";
 
 export interface ScheduleNextResultLike {
   scheduled: boolean;

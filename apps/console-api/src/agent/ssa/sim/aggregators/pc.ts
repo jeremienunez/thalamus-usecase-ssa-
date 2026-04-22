@@ -15,10 +15,12 @@
 
 import { createLogger } from "@interview/shared/observability";
 import {
-  percentile,
-  sampleStddev,
   type SimSwarmStore,
 } from "@interview/sweep";
+import {
+  percentile,
+  sampleStddev,
+} from "@interview/sweep/internal";
 import type { SsaTurnAction } from "../action-schema";
 
 const logger = createLogger("sim-pc-aggregator");

@@ -31,7 +31,7 @@ import type {
   LaunchSwarmResult,
   StartStandaloneResult,
   SwarmService,
-} from "@interview/sweep";
+} from "@interview/sweep/internal";
 import type { SimRunRow, SimSwarmFishCounts } from "../types/sim-run.types";
 import type { SimSwarmRow } from "../types/sim-swarm.types";
 import type {

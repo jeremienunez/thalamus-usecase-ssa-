@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fakePort, typedSpy } from "@interview/test-kit";
 import { startTelemetrySwarm } from "../../../../../src/agent/ssa/sim/swarms/telemetry";
 import { __resetBusDatasheetCache } from "../../../../../src/agent/ssa/sim/bus-datasheets/loader";
-import type { LaunchSwarmResult } from "@interview/sweep";
+import type { LaunchSwarmResult } from "@interview/sweep/internal";
 import type { FindByIdFullRow } from "../../../../../src/types/satellite.types";
 import type { TelemetrySwarmLaunchPort } from "../../../../../src/agent/ssa/sim/swarms/telemetry";
 

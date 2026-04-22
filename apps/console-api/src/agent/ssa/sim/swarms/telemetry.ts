@@ -11,12 +11,11 @@ import type {
   FindByIdFullRow,
 } from "../../../../types/satellite.types";
 import type {
-  LaunchSwarmResult,
   PerturbationSpec,
   SeedRefs,
   SwarmConfig,
-  SwarmService,
 } from "@interview/sweep";
+import type { LaunchSwarmResult, SwarmService } from "@interview/sweep/internal";
 import { lookupBusPrior } from "../bus-datasheets/loader";
 
 const logger = createLogger("telemetry-swarm");

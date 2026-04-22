@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import type { SwarmService } from "@interview/sweep";
+import type { SwarmService } from "@interview/sweep/internal";
 import type { SimSwarmService } from "../services/sim-swarm.service";
 import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";

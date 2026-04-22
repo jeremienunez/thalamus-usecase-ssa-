@@ -1,9 +1,9 @@
 import type {
-  AggregatorService,
   SimOutcomeResolver,
   SimResolvedOutcome,
   SwarmAggregate,
 } from "@interview/sweep";
+import type { AggregatorService } from "@interview/sweep/internal";
 import type { PcAggregatorService } from "../agent/ssa/sim/aggregators/pc";
 import type {
   TelemetryAggregate,

@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import type { LaunchSwarmResult, SimOrchestrator } from "@interview/sweep";
+import type { LaunchSwarmResult, SimOrchestrator } from "@interview/sweep/internal";
 import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 import {

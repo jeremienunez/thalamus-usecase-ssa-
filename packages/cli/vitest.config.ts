@@ -37,6 +37,7 @@ const alias = {
   ),
   "@interview/db-schema": resolve(root, "packages/db-schema/src/index.ts"),
   "@interview/thalamus": resolve(root, "packages/thalamus/src/index.ts"),
+  "@interview/sweep/internal": resolve(root, "packages/sweep/src/internal.ts"),
   "@interview/sweep": resolve(root, "packages/sweep/src/index.ts"),
 };
 

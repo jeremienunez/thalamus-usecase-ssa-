@@ -1,4 +1,4 @@
-import type { SimOrchestrator, SwarmService } from "@interview/sweep";
+import type { SimOrchestrator, SwarmService } from "@interview/sweep/internal";
 import type { SimAgentService } from "../services/sim-agent.service";
 import type { SimGodChannelService } from "../services/sim-god-channel.service";
 import type { SimTargetService } from "../services/sim-target.service";

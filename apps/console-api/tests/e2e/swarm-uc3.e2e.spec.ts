@@ -48,17 +48,19 @@ import {
   SimPromotionHttpClient,
   SimScenarioContextHttpAdapter,
   SimSwarmStoreHttpAdapter,
-  createSwarmFishWorker,
-  createSwarmAggregateWorker,
   setRedisClient,
-  simTurnQueue,
-  swarmFishQueue,
-  swarmAggregateQueue,
   type SwarmAggregate,
   type DomainAuditProvider,
   type SweepPromotionAdapter,
   type ResolutionHandlerRegistry,
 } from "@interview/sweep";
+import {
+  createSwarmFishWorker,
+  createSwarmAggregateWorker,
+  simTurnQueue,
+  swarmFishQueue,
+  swarmAggregateQueue,
+} from "@interview/sweep/internal";
 import { SsaPersonaComposer } from "../../src/agent/ssa/sim/persona-composer";
 import { SsaPromptRenderer } from "../../src/agent/ssa/sim/prompt-renderer";
 import { SsaCortexSelector } from "../../src/agent/ssa/sim/cortex-selector";

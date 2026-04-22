@@ -1,12 +1,14 @@
 import { createLogger } from "@interview/shared/observability";
 import {
+  type SimSwarmStore,
+} from "@interview/sweep";
+import {
   average,
   clamp,
   mostFrequent,
   percentile,
   sampleStddev,
-  type SimSwarmStore,
-} from "@interview/sweep";
+} from "@interview/sweep/internal";
 import {
   type SsaTurnAction,
 } from "../action-schema";

@@ -48,12 +48,7 @@ import {
 } from "./prompts";
 import {
   buildSweepContainer,
-  closeQueues,
-  createIngestionRegistry,
-  createIngestionWorker,
   getRedis,
-  ingestionQueue,
-  registerSchedulers,
   registerSweepConfigDomains,
   setSimEmbeddingConfigProvider,
   setSimFishConfigProvider,
@@ -65,11 +60,18 @@ import {
   SimRuntimeStoreHttpAdapter,
   SimSwarmStoreHttpAdapter,
   SimScenarioContextHttpAdapter,
+  type SuggestionFeedbackRow,
+} from "@interview/sweep";
+import {
+  closeQueues,
+  createIngestionRegistry,
+  createIngestionWorker,
+  ingestionQueue,
+  registerSchedulers,
   simTurnQueue,
   swarmAggregateQueue,
   swarmFishQueue,
-  type SuggestionFeedbackRow,
-} from "@interview/sweep";
+} from "@interview/sweep/internal";
 import { IngestionService } from "./services/ingestion.service";
 import { registerConsoleConfigDomains } from "./config/register-console-config";
 

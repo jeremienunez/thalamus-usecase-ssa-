@@ -23,8 +23,6 @@ import {
 } from "@interview/thalamus";
 import {
   buildSweepContainer,
-  createSwarmAggregateWorker,
-  createSwarmFishWorker,
   type DomainAuditProvider,
   type ResolutionHandlerRegistry,
   SimHttpClient,
@@ -34,12 +32,16 @@ import {
   SimScenarioContextHttpAdapter,
   SimSubjectHttpAdapter,
   SimSwarmStoreHttpAdapter,
-  simTurnQueue,
-  swarmAggregateQueue,
-  swarmFishQueue,
   type SweepPromotionAdapter,
   setRedisClient,
 } from "@interview/sweep";
+import {
+  createSwarmAggregateWorker,
+  createSwarmFishWorker,
+  simTurnQueue,
+  swarmAggregateQueue,
+  swarmFishQueue,
+} from "@interview/sweep/internal";
 import { SsaActionSchemaProvider } from "../../src/agent/ssa/sim/action-schema";
 import { SsaAggregationStrategy } from "../../src/agent/ssa/sim/aggregation-strategy";
 import { SsaCortexSelector } from "../../src/agent/ssa/sim/cortex-selector";

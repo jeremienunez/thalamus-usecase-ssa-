@@ -14,12 +14,11 @@ import type {
   ConjunctionWithSatellitesRow,
 } from "../../../../types/conjunction.types";
 import type {
-  LaunchSwarmResult,
   PerturbationSpec,
   SeedRefs,
   SwarmConfig,
-  SwarmService,
 } from "@interview/sweep";
+import type { LaunchSwarmResult, SwarmService } from "@interview/sweep/internal";
 
 const logger = createLogger("pc-swarm");
 

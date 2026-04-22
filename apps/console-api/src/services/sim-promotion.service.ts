@@ -21,7 +21,7 @@ import type {
   SwarmAggregate,
   SweepRepository,
 } from "@interview/sweep";
-import { isKgPromotable } from "@interview/sweep";
+import { isKgPromotable } from "@interview/sweep/internal";
 import type { SimSwarmRepository } from "../repositories/sim-swarm.repository";
 import type { SatelliteRepository } from "../repositories/satellite.repository";
 import type { TelemetryAggregate } from "../agent/ssa/sim/aggregators/telemetry";
