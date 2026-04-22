@@ -1,5 +1,5 @@
 /**
- * Shared DTO schemas — reusable across all DTOs.
+ * Shared pagination bits for package-owned DTO schemas.
  * M33 fix: pagination was duplicated 7 times.
  */
 

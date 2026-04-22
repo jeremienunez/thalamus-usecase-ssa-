@@ -4,7 +4,7 @@ import { blockBar } from "@/shared/ui/sparkline";
 import { ENTITY_COLOR, SOURCE_COLOR } from "@/shared/types/graph-colors";
 import { fmtCount } from "@/shared/types/units";
 import { countBy, topN, maxCount } from "@/shared/util/aggregate";
-import type { EntityClass, KgEdgeDTO, KgNodeDTO } from "@/transformers/http";
+import type { EntityClass, KgEdgeDto, KgNodeDto } from "@/dto/http";
 
 function classDescription(cls: EntityClass): string {
   switch (cls) {
@@ -54,8 +54,8 @@ export function ThalamusDrawer({
   node,
   edges,
 }: {
-  node: KgNodeDTO | null;
-  edges: KgEdgeDTO[];
+  node: KgNodeDto | null;
+  edges: KgEdgeDto[];
 }) {
   if (!node) return <Drawer title="ENTITY" subtitle="select a neuron">{null}</Drawer>;
 

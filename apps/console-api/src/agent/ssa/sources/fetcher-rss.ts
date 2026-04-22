@@ -1,4 +1,8 @@
 import { createLogger } from "@interview/shared/observability";
+import {
+  pickFirstTagText,
+  pickTagAttr,
+} from "@interview/shared/utils";
 import type { Source, NewSourceItem } from "@interview/db-schema";
 
 const logger = createLogger("source-rss");
@@ -19,37 +23,6 @@ export interface RssFetchOptions {
   limit?: number;
   timeoutMs?: number;
 }
-
-const decodeEntities = (s: string): string =>
-  s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
-
-const stripTags = (s: string): string =>
-  decodeEntities(s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ")
-    .trim();
-
-const pick = (block: string, tag: string): string | null => {
-  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
-  const m = block.match(re);
-  if (!m) return null;
-  const raw = m[1];
-  // CDATA passthrough then tag strip
-  const cdata = raw.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-  return stripTags(cdata ? cdata[1] : raw);
-};
-
-const pickAttr = (block: string, tag: string, attr: string): string | null => {
-  const re = new RegExp(`<${tag}\\b[^>]*\\b${attr}="([^"]+)"[^>]*\\/?>`, "i");
-  const m = block.match(re);
-  return m ? m[1] : null;
-};
 
 const parseDate = (s: string | null): Date | null => {
   if (!s) return null;
@@ -87,25 +60,28 @@ export async function fetchRssSource(
   while ((m = blockRe.exec(xml)) !== null && items.length < limit) {
     const block = m[1];
 
-    const title = pick(block, "title");
+    const title = pickFirstTagText(block, "title");
     if (!title) continue;
 
     const link =
-      pick(block, "link") ?? pickAttr(block, "link", "href") ?? null;
+      pickFirstTagText(block, "link") ?? pickTagAttr(block, "link", "href") ?? null;
 
     const guid =
-      pick(block, "guid") ?? pick(block, "id") ?? link ?? title.slice(0, 200);
+      pickFirstTagText(block, "guid") ??
+      pickFirstTagText(block, "id") ??
+      link ??
+      title.slice(0, 200);
 
     const dateStr =
-      pick(block, "pubDate") ??
-      pick(block, "published") ??
-      pick(block, "updated") ??
-      pick(block, "dc:date");
+      pickFirstTagText(block, "pubDate") ??
+      pickFirstTagText(block, "published") ??
+      pickFirstTagText(block, "updated") ??
+      pickFirstTagText(block, "dc:date");
 
     const description =
-      pick(block, "description") ??
-      pick(block, "summary") ??
-      pick(block, "content");
+      pickFirstTagText(block, "description") ??
+      pickFirstTagText(block, "summary") ??
+      pickFirstTagText(block, "content");
 
     items.push({
       sourceId: source.id,

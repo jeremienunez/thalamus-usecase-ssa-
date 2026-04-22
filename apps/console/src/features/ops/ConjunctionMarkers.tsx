@@ -14,13 +14,13 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import type { ConjunctionDTO, SatelliteDTO } from "@/transformers/http";
+import type { ConjunctionDto, SatelliteDto } from "@/dto/http";
 import { satellitePosition } from "@/adapters/propagator/sgp4";
 import { severityOf, SEVERITY_COLOR, type Severity } from "@/shared/types/conjunction";
 
 interface Props {
-  conjunctions: ConjunctionDTO[];
-  satellitesById: Map<number, SatelliteDTO>;
+  conjunctions: ConjunctionDto[];
+  satellitesById: Map<number, SatelliteDto>;
   hoveredId: string | null;
   selectedId: string | null;
   timeScale: number;
@@ -63,7 +63,7 @@ function getCrossTexture(sev: Severity): THREE.Texture {
 
 type MarkerItem = {
   id: string;
-  sat: SatelliteDTO;
+  sat: SatelliteDto;
   severity: Severity;
 };
 

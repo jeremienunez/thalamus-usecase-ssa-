@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { numericIdString } from "../utils/request-schema";
 
-const NumericIdStringSchema = z.string().regex(/^[0-9]+$/, "id must be numeric");
+const NumericIdStringSchema = numericIdString();
 
 export const SimKindSchema = z.enum([
   "uc1_operator_behavior",
@@ -63,7 +64,7 @@ export const GodEventKindSchema = z.enum([
   "debris_cascade",
   "custom",
 ]);
-export type GodEventKindDto = z.infer<typeof GodEventKindSchema>;
+export type GodEventKind = z.infer<typeof GodEventKindSchema>;
 
 export const GodEventInjectBodySchema = z.object({
   kind: GodEventKindSchema,

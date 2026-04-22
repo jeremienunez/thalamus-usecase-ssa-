@@ -1,4 +1,4 @@
-export type CycleDTO = {
+export type CycleDto = {
   id: string;
   kind: "thalamus" | "fish" | "both";
   startedAt: string;

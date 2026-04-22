@@ -9,7 +9,7 @@ import {
   GodEventInjectBodySchema,
   SimRunIdParamsSchema,
 } from "../schemas/sim.schema";
-import { toInjectResultDto } from "../transformers/sim-god-channel.transformer";
+import { toSimGodInjectResultDto } from "../transformers/sim-god-channel.transformer";
 
 export function simInjectController(service: SimGodChannelService) {
   return asyncHandler<FastifyRequest<{ Params: unknown; Body: unknown }>>(
@@ -22,7 +22,7 @@ export function simInjectController(service: SimGodChannelService) {
         BigInt(params.id),
         body as GodEventInput,
       );
-      return toInjectResultDto(result);
+      return toSimGodInjectResultDto(result);
     },
   );
 }

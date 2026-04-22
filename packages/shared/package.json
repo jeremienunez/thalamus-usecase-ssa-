@@ -8,6 +8,8 @@
     ".": "./src/index.ts",
     "./config": "./src/config/index.ts",
     "./config/*": "./src/config/*",
+    "./dto": "./src/dto/index.ts",
+    "./dto/*": "./src/dto/*",
     "./enum": "./src/enum/index.ts",
     "./enum/*": "./src/enum/*",
     "./net": "./src/net/index.ts",

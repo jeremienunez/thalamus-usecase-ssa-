@@ -7,7 +7,7 @@ import {
   AuthorLabelsBodySchema,
 } from "../schemas/sim.schema";
 import {
-  toAgentSubjectDto,
+  toSimSubjectDto,
   toAuthorLabelsDto,
 } from "../transformers/sim-fleet.transformer";
 import { parseSafeNumberId } from "./sim-controller.utils";
@@ -21,7 +21,7 @@ export function simAgentSubjectController(service: SimFleetService) {
         kind: q.kind,
         id: parseSafeNumberId(q.id, "id"),
       });
-      return toAgentSubjectDto(snap);
+      return toSimSubjectDto(snap);
     },
   );
 }

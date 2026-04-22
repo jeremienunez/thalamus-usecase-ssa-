@@ -5,7 +5,7 @@ import type {
   RegimeProfileView,
   OrbitSlotRow,
   OrbitSlotView,
-} from "../types/fleet-analysis.types";
+} from "../types/orbital-analysis.types";
 
 // ---- transformers ------------------------------------------------------
 export function toFleetAnalysisView(r: FleetAnalysisRow): FleetAnalysisView {

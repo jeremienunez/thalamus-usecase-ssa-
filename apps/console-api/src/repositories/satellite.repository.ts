@@ -4,6 +4,11 @@ import type * as schema from "@interview/db-schema";
 import type { Regime } from "@interview/shared";
 import { TELEMETRY_SCALAR_COLUMN } from "../types/sim-telemetry.types";
 import { fieldSqlFor } from "../utils/sql-field";
+import {
+  satelliteDimensionJoinsSql,
+  satelliteOrbitRegimeJoinSql,
+} from "./satellite-dimension.sql";
+import { SatelliteDimensionRepository } from "./satellite-dimension.repository";
 import type {
   SatelliteOrbitalRow,
   SatelliteNameRow,
@@ -19,7 +24,11 @@ export type {
 } from "../types/satellite.types";
 
 export class SatelliteRepository {
-  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+  private readonly dimensions: SatelliteDimensionRepository;
+
+  constructor(private readonly db: NodePgDatabase<typeof schema>) {
+    this.dimensions = new SatelliteDimensionRepository(db);
+  }
 
   async listWithOrbital(
     limit: number,
@@ -78,10 +87,7 @@ export class SatelliteRepository {
         th_latest.last_tle_ingested_at,
         (th_latest.latest_mm - th_prev.prev_mm)::real AS mean_motion_drift
       FROM satellite s
-      LEFT JOIN operator op          ON op.id = s.operator_id
-      LEFT JOIN operator_country oc  ON oc.id = s.operator_country_id
-      LEFT JOIN platform_class pc    ON pc.id = s.platform_class_id
-      LEFT JOIN satellite_bus sb     ON sb.id = s.satellite_bus_id
+      ${satelliteDimensionJoinsSql}
       LEFT JOIN LATERAL (
         SELECT ingested_at AS last_tle_ingested_at, mean_motion AS latest_mm
         FROM tle_history
@@ -192,62 +198,14 @@ export class SatelliteRepository {
   async findByIdFull(
     id: bigint | number,
   ): Promise<FindByIdFullRow | null> {
-    const results = await this.db.execute<FindByIdFullRow>(sql`
-      SELECT
-        s.id, s.name, s.slug,
-        s.norad_id AS "noradId",
-        s.launch_year as "launchYear",
-        op.name as "operatorName", op.id as "operatorId",
-        oc.name as "operatorCountryName", oc.id as "operatorCountryId",
-        pc.name as "platformClassName", pc.id as "platformClassId",
-        orr.name as "orbitRegimeName", orr.id as "orbitRegimeId",
-        sb.name as "busName",
-        s.telemetry_summary as "telemetrySummary"
-      FROM satellite s
-      LEFT JOIN operator op ON op.id = s.operator_id
-      LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
-      LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
-      LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
-      LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
-      WHERE s.id = ${BigInt(id)}
-      LIMIT 1
-    `);
-
-    return results.rows[0] ?? null;
+    return this.dimensions.findByIdFull(id);
   }
 
   /** List satellites by operator name. */
   async listByOperator(
     opts: { operator?: string; limit?: number },
   ): Promise<ListByOperatorRow[]> {
-    const operatorFilter = opts.operator
-      ? sql`AND op.name = ${opts.operator}`
-      : sql``;
-
-    const results = await this.db.execute<ListByOperatorRow>(sql`
-      SELECT
-        s.id, s.name, s.slug,
-        s.norad_id AS "noradId",
-        s.launch_year as "launchYear",
-        op.name as "operatorName", op.id as "operatorId",
-        oc.name as "operatorCountryName", oc.id as "operatorCountryId",
-        pc.name as "platformClassName", pc.id as "platformClassId",
-        orr.name as "orbitRegimeName", orr.id as "orbitRegimeId",
-        sb.name as "busName",
-        s.telemetry_summary as "telemetrySummary"
-      FROM satellite s
-      LEFT JOIN operator op ON op.id = s.operator_id
-      LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
-      LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
-      LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
-      LEFT JOIN satellite_bus sb ON sb.id = s.satellite_bus_id
-      WHERE 1 = 1
-        ${operatorFilter}
-      ORDER BY s.launch_year DESC NULLS LAST, s.name ASC
-      LIMIT ${opts.limit ?? 200}
-    `);
-
-    return results.rows;
+    return this.dimensions.listByOperator(opts);
   }
 
   /** Mission windows with EOL projections. */
@@ -311,10 +269,8 @@ export class SatelliteRepository {
           orr.name as "orbitRegimeName", orr.id as "orbitRegimeId",
           s.telemetry_summary as "telemetrySummary"
         FROM satellite s
-        LEFT JOIN operator op ON op.id = s.operator_id
-        LEFT JOIN operator_country oc ON oc.id = s.operator_country_id
-        LEFT JOIN platform_class pc ON pc.id = s.platform_class_id
-        LEFT JOIN orbit_regime orr ON orr.id = oc.orbit_regime_id
+        ${satelliteDimensionJoinsSql}
+        ${satelliteOrbitRegimeJoinSql}
         WHERE s.launch_year IS NOT NULL
           AND s.launch_year > 1957
           ${regimeFilter}
@@ -364,84 +320,138 @@ export class SatelliteRepository {
       }>;
     }>
   > {
-    const rows = await this.db.execute(sql`
-      SELECT
-        oc.id as operator_country_id,
-        oc.name as operator_country_name,
-        reg.name as orbit_regime_name,
-        count(s.id)::int as satellite_count,
-        count(s.id) FILTER (WHERE NOT EXISTS (
-          SELECT 1 FROM satellite_payload sp WHERE sp.satellite_id = s.id
-        ))::int as missing_payloads,
-        count(s.id) FILTER (WHERE s.g_orbit_regime_description IS NULL OR s.g_orbit_regime_description = '')::int as missing_orbit_regime,
-        count(s.id) FILTER (WHERE s.launch_year IS NULL)::int as missing_launch_year,
-        count(s.id) FILTER (WHERE s.mass_kg = 0 OR s.mass_kg IS NULL)::int as missing_mass,
-        (oc.doctrine IS NOT NULL) as has_doctrine,
-        round(avg(s.mass_kg) FILTER (WHERE s.mass_kg > 0))::real as avg_mass
-      FROM operator_country oc
-      JOIN orbit_regime reg ON reg.id = oc.orbit_regime_id
-      LEFT JOIN satellite s ON s.operator_country_id = oc.id
-      GROUP BY oc.id, oc.name, reg.name, oc.doctrine
-      HAVING count(s.id) > 0
-      ORDER BY count(s.id) DESC
-    `);
-
-    const results: Array<{
-      operatorCountryId: bigint;
-      operatorCountryName: string;
-      orbitRegimeName: string;
-      satelliteCount: number;
-      missingPayloads: number;
-      missingOrbitRegime: number;
-      missingLaunchYear: number;
-      missingMass: number;
-      hasDoctrine: boolean;
-      avgMass: number | null;
-      topPayloads: string[];
-      sampleSatellites: Array<{
+    const rows = await this.db.execute<{
+      operator_country_id: string;
+      operator_country_name: string;
+      orbit_regime_name: string;
+      satellite_count: number;
+      missing_payloads: number;
+      missing_orbit_regime: number;
+      missing_launch_year: number;
+      missing_mass: number;
+      has_doctrine: boolean;
+      avg_mass: number | null;
+      top_payloads: string[];
+      sample_satellites: Array<{
         name: string;
         massKg: number;
         launchYear: number | null;
       }>;
-    }> = [];
-    for (const row of rows.rows as Record<string, unknown>[]) {
-      const ocId = row.operator_country_id as bigint;
-      const payloadsRes = await this.db.execute(sql`
-        SELECT p.name FROM satellite_payload sp
+    }>(sql`
+      WITH operator_country_stats AS (
+        SELECT
+          oc.id::text AS operator_country_id,
+          oc.name AS operator_country_name,
+          reg.name AS orbit_regime_name,
+          count(s.id)::int AS satellite_count,
+          count(s.id) FILTER (
+            WHERE NOT EXISTS (
+              SELECT 1
+              FROM satellite_payload sp
+              WHERE sp.satellite_id = s.id
+            )
+          )::int AS missing_payloads,
+          count(s.id) FILTER (
+            WHERE s.g_orbit_regime_description IS NULL
+              OR s.g_orbit_regime_description = ''
+          )::int AS missing_orbit_regime,
+          count(s.id) FILTER (WHERE s.launch_year IS NULL)::int AS missing_launch_year,
+          count(s.id) FILTER (
+            WHERE s.mass_kg = 0 OR s.mass_kg IS NULL
+          )::int AS missing_mass,
+          (oc.doctrine IS NOT NULL) AS has_doctrine,
+          round(avg(s.mass_kg) FILTER (WHERE s.mass_kg > 0))::real AS avg_mass
+        FROM operator_country oc
+        JOIN orbit_regime reg ON reg.id = oc.orbit_regime_id
+        LEFT JOIN satellite s ON s.operator_country_id = oc.id
+        GROUP BY oc.id, oc.name, reg.name, oc.doctrine
+        HAVING count(s.id) > 0
+      ),
+      ranked_payloads AS (
+        SELECT
+          s.operator_country_id::text AS operator_country_id,
+          p.name,
+          count(*)::int AS payload_count,
+          row_number() OVER (
+            PARTITION BY s.operator_country_id
+            ORDER BY count(*) DESC, p.name ASC
+          ) AS rank
+        FROM satellite_payload sp
         JOIN payload p ON p.id = sp.payload_id
         JOIN satellite s ON s.id = sp.satellite_id
-        WHERE s.operator_country_id = ${ocId}
-        GROUP BY p.name ORDER BY count(*) DESC LIMIT 5
-      `);
-      const sampleRes = await this.db.execute(sql`
-        SELECT name, mass_kg, launch_year
-        FROM satellite WHERE operator_country_id = ${ocId} AND mass_kg > 0
-        ORDER BY mass_kg DESC LIMIT 3
-      `);
-      results.push({
-        operatorCountryId: ocId,
-        operatorCountryName: row.operator_country_name as string,
-        orbitRegimeName: row.orbit_regime_name as string,
-        satelliteCount: row.satellite_count as number,
-        missingPayloads: row.missing_payloads as number,
-        missingOrbitRegime: row.missing_orbit_regime as number,
-        missingLaunchYear: row.missing_launch_year as number,
-        missingMass: row.missing_mass as number,
-        hasDoctrine: row.has_doctrine as boolean,
-        avgMass: row.avg_mass as number | null,
-        topPayloads: (payloadsRes.rows as Array<{ name: string }>).map(
-          (p) => p.name,
-        ),
-        sampleSatellites: (sampleRes.rows as Array<Record<string, unknown>>).map(
-          (s) => ({
-            name: s.name as string,
-            massKg: s.mass_kg as number,
-            launchYear: s.launch_year as number | null,
-          }),
-        ),
-      });
-    }
-    return results;
+        GROUP BY s.operator_country_id, p.name
+      ),
+      top_payloads AS (
+        SELECT
+          operator_country_id,
+          array_agg(name ORDER BY payload_count DESC, name ASC) AS top_payloads
+        FROM ranked_payloads
+        WHERE rank <= 5
+        GROUP BY operator_country_id
+      ),
+      ranked_samples AS (
+        SELECT
+          s.operator_country_id::text AS operator_country_id,
+          s.name,
+          s.mass_kg,
+          s.launch_year,
+          row_number() OVER (
+            PARTITION BY s.operator_country_id
+            ORDER BY s.mass_kg DESC, s.name ASC
+          ) AS rank
+        FROM satellite s
+        WHERE s.mass_kg > 0
+      ),
+      sample_satellites AS (
+        SELECT
+          operator_country_id,
+          jsonb_agg(
+            jsonb_build_object(
+              'name', name,
+              'massKg', mass_kg,
+              'launchYear', launch_year
+            )
+            ORDER BY mass_kg DESC, name ASC
+          ) AS sample_satellites
+        FROM ranked_samples
+        WHERE rank <= 3
+        GROUP BY operator_country_id
+      )
+      SELECT
+        ocs.operator_country_id,
+        ocs.operator_country_name,
+        ocs.orbit_regime_name,
+        ocs.satellite_count,
+        ocs.missing_payloads,
+        ocs.missing_orbit_regime,
+        ocs.missing_launch_year,
+        ocs.missing_mass,
+        ocs.has_doctrine,
+        ocs.avg_mass,
+        COALESCE(tp.top_payloads, ARRAY[]::text[]) AS top_payloads,
+        COALESCE(ss.sample_satellites, '[]'::jsonb) AS sample_satellites
+      FROM operator_country_stats ocs
+      LEFT JOIN top_payloads tp
+        ON tp.operator_country_id = ocs.operator_country_id
+      LEFT JOIN sample_satellites ss
+        ON ss.operator_country_id = ocs.operator_country_id
+      ORDER BY ocs.satellite_count DESC
+    `);
+
+    return rows.rows.map((row) => ({
+      operatorCountryId: BigInt(row.operator_country_id),
+      operatorCountryName: row.operator_country_name,
+      orbitRegimeName: row.orbit_regime_name,
+      satelliteCount: row.satellite_count,
+      missingPayloads: row.missing_payloads,
+      missingOrbitRegime: row.missing_orbit_regime,
+      missingLaunchYear: row.missing_launch_year,
+      missingMass: row.missing_mass,
+      hasDoctrine: row.has_doctrine,
+      avgMass: row.avg_mass,
+      topPayloads: row.top_payloads ?? [],
+      sampleSatellites: row.sample_satellites ?? [],
+    }));
   }
 
   /**

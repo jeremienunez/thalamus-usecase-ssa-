@@ -6,14 +6,20 @@ import { resolve } from "node:path";
  * sub-path imports like `@interview/shared/observability` the same way tsc does.
  */
 const aliases = {
+  "@interview/shared/observability/": resolve(
+    __dirname,
+    "packages/shared/src/observability/",
+  ),
   "@interview/shared/observability": resolve(
     __dirname,
     "packages/shared/src/observability/index.ts",
   ),
+  "@interview/shared/enum/": resolve(__dirname, "packages/shared/src/enum/"),
   "@interview/shared/enum": resolve(
     __dirname,
     "packages/shared/src/enum/index.ts",
   ),
+  "@interview/shared/utils/": resolve(__dirname, "packages/shared/src/utils/"),
   "@interview/shared/utils": resolve(
     __dirname,
     "packages/shared/src/utils/index.ts",

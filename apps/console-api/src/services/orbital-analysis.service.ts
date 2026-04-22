@@ -10,7 +10,7 @@ import type {
   FleetAnalysisView,
   RegimeProfileView,
   OrbitSlotView,
-} from "../types/fleet-analysis.types";
+} from "../types/orbital-analysis.types";
 import {
   toOrbitalTrafficView,
   toDebrisForecastView,
@@ -26,7 +26,7 @@ import type {
   DebrisForecastView,
   LaunchManifestView,
   LaunchEpochWeatherView,
-} from "../types/traffic-forecast.types";
+} from "../types/orbital-analysis.types";
 
 // ── Ports (structural — repos satisfy these by duck typing) ────────
 export interface FleetAnalysisReadPort {

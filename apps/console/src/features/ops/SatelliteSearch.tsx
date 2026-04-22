@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Search } from "lucide-react";
 import { clsx } from "clsx";
-import type { SatelliteDTO } from "@/transformers/http";
+import type { SatelliteDto } from "@/dto/http";
 
 /**
  * HUD search panel — filter satellites by name or NORAD id as you type,
@@ -14,8 +14,8 @@ export function SatelliteSearch({
   satellites,
   onPick,
 }: {
-  satellites: SatelliteDTO[];
-  onPick: (sat: SatelliteDTO) => void;
+  satellites: SatelliteDto[];
+  onPick: (sat: SatelliteDto) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -26,7 +26,7 @@ export function SatelliteSearch({
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    const results: Array<{ sat: SatelliteDTO; rank: number }> = [];
+    const results: Array<{ sat: SatelliteDto; rank: number }> = [];
     for (const sat of satellites) {
       const name = sat.name.toLowerCase();
       const norad = String(sat.noradId);
@@ -69,7 +69,7 @@ export function SatelliteSearch({
     return () => window.removeEventListener("mousedown", handler);
   }, []);
 
-  const commit = (sat: SatelliteDTO) => {
+  const commit = (sat: SatelliteDto) => {
     onPick(sat);
     setQuery("");
     setOpen(false);

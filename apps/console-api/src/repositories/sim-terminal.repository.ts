@@ -20,7 +20,7 @@
  * Introduced: Plan 5 Task 1.A.6.
  */
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
 import type { SimRunStatus, TurnAction } from "@interview/db-schema";
@@ -30,6 +30,44 @@ import type {
 } from "../types/sim-terminal.types";
 
 export type { SimFishTerminalActionRow, SimFishTerminalRow };
+
+function simTerminalBaseCtes(swarmId: bigint, includeTurnCounts = false): SQL {
+  return sql`
+    WITH runs AS (
+      SELECT
+        id,
+        fish_index,
+        status
+      FROM sim_run
+      WHERE swarm_id = ${swarmId}
+    ),
+    latest AS (
+      SELECT DISTINCT ON (r.id)
+        r.id                 AS sim_run_id,
+        r.fish_index         AS fish_index,
+        r.status             AS run_status,
+        t.agent_id           AS agent_id,
+        t.action             AS action,
+        t.observable_summary AS observable_summary
+      FROM runs r
+      LEFT JOIN sim_turn t
+        ON t.sim_run_id = r.id AND t.actor_kind = 'agent'
+      ORDER BY r.id, t.turn_index DESC NULLS LAST
+    )
+    ${includeTurnCounts
+      ? sql`,
+        turn_counts AS (
+          SELECT
+            t.sim_run_id,
+            count(*)::int AS turns_played
+          FROM sim_turn t
+          JOIN runs r ON r.id = t.sim_run_id
+          WHERE t.actor_kind = 'agent'
+          GROUP BY t.sim_run_id
+        )`
+      : sql``}
+  `;
+}
 
 export class SimTerminalRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -49,33 +87,23 @@ export class SimTerminalRepository {
       sim_run_id: string;
       fish_index: number;
       run_status: SimRunStatus;
-      agent_id: string | null;
       agent_index: number | null;
       action: TurnAction | null;
       observable_summary: string | null;
       turns_played: number;
     }>(sql`
-      WITH latest AS (
-        SELECT DISTINCT ON (r.id)
-          r.id::text         AS sim_run_id,
-          r.fish_index       AS fish_index,
-          r.status           AS run_status,
-          t.agent_id::text   AS agent_id,
-          t.action           AS action,
-          t.observable_summary AS observable_summary
-        FROM sim_run r
-        LEFT JOIN sim_turn t
-          ON t.sim_run_id = r.id AND t.actor_kind = 'agent'
-        WHERE r.swarm_id = ${swarmId}
-        ORDER BY r.id, t.turn_index DESC NULLS LAST
-      )
-      SELECT l.*,
-             a.agent_index AS agent_index,
-             (SELECT count(*)::int FROM sim_turn t2
-              WHERE t2.sim_run_id = l.sim_run_id::bigint
-                AND t2.actor_kind = 'agent') AS turns_played
+      ${simTerminalBaseCtes(swarmId, true)}
+      SELECT
+        l.sim_run_id::text AS sim_run_id,
+        l.fish_index,
+        l.run_status,
+        a.agent_index AS agent_index,
+        l.action,
+        l.observable_summary,
+        COALESCE(tc.turns_played, 0) AS turns_played
       FROM latest l
-      LEFT JOIN sim_agent a ON a.id::text = l.agent_id
+      LEFT JOIN sim_agent a ON a.id = l.agent_id
+      LEFT JOIN turn_counts tc ON tc.sim_run_id = l.sim_run_id
     `);
 
     return rows.rows.map((r) => ({
@@ -102,18 +130,12 @@ export class SimTerminalRepository {
       run_status: SimRunStatus;
       action: TurnAction | null;
     }>(sql`
-      WITH latest AS (
-        SELECT DISTINCT ON (r.id)
-          r.id::text  AS sim_run_id,
-          r.status    AS run_status,
-          t.action    AS action
-        FROM sim_run r
-        LEFT JOIN sim_turn t
-          ON t.sim_run_id = r.id AND t.actor_kind = 'agent'
-        WHERE r.swarm_id = ${swarmId}
-        ORDER BY r.id, t.turn_index DESC NULLS LAST
-      )
-      SELECT * FROM latest
+      ${simTerminalBaseCtes(swarmId)}
+      SELECT
+        l.sim_run_id::text AS sim_run_id,
+        l.run_status,
+        l.action
+      FROM latest l
     `);
     return rows.rows.map((r) => ({
       simRunId: BigInt(r.sim_run_id),

@@ -5,7 +5,7 @@ import type {
   FleetAnalysisRow,
   RegimeProfileRow,
   OrbitSlotRow,
-} from "../types/fleet-analysis.types";
+} from "../types/orbital-analysis.types";
 import {
   operatorFleetRollupSql,
   type OperatorFleetRollupRow,
@@ -15,7 +15,7 @@ export type {
   FleetAnalysisRow,
   RegimeProfileRow,
   OrbitSlotRow,
-} from "../types/fleet-analysis.types";
+} from "../types/orbital-analysis.types";
 
 export class FleetAnalysisRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}

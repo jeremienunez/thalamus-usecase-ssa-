@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { ConjunctionDTO, SatelliteDTO } from "@/transformers/http";
+import type { ConjunctionDto, SatelliteDto } from "@/dto/http";
 import { satellitePosition } from "@/adapters/propagator/sgp4";
 import { pcColor } from "@/adapters/renderer/palette";
 
@@ -18,8 +18,8 @@ const TRAIL_WINDOW_SEC = 540; // ±9 min — enough to span LEO rendezvous geome
 const SEGS_PER_TRAIL = 14;
 
 interface Props {
-  satellites: SatelliteDTO[];
-  conjunctions: ConjunctionDTO[];
+  satellites: SatelliteDto[];
+  conjunctions: ConjunctionDto[];
   timeScale: number;
 }
 

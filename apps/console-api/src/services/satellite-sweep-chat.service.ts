@@ -58,7 +58,7 @@ import type {
   SweepFinding,
   SweepChatMessage,
   SweepChatState,
-} from "../transformers/satellite-sweep-chat.dto";
+} from "../schemas/satellite-sweep-chat.schema";
 import {
   SATELLITE_SWEEP_CHAT_ROLE,
   SATELLITE_SWEEP_CHAT_INSTRUCTIONS,

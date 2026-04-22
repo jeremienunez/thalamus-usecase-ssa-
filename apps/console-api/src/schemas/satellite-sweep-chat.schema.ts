@@ -17,9 +17,8 @@ export const sweepFindingCategorySchema = z.enum([
   "general",
 ]);
 
-// Types moved to ../types/satellite-sweep-chat.types to satisfy the
-// arch-guard (repos cannot import transformers). Re-exported here so
-// existing import paths keep working.
+// Keep chat shapes in the local types module so repositories and services can
+// share them without depending on HTTP-facing schemas.
 export type {
   SweepFindingCategory,
   SweepFinding,

@@ -21,17 +21,17 @@ export type EntityClass =
   | "ConjunctionEvent"
   | "Maneuver";
 
-export type TelemetryDTO = TelemetryView;
+export type TelemetryDto = TelemetryView;
 
-export type SatelliteDTO = SatelliteView & {
+export type SatelliteDto = SatelliteView & {
   opacityDeficitReasons?: string[];
 };
 
-export type PayloadDTO = PayloadView;
+export type PayloadDto = PayloadView;
 
-export type ConjunctionDTO = ConjunctionView;
+export type ConjunctionDto = ConjunctionView;
 
-export type KgNodeDTO = {
+export type KgNodeDto = {
   id: string;
   label: string;
   class: EntityClass;
@@ -41,7 +41,7 @@ export type KgNodeDTO = {
   cortex: string;
 };
 
-export type KgEdgeDTO = {
+export type KgEdgeDto = {
   id: string;
   source: string;
   target: string;
@@ -50,7 +50,7 @@ export type KgEdgeDTO = {
   sourceClass: SourceClass;
 };
 
-export type FindingDTO = FindingView & {
+export type FindingDto = FindingView & {
   swarmConsensus?: { accept: number; reject: number; abstain: number; k: number };
   decisionReason?: string;
 };

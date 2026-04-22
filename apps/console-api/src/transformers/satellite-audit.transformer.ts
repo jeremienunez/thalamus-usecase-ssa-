@@ -9,21 +9,7 @@ import type {
   SatelliteClassificationAuditView,
   ApogeeHistoryView,
 } from "../types/satellite-audit.types";
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────────────────────────────────────
-
-function toIsoOrNull(v: Date | string | null | undefined): string | null {
-  if (v == null) return null;
-  const d = v instanceof Date ? v : new Date(v);
-  const t = d.getTime();
-  return Number.isFinite(t) ? d.toISOString() : null;
-}
-
-function idOrNull(v: string | number | bigint | null | undefined): string | null {
-  return v == null ? null : String(v);
-}
+import { idOrNull, toIsoOrNull } from "../utils/serialize";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Transformers

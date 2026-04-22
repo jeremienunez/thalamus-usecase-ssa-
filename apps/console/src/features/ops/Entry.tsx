@@ -10,7 +10,7 @@ import { useSatellitesQuery } from "@/usecases/useSatellitesQuery";
 import { useConjunctionsQuery } from "@/usecases/useConjunctionsQuery";
 import { useUiStore } from "@/shared/ui/uiStore";
 import { useOpsFilterStore } from "./opsFilterStore";
-import type { SatelliteDTO } from "@/transformers/http";
+import type { SatelliteDto } from "@/dto/http";
 import { OpsScene } from "./OpsScene";
 import { OpsTelemetryPanel } from "./OpsTelemetryPanel";
 import { ThreatBoardPanel } from "./ThreatBoardPanel";
@@ -66,7 +66,7 @@ export function OpsEntry() {
     regimeCounts,
   } = useRegimeFilter(satellites);
 
-  const handleSearchPick = (sat: SatelliteDTO) => {
+  const handleSearchPick = (sat: SatelliteDto) => {
     setSelectedId(sat.id);
     openDrawer(`sat:${sat.id}`);
     // Bump the focus key each time so picking the same sat twice re-triggers.

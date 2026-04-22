@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { clsx } from "clsx";
 import { useFindings } from "@/usecases";
-import type { FindingDTO, SatelliteDTO } from "@/transformers/http";
+import type { FindingDto, SatelliteDto } from "@/dto/http";
 
 /**
  * Recent findings stream — bottom-right. When a satellite is selected,
@@ -15,12 +15,12 @@ export function FindingsPanel({
   selectedSatellite,
   onFocusSat,
 }: {
-  satellites: SatelliteDTO[];
-  selectedSatellite: SatelliteDTO | null;
-  onFocusSat: (sat: SatelliteDTO) => void;
+  satellites: SatelliteDto[];
+  selectedSatellite: SatelliteDto | null;
+  onFocusSat: (sat: SatelliteDto) => void;
 }) {
   const satById = useMemo(() => {
-    const m = new Map<number, SatelliteDTO>();
+    const m = new Map<number, SatelliteDto>();
     for (const s of satellites) m.set(s.id, s);
     return m;
   }, [satellites]);
@@ -82,7 +82,7 @@ function FindingRow({
   finding,
   onClickSat,
 }: {
-  finding: FindingDTO;
+  finding: FindingDto;
   onClickSat: (satId: number) => void;
 }) {
   const satLink = finding.linkedEntityIds.find((e) => e.startsWith("sat:"));

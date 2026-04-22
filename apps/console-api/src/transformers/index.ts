@@ -21,4 +21,4 @@ export type {
   CycleRunDto,
   CycleRunFindingDto,
   CycleRunResponseDto,
-} from "./cycle-run.dto";
+} from "@interview/shared/dto/cycle-run.dto";

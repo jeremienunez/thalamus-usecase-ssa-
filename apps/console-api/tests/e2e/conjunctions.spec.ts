@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, it, expect } from "vitest";
 import { Pool } from "pg";
 import { ConjunctionViewSchema } from "@interview/shared";
 import {
+  cleanupConjunctionFixture,
   E2E_DATABASE_URL,
   CONJUNCTION_PRIMARY_NORAD_ID,
   CONJUNCTION_SECONDARY_NORAD_ID,
@@ -22,7 +23,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pool.end();
+  const client = await pool.connect();
+  try {
+    await cleanupConjunctionFixture(client);
+  } finally {
+    client.release();
+    await pool.end();
+  }
 });
 
 describe("GET /api/conjunctions*", () => {

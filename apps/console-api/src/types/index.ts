@@ -12,6 +12,5 @@ export * from "./opacity.types";
 export * from "./kg.types";
 export * from "./stats.types";
 export * from "./sweep.types";
-export * from "./fleet-analysis.types";
-export * from "./traffic-forecast.types";
+export * from "./orbital-analysis.types";
 export * from "./repl-chat.types";

@@ -1,11 +1,11 @@
 import type { ApiFetcher } from "./client";
-import type { AutonomyStateDTO } from "@/transformers/http";
+import type { AutonomyStateDto } from "@/dto/http";
 
 export interface AutonomyApiPort {
-  status(): Promise<AutonomyStateDTO>;
-  start(intervalSec?: number): Promise<{ ok: boolean; state: AutonomyStateDTO }>;
-  stop(): Promise<{ ok: boolean; state: AutonomyStateDTO }>;
-  reset(): Promise<{ ok: boolean; state: AutonomyStateDTO }>;
+  status(): Promise<AutonomyStateDto>;
+  start(intervalSec?: number): Promise<{ ok: boolean; state: AutonomyStateDto }>;
+  stop(): Promise<{ ok: boolean; state: AutonomyStateDto }>;
+  reset(): Promise<{ ok: boolean; state: AutonomyStateDto }>;
 }
 
 export function createAutonomyApi(f: ApiFetcher): AutonomyApiPort {

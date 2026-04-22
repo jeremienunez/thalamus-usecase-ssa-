@@ -1,18 +1,10 @@
+import type { AuthorLabelsDto, SimSubjectDto } from "@interview/shared/dto/sim-subject.dto";
 import type { SimAgentSubjectSnapshot } from "../services/sim-fleet.service";
 
-export interface AgentSubjectDto {
-  displayName: string;
-  attributes: Record<string, unknown>;
-}
-
-export function toAgentSubjectDto(
+export function toSimSubjectDto(
   snap: SimAgentSubjectSnapshot,
-): AgentSubjectDto {
+): SimSubjectDto {
   return { displayName: snap.displayName, attributes: snap.attributes };
-}
-
-export interface AuthorLabelsDto {
-  labels: Record<string, string>;
 }
 
 export function toAuthorLabelsDto(

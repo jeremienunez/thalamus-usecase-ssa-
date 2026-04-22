@@ -567,10 +567,13 @@ async function seedOperators(): Promise<number[]> {
 }
 
 async function cleanE2E(): Promise<void> {
-  // Cascade from sim_swarm + operator. Also clear research_cycle rows tagged
-  // with our swarm prefix so findings/edges drop cleanly.
+  // Cascade only our own UC3 swarm fixtures. Never delete every sim_swarm
+  // research_cycle row from the shared DB.
   await db.execute(sql`
-    DELETE FROM research_cycle WHERE trigger_source LIKE 'sim_swarm:%'
+    DELETE FROM research_cycle rc
+    USING sim_swarm s
+    WHERE rc.trigger_source = ('sim_swarm:' || s.id::text)
+      AND s.title LIKE ${`${SEED_TAG}%`}
   `);
   await db.execute(sql`
     DELETE FROM sim_swarm

@@ -2,22 +2,17 @@ import type {
   SimSubjectProvider,
   SimSubjectSnapshot,
 } from "../ports/subject.port";
+import type {
+  AuthorLabelsDto,
+  SimSubjectDto,
+} from "@interview/shared/dto/sim-subject.dto";
 import { SimHttpClient } from "./client";
-
-interface SubjectDto {
-  displayName: string;
-  attributes: Record<string, unknown>;
-}
-
-interface AuthorLabelsDto {
-  labels: Record<string, string>;
-}
 
 export class SimSubjectHttpAdapter implements SimSubjectProvider {
   constructor(private readonly http: SimHttpClient) {}
 
   getSubject(ref: { kind: string; id: number }): Promise<SimSubjectSnapshot> {
-    return this.http.get<SubjectDto>(`/api/sim/subjects/${ref.kind}/${ref.id}`);
+    return this.http.get<SimSubjectDto>(`/api/sim/subjects/${ref.kind}/${ref.id}`);
   }
 
   async getAuthorLabels(agentIds: number[]): Promise<Map<number, string>> {

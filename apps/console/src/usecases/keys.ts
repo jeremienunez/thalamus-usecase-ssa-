@@ -1,4 +1,4 @@
-import type { FindingStatus, Regime } from "@/transformers/http";
+import type { FindingStatus, Regime } from "@/dto/http";
 
 /** Centralised TanStack Query keys. One tuple shape per cacheable resource. */
 export const qk = {

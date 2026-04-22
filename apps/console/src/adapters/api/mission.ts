@@ -1,10 +1,10 @@
 import type { ApiFetcher } from "./client";
-import type { MissionStateDTO } from "@/transformers/http";
+import type { MissionStateDto } from "@/dto/http";
 
 export interface MissionApiPort {
-  status(): Promise<MissionStateDTO>;
-  start(): Promise<{ ok: boolean; state: MissionStateDTO }>;
-  stop(): Promise<{ ok: boolean; state: MissionStateDTO }>;
+  status(): Promise<MissionStateDto>;
+  start(): Promise<{ ok: boolean; state: MissionStateDto }>;
+  stop(): Promise<{ ok: boolean; state: MissionStateDto }>;
 }
 
 export function createMissionApi(f: ApiFetcher): MissionApiPort {

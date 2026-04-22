@@ -3,12 +3,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiClientProvider } from "@/adapters/api/ApiClientContext";
 import type { ApiClient } from "@/adapters/api";
 import type {
-  AutonomyStateDTO,
-  CycleDTO,
-  FindingDTO,
-  MissionStateDTO,
-  StatsDTO,
-} from "@/transformers/http";
+  AutonomyStateDto,
+  CycleDto,
+  FindingDto,
+  MissionStateDto,
+  StatsDto,
+} from "@/dto/http";
 import { SseClientProvider } from "@/adapters/sse/SseClientContext";
 import type { SseClient } from "@/adapters/sse/client";
 import {
@@ -27,7 +27,7 @@ import {
   type GraphAdapter,
 } from "@/adapters/graph/GraphContext";
 
-export const EMPTY_FINDING: FindingDTO = {
+export const EMPTY_FINDING: FindingDto = {
   id: "f:0",
   title: "",
   summary: "",
@@ -39,7 +39,7 @@ export const EMPTY_FINDING: FindingDTO = {
   evidence: [],
 };
 
-export const EMPTY_STATS: StatsDTO = {
+export const EMPTY_STATS: StatsDto = {
   satellites: 0,
   conjunctions: 0,
   kgNodes: 0,
@@ -49,7 +49,7 @@ export const EMPTY_STATS: StatsDTO = {
   byCortex: {},
 };
 
-export const EMPTY_CYCLE: CycleDTO = {
+export const EMPTY_CYCLE: CycleDto = {
   id: "cycle-0",
   kind: "thalamus",
   startedAt: "1970-01-01T00:00:00.000Z",
@@ -58,7 +58,7 @@ export const EMPTY_CYCLE: CycleDTO = {
   cortices: [],
 };
 
-export const EMPTY_MISSION_STATE: MissionStateDTO = {
+export const EMPTY_MISSION_STATE: MissionStateDto = {
   running: false,
   startedAt: null,
   total: 0,
@@ -71,7 +71,7 @@ export const EMPTY_MISSION_STATE: MissionStateDTO = {
   recent: [],
 };
 
-export const EMPTY_AUTONOMY_STATE: AutonomyStateDTO = {
+export const EMPTY_AUTONOMY_STATE: AutonomyStateDto = {
   running: false,
   intervalMs: 0,
   startedAt: null,

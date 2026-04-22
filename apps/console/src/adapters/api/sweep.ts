@@ -1,8 +1,8 @@
 import type { ApiFetcher } from "./client";
-import type { SweepSuggestionDTO } from "@/transformers/http";
+import type { SweepSuggestionDto } from "@/dto/http";
 
 export interface SweepApiPort {
-  listSuggestions(): Promise<{ items: SweepSuggestionDTO[]; count: number }>;
+  listSuggestions(): Promise<{ items: SweepSuggestionDto[]; count: number }>;
   review(
     id: string,
     accept: boolean,

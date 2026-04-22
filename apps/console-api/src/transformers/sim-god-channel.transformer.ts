@@ -1,7 +1,7 @@
-export interface InjectResultDto {
-  simTurnId: string;
-}
+import type { SimGodInjectResultDto } from "@interview/shared/dto/sim-god-channel.dto";
 
-export function toInjectResultDto(r: { simTurnId: bigint }): InjectResultDto {
+export function toSimGodInjectResultDto(
+  r: { simTurnId: bigint },
+): SimGodInjectResultDto {
   return { simTurnId: r.simTurnId.toString() };
 }

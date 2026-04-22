@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { clampedInt } from "./clamp";
+import {
+  optionalFiniteNumber,
+  optionalNonEmptyString,
+} from "../utils/request-schema";
 
-const optionalString = z.preprocess(
-  (v) => (v === "" ? undefined : v),
-  z.string().optional(),
-);
+const optionalString = optionalNonEmptyString();
 
 export const AdvisoryQuerySchema = z.object({
   sinceIso: optionalString,
@@ -23,10 +24,7 @@ export type RssQuery = z.infer<typeof RssQuerySchema>;
 
 export const ManeuverQuerySchema = z.object({
   conjunctionEventId: optionalString,
-  maxDeltaVmps: z.preprocess(
-    (v) => (v === undefined || v === "" ? undefined : Number(v)),
-    z.number().finite().optional(),
-  ),
+  maxDeltaVmps: optionalFiniteNumber(),
   limit: clampedInt(1, 200, 15),
 });
 export type ManeuverQuery = z.infer<typeof ManeuverQuerySchema>;

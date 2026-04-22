@@ -2,7 +2,7 @@ import { useId } from "react";
 import { X } from "lucide-react";
 import { clsx } from "clsx";
 import { useFindingQuery } from "@/usecases/useFindingQuery";
-import type { FindingDTO } from "@/transformers/http";
+import type { FindingDto } from "@/dto/http";
 import { SOURCE_COLOR, STATUS_COLOR } from "@/shared/types/graph-colors";
 import { KV } from "@/shared/ui/Drawer";
 import { useDrawerA11y } from "@/hooks/useDrawerA11y";
@@ -150,7 +150,7 @@ function ReadoutBody({
   data,
   onFocusEntity,
 }: {
-  data: FindingDTO;
+  data: FindingDto;
   onFocusEntity?: (entityId: string) => void;
 }) {
   const numeric = data.id.replace(/^f:/, "");
@@ -277,7 +277,7 @@ function TitleBlock({
   priority,
 }: {
   title: string;
-  status: FindingDTO["status"];
+  status: FindingDto["status"];
   priority: number;
 }) {
   return (

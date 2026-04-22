@@ -1,3 +1,8 @@
+import type {
+  CycleRunFindingDto,
+  CycleRunResponseDto,
+} from "@interview/shared/dto/cycle-run.dto";
+
 /**
  * Thin fetch wrapper for `POST /api/cycles/run`.
  *
@@ -9,14 +14,7 @@
  * projects the adapter's expected `{ findings, costUsd }` shape out of it.
  */
 
-export interface ThalamusHttpFinding {
-  id: string;
-  summary: string;
-  title: string;
-  sourceClass: string;
-  confidence: number;
-  evidenceRefs: string[];
-}
+export type ThalamusHttpFinding = CycleRunFindingDto;
 
 export interface ThalamusHttpRunCycleInput {
   query: string;
@@ -29,19 +27,7 @@ export interface ThalamusHttpRunCycleResult {
   costUsd: number;
 }
 
-type CyclesRunResponseBody = {
-  cycle: {
-    id: string;
-    kind: "thalamus" | "fish" | "both";
-    startedAt: string;
-    completedAt: string;
-    findingsEmitted: number;
-    cortices: string[];
-    findings?: ThalamusHttpFinding[];
-    costUsd?: number;
-    error?: string;
-  };
-};
+type CyclesRunResponseBody = CycleRunResponseDto;
 
 export class ThalamusHttpClient {
   constructor(

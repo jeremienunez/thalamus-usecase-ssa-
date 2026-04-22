@@ -14,7 +14,11 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import type { SimSwarmStore } from "@interview/sweep";
+import {
+  percentile,
+  sampleStddev,
+  type SimSwarmStore,
+} from "@interview/sweep";
 import type { SsaTurnAction } from "../action-schema";
 
 const logger = createLogger("sim-pc-aggregator");
@@ -88,7 +92,7 @@ export function computePcAggregate(
   const median = percentile(samples, 0.5);
   const p5 = percentile(samples, 0.05);
   const p95 = percentile(samples, 0.95);
-  const sigma = stddev(samples);
+  const sigma = sampleStddev(samples);
 
   // Cluster by (mode, sorted(flags)). Emit clusters with ≥ 2 fish.
   const clusterMap = new Map<
@@ -206,26 +210,4 @@ export class PcAggregatorService {
     );
     return { aggregate, suggestion };
   }
-}
-
-// -----------------------------------------------------------------------
-// Pure stat helpers
-// -----------------------------------------------------------------------
-
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  if (sorted.length === 1) return sorted[0]!;
-  const idx = (sorted.length - 1) * p;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo]!;
-  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (idx - lo);
-}
-
-function stddev(arr: number[]): number {
-  if (arr.length < 2) return 0;
-  const m = arr.reduce((s, v) => s + v, 0) / arr.length;
-  const variance =
-    arr.reduce((s, v) => s + (v - m) * (v - m), 0) / (arr.length - 1);
-  return Math.sqrt(variance);
 }

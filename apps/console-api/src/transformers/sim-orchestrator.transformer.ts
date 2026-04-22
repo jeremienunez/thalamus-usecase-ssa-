@@ -1,3 +1,7 @@
+import type {
+  SimRunExecutionStatusDto,
+  SimScheduleNextDto,
+} from "@interview/shared/dto/sim-orchestrator.dto";
 import type { SimStatus } from "@interview/sweep";
 
 export interface ScheduleNextResultLike {
@@ -5,16 +9,9 @@ export interface ScheduleNextResultLike {
   reason?: string;
 }
 
-export interface SimRunStatusDto {
-  swarmId: string;
-  simRunId: string;
-  status: string;
-  turnsPlayed: number;
-  maxTurns: number;
-  lastTurnAt: string | null;
-}
-
-export function toSimRunStatusDto(v: SimStatus): SimRunStatusDto {
+export function toSimRunExecutionStatusDto(
+  v: SimStatus,
+): SimRunExecutionStatusDto {
   return {
     swarmId: v.swarmId.toString(),
     simRunId: v.simRunId.toString(),
@@ -25,12 +22,9 @@ export function toSimRunStatusDto(v: SimStatus): SimRunStatusDto {
   };
 }
 
-export interface ScheduleNextDto {
-  scheduled: boolean;
-  reason?: string;
-}
-
-export function toScheduleNextDto(r: ScheduleNextResultLike): ScheduleNextDto {
+export function toSimScheduleNextDto(
+  r: ScheduleNextResultLike,
+): SimScheduleNextDto {
   return r.reason === undefined
     ? { scheduled: r.scheduled }
     : { scheduled: r.scheduled, reason: r.reason };

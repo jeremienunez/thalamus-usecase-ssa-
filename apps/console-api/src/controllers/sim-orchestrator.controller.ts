@@ -4,8 +4,8 @@ import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 import { SimRunIdParamsSchema } from "../schemas/sim.schema";
 import {
-  toScheduleNextDto,
-  toSimRunStatusDto,
+  toSimRunExecutionStatusDto,
+  toSimScheduleNextDto,
 } from "../transformers/sim-orchestrator.transformer";
 
 type SimOrchestratorRoutePort = Pick<
@@ -77,7 +77,7 @@ export function simScheduleNextController(service: SimOrchestratorRoutePort) {
       const simRunId = parseSimRunId(params.id);
       try {
         const result = await service.scheduleNext(simRunId);
-        return toScheduleNextDto(result);
+        return toSimScheduleNextDto(result);
       } catch (err) {
         normalizeOrchestratorError(err);
       }
@@ -96,7 +96,7 @@ export function simStatusController(service: SimOrchestratorRoutePort) {
         reply.code(404).send({ error: "sim_run not found" });
         return;
       }
-      return toSimRunStatusDto(view);
+      return toSimRunExecutionStatusDto(view);
     },
   );
 }

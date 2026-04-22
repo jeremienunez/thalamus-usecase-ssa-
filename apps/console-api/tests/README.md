@@ -44,7 +44,10 @@ Full HTTP surface via `startServer(0)` on an ephemeral port. Tests the whole sta
 Convention: `.spec.ts` extension.
 
 `setup.ts` is vitest's global setup: it boots the real Fastify app and exposes
-the ephemeral port via `CONSOLE_API_URL`. Every e2e spec fetches against that URL.
+the ephemeral port via `CONSOLE_API_URL`. Before booting, it provisions a
+temporary migrated Postgres database and points `DATABASE_URL` at it, so e2e
+specs never seed or mutate the developer's local `thalamus` catalog.
+Every e2e spec fetches against that URL.
 
 ## Running
 
@@ -58,8 +61,10 @@ pnpm test:e2e
 pnpm test
 ```
 
-`pnpm test:integration` and `pnpm test:e2e` require a live Postgres at
-`DATABASE_URL`. `pnpm test:e2e` also requires Redis at `REDIS_URL`.
+`pnpm test:integration` and `pnpm test:e2e` require access to a live Postgres
+server at `DATABASE_URL`. Integration provisions per-spec ephemeral databases;
+e2e provisions one migrated ephemeral database for the whole project.
+`pnpm test:e2e` also requires Redis at `REDIS_URL`.
 
 Apply the test DB migrations before those layers:
 

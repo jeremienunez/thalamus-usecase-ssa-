@@ -5,6 +5,10 @@ import type {
   EdgeRow,
   EdgeInsertInput,
 } from "../types/finding.types";
+import {
+  researchEdgeEntityLabelJoinsSql,
+  researchEdgeEntityLabelSql,
+} from "./research-edge-label.sql";
 
 export type {
   EdgeRow,
@@ -20,18 +24,9 @@ export class ResearchEdgeRepository {
       SELECT
         re.finding_id::text,
         re.entity_type,
-        CASE
-          WHEN re.entity_type = 'operator'
-            THEN COALESCE(op.name, re.entity_id::text)
-          WHEN re.entity_type = 'orbit_regime'
-            THEN COALESCE(r.name, re.entity_id::text)
-          ELSE re.entity_id::text
-        END AS entity_id
+        ${researchEdgeEntityLabelSql}
       FROM research_edge re
-      LEFT JOIN operator op
-        ON re.entity_type = 'operator' AND op.id = re.entity_id
-      LEFT JOIN orbit_regime r
-        ON re.entity_type = 'orbit_regime' AND r.id = re.entity_id
+      ${researchEdgeEntityLabelJoinsSql}
       WHERE re.finding_id = ANY(${sql`ARRAY[${sql.join(
         ids.map((i) => sql`${i}`),
         sql`, `,
@@ -50,18 +45,9 @@ export class ResearchEdgeRepository {
     }>(sql`
       SELECT
         re.entity_type,
-        CASE
-          WHEN re.entity_type = 'operator'
-            THEN COALESCE(op.name, re.entity_id::text)
-          WHEN re.entity_type = 'orbit_regime'
-            THEN COALESCE(r.name, re.entity_id::text)
-          ELSE re.entity_id::text
-        END AS entity_id
+        ${researchEdgeEntityLabelSql}
       FROM research_edge re
-      LEFT JOIN operator op
-        ON re.entity_type = 'operator' AND op.id = re.entity_id
-      LEFT JOIN orbit_regime r
-        ON re.entity_type = 'orbit_regime' AND r.id = re.entity_id
+      ${researchEdgeEntityLabelJoinsSql}
       WHERE re.finding_id = ${id}
       LIMIT ${limit}
     `);

@@ -8,16 +8,16 @@ import {
   useStats,
   useSweepSuggestions,
 } from "@/usecases";
-import type { AutonomyStateDTO, AutonomyTickDTO } from "@/transformers/http";
+import type { AutonomyStateDto, AutonomyTickDto } from "@/dto/http";
 import { useUiStore } from "@/shared/ui/uiStore";
 
-const ACTION_COLOR: Record<AutonomyTickDTO["action"], string> = {
+const ACTION_COLOR: Record<AutonomyTickDto["action"], string> = {
   thalamus: "text-cyan",
   "sweep-nullscan": "text-amber",
   "fish-swarm": "text-magenta",
 };
 
-const ACTION_LABEL: Record<AutonomyTickDTO["action"], string> = {
+const ACTION_LABEL: Record<AutonomyTickDto["action"], string> = {
   thalamus: "THALAMUS",
   "sweep-nullscan": "SWEEP · nullScan",
   "fish-swarm": "SWEEP · briefing",
@@ -214,7 +214,7 @@ function formatNextTick(value: number | null): string {
   return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}s`;
 }
 
-function humanizeStopReason(reason: AutonomyStateDTO["stoppedReason"]): string {
+function humanizeStopReason(reason: AutonomyStateDto["stoppedReason"]): string {
   switch (reason) {
     case "daily_budget_exhausted":
       return "daily budget exhausted";

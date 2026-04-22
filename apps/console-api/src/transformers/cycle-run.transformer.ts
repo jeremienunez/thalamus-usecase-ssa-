@@ -11,7 +11,7 @@ import type {
   CycleRunDto,
   CycleRunFindingDto,
   CycleRunResponseDto,
-} from "./cycle-run.dto";
+} from "@interview/shared/dto/cycle-run.dto";
 
 /**
  * Minimal structural shape of a thalamus finding row as it leaves the

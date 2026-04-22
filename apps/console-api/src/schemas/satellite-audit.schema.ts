@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { clampedInt } from "./clamp";
+import {
+  numericIdString,
+  optionalFiniteNumber,
+} from "../utils/request-schema";
 
 export const AuditDataQuerySchema = z.object({
   orbitRegime: z.string().optional(),
@@ -22,7 +26,7 @@ export const ApogeeHistoryQuerySchema = z.object({
 export type ApogeeHistoryQuery = z.infer<typeof ApogeeHistoryQuerySchema>;
 
 export const SatelliteIdParamsSchema = z.object({
-  id: z.string().regex(/^\d+$/, "id must be numeric"),
+  id: numericIdString("id must be numeric"),
 });
 export type SatelliteIdParams = z.infer<typeof SatelliteIdParamsSchema>;
 
@@ -39,20 +43,14 @@ export const CatalogContextQuerySchema = z.object({
 export type CatalogContextQuery = z.infer<typeof CatalogContextQuerySchema>;
 
 export const ReplacementCostQuerySchema = z.object({
-  satelliteId: z.string().regex(/^\d+$/, "satelliteId must be numeric"),
+  satelliteId: numericIdString("satelliteId must be numeric"),
 });
 export type ReplacementCostQuery = z.infer<typeof ReplacementCostQuerySchema>;
 
 export const LaunchCostQuerySchema = z.object({
   orbitRegime: z.string().optional(),
-  minLaunchCost: z.preprocess(
-    (v) => (v === undefined ? undefined : Number(v)),
-    z.number().finite().optional(),
-  ),
-  maxLaunchCost: z.preprocess(
-    (v) => (v === undefined ? undefined : Number(v)),
-    z.number().finite().optional(),
-  ),
+  minLaunchCost: optionalFiniteNumber(),
+  maxLaunchCost: optionalFiniteNumber(),
   limit: clampedInt(1, 500, 50),
 });
 export type LaunchCostQuery = z.infer<typeof LaunchCostQuerySchema>;

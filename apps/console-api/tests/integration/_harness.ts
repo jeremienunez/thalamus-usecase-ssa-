@@ -26,6 +26,7 @@ const POST_DRIZZLE_SQL = [
 
 export interface IntegrationHarness {
   databaseName: string;
+  databaseUrl: string;
   pool: Pool;
   db: NodePgDatabase<typeof schema>;
   reset: () => Promise<void>;
@@ -52,6 +53,7 @@ export async function createIntegrationHarness(): Promise<IntegrationHarness> {
     max: 1,
   });
   const db = drizzle<typeof schema>(pool, { schema });
+  const databaseUrl = withDatabaseName(INTEGRATION_DATABASE_URL, databaseName);
 
   let cachedTables: string[] | null = null;
 
@@ -92,6 +94,7 @@ export async function createIntegrationHarness(): Promise<IntegrationHarness> {
 
   return {
     databaseName,
+    databaseUrl,
     pool,
     db,
     reset,
