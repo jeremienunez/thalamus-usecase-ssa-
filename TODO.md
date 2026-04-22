@@ -253,7 +253,7 @@ Full details in [docs/refactor/architecture-audit-2026-04-19.md#Pass-2](docs/ref
 - [ ] **M7** — `apps/console-api/src/transformers/sim-fleet.transformer.ts:1` + `sim-target.transformer.ts:5` — transformers import service-layer types. Move types to `types/` to clean the layer.
 - [ ] **M8** — `packages/sweep/src/repositories/sweep.repository.ts:179,362` — `zrevrange(IDX_ALL, 0, -1)` unbounded. Apply `opts.limit` to the range call when `reviewed !== false`; sample for `getStats`.
 - [ ] **M9** — `apps/console-api/src/repositories/sim-memory.repository.ts:50-71` — N+1 inside transaction: loop of single-row `.insert().values().returning()`. Replace with batch `.insert(table).values(inserts).returning()`.
-- [ ] **M10** — `packages/cli/src/boot.ts:155-156` — `.catch(() => undefined)` on shutdown swallows pool/Redis close errors silently in prod. Log at warn.
+- [x] **M10 (DONE 2026-04-22)** — `packages/cli/src/boot.ts` now logs owned Redis shutdown failures at `warn` instead of swallowing them. `packages/cli/tests/boot.spec.ts` covers the rejected `quit()` path so the CLI keeps its best-effort shutdown while exposing real close failures.
 
 ---
 

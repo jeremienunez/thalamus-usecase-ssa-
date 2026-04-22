@@ -71,6 +71,17 @@ const disabledResolutionHandlers: ResolutionHandlerRegistry = {
   list: () => [],
 };
 
+export async function closeOwnedRedis(
+  redis: Pick<IORedis, "quit">,
+  logger: Pick<pino.Logger, "warn">,
+): Promise<void> {
+  try {
+    await redis.quit();
+  } catch (err) {
+    logger.warn({ err }, "cli shutdown: failed to close redis");
+  }
+}
+
 export async function main(
   deps?: Partial<BootDeps> & { wiring?: BootWiring },
 ): Promise<void> {
@@ -124,7 +135,7 @@ export async function main(
   // In prod, when we own the redis client, make sure it closes on exit.
   if (ownedRedis) {
     app.waitUntilExit().finally(() => {
-      ownedRedis?.quit().catch((): void => undefined);
+      void closeOwnedRedis(ownedRedis, logger);
     });
   }
 }
