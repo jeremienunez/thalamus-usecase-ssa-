@@ -2,6 +2,7 @@ import { createLogger } from "@interview/shared/observability";
 import type { SimOrchestrator } from "./sim-orchestrator.service";
 import type { SwarmConfig, SimConfig, SimKind } from "./types";
 import type {
+  SwarmAggregateGate,
   SimKindGuard,
   SimPerturbationPack,
   SimQueuePort,
@@ -26,6 +27,7 @@ export interface SwarmServiceDeps {
   swarmStore: SimSwarmStore;
   orchestrator: SimOrchestrator;
   queue: SimQueuePort;
+  aggregateGate: SwarmAggregateGate;
   kindGuard: SimKindGuard;
   perturbationPack: SimPerturbationPack;
 }
@@ -93,6 +95,7 @@ export class SwarmService {
       status: "running",
       createdBy: opts.createdBy ?? null,
     });
+    await this.deps.aggregateGate.reset(swarmId);
 
     const maxTurns = this.deps.kindGuard.defaultMaxTurns(kind);
     const firstSimRunIds: number[] = [];
@@ -146,11 +149,24 @@ export class SwarmService {
     if (!swarm) return { aggregateEnqueued: false };
     const accounted = counts.done + counts.failed;
     if (accounted < swarm.size) return { aggregateEnqueued: false };
+    const claimed = await this.deps.aggregateGate.claim(swarmId);
+    if (!claimed) {
+      logger.debug(
+        { swarmId, done: counts.done, failed: counts.failed, size: swarm.size },
+        "aggregate already claimed for swarm",
+      );
+      return { aggregateEnqueued: false };
+    }
 
-    await this.deps.queue.enqueueSwarmAggregate({
-      swarmId,
-      jobId: `swarm-${swarmId}-aggregate`,
-    });
+    try {
+      await this.deps.queue.enqueueSwarmAggregate({
+        swarmId,
+        jobId: `swarm-${swarmId}-aggregate`,
+      });
+    } catch (error) {
+      await this.deps.aggregateGate.release(swarmId);
+      throw error;
+    }
     logger.info(
       { swarmId, done: counts.done, failed: counts.failed, size: swarm.size },
       "all fish accounted for — aggregate enqueued",

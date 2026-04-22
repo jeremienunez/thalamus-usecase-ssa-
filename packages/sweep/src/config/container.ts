@@ -45,6 +45,7 @@ import { DagTurnRunner } from "../sim/turn-runner-dag";
 import { SimOrchestrator } from "../sim/sim-orchestrator.service";
 import { AggregatorService } from "../sim/aggregator.service";
 import { SwarmService } from "../sim/swarm.service";
+import { RedisSwarmAggregateGate } from "../sim/swarm-aggregate-gate";
 import { ConfidenceService } from "@interview/thalamus";
 
 export interface SimServices {
@@ -193,6 +194,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       swarmStore,
       orchestrator,
       queue,
+      aggregateGate: new RedisSwarmAggregateGate(redis),
       kindGuard,
       perturbationPack,
     });

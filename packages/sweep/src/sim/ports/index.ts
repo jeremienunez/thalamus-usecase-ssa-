@@ -19,3 +19,4 @@ export * from "./runtime-store.port";
 export * from "./swarm-store.port";
 export * from "./outcome-resolver.port";
 export * from "./queue.port";
+export * from "../swarm-aggregate-gate";
