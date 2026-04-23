@@ -38,7 +38,7 @@ const DOCUMENT_MODEL = "voyage-4-large";
 const DIMENSIONS = 2048;
 const MAX_BATCH_SIZE = 128;
 
-async function embedDocuments(
+export async function embedDocuments(
   apiKey: string,
   texts: string[],
 ): Promise<(number[] | null)[]> {
@@ -106,7 +106,7 @@ interface Row {
  * Semantic proximity in this space should cluster objects that share a
  * mission profile — which is what we want for KNN conjunction screening.
  */
-function composeText(r: Row): string {
+export function composeText(r: Row): string {
   const regime =
     r.apogeeKm != null && r.perigeeKm != null
       ? classifyRegime(r.perigeeKm, r.apogeeKm)
@@ -133,7 +133,7 @@ function composeText(r: Row): string {
   return parts.filter(Boolean).join(" · ");
 }
 
-function classifyRegime(perigee: number, apogee: number): string {
+export function classifyRegime(perigee: number, apogee: number): string {
   const mean = (perigee + apogee) / 2;
   if (mean < 2000) return "LEO";
   if (mean < 35000) return "MEO";
@@ -146,6 +146,7 @@ async function main(): Promise<void> {
   if (!apiKey) {
     console.error("✗ VOYAGE_API_KEY missing — run via `pnpm exec dotenv` or set it in .env");
     process.exit(1);
+    return;
   }
 
   console.log(`▸ connecting to ${DATABASE_URL.replace(/\/\/[^@]+@/, "//***@")}`);

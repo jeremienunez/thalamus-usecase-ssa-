@@ -12,6 +12,7 @@
  */
 
 import { Pool } from "pg";
+import { pathToFileURL } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { enrichGcat } from "./enrich-gcat";
@@ -44,7 +45,7 @@ interface Tle {
   line2: string;
 }
 
-function parseTleBlock(l1: string, l2: string): Tle | null {
+export function parseTleBlock(l1: string, l2: string): Tle | null {
   try {
     const noradId = Number(l1.slice(2, 7).trim());
     if (!Number.isFinite(noradId)) return null;
@@ -169,7 +170,13 @@ async function main(): Promise<void> {
   await pool.end();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectRun =
+  process.argv[1] != null &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

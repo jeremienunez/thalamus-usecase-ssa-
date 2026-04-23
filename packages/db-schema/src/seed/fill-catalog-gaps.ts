@@ -19,6 +19,7 @@
  */
 
 import { Pool } from "pg";
+import { pathToFileURL } from "node:url";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -37,7 +38,7 @@ type Row = {
 };
 
 // ─── Regime classifier ────────────────────────────────────────────────
-function classifyRegime(row: Row): string | null {
+export function classifyRegime(row: Row): string | null {
   const mm = row.mean_motion;
   const ecc = row.eccentricity;
   const inc = row.inclination_deg;
@@ -86,7 +87,7 @@ const DUAL_USE_KEYWORDS = [
   "digitalglobe", "maxar",
 ];
 
-function classifyTier(row: Row): "restricted" | "sensitive" | "unclassified" {
+export function classifyTier(row: Row): "restricted" | "sensitive" | "unclassified" {
   const op = (row.operator_name ?? "").toLowerCase();
   const oc = (row.operator_country_name ?? "").toLowerCase();
   const name = (row.name ?? "").toLowerCase();
@@ -117,7 +118,7 @@ const EXPERIMENTAL_NAME_HINTS = [
   "student", "university", "school",
 ];
 
-function classifyExperimental(row: Row): boolean {
+export function classifyExperimental(row: Row): boolean {
   const mass = row.mass_kg ?? 0;
   const name = (row.name ?? "").toLowerCase();
   const platform = (row.platform_name ?? "").toLowerCase();
@@ -224,7 +225,13 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error("✗ fill-catalog-gaps failed:", err);
-  process.exit(1);
-});
+const isDirectRun =
+  process.argv[1] != null &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("✗ fill-catalog-gaps failed:", err);
+    process.exit(1);
+  });
+}

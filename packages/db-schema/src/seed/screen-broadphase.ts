@@ -54,7 +54,7 @@ interface Obj {
 }
 
 /** Classify by mean altitude. Matches the existing `classifyRegime` convention. */
-function classifyRegime(perigee: number, apogee: number): Regime {
+export function classifyRegime(perigee: number, apogee: number): Regime {
   const mean = (perigee + apogee) / 2;
   if (mean < 2000) return "leo";
   if (mean < 35000) return "meo";
@@ -62,7 +62,9 @@ function classifyRegime(perigee: number, apogee: number): Regime {
   return "heo";
 }
 
-async function loadObjects(db: ReturnType<typeof drizzle>): Promise<Obj[]> {
+export async function loadObjects(
+  db: Pick<ReturnType<typeof drizzle>, "execute">,
+): Promise<Obj[]> {
   const rows = await db.execute(sql`
     SELECT
       id::text AS id,
@@ -137,7 +139,7 @@ interface BroadPhaseResult {
  *
  * Complexity: O(n log n + candidate_count). Memory: O(n + topK).
  */
-function broadPhase(
+export function broadPhase(
   objs: Obj[],
   marginKm: number,
   topK: number,
@@ -281,7 +283,7 @@ async function main(): Promise<void> {
 
     console.log(`\n▸ per-regime candidate count:`);
     for (const [r, n] of [...perRegime.entries()].sort((a, b) => b[1] - a[1])) {
-      const objsInRegime = regimeCounts.get(r) ?? 0;
+      const objsInRegime = regimeCounts.get(r)!;
       console.log(`  ${String(r).padEnd(5)} ${n.toLocaleString().padStart(12)} pairs  (${objsInRegime} objects)`);
     }
 

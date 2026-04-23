@@ -197,12 +197,12 @@ export function OrbitTrails({
           continue;
         }
 
-        posArr[segOff] = entry.buf[a3] ?? 0;
-        posArr[segOff + 1] = entry.buf[a3 + 1] ?? 0;
-        posArr[segOff + 2] = entry.buf[a3 + 2] ?? 0;
-        posArr[segOff + 3] = entry.buf[b3] ?? 0;
-        posArr[segOff + 4] = entry.buf[b3 + 1] ?? 0;
-        posArr[segOff + 5] = entry.buf[b3 + 2] ?? 0;
+        posArr[segOff] = entry.buf[a3]!;
+        posArr[segOff + 1] = entry.buf[a3 + 1]!;
+        posArr[segOff + 2] = entry.buf[a3 + 2]!;
+        posArr[segOff + 3] = entry.buf[b3]!;
+        posArr[segOff + 4] = entry.buf[b3 + 1]!;
+        posArr[segOff + 5] = entry.buf[b3 + 2]!;
 
         // Fade: head (newest) = bright, tail (oldest) = dark.
         // ageA/B run 0 (oldest) → segPerSat (newest).

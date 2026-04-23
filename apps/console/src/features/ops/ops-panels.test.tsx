@@ -448,6 +448,21 @@ describe("ops panels", () => {
     expect(screen.queryByText("TRAILS")).not.toBeInTheDocument();
   });
 
+  it("defaults missing regime visibility keys to visible", () => {
+    const visible = { LEO: true, MEO: true, GEO: true, HEO: true };
+    Reflect.deleteProperty(visible, "HEO");
+
+    render(
+      <RegimeFilter
+        visible={visible}
+        onToggle={vi.fn()}
+        counts={{ HEO: 4 }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "HEO 4" })).not.toHaveClass("opacity-40");
+  });
+
   it("renders the info stack clock, legend, and embedded launcher", () => {
     render(<OpsInfoStack />);
 
@@ -643,17 +658,17 @@ describe("ops panels", () => {
   });
 
   it("no-ops passive keyboard and focus-button clicks when callbacks are absent", () => {
-    render(
+    const { container } = render(
       <ThreatBoardPanel
         threats={[conjunctionFixture({ id: 5, probabilityOfCollision: 2e-4 })]}
       />,
     );
 
-    const listItem = screen.getByText("ISS").closest("div");
-    expect(listItem).toBeTruthy();
-    if (!listItem) return;
+    const row = container.querySelector("li > div");
+    expect(row).toBeTruthy();
+    if (!row) return;
 
-    triggerReactHandler(listItem, "onKeyDown", {
+    triggerReactHandler(row, "onKeyDown", {
       key: "Enter",
       preventDefault() {},
     });
@@ -711,5 +726,55 @@ describe("ops panels", () => {
 
     expect(screen.getByText(/reviewer queue drained/i)).toBeInTheDocument();
     expect(screen.getAllByText("INFO").length).toBe(3);
+  });
+
+  it("falls back to zero counts when telemetry data has not arrived yet", () => {
+    vi.useFakeTimers();
+    state.satellites.data = undefined;
+    state.conjunctions.data = undefined;
+    state.findings.data = undefined;
+
+    render(<TelemetryStrip />);
+
+    expect(screen.getByText("streaming · 0 / 40")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(15_000);
+    });
+
+    expect(screen.getByText(/heartbeat · console-api healthy/i)).toBeInTheDocument();
+    expect(screen.getByText("INFO")).toHaveClass("text-muted");
+  });
+
+  it("renders accept and reject telemetry tones from pre-seeded state", async () => {
+    vi.resetModules();
+    vi.doMock("@/usecases", () => ({
+      useSatellites: () => ({ data: undefined }),
+      useConjunctions: () => ({ data: undefined }),
+      useFindings: () => ({ data: undefined }),
+    }));
+    vi.doMock("react", async () => {
+      const actual = await vi.importActual<typeof import("react")>("react");
+      return {
+        ...actual,
+        useState: () =>
+          actual.useState([
+            { ts: "00:00:01", kind: "ACCEPT", msg: "accepted by reviewer" },
+            { ts: "00:00:02", kind: "REJECT", msg: "rejected by reviewer" },
+          ]),
+      };
+    });
+
+    try {
+      const { TelemetryStrip: SeededTelemetryStrip } = await import("./TelemetryStrip");
+      render(<SeededTelemetryStrip />);
+
+      expect(screen.getByText("ACCEPT")).toHaveClass("text-cyan");
+      expect(screen.getByText("REJECT")).toHaveClass("text-hot");
+    } finally {
+      vi.doUnmock("react");
+      vi.doUnmock("@/usecases");
+      vi.resetModules();
+    }
   });
 });

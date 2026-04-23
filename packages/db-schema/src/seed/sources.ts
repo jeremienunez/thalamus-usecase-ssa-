@@ -152,13 +152,13 @@ export const SOURCE_SEEDS: SourceSeed[] = [
 
 // ─── Lightweight fetchers (keep in sync with apps/console-api/src/agent/ssa/sources) ─────
 
-const parseDate = (s: string | null | undefined): Date | null => {
+export const parseDate = (s: string | null | undefined): Date | null => {
   if (!s) return null;
   const d = new Date(s);
   return Number.isFinite(d.getTime()) ? d : null;
 };
 
-async function fetchRss(
+export async function fetchRss(
   src: Source,
   limit: number,
 ): Promise<NewSourceItem[]> {
@@ -210,7 +210,7 @@ async function fetchRss(
   return items;
 }
 
-async function fetchArxiv(
+export async function fetchArxiv(
   src: Source,
   limit: number,
 ): Promise<NewSourceItem[]> {
@@ -261,7 +261,7 @@ async function fetchArxiv(
   return items;
 }
 
-async function fetchNtrs(
+export async function fetchNtrs(
   src: Source,
   limit: number,
 ): Promise<NewSourceItem[]> {
@@ -364,20 +364,18 @@ export async function seedSources(
             ? await fetchArxiv(src, perSourceLimit)
             : await fetchNtrs(src, perSourceLimit);
 
-      if (items.length > 0) {
-        // Drizzle's onConflictDoNothing requires either no target or a pgUnique
-        // — we registered a uniqueIndex on (source_id, external_id) and rely on
-        // it via SQL composite target.
-        for (const it of items) {
-          await db
-            .insert(sourceItem)
-            .values(it)
-            .onConflictDoNothing({
-              target: [sourceItem.sourceId, sourceItem.externalId],
-            });
-        }
-        totalItems += items.length;
+      // Drizzle's onConflictDoNothing requires either no target or a pgUnique
+      // — we registered a uniqueIndex on (source_id, external_id) and rely on
+      // it via SQL composite target.
+      for (const it of items) {
+        await db
+          .insert(sourceItem)
+          .values(it)
+          .onConflictDoNothing({
+            target: [sourceItem.sourceId, sourceItem.externalId],
+          });
       }
+      totalItems += items.length;
 
       await db
         .update(source)

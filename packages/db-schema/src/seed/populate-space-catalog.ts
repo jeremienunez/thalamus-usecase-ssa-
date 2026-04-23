@@ -61,7 +61,7 @@ const OBJECT_TYPE_MAP: Record<string, SatcatRow["objectClass"]> = {
   UNK: "unknown",
 };
 
-function parseNumber(s: string): number | null {
+export function parseNumber(s: string): number | null {
   if (!s || s === "") return null;
   const v = Number(s);
   return Number.isFinite(v) ? v : null;
@@ -71,7 +71,7 @@ function parseNumber(s: string): number | null {
  * Minimal CSV parser — the CelesTrak file has no embedded commas or quotes
  * in the columns we consume. A full CSV library would be overkill for ~6 MB.
  */
-function parseSatcatCsv(body: string): SatcatRow[] {
+export function parseSatcatCsv(body: string): SatcatRow[] {
   const lines = body.split("\n");
   const header = lines[0]!.split(",");
   const idx = (name: string): number => header.indexOf(name);
@@ -150,7 +150,7 @@ async function loadSatcat(): Promise<SatcatRow[]> {
 
 // ─── Slug generation (fallback when name lookup fails) ──────────────────────
 
-function slugify(s: string, norad: number): string {
+export function slugify(s: string, norad: number): string {
   const base = s
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -170,8 +170,8 @@ function slugify(s: string, norad: number): string {
  * `metadata` JSONB for now — a dedicated column per field belongs in a
  * follow-up schema migration.
  */
-async function upsertBatch(
-  db: ReturnType<typeof drizzle>,
+export async function upsertBatch(
+  db: Pick<ReturnType<typeof drizzle>, "execute">,
   rows: SatcatRow[],
 ): Promise<{ inserted: number; updated: number }> {
   let inserted = 0;

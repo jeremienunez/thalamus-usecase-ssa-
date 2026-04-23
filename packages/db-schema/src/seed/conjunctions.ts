@@ -77,11 +77,11 @@ export function sigmaKmFor(
 
 // ─── TLE synthesis ───────────────────────────────────────────────────────────
 
-function pad(n: number, len: number): string {
+export function pad(n: number, len: number): string {
   return String(n).padStart(len, "0");
 }
 
-function tleChecksum(line: string): number {
+export function tleChecksum(line: string): number {
   let sum = 0;
   for (const ch of line.slice(0, 68)) {
     if (ch >= "0" && ch <= "9") sum += Number(ch);
@@ -90,13 +90,13 @@ function tleChecksum(line: string): number {
   return sum % 10;
 }
 
-function formatEccentricity(e: number): string {
+export function formatEccentricity(e: number): string {
   // TLE format: implicit leading 0., 7 digits
   const s = Math.max(0, Math.min(0.9999999, e)).toFixed(7).slice(2);
   return s.padEnd(7, "0");
 }
 
-function synthesizeTLE(s: SatRow, now: Date): [string, string] {
+export function synthesizeTLE(s: SatRow, now: Date): [string, string] {
   // Epoch: YYDDD.DDDDDDDD — year (2-digit) + day of year (with fraction)
   const year = now.getUTCFullYear();
   const startOfYear = Date.UTC(year, 0, 1);
@@ -405,7 +405,7 @@ export async function seedConjunctions(db: any, opts: SeedConjunctionsOpts = {})
           secondarySatelliteId: s.id,
           epoch,
           minRangeKm: c.minRange,
-          relativeVelocityKmps: c.relVel || null,
+          relativeVelocityKmps: c.relVel,
           probabilityOfCollision: pc,
           primarySigmaKm: pSigma,
           secondarySigmaKm: sSigma,

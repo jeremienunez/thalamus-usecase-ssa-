@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as units from "@/shared/types/units";
 import {
   conjunctionFixture,
   payloadFixture,
@@ -206,5 +207,169 @@ describe("OpsDrawer", () => {
     );
 
     expect(screen.queryByText("PUBLIC DATA GAPS")).not.toBeInTheDocument();
+  });
+
+  it("covers telemetry formatter fallbacks, secondary-side conjunction labels, and payload/query defaults", () => {
+    state.drawerId = "sat:300";
+    state.payloadsData = undefined;
+
+    const conjunctions = [
+      conjunctionFixture({
+        id: 30,
+        primaryId: 100,
+        primaryName: "PRIMARY-HOT",
+        secondaryId: 300,
+        secondaryName: "SECONDARY-HOT",
+        probabilityOfCollision: 2e-4,
+        epoch: "2026-04-22T08:00:00.000Z",
+      }),
+      conjunctionFixture({
+        id: 31,
+        primaryId: 101,
+        primaryName: "PRIMARY-AMBER",
+        secondaryId: 300,
+        secondaryName: "SECONDARY-AMBER",
+        probabilityOfCollision: 2e-5,
+        epoch: "2026-04-22T09:00:00.000Z",
+      }),
+      conjunctionFixture({
+        id: 32,
+        primaryId: 102,
+        primaryName: "PRIMARY-DIM",
+        secondaryId: 300,
+        secondaryName: "SECONDARY-DIM",
+        probabilityOfCollision: 5e-8,
+        epoch: "2026-04-22T10:00:00.000Z",
+      }),
+    ];
+
+    const sparseTelemetry = satelliteFixture({
+      id: 300,
+      name: "SECONDARY-SAT",
+      noradId: 300,
+      photoUrl: null,
+      shortDescription: null,
+      opacityScore: 0,
+      telemetry: telemetryFixture({
+        powerDraw: null,
+        thermalMargin: 5.2,
+        pointingAccuracy: null,
+        attitudeRate: null,
+        linkBudget: null,
+        dataRate: null,
+        payloadDuty: null,
+        eclipseRatio: 0.5,
+        solarArrayHealth: null,
+        batteryDepthOfDischarge: null,
+        propellantRemaining: null,
+        radiationDose: null,
+        debrisProximity: null,
+        missionAge: null,
+      }),
+      lastTleIngestedAt: "2026-04-23T12:00:00.000Z",
+      meanMotionDrift: -0.0007,
+    });
+
+    const { rerender } = render(
+      <OpsDrawer
+        satellite={sparseTelemetry}
+        conjunctions={conjunctions}
+        selectedConjunctionId={30}
+      />,
+    );
+
+    expect(screen.getByText("+5.2 °C")).toBeInTheDocument();
+    expect(screen.getByText("50 %")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+    expect(screen.getByText("Δmm -0.0007")).toBeInTheDocument();
+    expect(screen.queryByText(/PAYLOADS/i)).not.toBeInTheDocument();
+
+    const conjunctionSection = screen.getByText("CONJUNCTIONS (3)").closest("section");
+    expect(conjunctionSection).toBeTruthy();
+    if (!conjunctionSection) return;
+
+    const rows = within(conjunctionSection);
+    expect(rows.getByText("PRIMARY-HOT")).toBeInTheDocument();
+    expect(rows.getByText("PRIMARY-AMBER")).toBeInTheDocument();
+    expect(rows.getByText("PRIMARY-DIM")).toBeInTheDocument();
+
+    rerender(
+      <OpsDrawer
+        satellite={satelliteFixture({
+          id: 300,
+          name: "SECONDARY-SAT",
+          noradId: 300,
+          photoUrl: null,
+          shortDescription: null,
+          opacityScore: 0,
+          telemetry: telemetryFixture({
+            powerDraw: 400,
+            thermalMargin: 1.2,
+          }),
+        })}
+        conjunctions={[conjunctions[1]!, conjunctions[0]!]}
+        selectedConjunctionId={31}
+      />,
+    );
+
+    expect(screen.getByText("400 W")).toBeInTheDocument();
+    const hot = screen.getByText("PRIMARY-HOT");
+    const amber = screen.getByText("PRIMARY-AMBER");
+    expect(amber.compareDocumentPosition(hot)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    rerender(
+      <OpsDrawer
+        satellite={satelliteFixture({
+          id: 300,
+          name: "SECONDARY-SAT",
+          noradId: 300,
+          photoUrl: null,
+          shortDescription: null,
+          telemetry: telemetryFixture({
+            powerDraw: 400,
+            thermalMargin: null,
+          }),
+          tleLine1: null,
+          tleLine2: null,
+          lastTleIngestedAt: null,
+          opacityScore: 0,
+        })}
+        conjunctions={[]}
+        selectedConjunctionId={null}
+      />,
+    );
+
+    expect(screen.queryByText(/^TLE$/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("renders ratio values even when the shared formatter returns a unitless tuple", () => {
+    state.drawerId = "sat:500";
+    const fmtPctSpy = vi.spyOn(units, "fmtPct").mockReturnValue(["42", ""]);
+
+    try {
+      render(
+        <OpsDrawer
+          satellite={satelliteFixture({
+            id: 500,
+            name: "UNITLESS-SAT",
+            noradId: 500,
+            photoUrl: null,
+            shortDescription: null,
+            telemetry: telemetryFixture({
+              powerDraw: 400,
+              payloadDuty: 0.42,
+            }),
+            opacityScore: 0,
+          })}
+          conjunctions={[]}
+          selectedConjunctionId={null}
+        />,
+      );
+
+      expect(screen.getAllByText("42").length).toBeGreaterThan(0);
+    } finally {
+      fmtPctSpy.mockRestore();
+    }
   });
 });

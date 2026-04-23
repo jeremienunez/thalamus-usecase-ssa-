@@ -68,7 +68,7 @@ interface CandidatePair {
   overlapKm: number;
 }
 
-function classifyRegime(perigee: number, apogee: number): Regime {
+export function classifyRegime(perigee: number, apogee: number): Regime {
   const mean = (perigee + apogee) / 2;
   if (mean < 2000) return "leo";
   if (mean < 35000) return "meo";
@@ -78,7 +78,9 @@ function classifyRegime(perigee: number, apogee: number): Regime {
 
 // ─── Load + broad-phase top-K ────────────────────────────────────────────────
 
-async function loadObjects(db: ReturnType<typeof drizzle>): Promise<Obj[]> {
+export async function loadObjects(
+  db: Pick<ReturnType<typeof drizzle>, "execute">,
+): Promise<Obj[]> {
   const rows = await db.execute(sql`
     SELECT
       id::text AS id, name, norad_id, object_class,
@@ -109,7 +111,7 @@ async function loadObjects(db: ReturnType<typeof drizzle>): Promise<Obj[]> {
  * Sweep-line broad-phase with bounded top-K heap. Copy of screen-broadphase
  * logic, inlined so this script is self-contained. Returns tightest pairs.
  */
-function broadPhaseTopK(objs: Obj[], marginKm: number, topK: number): CandidatePair[] {
+export function broadPhaseTopK(objs: Obj[], marginKm: number, topK: number): CandidatePair[] {
   const byRegime = new Map<Regime, Obj[]>();
   for (const o of objs) {
     const arr = byRegime.get(o.regime) ?? [];
@@ -170,7 +172,7 @@ if (!existsSync(TLE_CACHE_DIR)) mkdirSync(TLE_CACHE_DIR, { recursive: true });
 
 const tleMem = new Map<number, { l1: string; l2: string } | null>();
 
-async function fetchTLE(norad: number): Promise<{ l1: string; l2: string } | null> {
+export async function fetchTLE(norad: number): Promise<{ l1: string; l2: string } | null> {
   if (tleMem.has(norad)) return tleMem.get(norad) ?? null;
   const cachePath = join(TLE_CACHE_DIR, `${norad}.txt`);
   let body: string | null = null;
@@ -215,7 +217,7 @@ interface CloseApproach {
  * Propagate both satellites over `windowH` hours at `stepS` step and find the
  * minimum-range timestep. Returns null if either satrec fails at some step.
  */
-function findClosestApproach(
+export function findClosestApproach(
   recA: unknown, recB: unknown, start: Date, windowH: number, stepS: number,
 ): CloseApproach | null {
   let best: CloseApproach | null = null;
@@ -257,7 +259,7 @@ function findClosestApproach(
  * isotropic Gaussian and integrate over a hard-body disc. Not operational
  * grade, but enough to produce a ranked list with plausible magnitudes.
  */
-function computePc(
+export function computePc(
   minRangeKm: number, sigmaCombinedKm: number, hardBodyM: number,
 ): number {
   const r = hardBodyM / 1000; // km

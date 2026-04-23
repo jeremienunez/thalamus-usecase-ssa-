@@ -228,7 +228,7 @@ export function parseTleEpoch(line1: string): string | null {
   }
 }
 
-function parseTleBlock(name: string, l1: string, l2: string): Tle | null {
+export function parseTleBlock(name: string, l1: string, l2: string): Tle | null {
   try {
     const noradId = Number(l1.slice(2, 7).trim());
     if (!Number.isFinite(noradId)) return null;
@@ -251,7 +251,7 @@ function parseTleBlock(name: string, l1: string, l2: string): Tle | null {
   }
 }
 
-function classifyRegime(t: Tle): (typeof ORBIT_REGIMES)[number]["slug"] {
+export function classifyRegime(t: Tle): (typeof ORBIT_REGIMES)[number]["slug"] {
   // Period (min) = 1440 / meanMotion
   const periodMin = 1440 / t.meanMotion;
   if (t.eccentricity > 0.25 && periodMin < 1000) return "gto";
@@ -289,7 +289,7 @@ export function guessCountry(_satName: string, operatorSlug: string): string {
   return "other";
 }
 
-function toSlug(s: string) {
+export function toSlug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 

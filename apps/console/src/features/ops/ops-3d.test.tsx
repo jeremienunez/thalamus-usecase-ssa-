@@ -347,6 +347,22 @@ function clickWithInstanceId(node: Element, instanceId: number) {
   }
 }
 
+function clickWithoutInstanceId(node: Element) {
+  const reactPropsKey = Reflect.ownKeys(node).find(
+    (key) => typeof key === "string" && key.startsWith("__reactProps"),
+  );
+  if (!reactPropsKey) {
+    return;
+  }
+  const reactProps = Reflect.get(node, reactPropsKey);
+  const onClick = Reflect.get(reactProps, "onClick");
+  if (typeof onClick === "function") {
+    onClick({
+      stopPropagation() {},
+    });
+  }
+}
+
 beforeEach(() => {
   r3fState.frameCallbacks = [];
   r3fState.camera = {
@@ -541,7 +557,10 @@ describe("ops 3d components", () => {
     r3fState.injectUndefinedTailSat = true;
     rerender(
       <OrbitTrails
-        satellites={[satelliteFixture({ id: 1, name: "LEO-1", regime: "LEO" })]}
+        satellites={[
+          satelliteFixture({ id: 1, name: "LEO-1", regime: "LEO" }),
+          satelliteFixture({ id: 3, name: "LEO-3", regime: "LEO" }),
+        ]}
         regimeFilter="LEO"
         trailMode="tails"
         timeScale={2}
@@ -803,19 +822,21 @@ describe("ops 3d components", () => {
   it("renders telecom, probe, and smallsat buses, schedules floating labels, and selects by instance id", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.95);
     const onSelect = vi.fn();
+    const smallsat = satelliteFixture({ id: 3, name: "STARLINK-5000", regime: "LEO" });
+    Reflect.deleteProperty(smallsat, "opacityScore");
     const satellites = [
       satelliteFixture({ id: 1, name: "INTELSAT-1", regime: "GEO", opacityScore: 0.95 }),
       satelliteFixture({ id: 2, name: "ISS", regime: "LEO", opacityScore: 0.8 }),
-      satelliteFixture({ id: 3, name: "CUBESAT-1", regime: "LEO", opacityScore: 0.2 }),
+      smallsat,
     ];
 
-    const { container } = render(
+    const { container, rerender } = render(
       <SatelliteField
         satellites={satellites}
-        selectedId={1}
+        selectedId={2}
         onSelect={onSelect}
         timeScale={5}
-        labelIds={[2]}
+        labelIds={[1]}
       />,
     );
 
@@ -838,7 +859,29 @@ describe("ops 3d components", () => {
 
     expect(screen.getByText("INTELSAT-1")).toBeInTheDocument();
     expect(screen.getByText("ISS")).toBeInTheDocument();
-    expect(screen.getByText("CUBESAT-1")).toBeInTheDocument();
+    expect(screen.getByText("STARLINK-5000")).toBeInTheDocument();
+
+    rerender(
+      <SatelliteField
+        satellites={satellites}
+        selectedId={3}
+        onSelect={onSelect}
+        timeScale={5}
+        labelIds={[1]}
+      />,
+    );
+    runFrame(0.2, 0.6);
+
+    rerender(
+      <SatelliteField
+        satellites={satellites}
+        selectedId={1}
+        onSelect={onSelect}
+        timeScale={5}
+        labelIds={[1]}
+      />,
+    );
+    runFrame(0.2, 0.8);
   });
 
   it("handles empty fleets and out-of-range instance clicks in the satellite field", () => {
@@ -863,7 +906,127 @@ describe("ops 3d components", () => {
 
     const clickableMesh = container.querySelectorAll("instancedmesh")[1];
     clickWithInstanceId(clickableMesh, 99);
+    clickWithoutInstanceId(clickableMesh);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("skips floating-label refresh when there are no requested labels yet", () => {
+    render(
+      <SatelliteField
+        satellites={[satelliteFixture({ id: 10, name: "STARLINK-10", regime: "LEO" })]}
+        selectedId={null}
+        onSelect={vi.fn()}
+        timeScale={1}
+      />,
+    );
+
+    runFrame(0.05, 0.05);
+    expect(screen.queryByTestId("html")).not.toBeInTheDocument();
+  });
+
+  it("returns early when the halo ref never binds", async () => {
+    vi.resetModules();
+    vi.doMock("react", async () => {
+      const actual = await vi.importActual<typeof import("react")>("react");
+      let refCalls = 0;
+      return {
+        ...actual,
+        useRef(initial: unknown) {
+          refCalls++;
+          const ref = actual.useRef(initial);
+          if (refCalls === 1) {
+            return Object.defineProperty({}, "current", {
+              configurable: true,
+              get() {
+                return null;
+              },
+              set() {},
+            });
+          }
+          return ref;
+        },
+      };
+    });
+
+    try {
+      const { SatelliteField: GuardedSatelliteField } = await import("./SatelliteField");
+      const { container } = render(
+        <GuardedSatelliteField
+          satellites={[satelliteFixture({ id: 20, name: "STARLINK-20", regime: "LEO" })]}
+          selectedId={null}
+          onSelect={vi.fn()}
+          timeScale={1}
+        />,
+      );
+
+      runFrame(0.2, 0.2);
+      const haloMesh = container.querySelector("instancedmesh");
+      expect(haloMesh).toBeTruthy();
+      if (haloMesh instanceof HTMLElement) {
+        expect(getInstanceMatrix(haloMesh).needsUpdate).toBe(false);
+      }
+    } finally {
+      vi.doUnmock("react");
+      vi.resetModules();
+    }
+  });
+
+  it("tolerates missing child mesh refs and orphaned label entries", async () => {
+    vi.resetModules();
+    vi.doMock("react", async () => {
+      const actual = await vi.importActual<typeof import("react")>("react");
+      let refCalls = 0;
+      let memoCalls = 0;
+      return {
+        ...actual,
+        useRef(initial: unknown) {
+          refCalls++;
+          if (refCalls >= 2 && refCalls <= 11) {
+            actual.useRef(initial);
+            return Object.defineProperty({}, "current", {
+              configurable: true,
+              get() {
+                return null;
+              },
+              set() {},
+            });
+          }
+          return actual.useRef(initial);
+        },
+        useMemo(factory: () => unknown, deps: React.DependencyList | undefined) {
+          memoCalls++;
+          const value = actual.useMemo(factory, deps);
+          if (memoCalls === 4) {
+            return [satelliteFixture({ id: 777, name: "ORPHAN-LABEL", regime: "LEO" })];
+          }
+          return value;
+        },
+      };
+    });
+
+    try {
+      const { SatelliteField: SparseSatelliteField } = await import("./SatelliteField");
+      const onSelect = vi.fn();
+      const { container } = render(
+        <SparseSatelliteField
+          satellites={[satelliteFixture({ id: 21, name: "STARLINK-21", regime: "LEO" })]}
+          selectedId={21}
+          onSelect={onSelect}
+          timeScale={1}
+          labelIds={[21]}
+        />,
+      );
+
+      runFrame(0.2, 0.2);
+
+      const clickableMesh = container.querySelectorAll("instancedmesh")[1];
+      clickWithoutInstanceId(clickableMesh);
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(screen.queryByText("ORPHAN-LABEL")).not.toBeInTheDocument();
+    } finally {
+      vi.doUnmock("react");
+      vi.resetModules();
+    }
   });
 
   it("renders the full ops scene overlays when filtered satellites are present", () => {

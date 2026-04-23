@@ -22,6 +22,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
@@ -58,7 +59,7 @@ const REGIME_LONG_NAME: Record<Regime, string> = {
  * Classify a regime from perigee / apogee / inclination (km, deg).
  * Deliberately simple — matches the seed-time classification convention.
  */
-function classify(
+export function classify(
   perigee: number,
   apogee: number,
   inc: number,
@@ -81,7 +82,7 @@ function classify(
 }
 
 /** Parse a GCAT date string like "2024 Jan 15" → timestamp ms, or null. */
-function parseGcatDate(s: string | undefined): number | null {
+export function parseGcatDate(s: string | undefined): number | null {
   if (!s) return null;
   const trimmed = s.trim().replace(/\?$/, "");
   if (!trimmed || trimmed === "-") return null;
@@ -130,7 +131,7 @@ function loadGcat(): SatelliteLifeEvent[] {
   return out;
 }
 
-function weeklyCounts(
+export function weeklyCounts(
   timestamps: Array<number | null>,
   windowWeeks: number,
   now: number,
@@ -149,7 +150,7 @@ function weeklyCounts(
   return buckets;
 }
 
-function meanStd(xs: number[]): { mean: number; std: number; samples: number } {
+export function meanStd(xs: number[]): { mean: number; std: number; samples: number } {
   if (xs.length === 0) return { mean: 0, std: 0, samples: 0 };
   const mean = xs.reduce((s, v) => s + v, 0) / xs.length;
   const variance = xs.reduce((s, v) => s + (v - mean) ** 2, 0) / xs.length;
@@ -262,7 +263,13 @@ async function main(): Promise<void> {
   await pool.end();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectRun =
+  process.argv[1] != null &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
