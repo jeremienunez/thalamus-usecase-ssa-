@@ -33,24 +33,30 @@ function CornerBracket({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
 
 export function OpsEntry() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedConjunctionId, setSelectedConjunctionId] = useState<number | null>(
+    null,
+  );
   const openDrawer = useUiStore((s) => s.openDrawer);
 
   const { data: satData, isLoading: loadingSats } = useSatellitesQuery();
   const pcThresholdExp = useOpsFilterStore((s) => s.pcThresholdExp);
   const { data: cjData } = useConjunctionsQuery(Math.pow(10, pcThresholdExp));
+  const { data: boardCjData } = useConjunctionsQuery(0);
 
   const satellites = satData?.items ?? [];
   const conjunctions = cjData?.items ?? [];
+  const boardConjunctions = boardCjData?.items ?? conjunctions;
   const satellitesById = useMemo(() => {
     const m = new Map<number, typeof satellites[number]>();
     for (const s of satellites) m.set(s.id, s);
     return m;
   }, [satellites]);
 
-  const { threats, highCount, peakPc, labelIds } = useThreatBoard(conjunctions);
+  const { threats, highCount, peakPc, labelIds } = useThreatBoard(boardConjunctions);
 
   const handleSelect = (id: number) => {
     setSelectedId(id);
+    setSelectedConjunctionId(null);
     openDrawer(`sat:${id}`);
   };
 
@@ -68,9 +74,21 @@ export function OpsEntry() {
 
   const handleSearchPick = (sat: SatelliteDto) => {
     setSelectedId(sat.id);
+    setSelectedConjunctionId(null);
     openDrawer(`sat:${sat.id}`);
     // Bump the focus key each time so picking the same sat twice re-triggers.
     setFocusId(sat.id);
+  };
+
+  const focusThreatSatellite = (satelliteId: number, conjunctionId: number) => {
+    setSelectedId(satelliteId);
+    setSelectedConjunctionId(conjunctionId);
+    openDrawer(`sat:${satelliteId}`);
+    setFocusId(satelliteId);
+  };
+
+  const handleSelectThreat = (threat: (typeof threats)[number]) => {
+    focusThreatSatellite(threat.primaryId, threat.id);
   };
 
   const { speedIdx, paused, effectiveSpeed, togglePause, selectSpeed } = useTimeControl(1);
@@ -109,7 +127,7 @@ export function OpsEntry() {
       <OpsTelemetryPanel
         loadingSats={loadingSats}
         satelliteCount={satellites.length}
-        conjunctionCount={conjunctions.length}
+        conjunctionCount={boardConjunctions.length}
         highCount={highCount}
         peakPc={peakPc}
         paused={paused}
@@ -128,7 +146,14 @@ export function OpsEntry() {
       </div>
 
       {/* Top-right: threat board */}
-      <ThreatBoardPanel threats={threats} />
+      <ThreatBoardPanel
+        threats={threats}
+        selectedThreatId={selectedConjunctionId}
+        onSelectThreat={handleSelectThreat}
+        onFocusSatellite={(satelliteId, threat) =>
+          focusThreatSatellite(satelliteId, threat.id)
+        }
+      />
 
       {/* Bottom-left: UTC clock + legend + cycle launcher (stacked) */}
       <OpsInfoStack />
@@ -159,6 +184,7 @@ export function OpsEntry() {
         conjunctions={conjunctions.filter(
           (c) => c.primaryId === selectedId || c.secondaryId === selectedId,
         )}
+        selectedConjunctionId={selectedConjunctionId}
       />
     </div>
   );

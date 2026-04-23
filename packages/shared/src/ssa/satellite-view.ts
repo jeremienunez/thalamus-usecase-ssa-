@@ -37,7 +37,7 @@ export const SatelliteViewSchema = z.object({
   meanAnomalyDeg: z.number(),
   meanMotionRevPerDay: z.number(),
   epoch: z.string(),
-  massKg: z.number(),
+  massKg: z.number().nullable(),
   classificationTier: ClassificationTierSchema,
   opacityScore: z.number().nullable(),
   tleLine1: z.string().nullable().optional(),

@@ -179,4 +179,48 @@ describe("ConjunctionRepository", () => {
       },
     });
   });
+
+  it("excludes conjunctions with zero range or missing relative velocity from list and screen reads", async () => {
+    await db.execute(sql.raw(`
+      INSERT INTO conjunction_event (
+        id,
+        primary_satellite_id,
+        secondary_satellite_id,
+        epoch,
+        min_range_km,
+        relative_velocity_kmps,
+        probability_of_collision,
+        primary_sigma_km,
+        secondary_sigma_km,
+        combined_sigma_km,
+        hard_body_radius_m,
+        pc_method,
+        computed_at
+      ) VALUES (
+        8,
+        100,
+        200,
+        now() + interval '2 hour',
+        0,
+        NULL,
+        4e-4,
+        0.2,
+        0.3,
+        0.36,
+        15,
+        'foster-gaussian',
+        now()
+      )
+    `));
+
+    const listed = await repo.listAboveMinPc(0);
+    expect(listed.map((row) => Number(row.id))).toEqual([7]);
+
+    const screened = await repo.screenConjunctions({
+      windowHours: 3,
+      primaryNoradId: 25544,
+      limit: 10,
+    });
+    expect(screened.map((row) => row.conjunctionId)).toEqual([7]);
+  });
 });

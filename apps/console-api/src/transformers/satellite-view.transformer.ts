@@ -32,7 +32,7 @@ export function toSatelliteView(r: SatelliteOrbitalRow): SatelliteView {
     meanAnomalyDeg: Number(ts.meanAnomaly ?? 0),
     meanMotionRevPerDay: mm,
     epoch: typeof ts.epoch === "string" ? ts.epoch : new Date().toISOString(),
-    massKg: r.mass_kg ?? 0,
+    massKg: r.mass_kg ?? null,
     classificationTier: classificationTier(r.classification_tier),
     opacityScore,
     tleLine1: typeof ts.tleLine1 === "string" ? ts.tleLine1 : null,

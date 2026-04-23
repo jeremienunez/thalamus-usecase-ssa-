@@ -190,4 +190,18 @@ describe("ThalamusPlanner.applyRuntimeFilters — runtime-config post-filters", 
     expect(c!.dependsOn).not.toContain("b");
     expect(c!.dependsOn).toEqual([]);
   });
+
+  it("given forced cortices are already present or disabled and an override is enabled true, when applied, then nothing extra is injected", () => {
+    const dag: DAGNode[] = [node("a")];
+    const result = planner.applyRuntimeFilters(
+      dag,
+      mkPlannerCfg({
+        forcedCortices: ["a", "strategist"],
+        disabledCortices: ["strategist"],
+        mandatoryStrategist: false,
+      }),
+      mkCortexCfg({ a: { enabled: true } }),
+    );
+    expect(result).toEqual([node("a")]);
+  });
 });

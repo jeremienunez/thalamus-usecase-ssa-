@@ -10,6 +10,52 @@ Portfolio-readiness checklist for Thalamus + Sweep.
 
 ---
 
+## Coverage - top 10 winners (2026-04-22)
+
+Real baseline from `pnpm test:coverage` on `apps/**/src` +
+`packages/**/src`: `lines 43.99%` · `statements 42.29%` ·
+`functions 45.57%` · `branches 33.89%`.
+
+If the 10 slices below each reach `100%` on their own files, the repo
+would move to about `71.62% lines` / `70.89% statements` /
+`67.37% functions` / `64.90% branches`.
+
+- [ ] **Coverage winner 1** - `packages/db-schema/src/seed/**`
+      (`15` files, `1265` uncovered lines, est. `+9.38` pts global
+      lines). Highest single uplift in the repo; best target for a
+      DB-backed seed harness with deterministic fixtures.
+- [ ] **Coverage winner 2** - `apps/console/src/features/ops/**`
+      (`21` files, `724` uncovered lines, est. `+5.37` pts). Biggest
+      frontend hole; pair with the existing TODO about
+      `@react-three/fiber` mocks / renderer harness.
+- [ ] **Coverage winner 3** - `apps/console-api/src/agent/ssa/sweep/**`
+      (`18` files, `343` uncovered lines, est. `+2.54` pts). Good ROI
+      because much of the slice is pure orchestration / parsing once
+      ports are mocked.
+- [ ] **Coverage winner 4** - `apps/console-api/src/agent/ssa/sources/**`
+      (`16` files, `283` uncovered lines, est. `+2.10` pts). Fetcher
+      parsing tests with local fixtures buy a lot of lines quickly.
+- [ ] **Coverage winner 5** - `packages/thalamus/src/services/**`
+      (`8` files, `217` uncovered lines, est. `+1.61` pts). Service
+      tests here are cheaper than API/e2e coverage.
+- [ ] **Coverage winner 6** - `apps/console/src/shared/ui/**`
+      (`15` files, `209` uncovered lines, est. `+1.55` pts). Low-risk
+      RTL coverage; many files are currently at `0%`.
+- [ ] **Coverage winner 7** - `packages/cli/src/boot.ts` +
+      `packages/cli/src/app.tsx` + `packages/cli/src/components/**` +
+      `packages/cli/src/renderers/**` (`15` files, `206` uncovered
+      lines, est. `+1.53` pts). The CLI transport side is already much
+      healthier than the presentation side.
+- [ ] **Coverage winner 8** - `apps/console/src/features/repl/**`
+      (`21` files, `170` uncovered lines, est. `+1.26` pts). Important
+      product surface and still largely dark in coverage.
+- [ ] **Coverage winner 9** - `packages/thalamus/src/transports/**`
+      (`12` files, `160` uncovered lines, est. `+1.19` pts). Adapter
+      tests with fake providers should close this without heavy setup.
+- [ ] **Coverage winner 10** - `apps/console/src/features/thalamus/**`
+      (`4` files, `147` uncovered lines, est. `+1.09` pts). Small slice,
+      meaningful user-facing flow, easy to batch with graph fixture work.
+
 ## 🔎 Review checklist — 2026-04-19 session (9 fixes to commit)
 
 Audit + quick-wins landed. All changes non-destructive, typecheck 7/7, 652 unit tests passing. Review checklist before commit/PR:

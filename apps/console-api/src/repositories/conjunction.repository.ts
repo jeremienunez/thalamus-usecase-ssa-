@@ -41,6 +41,8 @@ export class ConjunctionRepository {
       LEFT JOIN satellite sp ON sp.id = ce.primary_satellite_id
       LEFT JOIN satellite ss ON ss.id = ce.secondary_satellite_id
       WHERE COALESCE(ce.probability_of_collision, 0) >= ${minPc}
+        AND ce.min_range_km > 0
+        AND COALESCE(ce.relative_velocity_kmps, 0) > 0
       ORDER BY ce.probability_of_collision DESC NULLS LAST
       LIMIT 500
     `);
@@ -89,6 +91,8 @@ export class ConjunctionRepository {
       LEFT JOIN operator op_p   ON op_p.id = p.operator_id
       LEFT JOIN operator op_s   ON op_s.id = s.operator_id
       WHERE ce.epoch BETWEEN now() AND now() + (${windowHours} || ' hours')::interval
+        AND ce.min_range_km > 0
+        AND COALESCE(ce.relative_velocity_kmps, 0) > 0
         ${noradFilter}
       ORDER BY ce.probability_of_collision DESC NULLS LAST, ce.min_range_km ASC
       LIMIT ${opts.limit ?? 20}

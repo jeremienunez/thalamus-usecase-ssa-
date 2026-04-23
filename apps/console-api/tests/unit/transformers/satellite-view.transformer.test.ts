@@ -85,6 +85,11 @@ describe("toSatelliteView", () => {
     expect(v.noradId).toBe(0);
   });
 
+  it("keeps massKg null when source mass is absent", () => {
+    const v = toSatelliteView(row({ mass_kg: null }));
+    expect(v.massKg).toBeNull();
+  });
+
   it("parses opacity_score string to number", () => {
     const v = toSatelliteView(row({ opacity_score: "0.5" }));
     expect(v.opacityScore).toBe(0.5);

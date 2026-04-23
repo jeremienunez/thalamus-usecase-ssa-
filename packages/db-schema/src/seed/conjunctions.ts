@@ -332,6 +332,7 @@ export async function seedConjunctions(db: any, opts: SeedConjunctionsOpts = {})
             const vz = vi.z - vj.z;
             relVel = Math.sqrt(vx * vx + vy * vy + vz * vz);
           }
+          if (minRange <= 0 || relVel <= 0) continue;
           candidates.push({
             a: ei.sat,
             b: ej.sat,

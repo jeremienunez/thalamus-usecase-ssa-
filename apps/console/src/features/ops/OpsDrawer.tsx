@@ -6,8 +6,10 @@ import {
   fmtAltitudeKm,
   fmtDeg,
   fmtPc,
+  fmtRangeKm,
   fmtPcCompact,
   fmtPct,
+  fmtVelocity,
 } from "@/shared/types/units";
 import type {
   ConjunctionDto,
@@ -20,9 +22,11 @@ import { useSatellitePayloadsQuery } from "@/usecases/useSatellitePayloadsQuery"
 export function OpsDrawer({
   satellite,
   conjunctions,
+  selectedConjunctionId = null,
 }: {
   satellite: SatelliteDto | null;
   conjunctions: ConjunctionDto[];
+  selectedConjunctionId?: number | null;
 }) {
   const drawerId = useUiStore((s) => s.drawerId);
   const { data: payloadsData } = useSatellitePayloadsQuery(
@@ -32,6 +36,11 @@ export function OpsDrawer({
     return <Drawer title="SATELLITE" subtitle="select a node">{null}</Drawer>;
   }
   const payloads = payloadsData?.items ?? [];
+  const orderedConjunctions = [...conjunctions].sort((a, b) => {
+    if (a.id === selectedConjunctionId) return -1;
+    if (b.id === selectedConjunctionId) return 1;
+    return b.probabilityOfCollision - a.probabilityOfCollision;
+  });
 
   return (
     <Drawer title="SATELLITE" subtitle={`${satellite.name} · NORAD ${satellite.noradId}`}>
@@ -95,10 +104,16 @@ export function OpsDrawer({
           k="Mass"
           v={
             <span className="mono tabular-nums">
-              {satellite.massKg.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}
-              <span className="ml-1 text-dim">kg</span>
+              {typeof satellite.massKg === "number"
+                ? (
+                    <>
+                      {satellite.massKg.toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                      })}
+                      <span className="ml-1 text-dim">kg</span>
+                    </>
+                  )
+                : "NON COMMUNIQUE"}
             </span>
           }
         />
@@ -209,17 +224,27 @@ export function OpsDrawer({
         {conjunctions.length === 0 && (
           <div className="text-caption text-dim">No active events for this asset.</div>
         )}
-        {conjunctions.slice(0, 8).map((c) => (
+        {orderedConjunctions.slice(0, 8).map((c) => (
           <div
             key={c.id}
-            className="grid grid-cols-[1fr_auto] items-baseline gap-2 border-b border-hairline py-1 last:border-0"
+            className={clsx(
+              "grid grid-cols-[1fr_auto] gap-2 border-b border-hairline py-1 last:border-0",
+              c.id === selectedConjunctionId && "bg-elevated-2/60",
+            )}
           >
-            <span className="truncate text-caption text-numeric">
-              {c.primaryId === satellite.id ? c.secondaryName : c.primaryName}
-            </span>
-            <span
+            <div className="min-w-0">
+              <div className="truncate text-caption text-numeric">
+                {c.primaryId === satellite.id ? c.secondaryName : c.primaryName}
+              </div>
+              <div className="mono flex items-center gap-2 text-nano text-dim tabular-nums">
+                <Measure value={fmtRangeKm(c.minRangeKm)} className="text-nano" />
+                <span className="text-hairline-hot">·</span>
+                <Measure value={fmtVelocity(c.relativeVelocityKmps)} className="text-nano" />
+              </div>
+            </div>
+            <div
               className={clsx(
-                "mono text-caption tabular-nums",
+                "mono flex flex-col items-end text-caption tabular-nums",
                 c.probabilityOfCollision >= 1e-4
                   ? "text-hot"
                   : c.probabilityOfCollision >= 1e-6
@@ -227,8 +252,11 @@ export function OpsDrawer({
                     : "text-muted",
               )}
             >
-              Pc <span className="text-dim">{fmtPc(c.probabilityOfCollision)[0]}</span>
-            </span>
+              <span>
+                Pc <span className="text-dim">{fmtPc(c.probabilityOfCollision)[0]}</span>
+              </span>
+              <span className="text-nano text-dim">{c.epoch.slice(0, 16)}Z</span>
+            </div>
           </div>
         ))}
       </DrawerSection>

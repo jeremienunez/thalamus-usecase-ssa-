@@ -8,11 +8,14 @@ import type { ConjunctionDto } from "@/dto/http";
  */
 export function useThreatBoard(conjunctions: ConjunctionDto[]) {
   return useMemo(() => {
-    const sorted = [...conjunctions].sort(
+    const valid = conjunctions.filter(
+      (c) => c.minRangeKm > 0 && c.relativeVelocityKmps > 0,
+    );
+    const sorted = [...valid].sort(
       (a, b) => b.probabilityOfCollision - a.probabilityOfCollision,
     );
     const threats: ConjunctionDto[] = sorted.slice(0, 5);
-    const highCount = conjunctions.filter(
+    const highCount = valid.filter(
       (c) => c.probabilityOfCollision >= 1e-4,
     ).length;
     const peakPc = sorted[0]?.probabilityOfCollision ?? 0;

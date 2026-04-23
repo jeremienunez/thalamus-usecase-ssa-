@@ -14,6 +14,7 @@
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
+import { enrichGcat } from "./enrich-gcat";
 
 // CelesTrak throttles the `active` megafile (HTTP 403 without auth) but
 // serves per-constellation groups without restriction. Union them.
@@ -154,6 +155,17 @@ async function main(): Promise<void> {
   }
 
   console.log(`✓ updated ${updated} satellites, ${missing} not in DB`);
+
+  console.log("▸ enriching catalog from GCAT (mass / bus)");
+  try {
+    const summary = await enrichGcat(db);
+    console.log(
+      `✓ GCAT: ${summary.massBackfill} mass backfills, ${summary.busBackfill} bus backfills, ${summary.updatesApplied} rows updated`,
+    );
+  } catch (err) {
+    console.warn("⚠ GCAT enrichment failed:", (err as Error).message);
+  }
+
   await pool.end();
 }
 

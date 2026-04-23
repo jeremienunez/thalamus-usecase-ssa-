@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildCycleVerification,
 } from "../src/services/cycle-loop.service";
@@ -8,7 +8,14 @@ import {
   ResearchUrgency,
 } from "@interview/shared/enum";
 
+const realBigInt = globalThis.BigInt;
+
 describe("buildCycleVerification", () => {
+  afterEach(() => {
+    globalThis.BigInt = realBigInt;
+    vi.restoreAllMocks();
+  });
+
   it("emits generic verification reasons and entity hints from reflexion + finding edges", () => {
     const verification = buildCycleVerification({
       allFindings: [
@@ -104,6 +111,171 @@ describe("buildCycleVerification", () => {
       reasonCodes: [],
       targetHints: [],
       confidence: 0.92,
+    });
+  });
+
+  it("deduplicates repeated target hints and flags iteration-limit contradiction follow-up signals", () => {
+    const verification = buildCycleVerification({
+      allFindings: [
+        {
+          title: "Conflict in operator reports",
+          summary: "Recheck within 7 days because the catalog remains inconsistent.",
+          findingType: ResearchFindingType.Alert,
+          urgency: ResearchUrgency.High,
+          evidence: [],
+          confidence: 0.83,
+          impactScore: 7,
+          sourceCortex: "curator",
+          edges: [
+            {
+              entityType: "satellite",
+              entityId: 15,
+              relation: ResearchRelation.About,
+            },
+          ],
+        },
+        {
+          title: "Conflict in operator reports",
+          summary: "Same verification target emitted again.",
+          findingType: ResearchFindingType.Alert,
+          urgency: ResearchUrgency.High,
+          evidence: [],
+          confidence: 0.8,
+          impactScore: 7,
+          sourceCortex: "curator",
+          edges: [
+            {
+              entityType: "satellite",
+              entityId: 15,
+              relation: ResearchRelation.About,
+            },
+          ],
+        },
+      ],
+      finalReflexion: {
+        replan: true,
+        notes: "A conflict remains; recheck over a 7-day window.",
+        gaps: ["Coverage gap still open"],
+        overallConfidence: 1.4,
+      },
+      lowConfidenceRounds: 0,
+      replanCount: 1,
+      stopReason: "max-iterations",
+    });
+
+    expect(verification.confidence).toBe(1);
+    expect(verification.reasonCodes).toEqual(
+      expect.arrayContaining([
+        "replan_requested",
+        "iteration_limit_reached",
+        "contradiction_detected",
+        "needs_monitoring",
+        "horizon_insufficient",
+        "data_gap",
+      ]),
+    );
+    expect(verification.targetHints).toEqual([
+      {
+        entityType: "satellite",
+        entityId: 15n,
+        sourceCortex: "curator",
+        sourceTitle: "Conflict in operator reports",
+        confidence: 0.83,
+      },
+    ]);
+  });
+
+  it("ignores blank text for pattern matching and clamps non-finite confidence to zero", () => {
+    const verification = buildCycleVerification({
+      allFindings: [],
+      finalReflexion: {
+        replan: false,
+        notes: "   ",
+        gaps: ["   "],
+        overallConfidence: Number.NaN,
+      },
+      lowConfidenceRounds: 0,
+      replanCount: 0,
+      stopReason: "completed",
+    });
+
+    expect(verification).toEqual({
+      needsVerification: true,
+      reasonCodes: ["low_overall_confidence"],
+      targetHints: [],
+      confidence: 0,
+    });
+  });
+
+  it("keeps verification targets when provenance is missing and nullish target keys collapse to a single hint", () => {
+    vi.stubGlobal(
+      "BigInt",
+      (value: number) => (value === 0 ? undefined : realBigInt(value)),
+    );
+
+    const malformedEdge = JSON.parse(
+      '{"entityType":null,"entityId":0,"relation":"about"}',
+    );
+
+    const verification = buildCycleVerification({
+      allFindings: [
+        {
+          title: "Neutral operator note",
+          summary: "Escalation is not required.",
+          findingType: ResearchFindingType.Insight,
+          urgency: ResearchUrgency.Low,
+          evidence: [],
+          confidence: 0.81,
+          impactScore: 1,
+          edges: [malformedEdge, malformedEdge],
+        },
+      ],
+      finalReflexion: {
+        replan: false,
+        notes: "Evidence is sufficient.",
+        gaps: [],
+        overallConfidence: 0.81,
+      },
+      lowConfidenceRounds: 0,
+      replanCount: 0,
+      stopReason: "completed",
+    });
+
+    expect(verification).toEqual({
+      needsVerification: true,
+      reasonCodes: [],
+      targetHints: [
+        {
+          entityType: null,
+          entityId: undefined,
+          sourceCortex: null,
+          sourceTitle: "Neutral operator note",
+          confidence: 0.81,
+        },
+      ],
+      confidence: 0.81,
+    });
+  });
+
+  it("clamps negative confidence to zero", () => {
+    const verification = buildCycleVerification({
+      allFindings: [],
+      finalReflexion: {
+        replan: false,
+        notes: "Evidence closed.",
+        gaps: [],
+        overallConfidence: -0.2,
+      },
+      lowConfidenceRounds: 0,
+      replanCount: 0,
+      stopReason: "completed",
+    });
+
+    expect(verification).toEqual({
+      needsVerification: true,
+      reasonCodes: ["low_overall_confidence"],
+      targetHints: [],
+      confidence: 0,
     });
   });
 });

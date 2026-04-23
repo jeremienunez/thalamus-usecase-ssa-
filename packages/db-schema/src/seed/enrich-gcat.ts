@@ -12,11 +12,12 @@
  * Idempotent. Re-run any time.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, sql } from "drizzle-orm";
 import { satellite, satelliteBus } from "../schema";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -44,6 +45,16 @@ interface GcatRow {
   manufacturer: string | null;
 }
 
+export interface GcatEnrichmentSummary {
+  total: number;
+  withMass: number;
+  withBus: number;
+  withPlatform: number;
+  massBackfill: number;
+  busBackfill: number;
+  updatesApplied: number;
+}
+
 async function loadGcat(): Promise<Map<number, GcatRow>> {
   let buffer: string;
   try {
@@ -54,6 +65,7 @@ async function loadGcat(): Promise<Map<number, GcatRow>> {
     const res = await fetch(GCAT_URL, { signal: AbortSignal.timeout(120_000) });
     if (!res.ok) throw new Error(`GCAT HTTP ${res.status}`);
     buffer = await res.text();
+    writeFileSync(GCAT_CACHE, buffer, "utf8");
   }
 
   const byNorad = new Map<number, GcatRow>();
@@ -92,11 +104,9 @@ async function loadGcat(): Promise<Map<number, GcatRow>> {
   return byNorad;
 }
 
-async function main(): Promise<void> {
-  console.log(`▸ connecting to ${DATABASE_URL.replace(/\/\/[^@]+@/, "//***@")}`);
-  const pool = new Pool({ connectionString: DATABASE_URL });
-  const db = drizzle(pool);
-
+export async function enrichGcat(
+  db: NodePgDatabase<any>,
+): Promise<GcatEnrichmentSummary> {
   const gcat = await loadGcat();
   console.log(`▸ parsed GCAT: ${gcat.size} entries`);
 
@@ -160,8 +170,28 @@ async function main(): Promise<void> {
 
   if (updates.length === 0) {
     console.log("(nothing to update)");
-    await pool.end();
-    return;
+    const after = await db.execute(sql`
+      SELECT
+        (SELECT count(*)::int FROM satellite) AS total,
+        (SELECT count(*)::int FROM satellite WHERE mass_kg IS NOT NULL) AS with_mass,
+        (SELECT count(*)::int FROM satellite WHERE satellite_bus_id IS NOT NULL) AS with_bus,
+        (SELECT count(*)::int FROM satellite WHERE platform_class_id IS NOT NULL) AS with_platform
+    `);
+    const row = after.rows[0] as {
+      total: number;
+      with_mass: number;
+      with_bus: number;
+      with_platform: number;
+    };
+    return {
+      total: row.total,
+      withMass: row.with_mass,
+      withBus: row.with_bus,
+      withPlatform: row.with_platform,
+      massBackfill: massHits,
+      busBackfill: busHits,
+      updatesApplied: 0,
+    };
   }
 
   console.log(`▸ applying ${updates.length} updates`);
@@ -185,13 +215,49 @@ async function main(): Promise<void> {
       (SELECT count(*)::int FROM satellite WHERE satellite_bus_id IS NOT NULL) AS with_bus,
       (SELECT count(*)::int FROM satellite WHERE platform_class_id IS NOT NULL) AS with_platform
   `);
-  console.log("▸ post-conditions:", after.rows[0]);
+  const row = after.rows[0] as {
+    total: number;
+    with_mass: number;
+    with_bus: number;
+    with_platform: number;
+  };
+  console.log("▸ post-conditions:", row);
   console.log("✓ GCAT enrichment complete");
 
-  await pool.end();
+  return {
+    total: row.total,
+    withMass: row.with_mass,
+    withBus: row.with_bus,
+    withPlatform: row.with_platform,
+    massBackfill: massHits,
+    busBackfill: busHits,
+    updatesApplied: updates.length,
+  };
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+async function main(): Promise<void> {
+  console.log(`▸ connecting to ${DATABASE_URL.replace(/\/\/[^@]+@/, "//***@")}`);
+  const pool = new Pool({ connectionString: DATABASE_URL });
+  const db = drizzle(pool);
+  try {
+    await enrichGcat(db);
+  } finally {
+    await pool.end();
+  }
+}
+
+const isDirectRun = (() => {
+  try {
+    const entry = process.argv[1] ?? "";
+    return entry.endsWith("seed/enrich-gcat.ts") || entry.endsWith("seed/enrich-gcat.js");
+  } catch {
+    return false;
+  }
+})();
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

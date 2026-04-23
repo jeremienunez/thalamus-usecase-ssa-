@@ -29,6 +29,7 @@ import {
 } from "../schema";
 import { seedSources } from "./sources";
 import { seedConjunctions } from "./conjunctions";
+import { enrichGcat } from "./enrich-gcat";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -434,6 +435,17 @@ async function main() {
     );
   } catch (err) {
     console.warn("⚠ conjunction seeding failed:", (err as Error).message);
+  }
+
+  // ── Public catalog enrichment (GCAT) ────────────────────────────────────
+  console.log("▸ enriching catalog from GCAT (mass / bus)");
+  try {
+    const summary = await enrichGcat(db);
+    console.log(
+      `✓ GCAT: ${summary.massBackfill} mass backfills, ${summary.busBackfill} bus backfills, ${summary.updatesApplied} rows updated`,
+    );
+  } catch (err) {
+    console.warn("⚠ GCAT enrichment failed:", (err as Error).message);
   }
 
   await pool.end();

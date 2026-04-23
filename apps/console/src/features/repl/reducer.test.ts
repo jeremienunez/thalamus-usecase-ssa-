@@ -1,7 +1,54 @@
 import { describe, expect, it } from "vitest";
 import { newTurn, turnReducer } from "./reducer";
+import type { ReplStreamEvent } from "@interview/shared";
 
 describe("repl turnReducer follow-ups", () => {
+  it("creates new turns with empty stream accumulators", () => {
+    const turn = newTurn("t-1", "query");
+
+    expect(turn).toMatchObject({
+      id: "t-1",
+      input: "query",
+      phase: "classifying",
+      steps: [],
+      findings: [],
+      chatText: "",
+      summaryText: "",
+      followupOrder: [],
+      followups: {},
+    });
+  });
+
+  it("handles slash completions and explicit failures", () => {
+    const base = newTurn("t-1", "query");
+
+    const done = turnReducer(base, {
+      type: "slash.done",
+      response: {
+        results: [],
+        costUsd: 0.01,
+        tookMs: 456,
+      },
+    });
+    expect(done).toMatchObject({
+      phase: "done",
+      tookMs: 456,
+      response: {
+        costUsd: 0.01,
+        tookMs: 456,
+      },
+    });
+
+    const failed = turnReducer(base, {
+      type: "fail",
+      error: "cancelled",
+    });
+    expect(failed).toMatchObject({
+      phase: "error",
+      error: "cancelled",
+    });
+  });
+
   it("tracks follow-up plan and child lifecycle under the parent turn", () => {
     let turn = newTurn("t-1", "query");
 
@@ -112,5 +159,35 @@ describe("repl turnReducer follow-ups", () => {
       provider: "kimi",
       tookMs: 1234,
     });
+  });
+
+  it("routes core stream events through turnReducer", () => {
+    const turn = turnReducer(newTurn("t-1", "query"), {
+      type: "stream",
+      event: {
+        event: "error",
+        data: { message: "transport failed" },
+      },
+    });
+
+    expect(turn).toMatchObject({
+      phase: "error",
+      error: "transport failed",
+    });
+  });
+
+  it("returns the original turn for unknown stream events at runtime", () => {
+    const turn = newTurn("t-1", "query");
+    const invalidEvent = {
+      event: "not-real",
+      data: {},
+    } as ReplStreamEvent;
+
+    expect(
+      turnReducer(turn, {
+        type: "stream",
+        event: invalidEvent,
+      }),
+    ).toBe(turn);
   });
 });

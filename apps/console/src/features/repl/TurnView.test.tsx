@@ -5,6 +5,37 @@ import type { Turn } from "./reducer";
 import { TurnView } from "./TurnView";
 
 describe("TurnView follow-up rendering", () => {
+  it("shows the classifying badge and lets the operator cancel an in-flight turn", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const turn: Turn = {
+      id: "t-0",
+      input: "query",
+      phase: "classifying",
+      startedAt: Date.now() - 500,
+      steps: [],
+      findings: [],
+      chatText: "",
+      summaryText: "",
+      followupOrder: [],
+      followups: {},
+    };
+
+    render(
+      <TurnView
+        turn={turn}
+        onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
+        onRunFollowUp={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+
+    expect(screen.getByText(/classifying/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel turn" }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the parent summary while follow-ups are still running", () => {
     const turn: Turn = {
       id: "t-1",
@@ -69,6 +100,133 @@ describe("TurnView follow-up rendering", () => {
     expect(screen.getByText("child summary")).toBeInTheDocument();
   });
 
+  it("renders cycle progress, stream findings, bare timing metadata, and skips missing follow-up rows", () => {
+    const turn: Turn = {
+      id: "t-1b",
+      input: "query",
+      phase: "followup-running",
+      startedAt: Date.now() - 2400,
+      steps: [
+        {
+          name: "planner",
+          phase: "done",
+          terminal: "✓",
+          elapsedMs: 1200,
+        },
+      ],
+      currentStep: {
+        name: "swarm",
+        phase: "progress",
+        terminal: "🐟",
+        elapsedMs: 800,
+      },
+      findings: [
+        {
+          id: "f-1",
+          title: "Main finding",
+          cortex: "value_detective",
+        },
+      ],
+      chatText: "chat body",
+      summaryText: "summary body",
+      followupPlan: {
+        parentCycleId: "475",
+        autoLaunched: [],
+        proposed: [],
+        dropped: [],
+      },
+      followupOrder: ["missing-followup"],
+      followups: {},
+      tookMs: 222,
+    };
+
+    render(
+      <TurnView
+        turn={turn}
+        onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
+        onRunFollowUp={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/cycle/i)).toBeInTheDocument();
+    expect(screen.getByText("chat body")).toBeInTheDocument();
+    expect(screen.getByText("findings · 1")).toBeInTheDocument();
+    expect(screen.getByText("summary body")).toBeInTheDocument();
+    expect(screen.queryByText("missing-followup")).not.toBeInTheDocument();
+    expect(screen.getByText("222ms")).toBeInTheDocument();
+  });
+
+  it("renders chatting, cycle-running, and error phases", () => {
+    const { rerender } = render(
+      <TurnView
+        turn={{
+          id: "t-chat",
+          input: "query",
+          phase: "chatting",
+          startedAt: Date.now() - 500,
+          steps: [],
+          findings: [],
+          chatText: "",
+          summaryText: "",
+          followupOrder: [],
+          followups: {},
+        }}
+        onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
+        onRunFollowUp={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/chat…/i)).toBeInTheDocument();
+
+    rerender(
+      <TurnView
+        turn={{
+          id: "t-cycle",
+          input: "query",
+          phase: "cycle-running",
+          startedAt: Date.now() - 900,
+          steps: [],
+          findings: [],
+          chatText: "",
+          summaryText: "",
+          followupOrder: [],
+          followups: {},
+        }}
+        onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
+        onRunFollowUp={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/cycle/i)).toBeInTheDocument();
+    expect(screen.getByText("…")).toBeInTheDocument();
+
+    rerender(
+      <TurnView
+        turn={{
+          id: "t-error",
+          input: "query",
+          phase: "error",
+          startedAt: Date.now() - 900,
+          steps: [],
+          findings: [],
+          chatText: "",
+          summaryText: "",
+          followupOrder: [],
+          followups: {},
+          error: "transport failed",
+        }}
+        onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
+        onRunFollowUp={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("error: transport failed")).toBeInTheDocument();
+  });
+
   it("lets the user trigger a proposed follow-up", async () => {
     const user = userEvent.setup();
     const onRunFollowUp = vi.fn();
@@ -128,5 +286,97 @@ describe("TurnView follow-up rendering", () => {
         kind: "deep_research_30d",
       }),
     );
+  });
+
+  it("falls back to the raw input when the executed query is missing", async () => {
+    const user = userEvent.setup();
+    const onRunFollowUp = vi.fn();
+
+    render(
+      <TurnView
+        turn={{
+          id: "t-raw",
+          input: "raw query",
+          phase: "done",
+          startedAt: Date.now() - 1500,
+          steps: [],
+          findings: [],
+          chatText: "",
+          summaryText: "parent summary",
+          followupPlan: {
+            parentCycleId: "900",
+            autoLaunched: [],
+            proposed: [
+              {
+                followupId: "fu-raw",
+                kind: "deep_research_30d",
+                auto: false,
+                title: "Extend verification horizon to 30 days",
+                rationale: "Needs monitoring",
+                score: 0.69,
+                gateScore: 0.82,
+                costClass: "medium",
+                reasonCodes: ["needs_monitoring"],
+                target: null,
+              },
+            ],
+            dropped: [],
+          },
+          followupOrder: [],
+          followups: {},
+          tookMs: 1234,
+        }}
+        onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
+        onRunFollowUp={onRunFollowUp}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "run" }));
+    expect(onRunFollowUp).toHaveBeenCalledWith(
+      "t-raw",
+      "raw query",
+      "900",
+      expect.objectContaining({ followupId: "fu-raw" }),
+    );
+  });
+
+  it("renders slash results and the final cost footer once the turn is done", () => {
+    const turn: Turn = {
+      id: "t-3",
+      input: "query",
+      phase: "done",
+      startedAt: Date.now() - 1500,
+      steps: [],
+      findings: [],
+      chatText: "",
+      summaryText: "",
+      followupOrder: [],
+      followups: {},
+      response: {
+        results: [
+          {
+            kind: "chat",
+            text: "assistant answer",
+            provider: "openai",
+          },
+        ],
+        costUsd: 0.1234,
+        tookMs: 678,
+      },
+    };
+
+    render(
+      <TurnView
+        turn={turn}
+        onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
+        onRunFollowUp={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("assistant answer")).toBeInTheDocument();
+    expect(screen.getByText("assistant · openai")).toBeInTheDocument();
+    expect(screen.getByText("cost=$0.1234 · 678ms")).toBeInTheDocument();
   });
 });
