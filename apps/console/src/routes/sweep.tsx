@@ -1,5 +1,9 @@
+import { lazy } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { SweepEntry } from "@/features/sweep";
+
+const SweepEntry = lazy(() =>
+  import("@/features/sweep").then((module) => ({ default: module.SweepEntry })),
+);
 
 export const Route = createFileRoute("/sweep")({
   component: SweepEntry,

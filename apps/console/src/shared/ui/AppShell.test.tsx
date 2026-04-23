@@ -1,10 +1,16 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell";
+import { useUiStore } from "./uiStore";
 
 const state = vi.hoisted(() => ({
   telemetryThrows: false,
   replThrows: false,
+  pathname: "/ops",
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  useRouterState: () => ({ location: { pathname: state.pathname } }),
 }));
 
 vi.mock("./TopBar", () => ({
@@ -43,6 +49,13 @@ describe("AppShell", () => {
   beforeEach(() => {
     state.telemetryThrows = false;
     state.replThrows = false;
+    state.pathname = "/ops";
+    useUiStore.setState({
+      railCollapsed: false,
+      drawerId: null,
+      autonomyFeedOpen: false,
+      configFocus: null,
+    });
   });
 
   afterEach(() => {
@@ -83,5 +96,20 @@ describe("AppShell", () => {
     expect(screen.queryByText("telemetry strip")).not.toBeInTheDocument();
     expect(screen.queryByText("repl panel")).not.toBeInTheDocument();
     expect(consoleError).toHaveBeenCalled();
+  });
+
+  it("closes stale drawers when the route scope changes", async () => {
+    useUiStore.getState().openDrawer("f:7");
+    state.pathname = "/ops";
+
+    render(
+      <AppShell>
+        <div>payload</div>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(useUiStore.getState().drawerId).toBeNull();
+    });
   });
 });

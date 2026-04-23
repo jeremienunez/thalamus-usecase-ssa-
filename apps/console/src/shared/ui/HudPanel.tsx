@@ -43,13 +43,13 @@ export function HudPanel({
   return (
     <div
       className={clsx(
-        "border border-hairline bg-panel/90 backdrop-blur-md shadow-hud",
+        "overflow-hidden border border-cyan/10 bg-panel/90 shadow-hud backdrop-blur-md ring-1 ring-white/[0.02]",
         passthrough && "pointer-events-none",
         className,
       )}
     >
       {title && (
-        <div className="flex items-center gap-2 border-b border-hairline px-3 py-1.5">
+        <div className="flex items-center gap-2 border-b border-hairline bg-elevated/35 px-3 py-1.5">
           {dot && (
             <span className="relative flex h-1.5 w-1.5">
               {live && (
@@ -63,7 +63,7 @@ export function HudPanel({
               <span className={clsx("relative inline-flex h-1.5 w-1.5", DOT_BG[dot])} />
             </span>
           )}
-          <div className="label text-nano">{title}</div>
+          <div className="label text-nano text-primary">{title}</div>
           {meta !== undefined && (
             <span className="ml-auto mono text-nano text-dim">{meta}</span>
           )}

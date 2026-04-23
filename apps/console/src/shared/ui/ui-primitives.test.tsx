@@ -156,6 +156,40 @@ describe("shared ui primitives", () => {
     expect(useUiStore.getState().drawerId).toBeNull();
   });
 
+  it("keeps scoped drawers hidden for stale drawer ids", () => {
+    const { rerender } = render(
+      <Drawer title="Satellite" scope="sat:">
+        <div>satellite payload</div>
+      </Drawer>,
+    );
+
+    act(() => {
+      useUiStore.getState().openDrawer("f:7");
+    });
+    rerender(
+      <Drawer title="Satellite" scope="sat:">
+        <div>satellite payload</div>
+      </Drawer>,
+    );
+
+    expect(screen.getByRole("complementary", { hidden: true })).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+
+    act(() => {
+      useUiStore.getState().openDrawer("sat:42");
+    });
+    rerender(
+      <Drawer title="Satellite" scope="sat:">
+        <div>satellite payload</div>
+      </Drawer>,
+    );
+
+    expect(screen.getByRole("complementary")).toHaveAttribute("aria-hidden", "false");
+    expect(screen.getByText("satellite payload")).toBeInTheDocument();
+  });
+
   it("renders fault panels, custom fallbacks, and retry/reload actions", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const reload = vi.fn();

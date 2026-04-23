@@ -38,10 +38,12 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(window, { key: "1", metaKey: true });
     fireEvent.keyDown(window, { key: "2", metaKey: true });
     fireEvent.keyDown(window, { key: "3", metaKey: true });
+    fireEvent.keyDown(window, { key: "4", metaKey: true });
 
     expect(state.navigate).toHaveBeenNthCalledWith(1, { to: "/ops" });
     expect(state.navigate).toHaveBeenNthCalledWith(2, { to: "/thalamus" });
     expect(state.navigate).toHaveBeenNthCalledWith(3, { to: "/sweep" });
+    expect(state.navigate).toHaveBeenNthCalledWith(4, { to: "/config" });
 
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
@@ -73,7 +75,7 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input, { key: "ArrowUp" });
     expect(input).toHaveAttribute("aria-activedescendant", expect.stringContaining("-opt-0"));
     fireEvent.keyDown(input, { key: "End" });
-    expect(input).toHaveAttribute("aria-activedescendant", expect.stringContaining("-opt-3"));
+    expect(input).toHaveAttribute("aria-activedescendant", expect.stringContaining("-opt-4"));
     fireEvent.keyDown(input, { key: "Home" });
     expect(input).toHaveAttribute("aria-activedescendant", expect.stringContaining("-opt-0"));
 
@@ -102,6 +104,10 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     fireEvent.click(screen.getByRole("option", { name: /Go to SWEEP/i }));
     expect(state.navigate).toHaveBeenCalledWith({ to: "/sweep" });
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(screen.getByRole("option", { name: /Go to CONFIG/i }));
+    expect(state.navigate).toHaveBeenCalledWith({ to: "/config" });
 
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     fireEvent.click(screen.getByRole("option", { name: /System status/i }));

@@ -57,7 +57,7 @@ export function ThalamusDrawer({
   node: KgNodeDto | null;
   edges: KgEdgeDto[];
 }) {
-  if (!node) return <Drawer title="ENTITY" subtitle="select a neuron">{null}</Drawer>;
+  if (!node) return <Drawer title="ENTITY" subtitle="select a neuron" scope="kg:">{null}</Drawer>;
 
   const incidentDegree = edges.length;
   const relationCount = countBy(edges, (e) => e.relation);
@@ -83,7 +83,7 @@ export function ThalamusDrawer({
   const hubness = Math.min(1, incidentDegree / 12);
 
   return (
-    <Drawer title="NEURON" subtitle={`${node.label} · ${node.class}`}>
+    <Drawer title="NEURON" subtitle={`${node.label} · ${node.class}`} scope="kg:">
       <DrawerSection title="ASCII MAP">
         <pre className="mono whitespace-pre text-nano leading-tight text-cyan">
 {buildNeuronAscii(incidentDegree, hubness)}

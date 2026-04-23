@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Search, Globe2, Network, Radar, Activity } from "lucide-react";
+import { Search, Globe2, Network, Radar, Activity, SlidersHorizontal } from "lucide-react";
 import { clsx } from "clsx";
 import { useRepl } from "@/features/repl/ReplContext";
 
@@ -28,6 +28,7 @@ export function CommandPalette() {
       { id: "ops", label: "Go to OPS", hint: "⌘1", icon: Globe2, run: () => navigate({ to: "/ops" }) },
       { id: "thalamus", label: "Go to THALAMUS", hint: "⌘2", icon: Network, run: () => navigate({ to: "/thalamus" }) },
       { id: "sweep", label: "Go to SWEEP", hint: "⌘3", icon: Radar, run: () => navigate({ to: "/sweep" }) },
+      { id: "config", label: "Go to CONFIG", hint: "⌘4", icon: SlidersHorizontal, run: () => navigate({ to: "/config" }) },
       { id: "status", label: "System status", hint: "⌘.", icon: Activity, run: () => navigate({ to: "/" }) },
     ],
     [navigate],
@@ -45,6 +46,7 @@ export function CommandPalette() {
         if (meta && e.key === "1") { e.preventDefault(); navigate({ to: "/ops" }); }
         if (meta && e.key === "2") { e.preventDefault(); navigate({ to: "/thalamus" }); }
         if (meta && e.key === "3") { e.preventDefault(); navigate({ to: "/sweep" }); }
+        if (meta && e.key === "4") { e.preventDefault(); navigate({ to: "/config" }); }
       }
     };
     window.addEventListener("keydown", onKey);

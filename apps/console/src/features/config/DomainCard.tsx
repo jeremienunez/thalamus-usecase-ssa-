@@ -172,6 +172,7 @@ export function DomainCard({
           subtitle={`${domain} · ${
             dirty ? "unsaved draft" : payload.hasOverrides ? "override active" : "defaults active"
           }`}
+          scope="cfg:"
         >
           <div className="sticky top-0 z-10 border-b border-hairline bg-elevated px-4 py-3">
             <div className="flex items-center justify-end gap-2">

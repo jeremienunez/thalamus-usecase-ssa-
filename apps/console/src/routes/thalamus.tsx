@@ -1,5 +1,9 @@
+import { lazy } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ThalamusEntry } from "@/features/thalamus";
+
+const ThalamusEntry = lazy(() =>
+  import("@/features/thalamus").then((module) => ({ default: module.ThalamusEntry })),
+);
 
 export const Route = createFileRoute("/thalamus")({
   component: ThalamusEntry,

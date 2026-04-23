@@ -47,6 +47,11 @@ describe("ThreatBoardPanel", () => {
     expect(screen.getByText("km")).toBeInTheDocument();
     expect(screen.getByText("1.27")).toBeInTheDocument();
     expect(screen.getByText("km/s")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /Focus conjunction ISS to STARLINK-1000/i,
+      }),
+    ).toHaveClass("bg-active");
 
     await user.click(
       screen.getByRole("button", {

@@ -115,6 +115,7 @@ describe("OpsDrawer", () => {
     const objectA = rows.getByText("OBJECT-A");
     const objectB = rows.getByText("OBJECT-B");
     expect(objectA.compareDocumentPosition(objectB)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(objectA.closest("div.grid")).toHaveClass("bg-active/60");
 
     const img = screen.getByAltText("ISS");
     fireEvent.error(img);

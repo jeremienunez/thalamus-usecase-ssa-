@@ -38,7 +38,7 @@ export function SweepEntry() {
   return (
     <div className="relative h-full w-full">
       {/* Tab bar */}
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-hairline bg-panel px-3">
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-cyan/10 bg-panel/95 px-3">
         <nav className="flex h-full items-center gap-0">
           {(["overview", "suggestions", "map", "stats"] as Tab[]).map((t) => (
             <button
@@ -46,7 +46,7 @@ export function SweepEntry() {
               onClick={() => switchTab(t)}
               className={clsx(
                 "flex h-9 items-center gap-1.5 border-b-2 px-3 text-label transition-colors duration-fast ease-palantir cursor-pointer",
-                tab === t ? "border-cyan text-primary" : "border-transparent text-muted hover:text-primary",
+                tab === t ? "border-cyan bg-active/40 text-primary" : "border-transparent text-muted hover:bg-hover/60 hover:text-primary",
               )}
             >
               {t.toUpperCase()}

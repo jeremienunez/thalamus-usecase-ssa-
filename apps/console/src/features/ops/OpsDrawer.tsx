@@ -33,7 +33,7 @@ export function OpsDrawer({
     satellite?.id ?? null,
   );
   if (!drawerId || !satellite) {
-    return <Drawer title="SATELLITE" subtitle="select a node">{null}</Drawer>;
+    return <Drawer title="SATELLITE" subtitle="select a node" scope="sat:">{null}</Drawer>;
   }
   const payloads = payloadsData?.items ?? [];
   const orderedConjunctions = [...conjunctions].sort((a, b) => {
@@ -43,7 +43,7 @@ export function OpsDrawer({
   });
 
   return (
-    <Drawer title="SATELLITE" subtitle={`${satellite.name} · NORAD ${satellite.noradId}`}>
+    <Drawer title="SATELLITE" subtitle={`${satellite.name} · NORAD ${satellite.noradId}`} scope="sat:">
       {(satellite.photoUrl || satellite.shortDescription) && (
         <DrawerSection title="BRIEF">
           {satellite.photoUrl && (
@@ -229,7 +229,7 @@ export function OpsDrawer({
             key={c.id}
             className={clsx(
               "grid grid-cols-[1fr_auto] gap-2 border-b border-hairline py-1 last:border-0",
-              c.id === selectedConjunctionId && "bg-elevated-2/60",
+              c.id === selectedConjunctionId && "bg-active/60",
             )}
           >
             <div className="min-w-0">

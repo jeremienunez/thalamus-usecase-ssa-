@@ -16,7 +16,7 @@ export function TopBar() {
   const { location } = useRouterState();
 
   return (
-    <header className="flex h-10 shrink-0 items-center justify-between border-b border-hairline bg-panel px-3">
+    <header className="flex h-10 shrink-0 items-center justify-between border-b border-cyan/10 bg-panel/95 px-3 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset]">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 bg-cyan" />
@@ -34,12 +34,13 @@ export function TopBar() {
                 className={clsx(
                   "flex h-10 items-center gap-2 border-b-2 px-3 text-label transition-colors duration-fast ease-palantir",
                   active
-                    ? "border-cyan text-primary"
-                    : "border-transparent text-muted hover:text-primary",
+                    ? "border-cyan bg-active/40 text-primary"
+                    : "border-transparent text-muted hover:bg-hover/60 hover:text-primary",
                 )}
               >
                 <Icon size={14} strokeWidth={1.5} />
                 {m.label}
+                <span className="hidden mono text-nano text-dim xl:inline">{m.hint}</span>
               </Link>
             );
           })}

@@ -12,7 +12,7 @@ export function SweepDrawer({ findingId }: { findingId: string | null }) {
   const close = useUiStore((s) => s.closeDrawer);
   const [reason, setReason] = useState("");
 
-  if (!f) return <Drawer title="FINDING" subtitle="select a node">{null}</Drawer>;
+  if (!f) return <Drawer title="FINDING" subtitle="select a node" scope="f:">{null}</Drawer>;
 
   const submit = (decision: FindingStatus) => {
     decide.mutate(
@@ -22,7 +22,7 @@ export function SweepDrawer({ findingId }: { findingId: string | null }) {
   };
 
   return (
-    <Drawer title="FINDING" subtitle={`${f.id} · ${f.cortex}`}>
+    <Drawer title="FINDING" subtitle={`${f.id} · ${f.cortex}`} scope="f:">
       <DrawerSection title="STATUS">
         <div className="flex items-center gap-2">
           <span

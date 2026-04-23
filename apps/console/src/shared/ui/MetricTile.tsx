@@ -24,7 +24,7 @@ export function MetricTile({ label, value, display, accent = "primary" }: Props)
   const animated = useAnimatedNumber(Number.isFinite(value) ? value : 0, 420);
   const rendered = display ? display(animated) : Math.round(animated).toString();
   return (
-    <div className="flex flex-col gap-0.5 px-3 py-2 border-l border-hairline first:border-l-0">
+    <div className="flex min-w-[5.5rem] flex-col gap-1 border-l border-hairline bg-base/20 px-3 py-2 first:border-l-0">
       <div className="label text-nano">{label}</div>
       <div className={`mono text-h2 leading-none ${ACCENT_CLASS[accent]} tabular-nums`}>
         {rendered}
@@ -35,7 +35,7 @@ export function MetricTile({ label, value, display, accent = "primary" }: Props)
 
 export function MetricTilePlaceholder({ label }: { label: string }) {
   return (
-    <div className="flex flex-col gap-0.5 px-3 py-2 border-l border-hairline first:border-l-0">
+    <div className="flex min-w-[5.5rem] flex-col gap-1 border-l border-hairline bg-base/20 px-3 py-2 first:border-l-0">
       <div className="label text-nano">{label}</div>
       <div className="mono text-h2 leading-none text-dim tabular-nums">…</div>
     </div>

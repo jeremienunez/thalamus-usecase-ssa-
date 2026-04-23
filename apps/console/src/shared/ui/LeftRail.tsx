@@ -16,11 +16,11 @@ export function LeftRail() {
   return (
     <aside
       className={clsx(
-        "flex shrink-0 flex-col border-r border-hairline bg-panel transition-[width] duration-med ease-palantir",
+        "flex shrink-0 flex-col border-r border-cyan/10 bg-panel/95 transition-[width] duration-med ease-palantir",
         collapsed ? "w-14" : "w-60",
       )}
     >
-      <div className="flex h-10 items-center justify-between border-b border-hairline px-3">
+      <div className="flex h-10 items-center justify-between border-b border-hairline bg-elevated/25 px-3">
         {!collapsed && (
           <span className="label">
             {mode === "config" ? "DOMAINS" : "FILTERS"} · {mode.toUpperCase()}
