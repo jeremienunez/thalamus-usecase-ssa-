@@ -16,6 +16,7 @@ build/
 coverage/
 .vitest-cache/
 *.lcov
+infra/k6/results/
 
 # LaTeX / Mermaid — track compiled PDFs, ignore sources + build artifacts
 docs/**/*.tex
