@@ -41,7 +41,8 @@
   "pnpm": {
     "overrides": {
       "esbuild": "^0.25.12",
-      "file-type": "^21.3.2"
+      "file-type": "^21.3.2",
+      "uuid": "^14.0.0"
     }
   },
   "engines": {
