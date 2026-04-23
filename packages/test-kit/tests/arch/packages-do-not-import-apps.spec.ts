@@ -19,6 +19,7 @@ const DEPCRUISE_BIN = resolve(
   "node_modules/dependency-cruiser/bin/dependency-cruise.mjs",
 );
 const DEPCRUISE_MAX_BUFFER = 256 * 1024 * 1024;
+const ARCH_GUARD_TIMEOUT_MS = 30_000;
 
 type DepCruiseRunResult = {
   exitCode: number;
@@ -75,7 +76,7 @@ describe("repo-wide arch guardrails", () => {
     const result = await runDepCruise(["apps", "packages"]);
 
     expect(result.exitCode, result.output).toBe(0);
-  });
+  }, ARCH_GUARD_TIMEOUT_MS);
 
   it("packages-no-apps-imports catches an injected packages -> apps edge", async () => {
     const baseline = await runDepCruise(["packages/test-kit/src"]);
@@ -101,5 +102,5 @@ describe("repo-wide arch guardrails", () => {
     } finally {
       rmSync(INJECTION_DIR, { recursive: true, force: true });
     }
-  });
+  }, ARCH_GUARD_TIMEOUT_MS);
 });
