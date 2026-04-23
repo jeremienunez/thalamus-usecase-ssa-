@@ -14,6 +14,43 @@ Producer / maintainer halves of the same knowledge loop: Thalamus creates, Sweep
 
 ---
 
+## Quality snapshot
+
+As of `2026-04-23` on `main`:
+
+- `pnpm test`: `1528` passing, `9` skipped
+- `pnpm -r typecheck`, `pnpm arch:check`, `pnpm test:policy`, `pnpm spec:check`: green
+- `pnpm test:coverage`: `71.45%` lines / `70.61%` statements / `67.06%` functions / `63.97%` branches
+
+The coverage report is current. The command still exits non-zero because the repo keeps per-file `100%` thresholds on a set of lower-priority files outside the slices closed in this pass.
+
+---
+
+## Demo
+
+Short operator-console walkthrough. Click the preview to open the full
+video.
+
+<p align="center">
+  <a href="docs/media/readme/operator-console-demo.mp4">
+    <img src="docs/media/readme/operator-console-demo-poster.jpg" alt="Operator console demo video preview." width="100%" />
+  </a>
+</p>
+
+Screens from the same pass: Sweep review board, command palette, review
+drawer, and REPL summary loop.
+
+<p align="center">
+  <img src="docs/media/readme/sweep-triage-board.png" alt="Sweep triage board with pending, accepted and rejected findings." width="49%" />
+  <img src="docs/media/readme/sweep-review-drawer.png" alt="Sweep review drawer with decision controls and REPL summary." width="49%" />
+</p>
+<p align="center">
+  <img src="docs/media/readme/command-palette.png" alt="Cross-mode command palette inside the operator console." width="49%" />
+  <img src="docs/media/readme/sweep-repl-summary.png" alt="Operator REPL summary embedded under the review board." width="49%" />
+</p>
+
+---
+
 ## System topology
 
 The two subsystems share a typed foundation and form a closed knowledge loop: Thalamus writes to the knowledge graph, Sweep audits it, human decisions refine both.
