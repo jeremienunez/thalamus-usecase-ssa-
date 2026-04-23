@@ -28,7 +28,7 @@ would move to about `71.62% lines` / `70.89% statements` /
       (`21` files, `724` uncovered lines, est. `+5.37` pts). Biggest
       frontend hole; pair with the existing TODO about
       `@react-three/fiber` mocks / renderer harness.
-- [ ] **Coverage winner 3** - `apps/console-api/src/agent/ssa/sweep/**`
+- [x] **Coverage winner 3 (DONE 2026-04-23)** - `apps/console-api/src/agent/ssa/sweep/**`
       (`18` files, `343` uncovered lines, est. `+2.54` pts). Good ROI
       because much of the slice is pure orchestration / parsing once
       ports are mocked.

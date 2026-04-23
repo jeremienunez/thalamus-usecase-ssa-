@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   parseLlmSuggestions,
   validCategory,
@@ -10,6 +10,10 @@ const ocs: OperatorCountryLookup[] = [
   { id: 42n, name: "Testland" },
   { id: 99n, name: "Otherland" },
 ];
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("validCategory / validSeverity", () => {
   it("passes through whitelisted categories", () => {
@@ -53,12 +57,12 @@ describe("parseLlmSuggestions: robust to bad LLM output", () => {
   });
 
   it("returns [] when the parsed value is not an array", () => {
-    // Why: the regex is greedy and can match `[...` across a non-array
-    // value. The `Array.isArray` guard prevents downstream .filter from
-    // throwing.
-    const text = `{"results": [not really] }`;
-    // Whatever the regex captures, a non-array JSON.parse result must
-    // yield [] not throw.
+    // Why: `Array.isArray(parsed)` is the last guard before `.filter(...)`.
+    // We force the parse seam to yield a non-array object so the branch is
+    // exercised directly instead of relying on malformed JSON.
+    vi.spyOn(JSON, "parse").mockReturnValueOnce({ results: [] });
+    const text = `[{"operatorCountry":"Testland","category":"missing_data","title":"T"}]`;
+
     expect(parseLlmSuggestions(text, ocs)).toEqual([]);
   });
 
@@ -162,6 +166,27 @@ describe("parseLlmSuggestions: filtering + coercion", () => {
     const [c] = parseLlmSuggestions(text, ocs);
 
     expect(c!.domainFields.operatorCountryId).toBeNull();
+  });
+
+  it("defaults operatorCountryName to an empty string if a prefiltered parsed item reaches mapping without one", () => {
+    const parsedItems: Record<string, unknown>[] = [
+      {
+        operatorCountry: undefined,
+        category: "missing_data",
+        title: "T",
+      },
+    ];
+    Object.defineProperty(parsedItems, "filter", {
+      value: () => parsedItems,
+    });
+    vi.spyOn(JSON, "parse").mockReturnValueOnce(parsedItems);
+
+    const [c] = parseLlmSuggestions(
+      '[{"operatorCountry":"placeholder","category":"missing_data","title":"T"}]',
+      ocs,
+    );
+
+    expect(c!.domainFields.operatorCountryName).toBe("");
   });
 });
 

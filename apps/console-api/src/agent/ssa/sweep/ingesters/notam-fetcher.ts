@@ -88,6 +88,7 @@ function isLaunchRelated(row: FaaTfrRow): boolean {
 }
 
 function mapRow(row: FaaTfrRow, fetchedAt: Date): NewNotam | null {
+  const launchRelated = isLaunchRelated(row);
   if (!row.notam_id || !row.type || !row.description) return null;
   const { start, end } = parseDatesFromDescription(row.description);
   return {
@@ -99,7 +100,7 @@ function mapRow(row: FaaTfrRow, fetchedAt: Date): NewNotam | null {
     creationDate: parseCreationDate(row.creation_date),
     parsedStartUtc: start,
     parsedEndUtc: end,
-    isLaunchRelated: isLaunchRelated(row),
+    isLaunchRelated: launchRelated,
     source: "faa-tfr",
     fetchedAt,
   };

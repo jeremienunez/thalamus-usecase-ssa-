@@ -88,4 +88,29 @@ describe("SsaAuditProvider.recordFeedback", () => {
     expect(loadFeedback).not.toHaveBeenCalled();
     expect(callWavesSpy).not.toHaveBeenCalled();
   });
+
+  it("normalises missing category, operator-country name, and reviewer note to empty strings", async () => {
+    const push = typedSpy<AuditFeedbackPort["push"]>();
+    push.mockResolvedValue(undefined);
+    const provider = new SsaAuditProvider({
+      satelliteRepo: fakeSatellitePort(),
+      sweepRepo: fakeSweepRepo(),
+      feedbackRepo: { push },
+      nanoCaller: makeEmptyCaller().caller,
+    });
+
+    await provider.recordFeedback!({
+      suggestionId: "sugg-2",
+      accepted: false,
+      reviewerNote: null,
+      domainFields: {},
+    });
+
+    expect(push).toHaveBeenCalledWith({
+      category: "",
+      wasAccepted: false,
+      reviewerNote: "",
+      operatorCountryName: "",
+    } satisfies SweepFeedbackEntry);
+  });
 });

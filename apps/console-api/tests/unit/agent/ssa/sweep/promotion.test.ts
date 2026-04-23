@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { AcceptedSuggestionInput } from "@interview/sweep";
+import type { ConfidenceService } from "@interview/thalamus";
 import { fakePort, typedSpy } from "@interview/test-kit";
 import { SsaPromotionAdapter } from "../../../../../src/agent/ssa/sweep/promotion.ssa";
 import type { SsaSweepAuditPort } from "../../../../../src/agent/ssa/sweep/promotion.ssa";
@@ -113,5 +114,43 @@ describe("SsaPromotionAdapter.promote", () => {
     await adapter.promote({ ...input, resolutionPayload: null });
     const call = audit.insertResolutionAudit.mock.calls[0]?.[0];
     expect(call.resolutionPayload).toBeNull();
+  });
+
+  it("coerces missing domain fields to empty strings / zero and still returns ok when confidence is wired", async () => {
+    const audit = fakeAuditRepo();
+    const adapter = new SsaPromotionAdapter({
+      sweepAuditRepo: audit.repo,
+      confidence: {} as ConfidenceService,
+    });
+
+    const result = await adapter.promote({
+      ...input,
+      domainFields: {},
+    });
+
+    expect(result).toEqual({ ok: true });
+    const call = audit.insertResolutionAudit.mock.calls[0]?.[0];
+    expect(call).toMatchObject({
+      operatorCountryId: null,
+      operatorCountryName: "",
+      category: "",
+      severity: "",
+      title: "",
+      description: "",
+      suggestedAction: "",
+      affectedSatellites: 0,
+      webEvidence: null,
+    });
+  });
+
+  it("stringifies non-Error audit failures into soft warnings", async () => {
+    const audit = fakeAuditRepo();
+    audit.insertResolutionAudit.mockRejectedValueOnce("plain failure");
+    const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
+
+    const result = await adapter.promote(input);
+
+    expect(result.ok).toBe(true);
+    expect(result.errors?.[0]).toContain("plain failure");
   });
 });

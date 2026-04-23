@@ -54,61 +54,57 @@ interface ParsedTle {
  * entangle the sweep package with the db-schema seed infra.
  */
 function parseTleBlock(l1: string, l2: string): ParsedTle | null {
-  try {
-    const noradId = Number(l1.slice(2, 7).trim());
-    if (!Number.isFinite(noradId)) return null;
+  const noradId = Number(l1.slice(2, 7).trim());
+  if (!Number.isFinite(noradId)) return null;
 
-    const yy = Number(l1.slice(18, 20));
-    const doy = Number(l1.slice(20, 32));
-    const year = yy < 57 ? 2000 + yy : 1900 + yy;
-    const msPerDay = 86_400_000;
-    const epochMs = Date.UTC(year, 0, 1) + (doy - 1) * msPerDay;
-    const epoch = new Date(epochMs).toISOString();
+  const yy = Number(l1.slice(18, 20));
+  const doy = Number(l1.slice(20, 32));
+  const year = yy < 57 ? 2000 + yy : 1900 + yy;
+  const msPerDay = 86_400_000;
+  const epochMs = Date.UTC(year, 0, 1) + (doy - 1) * msPerDay;
+  const epoch = new Date(epochMs).toISOString();
 
-    // Bstar drag term — line 1 cols 54-61, assumed-decimal-point format like
-    //   " 12345-3" → 0.12345e-3. Preserve sign.
-    const bstarRaw = l1.slice(53, 61).trim();
-    const bstarSign = bstarRaw.startsWith("-") ? -1 : 1;
-    const bstarDigits = bstarRaw.replace(/^[-+]/, "").replace(/\s+/g, "");
-    // Format: MMMMM[+-]EE where MMMMM is mantissa (no decimal) and EE is exponent
-    const expMatch = bstarDigits.match(/^(\d+)([+-]\d+)$/);
-    const bstar = expMatch
-      ? bstarSign * Number(`0.${expMatch[1]}`) * Math.pow(10, Number(expMatch[2]))
-      : 0;
+  // Bstar drag term — line 1 cols 54-61, assumed-decimal-point format like
+  //   " 12345-3" → 0.12345e-3. Preserve sign.
+  const bstarRaw = l1.slice(53, 61).trim();
+  const bstarSign = bstarRaw.startsWith("-") ? -1 : 1;
+  const bstarDigits = bstarRaw.replace(/^[-+]/, "").replace(/\s+/g, "");
+  // Format: MMMMM[+-]EE where MMMMM is mantissa (no decimal) and EE is exponent
+  const expMatch = bstarDigits.match(/^(\d+)([+-]\d+)$/);
+  const bstar = expMatch
+    ? bstarSign * Number(`0.${expMatch[1]}`) * Math.pow(10, Number(expMatch[2]))
+    : 0;
 
-    const inclinationDeg = Number(l2.slice(8, 16).trim());
-    const raan = Number(l2.slice(17, 25).trim());
-    const eccentricity = Number("0." + l2.slice(26, 33).trim());
-    const argOfPerigee = Number(l2.slice(34, 42).trim());
-    const meanAnomaly = Number(l2.slice(43, 51).trim());
-    const meanMotion = Number(l2.slice(52, 63).trim());
+  const inclinationDeg = Number(l2.slice(8, 16).trim());
+  const raan = Number(l2.slice(17, 25).trim());
+  const eccentricity = Number("0." + l2.slice(26, 33).trim());
+  const argOfPerigee = Number(l2.slice(34, 42).trim());
+  const meanAnomaly = Number(l2.slice(43, 51).trim());
+  const meanMotion = Number(l2.slice(52, 63).trim());
 
-    if (
-      ![
-        inclinationDeg,
-        raan,
-        eccentricity,
-        argOfPerigee,
-        meanAnomaly,
-        meanMotion,
-      ].every(Number.isFinite)
-    )
-      return null;
-
-    return {
-      noradId,
-      epoch,
-      meanMotion,
-      eccentricity,
+  if (
+    ![
       inclinationDeg,
       raan,
+      eccentricity,
       argOfPerigee,
       meanAnomaly,
-      bstar,
-    };
-  } catch {
+      meanMotion,
+    ].every(Number.isFinite)
+  )
     return null;
-  }
+
+  return {
+    noradId,
+    epoch,
+    meanMotion,
+    eccentricity,
+    inclinationDeg,
+    raan,
+    argOfPerigee,
+    meanAnomaly,
+    bstar,
+  };
 }
 
 async function fetchGroup(group: string): Promise<ParsedTle[]> {

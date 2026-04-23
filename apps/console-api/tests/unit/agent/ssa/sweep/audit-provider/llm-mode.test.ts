@@ -164,6 +164,161 @@ describe("SsaAuditProvider LLM mode", () => {
     expect(c!.domainFields.affectedSatellites).toBe(0);
   });
 
+  it("builds briefing requests with avgMass=null preserved in the JSON input", async () => {
+    const stats = [statsRow({ operatorCountryName: "Testland", avgMass: null })];
+    const capturedRequests: NanoRequest[] = [];
+    const caller: NanoCaller = {
+      async callWaves(items, build) {
+        for (const item of items) capturedRequests.push(build(item));
+        return [];
+      },
+    };
+    const provider = new SsaAuditProvider({
+      satelliteRepo: fakeSatellitePort({
+        getOperatorCountrySweepStats: vi.fn().mockResolvedValue(stats),
+      }),
+      sweepRepo: fakeSweepRepo(),
+      nanoCaller: caller,
+    });
+
+    await provider.runAudit({ cycleId: "c", mode: "briefing", limit: 10 });
+
+    expect(capturedRequests).toHaveLength(1);
+    expect(capturedRequests[0]!.input).toContain('"avgMass":null');
+    expect(capturedRequests[0]!.input).toContain('"operatorCountry":"Testland"');
+  });
+
+  it("rounds a truthy avgMass inside briefing requests", async () => {
+    const stats = [statsRow({ operatorCountryName: "Testland", avgMass: 250.8 })];
+    const capturedRequests: NanoRequest[] = [];
+    const caller: NanoCaller = {
+      async callWaves(items, build) {
+        for (const item of items) capturedRequests.push(build(item));
+        return [];
+      },
+    };
+    const provider = new SsaAuditProvider({
+      satelliteRepo: fakeSatellitePort({
+        getOperatorCountrySweepStats: vi.fn().mockResolvedValue(stats),
+      }),
+      sweepRepo: fakeSweepRepo(),
+      nanoCaller: caller,
+    });
+
+    await provider.runAudit({ cycleId: "c", mode: "briefing", limit: 10 });
+
+    expect(capturedRequests).toHaveLength(1);
+    expect(capturedRequests[0]!.input).toContain('"avgMass":251');
+  });
+
+  it("treats an operator-country target without entityIds as an unfiltered sweep", async () => {
+    const stats = [
+      statsRow({ operatorCountryId: 1n, operatorCountryName: "OC-1" }),
+      statsRow({ operatorCountryId: 2n, operatorCountryName: "OC-2" }),
+    ];
+    let capturedBatches: unknown[] | undefined;
+    const capturedRequests: NanoRequest[] = [];
+    const caller: NanoCaller = {
+      async callWaves(items, build) {
+        capturedBatches = items as unknown[];
+        for (const item of items) capturedRequests.push(build(item));
+        return [];
+      },
+    };
+    const provider = new SsaAuditProvider({
+      satelliteRepo: fakeSatellitePort({
+        getOperatorCountrySweepStats: vi.fn().mockResolvedValue(stats),
+      }),
+      sweepRepo: fakeSweepRepo(),
+      nanoCaller: caller,
+    });
+
+    await provider.runAudit({
+      cycleId: "c",
+      mode: "default",
+      limit: 10,
+      target: { entityType: "operator_country" },
+    });
+
+    expect(capturedBatches).toHaveLength(1);
+    expect(capturedRequests[0]!.input).toContain('"operatorCountry":"OC-1"');
+    expect(capturedRequests[0]!.input).toContain('"operatorCountry":"OC-2"');
+    expect(capturedRequests[0]!.instructions).not.toContain(
+      "Past reviewer feedback",
+    );
+  });
+
+  it("filters operator-country batches to valid bigint target ids before prompting the LLM", async () => {
+    const stats = [
+      statsRow({ operatorCountryId: 1n, operatorCountryName: "OC-1" }),
+      statsRow({
+        operatorCountryId: 2n,
+        operatorCountryName: "OC-2",
+        avgMass: null,
+      }),
+    ];
+    const capturedRequests: NanoRequest[] = [];
+    const caller: NanoCaller = {
+      async callWaves(items, build) {
+        for (const item of items) capturedRequests.push(build(item));
+        return [];
+      },
+    };
+    const provider = new SsaAuditProvider({
+      satelliteRepo: fakeSatellitePort({
+        getOperatorCountrySweepStats: vi.fn().mockResolvedValue(stats),
+      }),
+      sweepRepo: fakeSweepRepo(),
+      nanoCaller: caller,
+    });
+
+    await provider.runAudit({
+      cycleId: "c",
+      mode: "default",
+      limit: 10,
+      target: {
+        entityType: "operator_country",
+        entityIds: ["not-a-bigint", "2"],
+      },
+    });
+
+    expect(capturedRequests).toHaveLength(1);
+    expect(capturedRequests[0]!.input).not.toContain('"operatorCountry":"OC-1"');
+    expect(capturedRequests[0]!.input).toContain('"operatorCountry":"OC-2"');
+    expect(capturedRequests[0]!.input).toContain('"avgMass":null');
+  });
+
+  it("keeps the full filtered set when limit is zero", async () => {
+    const stats = [
+      statsRow({ operatorCountryId: 1n, operatorCountryName: "OC-1" }),
+      statsRow({ operatorCountryId: 2n, operatorCountryName: "OC-2" }),
+    ];
+    const capturedRequests: NanoRequest[] = [];
+    const caller: NanoCaller = {
+      async callWaves(items, build) {
+        for (const item of items) capturedRequests.push(build(item));
+        return [];
+      },
+    };
+    const provider = new SsaAuditProvider({
+      satelliteRepo: fakeSatellitePort({
+        getOperatorCountrySweepStats: vi.fn().mockResolvedValue(stats),
+      }),
+      sweepRepo: fakeSweepRepo(),
+      nanoCaller: caller,
+    });
+
+    await provider.runAudit({
+      cycleId: "c",
+      mode: "default",
+      limit: 0,
+    });
+
+    expect(capturedRequests).toHaveLength(1);
+    expect(capturedRequests[0]!.input).toContain('"operatorCountry":"OC-1"');
+    expect(capturedRequests[0]!.input).toContain('"operatorCountry":"OC-2"');
+  });
+
   it("injects ONLY matching past feedback into the nano-request instructions", async () => {
     // Why: the provider filters past feedback by operator-country name
     // (case-insensitive) and injects matches into the prompt. Non-matching
@@ -225,5 +380,57 @@ describe("SsaAuditProvider LLM mode", () => {
     expect(capturedRequests[0]!.instructions).toContain("Testland");
     expect(capturedRequests[0]!.instructions).toContain("ACCEPTED");
     expect(capturedRequests[0]!.instructions).not.toContain("Otherland");
+  });
+
+  it("formats rejected past feedback without parentheses when reviewerNote is empty and ignores malformed feedback rows", async () => {
+    const stats = [statsRow({ operatorCountryName: "Testland" })];
+    const validDomainFields = {
+      operatorCountryId: null as bigint | null,
+      operatorCountryName: "Testland",
+      category: "enrichment",
+      severity: "info",
+      title: "valid",
+      description: "valid",
+      affectedSatellites: 1,
+      suggestedAction: "n/a",
+      webEvidence: null as string | null,
+    };
+    const sweepRepo: SsaAuditDeps["sweepRepo"] = {
+      loadPastFeedback: vi.fn().mockResolvedValue([
+        {
+          domainFields: validDomainFields,
+          wasAccepted: false,
+          reviewerNote: null,
+        },
+        {
+          domainFields: { broken: true },
+          wasAccepted: true,
+          reviewerNote: "ignore me",
+        },
+      ]),
+    };
+    const capturedRequests: NanoRequest[] = [];
+    const caller: NanoCaller = {
+      async callWaves(items, build) {
+        for (const item of items) capturedRequests.push(build(item));
+        return [];
+      },
+    };
+    const provider = new SsaAuditProvider({
+      satelliteRepo: fakeSatellitePort({
+        getOperatorCountrySweepStats: vi.fn().mockResolvedValue(stats),
+      }),
+      sweepRepo,
+      nanoCaller: caller,
+    });
+
+    await provider.runAudit({ cycleId: "c", mode: "default", limit: 10 });
+
+    expect(capturedRequests).toHaveLength(1);
+    expect(capturedRequests[0]!.instructions).toContain(
+      "- Testland: enrichment → REJECTED",
+    );
+    expect(capturedRequests[0]!.instructions).not.toContain("REJECTED (");
+    expect(capturedRequests[0]!.instructions).not.toContain("ignore me");
   });
 });

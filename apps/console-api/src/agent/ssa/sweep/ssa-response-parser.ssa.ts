@@ -69,10 +69,11 @@ export function parseLlmSuggestions(
   return items
     .filter((item) => item.operatorCountry && item.category && item.title)
     .map((item) => {
+      const operatorCountryName =
+        typeof item.operatorCountry === "string" ? item.operatorCountry : "";
       const oc = operatorCountries.find(
         (a) =>
-          a.name.toLowerCase() ===
-          (item.operatorCountry as string).toLowerCase(),
+          a.name.toLowerCase() === operatorCountryName.toLowerCase(),
       );
       let resolutionPayload: string | null = null;
       if (item.resolutionPayload) {
@@ -86,7 +87,7 @@ export function parseLlmSuggestions(
       return {
         domainFields: {
           operatorCountryId: oc?.id ?? null,
-          operatorCountryName: (item.operatorCountry as string) ?? "",
+          operatorCountryName,
           category: validCategory(item.category as string),
           severity: validSeverity(item.severity as string),
           title: (item.title as string).slice(0, 200),

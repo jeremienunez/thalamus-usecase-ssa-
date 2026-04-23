@@ -332,10 +332,7 @@ export function createItuFilingsSource(
     inserted += result.rowCount ?? 0;
   }
 
-  const totalSats = rows.reduce(
-    (s, r) => s + (r.plannedSatellites ?? 0),
-    0,
-  );
+  const totalSats = rows.reduce((s, r) => s + Number(r.plannedSatellites), 0);
   const countries = new Set(
     rows.map((r) => r.operatorCountry).filter(Boolean),
   );

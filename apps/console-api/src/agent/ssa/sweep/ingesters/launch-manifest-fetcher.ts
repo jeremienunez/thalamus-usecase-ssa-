@@ -237,24 +237,21 @@ export function createLaunchManifestSource(
   // Best-effort cleanup: expire LL2-sourced rows that no longer appear in
   // the upcoming manifest (launched or cancelled). Non-LL2 rows (legacy
   // seeds without externalLaunchId) are untouched.
-  const currentIds = rows.map((r) => r.externalLaunchId!).filter(Boolean);
-  let expired = 0;
-  if (currentIds.length > 0) {
-    const expireResult = await db
-      .update(launch)
-      .set({ status: sql`COALESCE(${launch.status}, '') || ' [stale]'` })
-      .where(
-        and(
-          isNotNull(launch.externalLaunchId),
-          notInArray(launch.externalLaunchId, currentIds),
-          or(
-            sql`${launch.status} IS NULL`,
-            notIlike(launch.status, "%stale%"),
-          ),
+  const currentIds = rows.map((r) => r.externalLaunchId!);
+  const expireResult = await db
+    .update(launch)
+    .set({ status: sql`COALESCE(${launch.status}, '') || ' [stale]'` })
+    .where(
+      and(
+        isNotNull(launch.externalLaunchId),
+        notInArray(launch.externalLaunchId, currentIds),
+        or(
+          sql`${launch.status} IS NULL`,
+          notIlike(launch.status, "%stale%"),
         ),
-      );
-    expired = expireResult.rowCount ?? 0;
-  }
+      ),
+    );
+  const expired = expireResult.rowCount ?? 0;
 
   return {
     inserted,

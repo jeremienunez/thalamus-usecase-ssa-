@@ -86,6 +86,12 @@ describe("CompositeCitationResolver", () => {
 
     expect(composite.resolve("whatever")).toBe("HIT");
   });
+
+  it("uses the defensive operator-ingest fallback when the strategy chain is empty", () => {
+    const composite = new CompositeCitationResolver([]);
+
+    expect(composite.resolve("orphan_column")).toContain("orphan_column");
+  });
 });
 
 describe("createDefaultCitationResolver (integration)", () => {
