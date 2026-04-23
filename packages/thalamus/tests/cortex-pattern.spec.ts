@@ -293,4 +293,59 @@ describe("SPEC-TH-003 AC-5 — helper throw is swallowed, executor keeps going",
     expect(out.findings[0].title).toMatch(/0 findings from \d+ data items/);
     expect(out.metadata).toBeDefined();
   });
+
+  it("emits an output-quality meta-finding when the LLM response is rejected", async () => {
+    vi.mocked(analyzeCortexData).mockResolvedValue({
+      findings: [],
+      tokensEstimate: 42,
+      model: "minimax:invalid",
+      diagnostic: {
+        kind: "degenerate_repetition",
+        reason: 'degenerate repetition detected: "一圈" x80',
+        repeatedUnit: "一圈",
+        repeatedCount: 80,
+      },
+    });
+
+    const sourceFetcher: SourceFetcherPort = {
+      fetchForCortex: async () => [
+        {
+          type: "celestrak",
+          source: "test",
+          url: "x",
+          data: { regimeName: "SSO", satelliteCount: 139 },
+          fetchedAt: new Date().toISOString(),
+          latencyMs: 0,
+        },
+      ],
+    };
+    const registry = fakeRegistry({
+      traffic_spotter: {
+        header: {
+          name: "traffic_spotter",
+          description: "",
+          sqlHelper: "none",
+          params: {},
+        },
+      },
+    });
+    const executor = new CortexExecutor(
+      registry,
+      buildTestStrategies({ sourceFetcher }),
+    );
+
+    const out = await executor.execute("traffic_spotter", {
+      query: "screen",
+      params: {},
+      cycleId: 1n,
+    });
+
+    expect(out.findings).toHaveLength(1);
+    expect(out.findings[0].title).toBe(
+      "Cortex traffic_spotter: LLM output rejected — degenerate_repetition",
+    );
+    expect(out.findings[0].summary).toContain("rejected before persistence");
+    expect(out.findings[0].summary).not.toContain("schema mismatch");
+    expect(out.metadata.model).toBe("minimax:invalid");
+  });
 });

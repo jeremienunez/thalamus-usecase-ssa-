@@ -50,6 +50,14 @@ describe("llm-json-parser", () => {
     expect(safeParseJson(raw)).toEqual({ findings: [] });
   });
 
+  it("rejects degenerate repeated-token output instead of accepting corrupted findings", () => {
+    const raw = `\`\`\`json
+{"findings":[{"title":"t","summary":"${"一圈".repeat(80)}","findingType":"insight","urgency":"medium","confidence":0.7,"evidence":[],"edges":[]}]}
+\`\`\``;
+
+    expect(safeParseJson(raw)).toEqual({ findings: [] });
+  });
+
   it("preserves escaped newlines inside string values", () => {
     const raw = '{"findings":[{"title":"line\\nbreak"}]}';
 

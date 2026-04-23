@@ -72,6 +72,7 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
   findings: CortexFinding[];
   model: string;
   tokensEstimate: number;
+  diagnostic?: CortexLlmDiagnostic;
 }> {
   const start = Date.now();
 
@@ -197,19 +198,22 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
 
   try {
     const response = await transport.call(userPrompt);
+    const parsedResponse = parseCortexResponse(response.content);
 
     logger.debug(
       {
         cortex: input.cortexName,
         rawLen: response.content.length,
-        raw: response.content.slice(0, 2000),
+        raw: response.content.slice(
+          0,
+          parsedResponse.diagnostic?.kind === "degenerate_repetition"
+            ? 500
+            : 2000,
+        ),
+        diagnostic: parsedResponse.diagnostic,
       },
       "Raw LLM response",
     );
-
-    const parsed = extractJsonObject(response.content);
-    const findings: CortexFinding[] =
-      (parsed.findings as CortexFinding[]) ?? [];
 
     const duration = Date.now() - start;
     const tokensEstimate = Math.round(
@@ -218,6 +222,32 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
         response.content.length) /
         4,
     );
+
+    if (parsedResponse.diagnostic) {
+      logger.warn(
+        {
+          cortex: input.cortexName,
+          provider: response.provider,
+          diagnostic: parsedResponse.diagnostic,
+          duration,
+        },
+        "Cortex LLM response rejected",
+      );
+      stepLog(logger, "nano.call", "error", {
+        cortex: input.cortexName,
+        provider: response.provider,
+        reason: parsedResponse.diagnostic.reason,
+        durationMs: duration,
+      });
+      return {
+        findings: [],
+        model: `${response.provider}:invalid`,
+        tokensEstimate,
+        diagnostic: parsedResponse.diagnostic,
+      };
+    }
+
+    const findings = parsedResponse.findings;
 
     logger.info(
       {
@@ -261,11 +291,88 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
  * Kept for backward compatibility with tests importing safeParseJson.
  */
 export function safeParseJson(raw: string): { findings: CortexFinding[] } {
+  return { findings: parseCortexResponse(raw).findings };
+}
+
+export type CortexLlmDiagnostic = {
+  kind: "degenerate_repetition" | "invalid_json";
+  reason: string;
+  repeatedUnit?: string;
+  repeatedCount?: number;
+};
+
+function parseCortexResponse(raw: string): {
+  findings: CortexFinding[];
+  diagnostic?: CortexLlmDiagnostic;
+} {
+  const repetition = detectDegenerateRepetition(raw);
+  if (repetition) {
+    return {
+      findings: [],
+      diagnostic: {
+        kind: "degenerate_repetition",
+        reason: `degenerate repetition detected: "${repetition.unit}" x${repetition.count}`,
+        repeatedUnit: repetition.unit,
+        repeatedCount: repetition.count,
+      },
+    };
+  }
+
   const parsed = extractJsonObject(raw);
-  const findings = (parsed.findings as CortexFinding[]) ?? [];
+  if (Array.isArray(parsed.findings)) {
+    return { findings: parsed.findings as CortexFinding[] };
+  }
   // Also handle bare arrays (LLM returns [...] instead of {"findings": [...]})
-  if (findings.length === 0 && Array.isArray(parsed.items)) {
+  if (Array.isArray(parsed.items)) {
     return { findings: parsed.items as CortexFinding[] };
   }
-  return { findings };
+
+  if (raw.includes("findings")) {
+    return {
+      findings: [],
+      diagnostic: {
+        kind: "invalid_json",
+        reason: "response mentioned findings but no valid findings array could be parsed",
+      },
+    };
+  }
+
+  return { findings: [] };
+}
+
+function detectDegenerateRepetition(
+  raw: string,
+): { unit: string; count: number } | null {
+  const compact = raw.replace(/\s+/g, "");
+  const minRepeatedChars = 120;
+  const minCount = 24;
+  const maxUnitLength = 12;
+
+  for (let start = 0; start < compact.length; start += 1) {
+    for (let unitLength = 1; unitLength <= maxUnitLength; unitLength += 1) {
+      const unit = compact.slice(start, start + unitLength);
+      if (unit.length < unitLength || !isMeaningfulRepeatedUnit(unit)) continue;
+
+      let count = 1;
+      let cursor = start + unitLength;
+      while (compact.slice(cursor, cursor + unitLength) === unit) {
+        count += 1;
+        cursor += unitLength;
+      }
+
+      if (count >= minCount && count * unitLength >= minRepeatedChars) {
+        return { unit: previewRepeatedUnit(unit), count };
+      }
+    }
+  }
+
+  return null;
+}
+
+function isMeaningfulRepeatedUnit(unit: string): boolean {
+  return !/^[{}\[\]":,.\-0-9]+$/.test(unit);
+}
+
+function previewRepeatedUnit(unit: string): string {
+  return unit.length <= 16 ? unit : `${unit.slice(0, 16)}...`;
 }

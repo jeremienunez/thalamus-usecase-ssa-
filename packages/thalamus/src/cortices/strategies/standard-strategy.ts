@@ -10,24 +10,21 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import {
-  ResearchFindingType,
-  ResearchUrgency,
-} from "@interview/shared/enum";
 import type { CortexSkill } from "../registry";
 import type {
-  CortexFinding,
   CortexInput,
   CortexOutput,
   CortexDataProvider,
   DomainConfig,
 } from "../types";
 import { analyzeCortexData } from "../cortex-llm";
-import { sanitizeDataPayload, sanitizeText } from "../guardrails";
 import type { WebSearchPort } from "../../ports/web-search.port";
 import type { SourceFetcherPort } from "../../ports/source-fetcher.port";
 import { NoopSourceFetcher } from "../../entities/noop-source-fetcher";
 import { emptyOutput, normalizeFinding } from "./helpers";
+import { buildNoFindingMetaFinding } from "./meta-findings";
+import { fetchStructuredSources, runCortexSqlHelper } from "./standard-inputs";
+import { buildStandardDataPayload } from "./standard-payload";
 import type { CortexExecutionStrategy } from "./types";
 
 const logger = createLogger("cortex-standard");
@@ -61,40 +58,18 @@ export class StandardStrategy implements CortexExecutionStrategy {
       }
     }
 
-    // 1. Run SQL helper to fetch data.
-    const sqlData = await this.runSqlHelper(skill, input.params);
-
-    // 1b. Fetch external structured sources for this cortex.
-    let sourceData: Record<string, unknown>[] = [];
-    try {
-      const sources = await this.sourceFetcher.fetchForCortex(
-        cortexName,
-        input.params,
-      );
-      sourceData = sources.map((s) => ({
-        type: s.type,
-        _source: s.source,
-        _sourceUrl: s.url,
-        ...(typeof s.data === "object" && s.data !== null
-          ? (s.data as Record<string, unknown>)
-          : { value: s.data }),
-      }));
-      if (sources.length > 0) {
-        logger.info(
-          {
-            cortex: cortexName,
-            sources: sources.length,
-            types: sources.map((s) => s.type),
-          },
-          "External sources enriched data",
-        );
-      }
-    } catch (err) {
-      logger.debug(
-        { cortex: cortexName, err },
-        "External source fetch failed (non-blocking)",
-      );
-    }
+    const sqlData = await runCortexSqlHelper({
+      skill,
+      params: input.params,
+      dataProvider: this.dataProvider,
+      logger,
+    });
+    const sourceData = await fetchStructuredSources({
+      sourceFetcher: this.sourceFetcher,
+      cortexName,
+      params: input.params,
+      logger,
+    });
 
     // 2. Enrich with web for cortices that benefit, or when SQL is empty.
     let webData: unknown[] = [];
@@ -119,68 +94,23 @@ export class StandardStrategy implements CortexExecutionStrategy {
       return emptyOutput();
     }
 
-    // 3. Map-Reduce: SQL did the math, now pre-summarize for LLM narration.
-    //    SQL+structured-sources and web-search are kept in separate tiers so
-    //    the LLM can treat one as authoritative (scoped by query params, e.g.
-    //    horizonDays) and the other as advisory context (unfiltered,
-    //    potentially out-of-scope). Blending them caused the LLM to cite
-    //    web-only launches as if they were inside the requested window.
-    const authoritative = this.domainConfig.preSummarize(
-      authoritativeData as Record<string, unknown>[],
+    const payload = buildStandardDataPayload({
+      domainConfig: this.domainConfig,
       cortexName,
-    );
-    const webContext =
-      webData.length > 0
-        ? this.domainConfig.preSummarize(
-            webData as Record<string, unknown>[],
-            cortexName,
-          )
-        : [];
+      authoritativeData,
+      webData,
+      previousFindings: input.context?.previousFindings,
+    });
 
-    // 4. Sanitize each tier separately — strip prompt injections, filter off-topic.
-    const { sanitized: authoritativePayload, stats } = sanitizeDataPayload(
-      authoritative,
-      {
-        maxItems: 30,
-        requireDomainRelevance:
-          this.domainConfig.relevanceFilteredCortices.has(cortexName),
-        keywords: this.domainConfig.keywords,
-      },
-    );
-    const webPayload =
-      webContext.length > 0
-        ? sanitizeDataPayload(webContext, {
-            maxItems: 10,
-            requireDomainRelevance:
-              this.domainConfig.relevanceFilteredCortices.has(cortexName),
-            keywords: this.domainConfig.keywords,
-          }).sanitized
-        : "";
-
-    const dataPayload = webPayload
-      ? `## AUTHORITATIVE DATA (from internal SQL + structured sources — scoped by query params)\n${authoritativePayload}\n\n## WEB CONTEXT (unfiltered web-search snippets — advisory only, may include out-of-scope items)\n${webPayload}\n\nIMPORTANT: Ground every finding in AUTHORITATIVE DATA. Use WEB CONTEXT only to cross-reference or flag uncertainty — never cite a specific launch/event/number that appears ONLY in WEB CONTEXT as if it were in scope.`
-      : authoritativePayload;
-
-    if (stats.injections > 0) {
+    if (payload.injections > 0) {
       logger.warn(
         {
           cortex: cortexName,
-          injections: stats.injections,
-          filtered: stats.filtered,
+          injections: payload.injections,
+          filtered: payload.filtered,
         },
         "Guardrails: prompt injection patterns stripped from data",
       );
-    }
-
-    // 5. Build context from previous findings (also sanitized).
-    let contextBlock = "";
-    if (input.context?.previousFindings?.length) {
-      const cleanFindings = input.context.previousFindings.map((f) => ({
-        title: sanitizeText(f.title).clean,
-        summary: sanitizeText(f.summary).clean,
-        confidence: f.confidence,
-      }));
-      contextBlock = `\n\nPREVIOUS FINDINGS FROM UPSTREAM CORTICES:\n${JSON.stringify(cleanFindings, null, 2)}`;
     }
 
     // 6. Call LLM with skill body as system prompt.
@@ -195,7 +125,7 @@ export class StandardStrategy implements CortexExecutionStrategy {
     const result = await analyzeCortexData({
       cortexName,
       systemPrompt: skill.body,
-      dataPayload: dataPayload + contextBlock,
+      dataPayload: payload.dataPayload,
       maxFindings,
       enableWebSearch: this.domainConfig.webEnrichedCortices.has(cortexName),
       lang: input.lang,
@@ -217,18 +147,28 @@ export class StandardStrategy implements CortexExecutionStrategy {
     const allRawItems = [...authoritativeData, ...webData];
     if (findings.length === 0 && allRawItems.length > 0) {
       findings.push(
-        buildDataGapFinding(cortexName, {
-          sqlRows: sqlData.length,
-          sourceRows: sourceData.length,
-          webRows: webData.length,
-          sampleKeys: allRawItems[0]
-            ? Object.keys(allRawItems[0] as Record<string, unknown>)
-            : [],
-        }),
+        buildNoFindingMetaFinding(
+          cortexName,
+          {
+            sqlRows: sqlData.length,
+            sourceRows: sourceData.length,
+            webRows: webData.length,
+            sampleKeys: allRawItems[0]
+              ? Object.keys(allRawItems[0] as Record<string, unknown>)
+              : [],
+          },
+          result.diagnostic,
+        ),
       );
       logger.warn(
-        { cortex: cortexName, rawItems: allRawItems.length },
-        "Cortex produced 0 findings despite non-empty data — emitting data-gap meta-finding",
+        {
+          cortex: cortexName,
+          rawItems: allRawItems.length,
+          diagnostic: result.diagnostic,
+        },
+        result.diagnostic
+          ? "Cortex LLM output was rejected despite non-empty data — emitting output-quality meta-finding"
+          : "Cortex produced 0 findings despite non-empty data — emitting data-gap meta-finding",
       );
     }
 
@@ -246,69 +186,6 @@ export class StandardStrategy implements CortexExecutionStrategy {
         model: result.model,
       },
     };
-  }
-
-  private async runSqlHelper(
-    skill: CortexSkill,
-    params: Record<string, unknown>,
-  ): Promise<unknown[]> {
-    const helperName = skill.header.sqlHelper;
-    const helperFn = this.dataProvider[helperName];
-
-    if (!helperFn) {
-      logger.debug(
-        { cortex: skill.header.name, sqlHelper: helperName },
-        "No data provider mapped, cortex will use raw params as data",
-      );
-      return [];
-    }
-
-    // Planner LLMs sometimes emit param keys with leading/trailing whitespace
-    // (e.g. ` rideshare_flag`) which makes the helper silently miss the value.
-    // Trim keys defensively. Deeper divergence from the skill's declared
-    // `params:` frontmatter is a planner-contract concern — logged at DEBUG
-    // because helpers often accept keys outside the declaration (the
-    // frontmatter is a planner hint, not the helper's real signature).
-    const cleanParams: Record<string, unknown> = {};
-    const declared = new Set(Object.keys(skill.header.params));
-    const unknown: string[] = [];
-    for (const [rawKey, value] of Object.entries(params)) {
-      const key = rawKey.trim();
-      if (!key) continue;
-      cleanParams[key] = value;
-      if (declared.size > 0 && !declared.has(key)) unknown.push(key);
-    }
-    if (unknown.length > 0) {
-      logger.debug(
-        {
-          cortex: skill.header.name,
-          sqlHelper: helperName,
-          declared: [...declared],
-          unknown,
-        },
-        "Planner params diverge from skill frontmatter",
-      );
-    }
-
-    try {
-      logger.debug(
-        {
-          cortex: skill.header.name,
-          sqlHelper: helperName,
-          params: cleanParams,
-        },
-        "Calling data provider",
-      );
-      const result = await helperFn(cleanParams);
-      if (Array.isArray(result)) return result;
-      return result == null ? [] : [result as unknown];
-    } catch (err) {
-      logger.error(
-        { cortex: skill.header.name, sqlHelper: helperName, err },
-        "Data provider call failed",
-      );
-      return [];
-    }
   }
 
   /**
@@ -341,43 +218,4 @@ export class StandardStrategy implements CortexExecutionStrategy {
       },
     ];
   }
-}
-
-/**
- * Build a synthetic "data gap" finding — emitted when a cortex received data
- * but produced no findings (usually schema mismatch with the skill's declared
- * inputs). Makes the silence visible to the strategist and to `/api/stats`.
- */
-function buildDataGapFinding(
-  cortexName: string,
-  stats: {
-    sqlRows: number;
-    sourceRows: number;
-    webRows: number;
-    sampleKeys: string[];
-  },
-): CortexFinding {
-  const total = stats.sqlRows + stats.sourceRows + stats.webRows;
-  return {
-    title: `Cortex ${cortexName}: 0 findings from ${total} data items — possible schema mismatch`,
-    summary:
-      `The LLM received ${total} items (${stats.sqlRows} SQL, ${stats.sourceRows} structured sources, ${stats.webRows} web) ` +
-      `but emitted no findings. Likely the skill's declared "Inputs from DATA" contract isn't met by the SQL helper output. ` +
-      `Sample keys present: ${stats.sampleKeys.slice(0, 10).join(", ") || "—"}.`,
-    findingType: ResearchFindingType.Anomaly,
-    urgency: ResearchUrgency.Low,
-    evidence: [
-      {
-        source: "cortex_audit",
-        data: stats,
-        weight: 1.0,
-      },
-    ],
-    // Confidence intentionally above the 0.7 cycle-loop gate so the gap is
-    // visible in persisted findings instead of being silently filtered.
-    confidence: 0.7,
-    impactScore: 3,
-    sourceCortex: cortexName,
-    edges: [],
-  };
 }
