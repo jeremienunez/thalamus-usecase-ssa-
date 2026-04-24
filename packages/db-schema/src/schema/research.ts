@@ -131,7 +131,7 @@ export const researchFinding = pgTable(
     expiresIdx: index("idx_research_finding_expires").on(t.expiresAt),
     // HNSW index on embedding is created in the migration via raw SQL
     // (CREATE INDEX ... USING hnsw (embedding vector_cosine_ops)) — Drizzle
-    // does not model HNSW natively. See migration 0000_init.sql.
+    // does not model HNSW natively. See migration 0001_hnsw_index.sql.
   }),
 );
 

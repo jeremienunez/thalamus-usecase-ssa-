@@ -14,6 +14,29 @@ Producer / maintainer halves of the same knowledge loop: Thalamus creates, Sweep
 
 ---
 
+## Repository Status
+
+This repository is a public architecture extraction of the Thalamus/Sweep system.
+
+Production-grade aspects demonstrated here:
+
+- DAG-based multi-cortex research orchestration
+- runtime-configurable LLM provider chain
+- knowledge graph persistence model
+- Sweep human-in-the-loop review loop
+- architecture gates and test policy
+
+Intentional demo/extraction boundaries:
+
+- authentication middleware is stubbed
+- Docker credentials are local-development defaults
+- some historical SSA naming remains in schema/migration seams
+- runtime hardening roadmap is tracked separately
+
+Do not deploy this repository as-is on a public network without replacing the demo-only seams.
+
+---
+
 ## Quality snapshot
 
 As of `2026-04-23` on `main`:
@@ -138,6 +161,14 @@ Rebuild everything: `make -C docs/specs all` (requires `latexmk` + `pdflatex`; m
 ---
 
 ## Quickstart
+
+Reviewer validation uses exactly one command:
+
+```bash
+pnpm quality:gate
+```
+
+Specialized commands remain available for local iteration:
 
 ```bash
 pnpm install

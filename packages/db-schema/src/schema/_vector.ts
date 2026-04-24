@@ -14,15 +14,36 @@ import { customType } from "drizzle-orm/pg-core";
  * must cast the parameter with `::halfvec` (see repositories).
  */
 export const vector = (name: string, { dimensions }: { dimensions: number }) =>
-  customType<{ data: number[]; driverData: string }>({
+  customType<{ data: number[]; driverData: string | null }>({
     dataType() {
       return `halfvec(${dimensions})`;
     },
     toDriver(value: number[]): string {
       return `[${value.join(",")}]`;
     },
-    fromDriver(value: string): number[] {
-      return value.slice(1, -1).split(",").map(Number);
+    fromDriver(value: string | null): number[] {
+      if (!value) return [];
+
+      const inner =
+        value.startsWith("[") && value.endsWith("]")
+          ? value.slice(1, -1)
+          : value;
+
+      if (!inner.trim()) return [];
+
+      const parsed = inner.split(",").map((part) => {
+        const trimmed = part.trim();
+        if (!trimmed) {
+          throw new Error("Invalid vector driver value");
+        }
+        return Number(trimmed);
+      });
+
+      if (parsed.some((x) => !Number.isFinite(x))) {
+        throw new Error("Invalid vector driver value");
+      }
+
+      return parsed;
     },
   })(name);
 

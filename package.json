@@ -7,6 +7,7 @@
     "arch:check": "bash scripts/check-repository-import-leaks.sh && pnpm exec depcruise --config .dependency-cruiser.js apps/console-api/src --output-type err-long",
     "arch:check:repo": "pnpm exec depcruise --config .dependency-cruiser.js apps packages --output-type err-long && bash scripts/arch-check-thalamus-agnostic.sh",
     "arch:check:agnostic": "bash scripts/arch-check-thalamus-agnostic.sh",
+    "quality:gate": "pnpm typecheck && pnpm arch:check:repo && pnpm dup:check && pnpm test:policy && pnpm spec:check && pnpm test",
     "dup:report": "pnpm exec jscpd --config .jscpd.json apps packages scripts",
     "dup:check": "pnpm exec jscpd --config .jscpd.json --threshold 3 --reporters console --silent apps packages scripts",
     "dup:report:full": "pnpm exec jscpd --gitignore --min-lines 10 --min-tokens 80 --mode strict --reporters console,json,html --output .reports/jscpd-full apps packages scripts",

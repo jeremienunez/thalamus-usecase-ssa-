@@ -64,7 +64,7 @@ export function normalizeFinding(
 
 function safeNumber(val: unknown, fallback: number): number {
   const n = Number(val);
-  return Number.isNaN(n) ? fallback : n;
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function validateEnum<T extends Record<string, string>>(
