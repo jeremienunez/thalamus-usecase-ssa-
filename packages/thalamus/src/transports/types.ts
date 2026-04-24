@@ -6,10 +6,7 @@
  * back to the concrete LlmChatTransport class.
  */
 
-import type {
-  LlmProviderCallOpts,
-  ProviderName,
-} from "./providers/types";
+import type { LlmProviderCallOpts, ProviderName } from "./providers/types";
 
 export interface LlmChatConfig {
   /** System prompt sent as first message */
@@ -23,7 +20,7 @@ export interface LlmChatConfig {
   preferredProvider?: ProviderName;
   /** Runtime per-call overrides forwarded to every provider (each reads
    *  only what it natively supports). */
-  overrides?: Omit<LlmProviderCallOpts, "enableWebSearch">;
+  overrides?: Omit<LlmProviderCallOpts, "enableWebSearch" | "signal">;
 }
 
 export interface LlmResponse {
@@ -32,6 +29,13 @@ export interface LlmResponse {
 }
 
 /** Generic LLM transport — `call(userPrompt) → LlmResponse`. */
+export interface LlmTransportCallOptions {
+  signal?: AbortSignal;
+}
+
 export interface LlmTransport {
-  call(userPrompt: string): Promise<LlmResponse>;
+  call(
+    userPrompt: string,
+    options?: LlmTransportCallOptions,
+  ): Promise<LlmResponse>;
 }

@@ -16,6 +16,7 @@ export interface CortexInput {
   query: string;
   params: Record<string, unknown>;
   cycleId: bigint;
+  signal?: AbortSignal;
   lang?: "fr" | "en";
   mode?: "investment" | "audit";
   context?: {
@@ -86,6 +87,7 @@ export interface Cortex {
  */
 export type DataProviderFn = (
   params: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
 ) => Promise<unknown[]>;
 
 /**

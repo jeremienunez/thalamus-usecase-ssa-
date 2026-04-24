@@ -17,7 +17,9 @@ export class StrategistStrategy implements CortexExecutionStrategy {
   constructor(private readonly domainConfig?: DomainConfig) {}
 
   canHandle(cortexName: string): boolean {
-    return cortexName === (this.domainConfig?.synthesisCortexName ?? "strategist");
+    return (
+      cortexName === (this.domainConfig?.synthesisCortexName ?? "strategist")
+    );
   }
 
   async execute(skill: CortexSkill, input: CortexInput): Promise<CortexOutput> {
@@ -26,7 +28,10 @@ export class StrategistStrategy implements CortexExecutionStrategy {
 
     const prevFindings = input.context?.previousFindings ?? [];
     if (prevFindings.length === 0) {
-      logger.info({ cortex: cortexName }, "No previous findings for strategist");
+      logger.info(
+        { cortex: cortexName },
+        "No previous findings for strategist",
+      );
       return emptyOutput();
     }
 
@@ -49,6 +54,7 @@ export class StrategistStrategy implements CortexExecutionStrategy {
       sourcingRules: this.domainConfig?.sourcingRules,
       entityTypes: this.domainConfig?.entityTypes,
       modeInstructions: this.domainConfig?.modeInstructions,
+      signal: input.signal,
     });
 
     const findings = result.findings.map((f) =>

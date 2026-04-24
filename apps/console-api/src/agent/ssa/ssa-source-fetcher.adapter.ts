@@ -6,15 +6,13 @@
  */
 
 import { fetchSourcesForCortex } from "./sources";
-import type {
-  SourceFetcherPort,
-  SourceResult,
-} from "@interview/thalamus";
+import type { SourceFetcherPort, SourceResult } from "@interview/thalamus";
 
 export class SsaSourceFetcherAdapter implements SourceFetcherPort {
   async fetchForCortex(
     cortexName: string,
     params: Record<string, unknown>,
+    _options?: { signal?: AbortSignal },
   ): Promise<SourceResult[]> {
     return fetchSourcesForCortex(cortexName, params);
   }

@@ -26,7 +26,6 @@ export { ThalamusPlanner } from "./services/thalamus-planner.service";
 export { ThalamusDAGExecutor } from "./services/thalamus-executor.service";
 export { ResearchGraphService } from "./services/research-graph.service";
 
-
 // Cortices
 export { CortexExecutor } from "./cortices/executor";
 export { CortexRegistry } from "./cortices/registry";
@@ -40,7 +39,10 @@ export type {
   DemoteEdgeInput,
   QueryFilter,
 } from "./cortices/confidence";
-export { FieldCorrelator, LATENCY_BUDGET_MS } from "./cortices/field-correlation";
+export {
+  FieldCorrelator,
+  LATENCY_BUDGET_MS,
+} from "./cortices/field-correlation";
 export type {
   Priority,
   FieldEvent,
@@ -90,9 +92,14 @@ export type {
 export { DEFAULT_NANO_SWARM_PROFILE } from "./prompts/nano-swarm.prompt";
 
 // Transports
-export { createLlmTransport } from "./transports/llm-chat";
+export { createLlmTransport, LlmUnavailableError } from "./transports/llm-chat";
 export { createLlmTransportWithMode } from "./transports/factory";
-export type { LlmChatConfig, LlmResponse, LlmTransport } from "./transports/types";
+export type {
+  LlmChatConfig,
+  LlmResponse,
+  LlmTransport,
+  LlmTransportCallOptions,
+} from "./transports/types";
 export {
   OpenAIWebSearchAdapter,
   NullWebSearchAdapter,
@@ -100,10 +107,7 @@ export {
 
 // Ports
 export type { WebSearchPort } from "./ports/web-search.port";
-export type {
-  EntityCatalogPort,
-  EntityRef,
-} from "./ports/entity-catalog.port";
+export type { EntityCatalogPort, EntityRef } from "./ports/entity-catalog.port";
 export { NoopEntityCatalog } from "./entities/noop-entity-catalog";
 export type {
   SourceFetcherPort,
@@ -114,10 +118,7 @@ export type { EmbedderPort } from "./ports/embedder.port";
 export { NullEmbedder } from "./entities/null-embedder";
 
 // Cortex execution strategies (extension points)
-export {
-  StandardStrategy,
-  StrategistStrategy,
-} from "./cortices/strategies";
+export { StandardStrategy, StrategistStrategy } from "./cortices/strategies";
 export type { CortexExecutionStrategy } from "./cortices/strategies";
 
 // Repositories

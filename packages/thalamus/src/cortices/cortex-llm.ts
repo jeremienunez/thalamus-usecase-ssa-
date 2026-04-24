@@ -9,7 +9,10 @@
  * This helper handles step 2-3.
  */
 
-import { createLlmTransport } from "../transports/llm-chat";
+import {
+  createLlmTransport,
+  LlmUnavailableError,
+} from "../transports/llm-chat";
 import type { ProviderName } from "../transports/providers";
 import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJsonObject } from "@interview/shared/utils";
@@ -42,6 +45,7 @@ export interface CortexLlmInput {
     audit?: string;
     investment?: string;
   };
+  signal?: AbortSignal;
 }
 
 /**
@@ -200,7 +204,9 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
   });
 
   try {
-    const response = await transport.call(userPrompt);
+    const response = input.signal
+      ? await transport.call(userPrompt, { signal: input.signal })
+      : await transport.call(userPrompt);
     const parsedResponse = parseCortexResponse(response.content);
 
     logger.debug(
@@ -317,6 +323,8 @@ export type CortexLlmStatus =
 export type CortexLlmDiagnostic = {
   kind: Exclude<CortexLlmStatus, "ok" | "empty_valid">;
   reason: string;
+  attemptedProviders?: string[];
+  providerFailures?: Array<{ provider: string; message: string }>;
   repeatedUnit?: string;
   repeatedCount?: number;
 };
@@ -390,6 +398,14 @@ function invalidCortexResponse(reason: string): {
 function diagnosticFromError(err: unknown): CortexLlmDiagnostic {
   const message = err instanceof Error ? err.message : String(err);
   const name = err instanceof Error ? err.name : "";
+  if (err instanceof LlmUnavailableError) {
+    return {
+      kind: "provider_unavailable",
+      reason: err.message,
+      attemptedProviders: err.attemptedProviders,
+      providerFailures: err.failures,
+    };
+  }
   const kind: CortexLlmDiagnostic["kind"] =
     name === "AbortError" || /timed?\s*out|timeout/i.test(message)
       ? "timeout"

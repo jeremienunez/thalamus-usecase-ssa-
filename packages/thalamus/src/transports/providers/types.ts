@@ -40,6 +40,9 @@ export interface LlmProviderCallOpts {
   reasoningFormat?: string;
   /** MiniMax OpenAI-compat `reasoning_split`. */
   reasoningSplit?: boolean;
+
+  /** Abort in-flight provider HTTP calls and retry delays. */
+  signal?: AbortSignal;
 }
 
 export interface LlmProvider {

@@ -8,6 +8,7 @@
 
 import { createLogger } from "@interview/shared/observability";
 import type { WebSearchPort } from "../ports/web-search.port";
+import { isAbortError, throwIfAborted } from "./abort";
 
 const logger = createLogger("openai-web-search");
 
@@ -17,8 +18,13 @@ export class OpenAIWebSearchAdapter implements WebSearchPort {
     private readonly model: string,
   ) {}
 
-  async search(instruction: string, _query: string): Promise<string> {
+  async search(
+    instruction: string,
+    _query: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<string> {
     try {
+      throwIfAborted(options?.signal);
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
@@ -30,6 +36,7 @@ export class OpenAIWebSearchAdapter implements WebSearchPort {
           tools: [{ type: "web_search_preview" }],
           input: instruction,
         }),
+        ...(options?.signal ? { signal: options.signal } : {}),
       });
 
       if (!response.ok) {
@@ -49,6 +56,7 @@ export class OpenAIWebSearchAdapter implements WebSearchPort {
 
       return text;
     } catch (err) {
+      if (isAbortError(err)) throw err;
       logger.debug({ err }, "Web search fallback failed");
       return "";
     }
@@ -56,7 +64,12 @@ export class OpenAIWebSearchAdapter implements WebSearchPort {
 }
 
 export class NullWebSearchAdapter implements WebSearchPort {
-  async search(_instruction: string, _query: string): Promise<string> {
+  async search(
+    _instruction: string,
+    _query: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<string> {
+    throwIfAborted(options?.signal);
     return "";
   }
 }

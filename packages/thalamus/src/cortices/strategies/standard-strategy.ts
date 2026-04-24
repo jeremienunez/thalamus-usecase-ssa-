@@ -62,12 +62,14 @@ export class StandardStrategy implements CortexExecutionStrategy {
       skill,
       params: input.params,
       dataProvider: this.dataProvider,
+      signal: input.signal,
       logger,
     });
     const sourceData = await fetchStructuredSources({
       sourceFetcher: this.sourceFetcher,
       cortexName,
       params: input.params,
+      signal: input.signal,
       logger,
     });
 
@@ -84,7 +86,11 @@ export class StandardStrategy implements CortexExecutionStrategy {
           : "Enriching SQL data with web search",
       );
 
-      webData = await this.webSearchFallback(input.query, cortexName);
+      webData = await this.webSearchFallback(
+        input.query,
+        cortexName,
+        input.signal,
+      );
     }
 
     const authoritativeData = [...sqlData, ...sourceData];
@@ -133,6 +139,7 @@ export class StandardStrategy implements CortexExecutionStrategy {
       sourcingRules: this.domainConfig.sourcingRules,
       entityTypes: this.domainConfig.entityTypes,
       modeInstructions: this.domainConfig.modeInstructions,
+      signal: input.signal,
     });
 
     // 7. Validate and normalize findings.
@@ -195,13 +202,16 @@ export class StandardStrategy implements CortexExecutionStrategy {
   private async webSearchFallback(
     query: string,
     cortexName: string,
+    signal?: AbortSignal,
   ): Promise<unknown[]> {
     const { searchQuery, instruction } = this.domainConfig.webSearchPrompt(
       query,
       cortexName,
     );
 
-    const text = await this.webSearch.search(instruction, searchQuery);
+    const text = signal
+      ? await this.webSearch.search(instruction, searchQuery, { signal })
+      : await this.webSearch.search(instruction, searchQuery);
     if (!text) return [];
 
     logger.info(

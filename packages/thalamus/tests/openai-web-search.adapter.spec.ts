@@ -15,7 +15,9 @@ vi.mock("@interview/shared/observability", () => ({
   createLogger: () => logger,
 }));
 
-function readBody(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> {
+function readBody(
+  fetchMock: ReturnType<typeof vi.fn>,
+): Record<string, unknown> {
   const request = fetchMock.mock.calls[0]?.[1];
   if (!request || typeof request !== "object" || !("body" in request)) {
     return {};
@@ -87,7 +89,9 @@ describe("OpenAIWebSearchAdapter", () => {
     vi.stubGlobal("fetch", fetchMock);
     const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search");
 
-    await expect(adapter.search("Search the web", "ignored query")).resolves.toBe("");
+    await expect(
+      adapter.search("Search the web", "ignored query"),
+    ).resolves.toBe("");
   });
 
   it("returns an empty string when the Responses payload does not contain output messages", async () => {
@@ -98,7 +102,9 @@ describe("OpenAIWebSearchAdapter", () => {
     vi.stubGlobal("fetch", fetchMock);
     const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search");
 
-    await expect(adapter.search("Search the web", "ignored query")).resolves.toBe("");
+    await expect(
+      adapter.search("Search the web", "ignored query"),
+    ).resolves.toBe("");
   });
 
   it("returns an empty string when fetch throws", async () => {
@@ -108,12 +114,36 @@ describe("OpenAIWebSearchAdapter", () => {
     vi.stubGlobal("fetch", fetchMock);
     const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search");
 
-    await expect(adapter.search("Search the web", "ignored query")).resolves.toBe("");
+    await expect(
+      adapter.search("Search the web", "ignored query"),
+    ).resolves.toBe("");
+  });
+
+  it("passes AbortSignal to fetch and propagates aborts", async () => {
+    const abortError = new Error("cancelled");
+    abortError.name = "AbortError";
+    const fetchMock = vi.fn(async () => {
+      throw abortError;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search");
+    const controller = new AbortController();
+
+    await expect(
+      adapter.search("Search the web", "ignored query", {
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow("cancelled");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      signal: controller.signal,
+    });
   });
 
   it("returns an empty string from the null adapter", async () => {
     const adapter = new NullWebSearchAdapter();
 
-    await expect(adapter.search("Search the web", "ignored query")).resolves.toBe("");
+    await expect(
+      adapter.search("Search the web", "ignored query"),
+    ).resolves.toBe("");
   });
 });

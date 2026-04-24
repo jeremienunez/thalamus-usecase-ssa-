@@ -5,7 +5,11 @@ import {
   StaticConfigProvider,
 } from "@interview/shared/config";
 import { setThalamusTransportConfigProvider } from "../src/config/runtime-config";
-import { createLlmTransport, LlmChatTransport } from "../src/transports/llm-chat";
+import {
+  createLlmTransport,
+  LlmChatTransport,
+  LlmUnavailableError,
+} from "../src/transports/llm-chat";
 import type {
   LlmProvider,
   LlmProviderCallOpts,
@@ -34,9 +38,11 @@ function buildProvider(name: ProviderName, enabled = true): MockProvider {
     name,
     refreshConfig: vi.fn(async () => undefined),
     isEnabled: vi.fn(() => enabled),
-    call: vi.fn(async (_system: string, _user: string, _opts: LlmProviderCallOpts) => {
-      return `${name}-ok`;
-    }),
+    call: vi.fn(
+      async (_system: string, _user: string, _opts: LlmProviderCallOpts) => {
+        return `${name}-ok`;
+      },
+    ),
   };
 }
 
@@ -45,6 +51,8 @@ afterEach(() => {
     new StaticConfigProvider(DEFAULT_THALAMUS_TRANSPORT_CONFIG),
   );
   Reflect.set(LlmChatTransport, "kimiConsecutiveFailures", 0);
+  Reflect.set(LlmChatTransport, "kimiCircuitState", "closed");
+  Reflect.set(LlmChatTransport, "kimiCircuitOpenedAt", null);
   vi.useRealTimers();
   vi.restoreAllMocks();
   logger.debug.mockReset();
@@ -65,7 +73,9 @@ describe("LlmChatTransport", () => {
       },
     });
 
-    const providers = Reflect.get(transport, "providers") as Array<{ name: string }>;
+    const providers = Reflect.get(transport, "providers") as Array<{
+      name: string;
+    }>;
     const config = Reflect.get(transport, "config") as Record<string, unknown>;
 
     expect(transport).toBeInstanceOf(LlmChatTransport);
@@ -192,7 +202,74 @@ describe("LlmChatTransport", () => {
     );
   });
 
-  it("returns a none response when every enabled provider fails", async () => {
+  it("allows one half-open Kimi probe after cooldown and closes on success", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-22T00:00:00Z"));
+    const kimi = buildProvider("kimi");
+    const openai = buildProvider("openai");
+
+    kimi.call
+      .mockRejectedValueOnce(new Error("kimi down 1"))
+      .mockRejectedValueOnce(new Error("kimi down 2"))
+      .mockRejectedValueOnce(new Error("kimi down 3"))
+      .mockResolvedValueOnce("kimi recovered");
+    openai.call.mockResolvedValue("openai fallback");
+
+    const transport = new LlmChatTransport(
+      {
+        systemPrompt: "SYSTEM",
+        maxRetries: 1,
+      },
+      [kimi, openai],
+    );
+
+    await transport.call("first");
+    await transport.call("second");
+    await transport.call("third");
+    expect(Reflect.get(LlmChatTransport, "kimiCircuitState")).toBe("open");
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await expect(transport.call("after cooldown")).resolves.toEqual({
+      content: "kimi recovered",
+      provider: "kimi",
+    });
+
+    expect(kimi.call).toHaveBeenCalledTimes(4);
+    expect(openai.call).toHaveBeenCalledTimes(3);
+    expect(Reflect.get(LlmChatTransport, "kimiCircuitState")).toBe("closed");
+    expect(Reflect.get(LlmChatTransport, "kimiConsecutiveFailures")).toBe(0);
+  });
+
+  it("reopens Kimi circuit when the half-open probe fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-22T00:00:00Z"));
+    const kimi = buildProvider("kimi");
+    const openai = buildProvider("openai");
+
+    kimi.call.mockRejectedValue(new Error("still down"));
+    openai.call.mockResolvedValue("openai fallback");
+
+    const transport = new LlmChatTransport(
+      {
+        systemPrompt: "SYSTEM",
+        maxRetries: 1,
+      },
+      [kimi, openai],
+    );
+
+    await transport.call("first");
+    await transport.call("second");
+    await transport.call("third");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await transport.call("half-open");
+    await transport.call("still cooling down");
+
+    expect(kimi.call).toHaveBeenCalledTimes(4);
+    expect(openai.call).toHaveBeenCalledTimes(5);
+    expect(Reflect.get(LlmChatTransport, "kimiCircuitState")).toBe("open");
+  });
+
+  it("throws an unavailable error when every enabled provider fails", async () => {
     const local = buildProvider("local");
     const minimax = buildProvider("minimax");
     const openai = buildProvider("openai");
@@ -209,18 +286,92 @@ describe("LlmChatTransport", () => {
       [local, minimax, openai],
     );
 
-    const result = await transport.call("USER");
+    const error = await transport.call("USER").catch((err: unknown) => err);
 
-    expect(result).toEqual({
-      content: "",
-      provider: "none",
+    expect(error).toMatchObject({
+      name: "LlmUnavailableError",
+      attemptedProviders: ["local", "minimax", "openai"],
+      failures: [
+        { provider: "local", message: "local down" },
+        { provider: "minimax", message: "minimax down" },
+        { provider: "openai", message: "openai down" },
+      ],
     });
+    expect(error).toBeInstanceOf(LlmUnavailableError);
+
     expect(logger.warn).toHaveBeenCalledWith(
       { error: "local down" },
       "Local LLM call failed — falling through to remote providers",
     );
     expect(logger.warn).toHaveBeenCalledWith("OpenAI fallback also failed");
     expect(minimax.call).toHaveBeenCalledOnce();
+  });
+
+  it("throws an unavailable error when every provider is disabled", async () => {
+    const local = buildProvider("local", false);
+    const kimi = buildProvider("kimi", false);
+    const openai = buildProvider("openai", false);
+
+    const transport = new LlmChatTransport(
+      {
+        systemPrompt: "SYSTEM",
+        maxRetries: 1,
+      },
+      [local, kimi, openai],
+    );
+
+    await expect(transport.call("USER")).rejects.toMatchObject({
+      attemptedProviders: [],
+      failures: [
+        { provider: "local", message: "provider disabled" },
+        { provider: "kimi", message: "provider disabled" },
+        { provider: "openai", message: "provider disabled" },
+      ],
+    });
+    expect(local.call).not.toHaveBeenCalled();
+    expect(kimi.call).not.toHaveBeenCalled();
+    expect(openai.call).not.toHaveBeenCalled();
+  });
+
+  it("forwards AbortSignal to provider calls", async () => {
+    const openai = buildProvider("openai");
+    const controller = new AbortController();
+    const transport = new LlmChatTransport(
+      {
+        systemPrompt: "SYSTEM",
+        maxRetries: 1,
+      },
+      [openai],
+    );
+
+    await expect(
+      transport.call("USER", { signal: controller.signal }),
+    ).resolves.toEqual({
+      content: "openai-ok",
+      provider: "openai",
+    });
+
+    expect(openai.call).toHaveBeenCalledWith("SYSTEM", "USER", {
+      enableWebSearch: undefined,
+      signal: controller.signal,
+    });
+  });
+
+  it("does not retry aborted provider calls", async () => {
+    const openai = buildProvider("openai");
+    const abort = new Error("cancelled by test");
+    abort.name = "AbortError";
+    openai.call.mockRejectedValue(abort);
+    const transport = new LlmChatTransport(
+      {
+        systemPrompt: "SYSTEM",
+        maxRetries: 3,
+      },
+      [openai],
+    );
+
+    await expect(transport.call("USER")).rejects.toThrow("cancelled by test");
+    expect(openai.call).toHaveBeenCalledOnce();
   });
 
   it("parses JSON objects from markdown-wrapped content", () => {

@@ -13,6 +13,7 @@ export class NoopSourceFetcher implements SourceFetcherPort {
   async fetchForCortex(
     _cortexName: string,
     _params: Record<string, unknown>,
+    _options?: { signal?: AbortSignal },
   ): Promise<SourceResult[]> {
     return [];
   }

@@ -11,11 +11,16 @@
  * The orchestrator is closed for modification, open for extension.
  */
 
-import { retry } from "@interview/shared/utils";
 import { createLogger } from "@interview/shared/observability";
 import type { z } from "zod";
-import type { LlmChatConfig, LlmResponse, LlmTransport } from "./types";
+import type {
+  LlmChatConfig,
+  LlmResponse,
+  LlmTransport,
+  LlmTransportCallOptions,
+} from "./types";
 import { getThalamusTransportConfig } from "../config/transport-config";
+import { abortableDelay, isAbortError, throwIfAborted } from "./abort";
 import {
   KimiProvider,
   LocalProvider,
@@ -28,6 +33,23 @@ export type { LlmChatConfig, LlmResponse, LlmTransport };
 
 const logger = createLogger("llm-chat-transport");
 
+export type LlmProviderFailure = {
+  provider: string;
+  message: string;
+};
+
+export class LlmUnavailableError extends Error {
+  constructor(
+    public readonly attemptedProviders: string[],
+    public readonly failures: LlmProviderFailure[],
+  ) {
+    super("All LLM providers failed or were unavailable");
+    this.name = "LlmUnavailableError";
+  }
+}
+
+type CircuitState = "closed" | "open" | "half_open";
+
 // ============================================================================
 // LlmChatTransport — orchestrator
 // ============================================================================
@@ -35,7 +57,10 @@ const logger = createLogger("llm-chat-transport");
 export class LlmChatTransport {
   /** Shared across ALL instances — if Kimi is down, we don't spam it */
   private static kimiConsecutiveFailures = 0;
+  private static kimiCircuitState: CircuitState = "closed";
+  private static kimiCircuitOpenedAt: number | null = null;
   private static readonly CIRCUIT_BREAKER_THRESHOLD = 3;
+  private static readonly KIMI_CIRCUIT_COOLDOWN_MS = 60_000;
 
   private readonly providers: LlmProvider[];
   private readonly config: LlmChatConfig;
@@ -47,10 +72,14 @@ export class LlmChatTransport {
 
   /**
    * Walk providers in priority order, apply retry + circuit-breaker policy,
-   * return the first success. Falls back to `{ content: "", provider: "none" }`
-   * when every enabled provider errors out.
+   * return the first success. Throws `LlmUnavailableError` when no provider
+   * can produce a response.
    */
-  async call(userPrompt: string): Promise<LlmResponse> {
+  async call(
+    userPrompt: string,
+    options?: LlmTransportCallOptions,
+  ): Promise<LlmResponse> {
+    throwIfAborted(options?.signal);
     // Reorder chain so the preferred provider (if set and enabled) is
     // tried first. Fallback order preserved for the rest.
     const ordered = this.config.preferredProvider
@@ -65,22 +94,35 @@ export class LlmChatTransport {
       : this.providers;
 
     await Promise.all(ordered.map((provider) => provider.refreshConfig?.()));
+    throwIfAborted(options?.signal);
     const transportConfig = await getThalamusTransportConfig();
     const maxRetries = this.config.maxRetries ?? transportConfig.llmMaxRetries;
+    const failures: LlmProviderFailure[] = [];
+    const attemptedProviders: string[] = [];
 
     for (const provider of ordered) {
-      if (!provider.isEnabled()) continue;
+      if (!provider.isEnabled()) {
+        failures.push({
+          provider: provider.name,
+          message: "provider disabled",
+        });
+        continue;
+      }
 
       // Circuit breaker: skip Kimi after N consecutive failures
       if (
         provider.name === "kimi" &&
-        LlmChatTransport.kimiConsecutiveFailures >=
-          LlmChatTransport.CIRCUIT_BREAKER_THRESHOLD
+        LlmChatTransport.shouldSkipKimi(Date.now())
       ) {
+        failures.push({
+          provider: provider.name,
+          message: "Kimi circuit breaker open",
+        });
         continue;
       }
 
       try {
+        throwIfAborted(options?.signal);
         // Model override only applies to the preferred provider — when
         // the chain falls through to a different backend, reusing e.g.
         // `kimi-k2-turbo-preview` on OpenAI yields a guaranteed 404.
@@ -94,16 +136,18 @@ export class LlmChatTransport {
         const callOverrides = isPreferred
           ? overrides
           : (({ model: _drop, ...rest }) => rest)(overrides);
-        const content = await retry(
+        attemptedProviders.push(provider.name);
+        const content = await this.retryProviderCall(
           () =>
             provider.call(this.config.systemPrompt, userPrompt, {
               ...callOverrides,
               enableWebSearch: this.config.enableWebSearch,
+              ...(options?.signal ? { signal: options.signal } : {}),
             }),
           {
             maxAttempts: maxRetries,
             delayMs: provider.name === "local" ? 500 : 1000,
-            backoff: "exponential",
+            signal: options?.signal,
             onRetry:
               provider.name === "kimi"
                 ? (attempt, error) => {
@@ -117,23 +161,24 @@ export class LlmChatTransport {
         );
 
         if (provider.name === "kimi") {
-          LlmChatTransport.kimiConsecutiveFailures = 0;
+          LlmChatTransport.recordKimiSuccess();
         }
         return { content, provider: provider.name };
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push({ provider: provider.name, message });
+        if (isAbortError(error)) throw error;
+
         if (provider.name === "kimi") {
-          LlmChatTransport.kimiConsecutiveFailures++;
-          if (
-            LlmChatTransport.kimiConsecutiveFailures >=
-            LlmChatTransport.CIRCUIT_BREAKER_THRESHOLD
-          ) {
+          const tripped = LlmChatTransport.recordKimiFailure(Date.now());
+          if (tripped) {
             logger.warn(
               "Kimi K2 circuit breaker tripped — switching to OpenAI",
             );
           }
         } else if (provider.name === "local") {
           logger.warn(
-            { error: (error as Error).message },
+            { error: message },
             "Local LLM call failed — falling through to remote providers",
           );
         } else if (provider.name === "openai") {
@@ -142,7 +187,67 @@ export class LlmChatTransport {
       }
     }
 
-    return { content: "", provider: "none" };
+    throw new LlmUnavailableError(attemptedProviders, failures);
+  }
+
+  private async retryProviderCall<T>(
+    fn: () => Promise<T>,
+    options: {
+      maxAttempts: number;
+      delayMs: number;
+      signal?: AbortSignal;
+      onRetry?: (attempt: number, error: Error) => void;
+    },
+  ): Promise<T> {
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
+      throwIfAborted(options.signal);
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (isAbortError(lastError)) throw lastError;
+        if (attempt < options.maxAttempts) {
+          options.onRetry?.(attempt, lastError);
+          await abortableDelay(
+            options.delayMs * Math.pow(2, attempt - 1),
+            options.signal,
+          );
+        }
+      }
+    }
+
+    throw lastError ?? new Error("LLM provider failed");
+  }
+
+  private static shouldSkipKimi(now: number): boolean {
+    if (LlmChatTransport.kimiCircuitState !== "open") return false;
+    const openedAt = LlmChatTransport.kimiCircuitOpenedAt ?? now;
+    if (now - openedAt >= LlmChatTransport.KIMI_CIRCUIT_COOLDOWN_MS) {
+      LlmChatTransport.kimiCircuitState = "half_open";
+      return false;
+    }
+    return true;
+  }
+
+  private static recordKimiSuccess(): void {
+    LlmChatTransport.kimiConsecutiveFailures = 0;
+    LlmChatTransport.kimiCircuitState = "closed";
+    LlmChatTransport.kimiCircuitOpenedAt = null;
+  }
+
+  private static recordKimiFailure(now: number): boolean {
+    LlmChatTransport.kimiConsecutiveFailures++;
+    if (
+      LlmChatTransport.kimiCircuitState === "half_open" ||
+      LlmChatTransport.kimiConsecutiveFailures >=
+        LlmChatTransport.CIRCUIT_BREAKER_THRESHOLD
+    ) {
+      LlmChatTransport.kimiCircuitState = "open";
+      LlmChatTransport.kimiCircuitOpenedAt = now;
+      return true;
+    }
+    return false;
   }
 
   /**

@@ -32,5 +32,6 @@ export interface SourceFetcherPort {
   fetchForCortex(
     cortexName: string,
     params: Record<string, unknown>,
+    options?: { signal?: AbortSignal },
   ): Promise<SourceResult[]>;
 }

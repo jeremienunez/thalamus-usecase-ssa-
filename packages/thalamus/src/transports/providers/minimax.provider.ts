@@ -15,6 +15,7 @@ import {
   getMinimaxConfig,
   getMinimaxConfigSnapshot,
 } from "../../config/enrichment";
+import { throwIfAborted } from "../abort";
 import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
@@ -37,7 +38,9 @@ export class MiniMaxProvider implements LlmProvider {
     userPrompt: string,
     opts: LlmProviderCallOpts,
   ): Promise<string> {
+    throwIfAborted(opts.signal);
     await this.refreshConfig();
+    throwIfAborted(opts.signal);
     const config = this.config;
     const model = opts.model ?? config.model;
     const maxTokens =
@@ -67,6 +70,7 @@ export class MiniMaxProvider implements LlmProvider {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      ...(opts.signal ? { signal: opts.signal } : {}),
     });
 
     if (!response.ok) {

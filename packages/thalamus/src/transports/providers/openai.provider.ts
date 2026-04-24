@@ -11,6 +11,7 @@ import {
   getEnrichmentFallbackConfig,
   getEnrichmentFallbackConfigSnapshot,
 } from "../../config/enrichment";
+import { throwIfAborted } from "../abort";
 import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
@@ -33,7 +34,9 @@ export class OpenAIProvider implements LlmProvider {
     userPrompt: string,
     opts: LlmProviderCallOpts,
   ): Promise<string> {
+    throwIfAborted(opts.signal);
     await this.refreshConfig();
+    throwIfAborted(opts.signal);
     const config = this.config;
     const model = opts.model ?? config.model;
     // Responses API uses nested reasoning.effort; valid for gpt-5.4 family
@@ -70,6 +73,7 @@ export class OpenAIProvider implements LlmProvider {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      ...(opts.signal ? { signal: opts.signal } : {}),
     });
 
     const rawBody = await response.text();

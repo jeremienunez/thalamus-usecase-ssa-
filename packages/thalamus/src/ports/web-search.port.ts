@@ -14,5 +14,9 @@ export interface WebSearchPort {
    * @param query - original search query (for logging / provider metadata)
    * @returns raw text content, or `""` if the search produced nothing
    */
-  search(instruction: string, query: string): Promise<string>;
+  search(
+    instruction: string,
+    query: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<string>;
 }

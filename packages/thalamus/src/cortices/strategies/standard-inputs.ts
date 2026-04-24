@@ -1,6 +1,7 @@
 import type { CortexSkill } from "../registry";
 import type { CortexDataProvider } from "../types";
 import type { SourceFetcherPort } from "../../ports/source-fetcher.port";
+import { isAbortError, throwIfAborted } from "../../transports/abort";
 
 type StrategyLogger = {
   debug: (obj: unknown, msg?: string) => void;
@@ -12,11 +13,13 @@ export async function runCortexSqlHelper({
   skill,
   params,
   dataProvider,
+  signal,
   logger,
 }: {
   skill: CortexSkill;
   params: Record<string, unknown>;
   dataProvider: CortexDataProvider;
+  signal?: AbortSignal;
   logger: StrategyLogger;
 }): Promise<unknown[]> {
   const helperName = skill.header.sqlHelper;
@@ -54,6 +57,7 @@ export async function runCortexSqlHelper({
   }
 
   try {
+    throwIfAborted(signal);
     logger.debug(
       {
         cortex: skill.header.name,
@@ -62,10 +66,13 @@ export async function runCortexSqlHelper({
       },
       "Calling data provider",
     );
-    const result = await helperFn(cleanParams);
+    const result = signal
+      ? await helperFn(cleanParams, { signal })
+      : await helperFn(cleanParams);
     if (Array.isArray(result)) return result;
     return result == null ? [] : [result as unknown];
   } catch (err) {
+    if (isAbortError(err)) throw err;
     logger.error(
       { cortex: skill.header.name, sqlHelper: helperName, err },
       "Data provider call failed",
@@ -78,15 +85,20 @@ export async function fetchStructuredSources({
   sourceFetcher,
   cortexName,
   params,
+  signal,
   logger,
 }: {
   sourceFetcher: SourceFetcherPort;
   cortexName: string;
   params: Record<string, unknown>;
+  signal?: AbortSignal;
   logger: StrategyLogger;
 }): Promise<Record<string, unknown>[]> {
   try {
-    const sources = await sourceFetcher.fetchForCortex(cortexName, params);
+    throwIfAborted(signal);
+    const sources = signal
+      ? await sourceFetcher.fetchForCortex(cortexName, params, { signal })
+      : await sourceFetcher.fetchForCortex(cortexName, params);
     if (sources.length > 0) {
       logger.info(
         {
@@ -107,6 +119,7 @@ export async function fetchStructuredSources({
         : { value: s.data }),
     }));
   } catch (err) {
+    if (isAbortError(err)) throw err;
     logger.debug(
       { cortex: cortexName, err },
       "External source fetch failed (non-blocking)",

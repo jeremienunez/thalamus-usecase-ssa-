@@ -69,7 +69,13 @@ async function expectTimeoutAfter(
   );
 
   const execute = typedSpy<CortexExecutor["execute"]>();
-  execute.mockImplementation(async () => new Promise<CortexOutput>(() => {}));
+  let capturedSignal: AbortSignal | undefined;
+  execute.mockImplementation(
+    async (_cortexName, input) =>
+      new Promise<CortexOutput>(() => {
+        capturedSignal = input.signal;
+      }),
+  );
 
   const service = new ThalamusDAGExecutor(
     fakePort<CortexExecutor>({ execute }),
@@ -99,6 +105,7 @@ async function expectTimeoutAfter(
     findings: [],
     metadata: { tokensUsed: 0, duration: 0, model: "error" },
   });
+  expect(capturedSignal?.aborted).toBe(true);
   return result;
 }
 

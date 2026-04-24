@@ -183,6 +183,7 @@ export class ThalamusDAGExecutor {
       }));
     });
 
+    const controller = new AbortController();
     const input: CortexInput = {
       query,
       params:
@@ -190,6 +191,7 @@ export class ThalamusDAGExecutor {
           ? { ...node.params, userId }
           : node.params,
       cycleId,
+      signal: controller.signal,
       lang,
       mode,
       context: previousFindings.length > 0 ? { previousFindings } : undefined,
@@ -220,18 +222,21 @@ export class ThalamusDAGExecutor {
       cycleId: cycleId.toString(),
       dependsOn: node.dependsOn,
     });
+    const timeoutError = new Error(
+      `Cortex ${node.cortex} timed out after ${timeout}ms`,
+    );
+    timeoutError.name = "AbortError";
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const executionPromise = this.cortexExecutor.execute(node.cortex, input);
     try {
       const result = await Promise.race([
-        this.cortexExecutor.execute(node.cortex, input),
-        new Promise<CortexOutput>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(`Cortex ${node.cortex} timed out after ${timeout}ms`),
-              ),
-            timeout,
-          ),
-        ),
+        executionPromise,
+        new Promise<CortexOutput>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            controller.abort(timeoutError);
+            reject(timeoutError);
+          }, timeout);
+        }),
       ]);
 
       stepLog(logger, "cortex", "done", {
@@ -251,6 +256,9 @@ export class ThalamusDAGExecutor {
         err: err instanceof Error ? err.message : String(err),
       });
       throw err;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      executionPromise.catch((): void => undefined);
     }
   }
 

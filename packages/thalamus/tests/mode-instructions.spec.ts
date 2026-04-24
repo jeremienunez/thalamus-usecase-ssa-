@@ -20,6 +20,7 @@ import { noopDomainConfig } from "../src/cortices/types";
 // Mock the LLM transport so we can capture the userPrompt without a real call.
 const capturedPrompts: string[] = [];
 vi.mock("../src/transports/llm-chat", () => ({
+  LlmUnavailableError: class LlmUnavailableError extends Error {},
   createLlmTransport: () => ({
     call: async (userPrompt: string) => {
       capturedPrompts.push(userPrompt);

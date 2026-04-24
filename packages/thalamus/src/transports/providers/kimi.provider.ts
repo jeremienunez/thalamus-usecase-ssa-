@@ -11,6 +11,7 @@ import {
   getEnrichmentConfig,
   getEnrichmentConfigSnapshot,
 } from "../../config/enrichment";
+import { abortableDelay, throwIfAborted } from "../abort";
 import { stripThinkingChannels } from "./strip-thinking";
 import type { LlmProvider, LlmProviderCallOpts } from "./types";
 
@@ -37,14 +38,17 @@ export class KimiProvider implements LlmProvider {
     userPrompt: string,
     opts: LlmProviderCallOpts,
   ): Promise<string> {
+    throwIfAborted(opts.signal);
     await this.refreshConfig();
+    throwIfAborted(opts.signal);
     const config = this.config;
     // Global rate limiter — wait if we're calling too fast
     const now = Date.now();
     const elapsed = now - KimiProvider.lastKimiCallMs;
     if (elapsed < KimiProvider.KIMI_MIN_INTERVAL_MS) {
-      await new Promise((r) =>
-        setTimeout(r, KimiProvider.KIMI_MIN_INTERVAL_MS - elapsed),
+      await abortableDelay(
+        KimiProvider.KIMI_MIN_INTERVAL_MS - elapsed,
+        opts.signal,
       );
     }
     KimiProvider.lastKimiCallMs = Date.now();
@@ -88,6 +92,7 @@ export class KimiProvider implements LlmProvider {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      ...(opts.signal ? { signal: opts.signal } : {}),
     });
 
     if (!response.ok) {

@@ -66,7 +66,11 @@ export class CortexExecutor {
   async runSkillFreeform(
     cortexName: string,
     userPrompt: string,
-    opts?: { enableWebSearch?: boolean; maxRetries?: number },
+    opts?: {
+      enableWebSearch?: boolean;
+      maxRetries?: number;
+      signal?: AbortSignal;
+    },
   ): Promise<{ content: string; provider: string }> {
     const skill = this.registry.get(cortexName);
     if (!skill) {
@@ -81,7 +85,9 @@ export class CortexExecutor {
       maxRetries: opts?.maxRetries,
     });
 
-    const response = await transport.call(userPrompt);
+    const response = opts?.signal
+      ? await transport.call(userPrompt, { signal: opts.signal })
+      : await transport.call(userPrompt);
     return { content: response.content, provider: response.provider };
   }
 }

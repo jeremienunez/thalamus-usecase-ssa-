@@ -30,7 +30,9 @@ function setTransportConfig(overrides: Partial<ThalamusTransportConfig>): void {
   );
 }
 
-function readBody(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> {
+function readBody(
+  fetchMock: ReturnType<typeof vi.fn>,
+): Record<string, unknown> {
   const request = fetchMock.mock.calls[0]?.[1];
   if (!request || typeof request !== "object" || !("body" in request)) {
     return {};
@@ -145,6 +147,27 @@ describe("LocalProvider", () => {
     await expect(provider.call("SYSTEM", "USER", {})).rejects.toThrow(
       "Local LLM error 503: busy",
     );
+  });
+
+  it("passes AbortSignal to the local fetch call", async () => {
+    setTransportConfig({
+      localLlmUrl: "http://127.0.0.1:11434",
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "ok" } }],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new LocalProvider();
+    const controller = new AbortController();
+
+    await provider.call("SYSTEM", "USER", { signal: controller.signal });
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      signal: controller.signal,
+    });
   });
 
   it("reports disabled when the configured URL is blank", async () => {
@@ -269,7 +292,9 @@ describe("KimiProvider", () => {
     vi.stubGlobal("fetch", fetchMock);
     const provider = new KimiProvider();
 
-    await expect(provider.call("SYSTEM", "USER", {})).resolves.toBe("plain answer");
+    await expect(provider.call("SYSTEM", "USER", {})).resolves.toBe(
+      "plain answer",
+    );
   });
 
   it("returns an empty string when the API returns no message", async () => {
@@ -309,6 +334,28 @@ describe("KimiProvider", () => {
     await expect(provider.call("SYSTEM", "USER", {})).rejects.toThrow(
       "Kimi K2 API error 429: rate limited",
     );
+  });
+
+  it("passes AbortSignal to the Kimi fetch call", async () => {
+    setTransportConfig({
+      kimiApiUrl: "https://kimi.test/v1/chat/completions",
+      kimiApiKey: "sk-kimi",
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "ok" } }],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new KimiProvider();
+    const controller = new AbortController();
+
+    await provider.call("SYSTEM", "USER", { signal: controller.signal });
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      signal: controller.signal,
+    });
   });
 
   it("reports disabled when no Kimi API key is configured", async () => {
@@ -459,6 +506,28 @@ describe("MiniMaxProvider", () => {
     );
   });
 
+  it("passes AbortSignal to the MiniMax fetch call", async () => {
+    setTransportConfig({
+      minimaxApiUrl: "https://minimax.test/v1/text/chatcompletion_v2",
+      minimaxApiKey: "sk-minimax",
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "ok" } }],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new MiniMaxProvider();
+    const controller = new AbortController();
+
+    await provider.call("SYSTEM", "USER", { signal: controller.signal });
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      signal: controller.signal,
+    });
+  });
+
   it("reports disabled when no MiniMax API key is configured", async () => {
     setTransportConfig({
       minimaxApiKey: "",
@@ -492,7 +561,10 @@ describe("OpenAIProvider", () => {
             {
               type: "message",
               content: [
-                { type: "output_text", text: "<thinking>hidden</thinking>done" },
+                {
+                  type: "output_text",
+                  text: "<thinking>hidden</thinking>done",
+                },
                 { type: "summary_text", text: "ignored" },
               ],
             },
@@ -628,6 +700,33 @@ describe("OpenAIProvider", () => {
     await expect(provider.call("SYSTEM", "USER", {})).rejects.toThrow(
       "OpenAI API error 401: unauthorized",
     );
+  });
+
+  it("passes AbortSignal to the OpenAI fetch call", async () => {
+    setTransportConfig({
+      openaiApiKey: "sk-openai",
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          output: [
+            {
+              type: "message",
+              content: [{ type: "output_text", text: "ok" }],
+            },
+          ],
+        }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new OpenAIProvider();
+    const controller = new AbortController();
+
+    await provider.call("SYSTEM", "USER", { signal: controller.signal });
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      signal: controller.signal,
+    });
   });
 
   it("reports disabled when no OpenAI key is configured", async () => {

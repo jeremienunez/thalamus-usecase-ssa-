@@ -16,7 +16,11 @@ import {
   getThalamusTransportConfig,
   resolveFixturesDir,
 } from "../config/transport-config";
-import type { LlmChatConfig, LlmTransport } from "./types";
+import type {
+  LlmChatConfig,
+  LlmTransport,
+  LlmTransportCallOptions,
+} from "./types";
 
 class ModeAwareLlmTransport implements LlmTransport {
   constructor(
@@ -24,10 +28,12 @@ class ModeAwareLlmTransport implements LlmTransport {
     private readonly real: LlmTransport,
   ) {}
 
-  async call(userPrompt: string) {
+  async call(userPrompt: string, options?: LlmTransportCallOptions) {
     const config = await getThalamusTransportConfig();
     if (config.mode === "cloud") {
-      return this.real.call(userPrompt);
+      return options
+        ? this.real.call(userPrompt, options)
+        : this.real.call(userPrompt);
     }
     const fixtureTransport = new FixtureLlmTransport({
       systemPrompt: this.systemPrompt,
@@ -36,7 +42,9 @@ class ModeAwareLlmTransport implements LlmTransport {
       fixturesDir: resolveFixturesDir(config.fixturesDir),
       fallbackFixture: config.fallbackFixture || undefined,
     });
-    return fixtureTransport.call(userPrompt);
+    return options
+      ? fixtureTransport.call(userPrompt, options)
+      : fixtureTransport.call(userPrompt);
   }
 }
 

@@ -14,7 +14,12 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createLogger } from "@interview/shared/observability";
 import { defaultFixturesDir } from "../config/transport-config";
-import type { LlmResponse, LlmTransport } from "./types";
+import { throwIfAborted } from "./abort";
+import type {
+  LlmResponse,
+  LlmTransport,
+  LlmTransportCallOptions,
+} from "./types";
 
 const logger = createLogger("fixture-transport");
 
@@ -50,7 +55,11 @@ export class FixtureLlmTransport {
     this.fixturesDir = opts.fixturesDir ?? defaultFixturesDir();
   }
 
-  async call(userPrompt: string): Promise<LlmResponse> {
+  async call(
+    userPrompt: string,
+    options?: LlmTransportCallOptions,
+  ): Promise<LlmResponse> {
+    throwIfAborted(options?.signal);
     const hash = hashPrompt(this.opts.systemPrompt, userPrompt);
     const path = join(this.fixturesDir, `${hash}.json`);
 
@@ -58,10 +67,18 @@ export class FixtureLlmTransport {
       if (!existsSync(path)) {
         // Try fallback fixture if configured (tests + in-flight demos).
         if (this.opts.fallbackFixture) {
-          const fallback = join(this.fixturesDir, `${this.opts.fallbackFixture}.json`);
+          const fallback = join(
+            this.fixturesDir,
+            `${this.opts.fallbackFixture}.json`,
+          );
           if (existsSync(fallback)) {
-            const file = JSON.parse(readFileSync(fallback, "utf-8")) as FixtureFile;
-            logger.debug({ hash, fallback: this.opts.fallbackFixture }, "Fallback fixture replayed");
+            const file = JSON.parse(
+              readFileSync(fallback, "utf-8"),
+            ) as FixtureFile;
+            logger.debug(
+              { hash, fallback: this.opts.fallbackFixture },
+              "Fallback fixture replayed",
+            );
             return { content: file.content, provider: file.provider };
           }
         }
@@ -78,13 +95,17 @@ export class FixtureLlmTransport {
 
     // record mode
     if (!this.opts.realTransport) {
-      throw new Error("FixtureLlmTransport in record mode requires realTransport");
+      throw new Error(
+        "FixtureLlmTransport in record mode requires realTransport",
+      );
     }
     if (existsSync(path)) {
       const file = JSON.parse(readFileSync(path, "utf-8")) as FixtureFile;
       return { content: file.content, provider: file.provider };
     }
-    const response = await this.opts.realTransport.call(userPrompt);
+    const response = options
+      ? await this.opts.realTransport.call(userPrompt, options)
+      : await this.opts.realTransport.call(userPrompt);
     mkdirSync(this.fixturesDir, { recursive: true });
     const file: FixtureFile = {
       content: response.content,
