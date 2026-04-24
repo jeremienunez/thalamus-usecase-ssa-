@@ -4,7 +4,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 
 import * as schema from "@interview/db-schema";
-import { SatelliteRepository } from "../../../src/repositories/satellite.repository";
+import { SatelliteFieldEnrichmentRepository } from "../../../src/repositories/satellite-field-enrichment.repository";
+import { SatelliteNullAuditRepository } from "../../../src/repositories/satellite-null-audit.repository";
+import { SatelliteViewRepository } from "../../../src/repositories/satellite-view.repository";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -25,7 +27,9 @@ type Fixtures = {
 
 let pool: Pool;
 let db: NodePgDatabase<typeof schema>;
-let repo: SatelliteRepository;
+let fieldEnrichmentRepo: SatelliteFieldEnrichmentRepository;
+let nullAuditRepo: SatelliteNullAuditRepository;
+let viewRepo: SatelliteViewRepository;
 let fixtures: Fixtures;
 
 function halfvecLiteral(head: number[]): string {
@@ -303,7 +307,9 @@ beforeAll(async () => {
   pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
   db = drizzle<typeof schema>(pool, { schema });
   await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS vector"));
-  repo = new SatelliteRepository(db);
+  fieldEnrichmentRepo = new SatelliteFieldEnrichmentRepository(db);
+  nullAuditRepo = new SatelliteNullAuditRepository(db);
+  viewRepo = new SatelliteViewRepository(db);
 });
 
 beforeEach(async () => {
@@ -315,9 +321,9 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe("SatelliteRepository", () => {
+describe("split satellite repositories", () => {
   it("listWithOrbital returns only rows that carry raan and computes latest TLE drift", async () => {
-    const rows = await repo.listWithOrbital(20);
+    const rows = await viewRepo.listWithOrbital(20);
     const geoExplicit = rows.find((row) => row.id === String(fixtures.geoExplicitId));
 
     expect(rows.map((row) => row.id)).toEqual([
@@ -341,13 +347,13 @@ describe("SatelliteRepository", () => {
   });
 
   it("listWithOrbital applies limit after the orbital filter and ordering", async () => {
-    const rows = await repo.listWithOrbital(2);
+    const rows = await viewRepo.listWithOrbital(2);
 
     expect(rows.map((row) => row.id)).toEqual(["1", "2"]);
   });
 
   it("listWithOrbital('GEO') prefers telemetry_summary.regime over the meanMotion fallback", async () => {
-    const rows = await repo.listWithOrbital(10, "GEO");
+    const rows = await viewRepo.listWithOrbital(10, "GEO");
 
     expect(rows.map((row) => row.id)).toEqual([
       String(fixtures.geoExplicitId),
@@ -356,20 +362,20 @@ describe("SatelliteRepository", () => {
   });
 
   it("listWithOrbital('LEO') derives the regime from meanMotion when no explicit regime is present", async () => {
-    const rows = await repo.listWithOrbital(20, "LEO");
+    const rows = await viewRepo.listWithOrbital(20, "LEO");
 
     expect(rows.map((row) => row.id)).toContain(String(fixtures.leoDerivedId));
     expect(rows.map((row) => row.id)).not.toContain(String(fixtures.geoExplicitId));
   });
 
   it("listNullCandidatesForField rejects fields outside the whitelist", async () => {
-    await expect(repo.listNullCandidatesForField("password", 5)).rejects.toThrow(
-      /unsupported field/,
-    );
+    await expect(
+      nullAuditRepo.listNullCandidatesForField("password", 5),
+    ).rejects.toThrow(/unsupported field/);
   });
 
   it("listNullCandidatesForField returns only payloads with embedding and a NULL target field", async () => {
-    const rows = await repo.listNullCandidatesForField("mass_kg", 10);
+    const rows = await nullAuditRepo.listNullCandidatesForField("mass_kg", 10);
 
     expect(rows).toEqual([
       {
@@ -381,7 +387,11 @@ describe("SatelliteRepository", () => {
   });
 
   it("knnNeighboursForField excludes the target, drops NULL values and orders by cosine distance", async () => {
-    const rows = await repo.knnNeighboursForField(fixtures.targetId, "lifetime", 3);
+    const rows = await fieldEnrichmentRepo.knnNeighboursForField(
+      fixtures.targetId,
+      "lifetime",
+      3,
+    );
 
     expect(rows.map((row) => row.id)).toEqual([
       String(fixtures.nearId),

@@ -5,8 +5,8 @@
  * Five handlers, one ResolutionHandler each, behind the ResolutionHandlerRegistry
  * port. The sweep-resolution engine (Task 2.3) will dispatch action.kind → handler.
  *
- * Plan 1 Task 4.2: satelliteRepo is now console-api's own SatelliteRepository
- * (updateField + FK queries available directly). The onSimUpdateAccepted
+ * Plan 1 Task 4.2: satelliteRepo is now a console-api update-field port.
+ * FK queries still use the injected Drizzle handle. The onSimUpdateAccepted
  * hook still flows from the sweep container path until Plan 2 consolidates
  * sim source-class promotion into the promotion port.
  */

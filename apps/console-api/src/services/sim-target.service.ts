@@ -5,8 +5,8 @@
  * Given a sim_run id, reads its seed_applied JSONB and composes up to two
  * sub-bags:
  *   - `telemetryTarget` — populated iff seed.telemetryTargetSatelliteId
- *     is set (loaded via SatelliteRepository.findByIdFull with busName
- *     from Plan 5 · 1.A.7).
+ *     is set (loaded via the satellite full-read port with busName from
+ *     Plan 5 · 1.A.7).
  *   - `pcEstimatorTarget` — populated iff seed.pcEstimatorTarget is set
  *     (loaded via ConjunctionRepository.findByIdWithSatellites from
  *     Plan 5 · 1.A.8).

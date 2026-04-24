@@ -5,7 +5,6 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
-import type { SatelliteSweepChatRepository } from "../repositories/satellite-sweep-chat.repository";
 
 /**
  * Rich satellite profile the chat service needs (operator detail, doctrine,
@@ -58,7 +57,7 @@ import type {
   SweepFinding,
   SweepChatMessage,
   SweepChatState,
-} from "../schemas/satellite-sweep-chat.schema";
+} from "../types/satellite-sweep-chat.types";
 import {
   SATELLITE_SWEEP_CHAT_ROLE,
   SATELLITE_SWEEP_CHAT_INSTRUCTIONS,
@@ -72,10 +71,26 @@ export interface ChatStreamEvent {
   data: unknown;
 }
 
+export interface SatelliteSweepChatStorePort {
+  checkRateLimit(userId: string): Promise<boolean>;
+  appendMessage(
+    satelliteId: string,
+    userId: string,
+    msg: SweepChatMessage,
+  ): Promise<void>;
+  getHistory(satelliteId: string, userId: string): Promise<SweepChatMessage[]>;
+  storeFinding(
+    satelliteId: string,
+    finding: Omit<SweepFinding, "id" | "createdAt">,
+  ): Promise<SweepFinding>;
+  getFindings(satelliteId: string, limit?: number): Promise<SweepFinding[]>;
+  getState(satelliteId: string, userId: string): Promise<SweepChatState>;
+}
+
 export class SatelliteSweepChatService {
   constructor(
     private satelliteRepo: SatelliteFullProfileRepo,
-    private sweepRepo: SatelliteSweepChatRepository,
+    private sweepRepo: SatelliteSweepChatStorePort,
     private vizService: VizService,
     private satelliteService: SatelliteService,
   ) {}

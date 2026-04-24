@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { fakePort } from "@interview/test-kit";
-import { StatsService } from "../../../src/services/stats.service";
-import type { StatsRepository } from "../../../src/repositories/stats.repository";
+import {
+  StatsService,
+  type StatsReadPort,
+} from "../../../src/services/stats.service";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -11,8 +13,8 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function mockRepo(): StatsRepository {
-  return fakePort<StatsRepository>({
+function mockRepo(): StatsReadPort {
+  return fakePort<StatsReadPort>({
     aggregates: vi.fn(),
     findingsByStatus: vi.fn(),
     findingsByCortex: vi.fn(),

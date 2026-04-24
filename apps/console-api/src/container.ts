@@ -119,7 +119,7 @@ export interface ContainerConfig {
   skillsDir?: string;
 }
 
-import { SatelliteRepository } from "./repositories/satellite.repository";
+import { SatelliteViewRepository } from "./repositories/satellite-view.repository";
 import { SatelliteDimensionRepository } from "./repositories/satellite-dimension.repository";
 import { PayloadRepository } from "./repositories/payload.repository";
 import { ConjunctionRepository } from "./repositories/conjunction.repository";
@@ -168,6 +168,9 @@ import { SourceRepository } from "./repositories/source.repository";
 import { SourceDataService } from "./services/source-data.service";
 import { SatelliteAuditRepository } from "./repositories/satellite-audit.repository";
 import { SatelliteEnrichmentRepository } from "./repositories/satellite-enrichment.repository";
+import { SatelliteFieldEnrichmentRepository } from "./repositories/satellite-field-enrichment.repository";
+import { SatelliteNullAuditRepository } from "./repositories/satellite-null-audit.repository";
+import { SatelliteSweepStatsRepository } from "./repositories/satellite-sweep-stats.repository";
 import { FleetAnalysisRepository } from "./repositories/fleet-analysis.repository";
 import { TrafficForecastRepository } from "./repositories/traffic-forecast.repository";
 import { SatelliteAuditService } from "./services/satellite-audit.service";
@@ -222,7 +225,7 @@ export async function buildContainer(
   const skillsDir = config.skillsDir ?? SSA_SKILLS_DIR;
 
   // repos
-  const satelliteRepo = new SatelliteRepository(db);
+  const satelliteViewRepo = new SatelliteViewRepository(db);
   const satelliteDimensionRepo = new SatelliteDimensionRepository(db);
   const payloadRepo = new PayloadRepository(db);
   const conjunctionRepo = new ConjunctionRepository(db);
@@ -236,9 +239,54 @@ export async function buildContainer(
   const sourceRepo = new SourceRepository(db);
   const satelliteAuditRepo = new SatelliteAuditRepository(db);
   const satelliteEnrichmentRepo = new SatelliteEnrichmentRepository(db);
+  const satelliteFieldEnrichmentRepo = new SatelliteFieldEnrichmentRepository(db);
+  const satelliteNullAuditRepo = new SatelliteNullAuditRepository(db);
+  const satelliteSweepStatsRepo = new SatelliteSweepStatsRepository(db);
   const fleetAnalysisRepo = new FleetAnalysisRepository(db);
   const trafficForecastRepo = new TrafficForecastRepository(db);
   const satelliteFleetRepo = new SatelliteFleetRepository(db);
+
+  const ssaAuditSatelliteRepo = {
+    nullScanByColumn:
+      satelliteNullAuditRepo.nullScanByColumn.bind(satelliteNullAuditRepo),
+    findSatelliteIdsWithNullColumn:
+      satelliteNullAuditRepo.findSatelliteIdsWithNullColumn.bind(
+        satelliteNullAuditRepo,
+      ),
+    getOperatorCountrySweepStats:
+      satelliteSweepStatsRepo.getOperatorCountrySweepStats.bind(
+        satelliteSweepStatsRepo,
+      ),
+  };
+  const missionSatelliteRepo = {
+    findPayloadNamesByIds:
+      satelliteViewRepo.findPayloadNamesByIds.bind(satelliteViewRepo),
+    updateField: satelliteFieldEnrichmentRepo.updateField.bind(
+      satelliteFieldEnrichmentRepo,
+    ),
+  };
+  const knnSatelliteRepo = {
+    listNullCandidatesForField:
+      satelliteNullAuditRepo.listNullCandidatesForField.bind(
+        satelliteNullAuditRepo,
+      ),
+    knnNeighboursForField:
+      satelliteFieldEnrichmentRepo.knnNeighboursForField.bind(
+        satelliteFieldEnrichmentRepo,
+      ),
+    updateField: satelliteFieldEnrichmentRepo.updateField.bind(
+      satelliteFieldEnrichmentRepo,
+    ),
+  };
+  const simPromotionSatelliteRepo = {
+    findByIdFull: satelliteDimensionRepo.findByIdFull.bind(
+      satelliteDimensionRepo,
+    ),
+    findNullTelemetryColumns:
+      satelliteFieldEnrichmentRepo.findNullTelemetryColumns.bind(
+        satelliteFieldEnrichmentRepo,
+      ),
+  };
 
   // Cortex-facing data services (same contract as the HTTP routes).
   const sourceDataService = new SourceDataService(sourceRepo);
@@ -330,7 +378,7 @@ export async function buildContainer(
   // fallbacks until their cutover is complete.
   const sweepFeedbackRepo = new SweepFeedbackRepository(redis);
 
-  // SSA pack uses console-api's own SatelliteRepository and Drizzle handle;
+  // SSA pack uses console-api's own split satellite repositories and Drizzle handle;
   // the sweep package carries zero domain persistence code — every fetcher
   // captures `db` via its factory and the kernel registry sees only opaque
   // IngestionSource objects.
@@ -358,7 +406,7 @@ export async function buildContainer(
         };
       },
     },
-    satelliteRepo,
+    satelliteRepo: satelliteFieldEnrichmentRepo,
   });
   // `SsaAuditProvider` needs `sweep.sweepRepo.loadPastFeedback`, but the
   // sweep container is built after the audit provider (which itself feeds
@@ -375,7 +423,7 @@ export async function buildContainer(
     },
   };
   const ssaAuditProvider = new SsaAuditProvider({
-    satelliteRepo,
+    satelliteRepo: ssaAuditSatelliteRepo,
     sweepRepo: sweepRepoHolder,
     feedbackRepo: sweepFeedbackRepo,
     config: runtimeConfigService.provider("sweep.nanoSweep"),
@@ -463,7 +511,7 @@ export async function buildContainer(
   );
   const nanoResearch = new NanoResearchService();
   const missionFillWriter = new MissionFillWriter(
-    satelliteRepo,
+    missionSatelliteRepo,
     auditRepo,
     enrichmentFinding,
   );
@@ -472,7 +520,7 @@ export async function buildContainer(
     missionFillWriter,
     logger,
   );
-  const sweepTaskPlanner = new SweepTaskPlanner(satelliteRepo);
+  const sweepTaskPlanner = new SweepTaskPlanner(missionSatelliteRepo);
   const missionService = new MissionService(
     sweepTaskPlanner,
     missionWorker,
@@ -560,7 +608,7 @@ export async function buildContainer(
       },
     },
     sweepRepo: sweep.sweepRepo,
-    satelliteRepo,
+    satelliteRepo: simPromotionSatelliteRepo,
     swarmRepo: simSwarmRepo,
     embed: thalamus.embedder.embedQuery.bind(thalamus.embedder),
   });
@@ -623,7 +671,7 @@ export async function buildContainer(
   // Redis repo (keys: satellite-sweep:{id}:messages|findings:...).
   const satelliteSweepChatRepo = new SatelliteSweepChatRepository(redis);
   const satelliteSweepChatService = new SatelliteSweepChatService(
-    satelliteRepo,
+    satelliteDimensionRepo,
     satelliteSweepChatRepo,
     new VizService(),
     new SatelliteService(),
@@ -633,7 +681,7 @@ export async function buildContainer(
   );
 
   const services: AppServices = {
-    satelliteView: new SatelliteViewService(satelliteRepo),
+    satelliteView: new SatelliteViewService(satelliteViewRepo),
     payloadView: new PayloadViewService(payloadRepo),
     conjunctionView: conjunctionViewService,
     kgView: new KgViewService(kgRepo),
@@ -647,7 +695,7 @@ export async function buildContainer(
       edgeRepo,
     ),
     knnPropagation: new KnnPropagationService(
-      satelliteRepo,
+      knnSatelliteRepo,
       auditRepo,
       enrichmentFinding,
     ),
@@ -702,7 +750,10 @@ export async function buildContainer(
       launcher: {
         startTelemetry: (opts) =>
           startTelemetrySwarm(
-            { satelliteRepo, swarmService: sweep.sim!.swarmService },
+            {
+              satelliteRepo: satelliteDimensionRepo,
+              swarmService: sweep.sim!.swarmService,
+            },
             opts,
           ),
         startPc: (opts) =>

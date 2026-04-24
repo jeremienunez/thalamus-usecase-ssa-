@@ -1,19 +1,38 @@
 import type { SimSwarmStore } from "@interview/sweep";
-import type { SimRunRepository } from "../repositories/sim-run.repository";
-import type { SimSwarmRepository } from "../repositories/sim-swarm.repository";
-import type { SimTerminalRepository } from "../repositories/sim-terminal.repository";
+import type { SimSwarmFishCounts } from "../types/sim-run.types";
+import type {
+  CloseSimSwarmInput,
+  SimSwarmRow,
+  SnapshotAggregateInput,
+} from "../types/sim-swarm.types";
+import type {
+  SimFishTerminalActionRow,
+  SimFishTerminalRow,
+} from "../types/sim-terminal.types";
+
+export interface SimSwarmStoreSwarmPort {
+  abortSwarm(swarmId: bigint): Promise<void>;
+  closeSwarm(input: CloseSimSwarmInput): Promise<void>;
+  findById(swarmId: bigint): Promise<SimSwarmRow | null>;
+  snapshotAggregate(input: SnapshotAggregateInput): Promise<void>;
+}
+
+export interface SimSwarmStoreRunPort {
+  countFishByStatus(swarmId: bigint): Promise<SimSwarmFishCounts>;
+}
+
+export interface SimSwarmStoreTerminalPort {
+  listTerminalsForSwarm(swarmId: bigint): Promise<SimFishTerminalRow[]>;
+  listTerminalActionsForSwarm(
+    swarmId: bigint,
+  ): Promise<SimFishTerminalActionRow[]>;
+}
 
 export class SimSwarmStoreService implements SimSwarmStore {
   constructor(
-    private readonly swarmRepo: Pick<
-      SimSwarmRepository,
-      "abortSwarm" | "closeSwarm" | "findById" | "snapshotAggregate"
-    >,
-    private readonly runRepo: Pick<SimRunRepository, "countFishByStatus">,
-    private readonly terminalRepo: Pick<
-      SimTerminalRepository,
-      "listTerminalsForSwarm" | "listTerminalActionsForSwarm"
-    >,
+    private readonly swarmRepo: SimSwarmStoreSwarmPort,
+    private readonly runRepo: SimSwarmStoreRunPort,
+    private readonly terminalRepo: SimSwarmStoreTerminalPort,
   ) {}
 
   async getSwarm(swarmId: number) {

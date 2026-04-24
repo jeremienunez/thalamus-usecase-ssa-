@@ -17,10 +17,10 @@
 
 import { createLogger } from "@interview/shared/observability";
 import type {
+  GenericSuggestionRow,
   ResolutionHandlerRegistry,
   SweepPromotionAdapter,
 } from "../ports";
-import type { SweepRepository } from "../repositories/sweep.repository";
 import {
   resolutionPayloadSchema,
   type ResolutionPayload,
@@ -33,7 +33,20 @@ const logger = createLogger("sweep-resolution");
 export interface SweepResolutionDeps {
   registry: ResolutionHandlerRegistry;
   promotion: SweepPromotionAdapter;
-  sweepRepo: SweepRepository;
+  sweepRepo: SweepResolutionStorePort;
+}
+
+export interface SweepResolutionStorePort {
+  getGeneric(id: string): Promise<GenericSuggestionRow | null>;
+  updateResolution(
+    id: string,
+    result: {
+      status: string;
+      resolvedAt?: string;
+      errors?: string[];
+      pendingSelections?: unknown[];
+    },
+  ): Promise<void>;
 }
 
 export class SweepResolutionService {
@@ -52,7 +65,7 @@ export class SweepResolutionService {
     suggestionId: string,
     selections?: Record<string, string | number>,
   ): Promise<ResolutionResult> {
-    // 1. Load the generic row — requires the repo's schema to be wired.
+    // 1. Load the generic row. The injected store owns schema details.
     const generic = await this.deps.sweepRepo.getGeneric(suggestionId);
     if (!generic) {
       return {

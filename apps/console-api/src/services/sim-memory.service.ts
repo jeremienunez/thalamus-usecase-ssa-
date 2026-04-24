@@ -1,35 +1,28 @@
 import type {
-  SimMemoryRepository,
   SimMemoryRow,
+  SimMemoryTopKByRecencyOpts,
+  SimMemoryTopKByVectorOpts,
   SimMemoryWriteRow,
-} from "../repositories/sim-memory.repository";
+} from "../types/sim-memory.types";
+
+export interface SimMemoryStorePort {
+  writeMany(rows: SimMemoryWriteRow[]): Promise<bigint[]>;
+  topKByVector(opts: SimMemoryTopKByVectorOpts): Promise<SimMemoryRow[]>;
+  topKByRecency(opts: SimMemoryTopKByRecencyOpts): Promise<SimMemoryRow[]>;
+}
 
 export class SimMemoryService {
-  constructor(
-    private readonly memoryRepo: Pick<
-      SimMemoryRepository,
-      "writeMany" | "topKByVector" | "topKByRecency"
-    >,
-  ) {}
+  constructor(private readonly memoryRepo: SimMemoryStorePort) {}
 
   writeMany(rows: SimMemoryWriteRow[]): Promise<bigint[]> {
     return this.memoryRepo.writeMany(rows);
   }
 
-  topKByVector(opts: {
-    simRunId: bigint;
-    agentId: bigint;
-    vec: number[];
-    k: number;
-  }): Promise<SimMemoryRow[]> {
+  topKByVector(opts: SimMemoryTopKByVectorOpts): Promise<SimMemoryRow[]> {
     return this.memoryRepo.topKByVector(opts);
   }
 
-  topKByRecency(opts: {
-    simRunId: bigint;
-    agentId: bigint;
-    k: number;
-  }): Promise<SimMemoryRow[]> {
+  topKByRecency(opts: SimMemoryTopKByRecencyOpts): Promise<SimMemoryRow[]> {
     return this.memoryRepo.topKByRecency(opts);
   }
 }

@@ -5,7 +5,7 @@ import { fakePort, typedSpy } from "@interview/test-kit";
 import { SsaPromotionAdapter } from "../../../../../src/agent/ssa/sweep/promotion.ssa";
 import type { SsaSweepAuditPort } from "../../../../../src/agent/ssa/sweep/promotion.ssa";
 
-function fakeAuditRepo() {
+function fakeAuditPort() {
   const insertResolutionAudit = typedSpy<
     SsaSweepAuditPort["insertResolutionAudit"]
   >().mockResolvedValue(undefined);
@@ -39,8 +39,8 @@ describe("SsaPromotionAdapter.promote", () => {
     reviewerNote: "looks fine",
   };
 
-  it("calls SweepAuditRepository.insertResolutionAudit with the full payload", async () => {
-    const audit = fakeAuditRepo();
+  it("calls the sweep audit port with the full payload", async () => {
+    const audit = fakeAuditPort();
     const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
 
     const result = await adapter.promote(input);
@@ -70,7 +70,7 @@ describe("SsaPromotionAdapter.promote", () => {
   });
 
   it("skips confidence promotion when confidence is null or omitted", async () => {
-    const audit = fakeAuditRepo();
+    const audit = fakeAuditPort();
     const adapter = new SsaPromotionAdapter({
       sweepAuditRepo: audit.repo,
       confidence: null,
@@ -80,7 +80,7 @@ describe("SsaPromotionAdapter.promote", () => {
   });
 
   it("returns ok with a soft errors[] when audit write throws (non-fatal)", async () => {
-    const audit = fakeAuditRepo();
+    const audit = fakeAuditPort();
     audit.insertResolutionAudit.mockRejectedValueOnce(new Error("DB down"));
     const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
 
@@ -93,7 +93,7 @@ describe("SsaPromotionAdapter.promote", () => {
   });
 
   it("handles null operatorCountryId + missing webEvidence", async () => {
-    const audit = fakeAuditRepo();
+    const audit = fakeAuditPort();
     const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
     await adapter.promote({
       ...input,
@@ -109,7 +109,7 @@ describe("SsaPromotionAdapter.promote", () => {
   });
 
   it("handles a null resolutionPayload", async () => {
-    const audit = fakeAuditRepo();
+    const audit = fakeAuditPort();
     const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
     await adapter.promote({ ...input, resolutionPayload: null });
     const call = audit.insertResolutionAudit.mock.calls[0]?.[0];
@@ -117,7 +117,7 @@ describe("SsaPromotionAdapter.promote", () => {
   });
 
   it("coerces missing domain fields to empty strings / zero and still returns ok when confidence is wired", async () => {
-    const audit = fakeAuditRepo();
+    const audit = fakeAuditPort();
     const adapter = new SsaPromotionAdapter({
       sweepAuditRepo: audit.repo,
       confidence: {} as ConfidenceService,
@@ -144,7 +144,7 @@ describe("SsaPromotionAdapter.promote", () => {
   });
 
   it("stringifies non-Error audit failures into soft warnings", async () => {
-    const audit = fakeAuditRepo();
+    const audit = fakeAuditPort();
     audit.insertResolutionAudit.mockRejectedValueOnce("plain failure");
     const adapter = new SsaPromotionAdapter({ sweepAuditRepo: audit.repo });
 

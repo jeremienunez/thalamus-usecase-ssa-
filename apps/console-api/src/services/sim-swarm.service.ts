@@ -1,18 +1,26 @@
 import type {
   InsertSimSwarmInput,
   LinkOutcomeInput,
-  SimSwarmRepository,
   SimSwarmRow,
-} from "../repositories/sim-swarm.repository";
-import type { SimRunRepository, SimSwarmFishCounts } from "../repositories/sim-run.repository";
+} from "../types/sim-swarm.types";
+import type { SimSwarmFishCounts } from "../types/sim-run.types";
+
+export interface SimSwarmStorePort {
+  insert(input: InsertSimSwarmInput): Promise<bigint>;
+  findById(swarmId: bigint): Promise<SimSwarmRow | null>;
+  markDone(swarmId: bigint): Promise<void>;
+  markFailed(swarmId: bigint): Promise<void>;
+  linkOutcome(swarmId: bigint, refs: LinkOutcomeInput): Promise<void>;
+}
+
+export interface SimSwarmRunCountPort {
+  countFishByStatus(swarmId: bigint): Promise<SimSwarmFishCounts>;
+}
 
 export class SimSwarmService {
   constructor(
-    private readonly swarmRepo: Pick<
-      SimSwarmRepository,
-      "insert" | "findById" | "markDone" | "markFailed" | "linkOutcome"
-    >,
-    private readonly runRepo: Pick<SimRunRepository, "countFishByStatus">,
+    private readonly swarmRepo: SimSwarmStorePort,
+    private readonly runRepo: SimSwarmRunCountPort,
   ) {}
 
   create(input: InsertSimSwarmInput): Promise<bigint> {

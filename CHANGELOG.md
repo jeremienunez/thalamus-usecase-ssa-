@@ -4,6 +4,100 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Console API repository DIP hardening — 2026-04-24
+
+This branch closes the repository-coupling regression found during console API
+hardening and adds a guardrail so unit tests cannot hide the same violation.
+
+**Satellite repository split**
+
+- Removed the monolithic `SatelliteRepository` surface and split satellite
+  persistence into focused repositories for orbital views, null-audit scans,
+  field enrichment writes / KNN helpers, and sweep stats.
+- Rewired `container.ts` so SSA audit, mission fill, KNN propagation,
+  simulation promotion, telemetry swarms, and satellite view services receive
+  only the focused repository they need.
+- Replaced the old satellite repository integration spec with
+  `satellite-split.repository.spec.ts` covering the new repository slices.
+
+**DIP and test guardrails**
+
+- Removed concrete repository imports from console API services and SSA agent
+  adapters; services now type against local ports plus shared DTO/type modules.
+- Removed the remaining production `packages/sweep` service dependency on
+  `SweepRepository` by introducing narrow suggestion writer / resolution store
+  ports.
+- Updated unit tests to import service ports or shared row types instead of
+  concrete repository classes.
+- Added `scripts/check-repository-import-leaks.sh` and wired it into
+  `pnpm run arch:check` so service files and non-repository tests fail fast if
+  they import repositories again.
+
+**Verification**
+
+- `pnpm --filter @interview/sweep typecheck`
+- `pnpm --filter @interview/console-api typecheck`
+- `pnpm run typecheck`
+- `pnpm test`
+- `pnpm run arch:check`
+- `pnpm exec vitest run --project integration apps/console-api/tests/integration/repositories/satellite-split.repository.spec.ts`
+
+### Console shell + 3D KG + CI hardening — 2026-04-24
+
+`75456e2`, `2ad5f7a`, `c2ec7d1`, `2aec73e`, and `49fd509`
+land the front hardening / Thalamus KG iteration and close the follow-up
+CI and dependency issues found after pushing to `main`.
+
+**Console shell hardening**
+
+- Route-level front shell fallbacks now keep `ops`, `thalamus`, `sweep`,
+  and `config` screens from taking down the whole console when a panel
+  throws.
+- Shared chrome primitives (`AppShell`, `Drawer`, `TopBar`, `LeftRail`,
+  `HudPanel`, `MetricTile`, `CommandPalette`) gained tighter defensive
+  rendering and regression coverage for thrown child components.
+- Ops / Sweep / Thalamus drawers now handle missing or partial data more
+  consistently instead of leaking brittle UI assumptions into feature code.
+
+**Thalamus 3D KG view**
+
+- The Thalamus knowledge graph view moved from the previous flat graph
+  direction to a 3D, operator-console style scene with node geometry,
+  edge rendering, camera focus, and ambient swarm detail.
+- `Entry.tsx` was trimmed back by moving graph scene construction into
+  `kg-scene.ts` and rendering into `kg-scene-3d/*` components.
+- KG scene tests now cover graph layout / projection helpers so visual
+  iteration does not have to live inside the main feature component.
+
+**LLM / cortex guardrails**
+
+- Cortex LLM parsing now rejects degenerate repeated-token responses
+  before they can be interpreted as valid findings.
+- Standard cortex strategy code was split into explicit `meta-findings`,
+  `standard-inputs`, `standard-payload`, and `standard-strategy` modules
+  to reduce the monolithic strategy surface.
+- Pattern and JSON parser tests cover the new guardrail behaviour,
+  including non-JSON polluted responses.
+
+**Dependency and CI fixes**
+
+- Dependabot alert `GHSA-w5hq-g745-h8pq` was fixed by forcing transitive
+  `uuid` resolution to `14.0.0` through `pnpm.overrides`; `pnpm audit`
+  now reports no known vulnerabilities.
+- The repo-wide arch guard test now has an explicit timeout because it
+  shells out to `dependency-cruiser` and was timing out under the GitHub
+  unit runner's default 5s limit.
+- k6 smoke results are no longer tracked in git; `infra/k6/results/` is
+  ignored so the CI container can create fresh writable JSON output.
+
+**Verification**
+
+- local gates green across the landing commits: `arch:check`,
+  `typecheck`, `test:policy`, `spec:check`, and `test`
+- focused CI fix checks: `pnpm test:unit` (`196` files, `1224` tests)
+- GitHub Actions on `49fd509`: `Repo Contracts`, `Tests`, and
+  `Build & Push` all green
+
 ### Runtime contracts + graph recovery hardening — 2026-04-22
 
 `2cf9dc9` lands the object-unification pass that was worth keeping:

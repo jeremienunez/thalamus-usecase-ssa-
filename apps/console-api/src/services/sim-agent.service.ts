@@ -1,16 +1,16 @@
 import type {
   InsertSimAgentInput,
-  SimAgentRepository,
   SimAgentRow,
-} from "../repositories/sim-agent.repository";
+} from "../types/sim-agent.types";
+
+export interface SimAgentStorePort {
+  insert(input: InsertSimAgentInput): Promise<bigint>;
+  listByRun(simRunId: bigint): Promise<SimAgentRow[]>;
+  countForRun(simRunId: bigint): Promise<number>;
+}
 
 export class SimAgentService {
-  constructor(
-    private readonly agentRepo: Pick<
-      SimAgentRepository,
-      "insert" | "listByRun" | "countForRun"
-    >,
-  ) {}
+  constructor(private readonly agentRepo: SimAgentStorePort) {}
 
   create(input: InsertSimAgentInput): Promise<bigint> {
     return this.agentRepo.insert(input);

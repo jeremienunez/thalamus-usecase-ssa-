@@ -3,14 +3,13 @@
  *
  * Preserves the public `sweep(limit, mode)` signature callers depend on
  * (CycleRunnerService, sweep.worker), delegates candidate generation to an
- * injected DomainAuditProvider, persists via SweepRepository.insertGeneric,
+ * injected DomainAuditProvider, persists via an injected suggestion writer,
  * and fires completion callbacks. Zero domain knowledge.
  */
 
 import { randomUUID } from "node:crypto";
 import { createLogger } from "@interview/shared/observability";
-import type { DomainAuditProvider } from "../ports";
-import type { SweepRepository } from "../repositories/sweep.repository";
+import type { DomainAuditProvider, GenericInsertSuggestion } from "../ports";
 
 const logger = createLogger("nano-sweep");
 
@@ -35,9 +34,13 @@ export type SweepCompleteCallback = (result: SweepResult) => Promise<void>;
 
 export interface NanoSweepDeps {
   audit: DomainAuditProvider;
-  sweepRepo: SweepRepository;
-  /** Domain discriminator forwarded to SweepRepository.insertGeneric. */
+  sweepRepo: SweepSuggestionWritePort;
+  /** Domain discriminator forwarded to the suggestion writer. */
   domain: string;
+}
+
+export interface SweepSuggestionWritePort {
+  insertGeneric(input: GenericInsertSuggestion): Promise<string>;
 }
 
 export class NanoSweepService {
@@ -52,7 +55,7 @@ export class NanoSweepService {
   /**
    * Façade preserved for CycleRunnerService + AdminSweepController +
    * sweep.worker. Runs one audit wave via DomainAuditProvider and
-   * persists each candidate through SweepRepository.insertGeneric.
+   * persists each candidate through the suggestion writer port.
    *
    * @param limit forwarded as AuditCycleContext.limit (0 = let the provider
    *              decide; preserves the pre-refactor optional-param behavior)

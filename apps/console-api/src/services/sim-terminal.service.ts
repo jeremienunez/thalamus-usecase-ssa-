@@ -1,16 +1,17 @@
 import type {
   SimFishTerminalActionRow,
   SimFishTerminalRow,
-  SimTerminalRepository,
-} from "../repositories/sim-terminal.repository";
+} from "../types/sim-terminal.types";
+
+export interface SimTerminalReadPort {
+  listTerminalsForSwarm(swarmId: bigint): Promise<SimFishTerminalRow[]>;
+  listTerminalActionsForSwarm(
+    swarmId: bigint,
+  ): Promise<SimFishTerminalActionRow[]>;
+}
 
 export class SimTerminalService {
-  constructor(
-    private readonly terminalRepo: Pick<
-      SimTerminalRepository,
-      "listTerminalsForSwarm" | "listTerminalActionsForSwarm"
-    >,
-  ) {}
+  constructor(private readonly terminalRepo: SimTerminalReadPort) {}
 
   listTerminalsForSwarm(swarmId: bigint): Promise<SimFishTerminalRow[]> {
     return this.terminalRepo.listTerminalsForSwarm(swarmId);

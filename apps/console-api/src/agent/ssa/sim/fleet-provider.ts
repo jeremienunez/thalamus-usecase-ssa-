@@ -16,10 +16,15 @@ import type {
   SimSubjectRef,
   SimSubjectSnapshot,
 } from "@interview/sweep";
-import type { SatelliteFleetRepository } from "../../../repositories/satellite-fleet.repository";
+import type { OperatorFleetSnapshot } from "../../../types/sim-fleet.types";
 
 export interface SsaFleetDeps {
-  fleetRepo: SatelliteFleetRepository;
+  fleetRepo: SsaFleetReadPort;
+}
+
+export interface SsaFleetReadPort {
+  getOperatorFleetSnapshot(operatorId: number): Promise<OperatorFleetSnapshot>;
+  getSimAgentAuthorLabels(agentIds: number[]): Promise<Map<number, string>>;
 }
 
 export class SsaFleetProvider implements SimSubjectProvider {

@@ -4,21 +4,28 @@ import type {
   PersistTurnBatchInput,
   RecentObservableRow,
   SimGodEventRow,
-  SimTurnRepository,
-} from "../repositories/sim-turn.repository";
+} from "../types/sim-turn.types";
+
+export interface SimTurnStorePort {
+  insertAgentTurn(input: InsertAgentTurnInput): Promise<bigint>;
+  persistTurnBatch(input: PersistTurnBatchInput): Promise<bigint[]>;
+  insertGodTurn(input: InsertGodTurnInput): Promise<bigint>;
+  listGodEventsAtOrBefore(
+    simRunId: bigint,
+    turnIndex: number,
+    limit?: number,
+  ): Promise<SimGodEventRow[]>;
+  lastTurnCreatedAt(simRunId: bigint): Promise<Date | null>;
+  recentObservable(opts: {
+    simRunId: bigint;
+    sinceTurnIndex: number;
+    excludeAgentId?: bigint;
+    limit: number;
+  }): Promise<RecentObservableRow[]>;
+}
 
 export class SimTurnService {
-  constructor(
-    private readonly turnRepo: Pick<
-      SimTurnRepository,
-      | "insertAgentTurn"
-      | "persistTurnBatch"
-      | "insertGodTurn"
-      | "listGodEventsAtOrBefore"
-      | "lastTurnCreatedAt"
-      | "recentObservable"
-    >,
-  ) {}
+  constructor(private readonly turnRepo: SimTurnStorePort) {}
 
   insertAgentTurn(input: InsertAgentTurnInput): Promise<bigint> {
     return this.turnRepo.insertAgentTurn(input);

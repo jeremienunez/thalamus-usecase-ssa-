@@ -151,6 +151,30 @@ module.exports = {
       },
     },
     {
+      name: "console-api-services-no-repositories",
+      severity: "error",
+      comment:
+        "console-api services depend on narrow local ports and DTO/types, not concrete repositories. Wire repositories only in container.ts.",
+      from: {
+        path: "^apps/console-api/src/services/",
+      },
+      to: {
+        path: "^apps/console-api/src/repositories/",
+      },
+    },
+    {
+      name: "console-api-agents-no-repositories",
+      severity: "error",
+      comment:
+        "console-api agent/domain adapters depend on local ports and DTO/types, not concrete repositories. Wire repositories only in container.ts.",
+      from: {
+        path: "^apps/console-api/src/agent/",
+      },
+      to: {
+        path: "^apps/console-api/src/repositories/",
+      },
+    },
+    {
       name: "console-api-controllers-no-repositories",
       severity: "error",
       comment:

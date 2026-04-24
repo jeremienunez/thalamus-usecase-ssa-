@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SimSwarmRow } from "../../../src/repositories/sim-swarm.repository";
+import type { SimSwarmRow } from "../../../src/types/sim-swarm.types";
 import { SimSwarmStoreService } from "../../../src/services/sim-swarm-store.service";
 
 describe("SimSwarmStoreService", () => {

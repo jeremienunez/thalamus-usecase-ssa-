@@ -7,7 +7,7 @@ import type {
   ConjunctionRow,
   ScreenedConjunctionRow,
   KnnCandidateRow,
-} from "../../../src/repositories/conjunction.repository";
+} from "../../../src/types/conjunction.types";
 
 function mockRepo(): ConjunctionsReadPort {
   return {

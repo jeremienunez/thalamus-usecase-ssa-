@@ -22,9 +22,8 @@ import type {
   SweepRepository,
 } from "@interview/sweep";
 import { isKgPromotable } from "@interview/sweep/internal";
-import type { SimSwarmRepository } from "../repositories/sim-swarm.repository";
-import type { SatelliteRepository } from "../repositories/satellite.repository";
 import type { TelemetryAggregate } from "../agent/ssa/sim/aggregators/telemetry";
+import type { FindByIdFullRow } from "../types/satellite.types";
 
 const logger = createLogger("sim-promotion-service");
 
@@ -49,12 +48,21 @@ type SsaAction =
 export interface SimPromotionServiceDeps {
   store: SimPromotionStorePort;
   sweepRepo: Pick<SweepRepository, "insertGeneric">;
-  satelliteRepo: Pick<
-    SatelliteRepository,
-    "findByIdFull" | "findNullTelemetryColumns"
-  >;
-  swarmRepo: Pick<SimSwarmRepository, "linkOutcome">;
+  satelliteRepo: SimPromotionSatellitePort;
+  swarmRepo: SimPromotionSwarmPort;
   embed?: (text: string) => Promise<number[] | null>;
+}
+
+export interface SimPromotionSatellitePort {
+  findByIdFull(id: bigint | number): Promise<FindByIdFullRow | null>;
+  findNullTelemetryColumns(satelliteId: bigint): Promise<Set<string>>;
+}
+
+export interface SimPromotionSwarmPort {
+  linkOutcome(
+    swarmId: bigint,
+    refs: { reportFindingId?: bigint | null; suggestionId?: bigint | null },
+  ): Promise<void>;
 }
 
 export interface SimPromotionStorePort {

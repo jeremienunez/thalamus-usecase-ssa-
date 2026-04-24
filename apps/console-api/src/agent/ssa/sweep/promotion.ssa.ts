@@ -17,10 +17,10 @@ import type {
   AcceptedSuggestionInput,
   PromotionResult,
 } from "@interview/sweep";
-import type { SweepAuditRepository } from "../../../repositories/sweep-audit.repository";
+import type { ResolutionAuditInsertInput } from "../../../types/sweep.types";
 
 export interface SsaSweepAuditPort {
-  insertResolutionAudit: SweepAuditRepository["insertResolutionAudit"];
+  insertResolutionAudit(input: ResolutionAuditInsertInput): Promise<void>;
 }
 
 export interface SsaPromotionDeps {

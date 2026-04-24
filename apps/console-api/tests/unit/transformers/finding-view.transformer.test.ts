@@ -6,7 +6,7 @@ import {
 import type {
   FindingDetailRow,
   FindingRow,
-} from "../../../src/repositories/finding.repository";
+} from "../../../src/types/finding.types";
 
 function listRow(over: Partial<FindingRow> = {}): FindingRow {
   return {

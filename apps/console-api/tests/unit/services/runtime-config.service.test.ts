@@ -5,9 +5,11 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { fakePort } from "@interview/test-kit";
-import { RuntimeConfigService } from "../../../src/services/runtime-config.service";
+import {
+  RuntimeConfigService,
+  type RuntimeConfigStorePort,
+} from "../../../src/services/runtime-config.service";
 import { ValidationError } from "../../../src/services/runtime-config.service";
-import type { RuntimeConfigRepository } from "../../../src/repositories/runtime-config.repository";
 import {
   DEFAULT_NANO_CONFIG,
   DEFAULT_NANO_SWARM_CONFIG,
@@ -18,9 +20,9 @@ import {
 import { registerThalamusConfigDomains } from "@interview/thalamus";
 import { registerSweepConfigDomains } from "@interview/sweep";
 
-function makeRepo(): RuntimeConfigRepository {
+function makeRepo(): RuntimeConfigStorePort {
   const store = new Map<string, Record<string, string>>();
-  return fakePort<RuntimeConfigRepository>({
+  return fakePort<RuntimeConfigStorePort>({
     async read(domain: RuntimeConfigDomain) {
       return store.get(domain) ?? {};
     },

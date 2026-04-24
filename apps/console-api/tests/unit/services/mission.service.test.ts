@@ -3,14 +3,21 @@ import type { GenericSuggestionRow } from "@interview/sweep";
 import { fakePort, stubLogger } from "@interview/test-kit";
 import type { FastifyBaseLogger } from "fastify";
 import { MissionService, type SweepListProvider } from "../../../src/services/mission.service";
-import { SweepTaskPlanner } from "../../../src/services/sweep-task-planner.service";
+import {
+  SweepTaskPlanner,
+  type SatellitesReadPort,
+} from "../../../src/services/sweep-task-planner.service";
 import { MissionTaskWorker } from "../../../src/services/mission-worker.service";
-import { MissionFillWriter } from "../../../src/services/mission-fill-writer.service";
-import type { SatelliteRepository } from "../../../src/repositories/satellite.repository";
-import type { SweepAuditRepository } from "../../../src/repositories/sweep-audit.repository";
+import {
+  MissionFillWriter,
+  type SatellitesFillPort,
+  type SweepAuditWritePort,
+} from "../../../src/services/mission-fill-writer.service";
 import type { NanoResearchService } from "../../../src/services/nano-research.service";
 import type { EnrichmentEmitPort } from "../../../src/services/enrichment-finding.service";
 import type { NanoResult } from "../../../src/types";
+
+type MissionSatellitePort = SatellitesReadPort & SatellitesFillPort;
 
 function flushAsync(times = 8) {
   return (async () => {
@@ -50,15 +57,15 @@ function failVote(reason: string): NanoResult {
   };
 }
 
-function mockSatellites(): SatelliteRepository {
-  return fakePort<SatelliteRepository>({
+function mockSatellites(): MissionSatellitePort {
+  return fakePort<MissionSatellitePort>({
     findPayloadNamesByIds: vi.fn(),
     updateField: vi.fn().mockResolvedValue(undefined),
   });
 }
 
-function mockAudit(): SweepAuditRepository {
-  return fakePort<SweepAuditRepository>({
+function mockAudit(): SweepAuditWritePort {
+  return fakePort<SweepAuditWritePort>({
     insertEnrichmentSuccess: vi.fn().mockResolvedValue(undefined),
   });
 }
@@ -126,8 +133,8 @@ function mockLogger(): FastifyBaseLogger {
 }
 
 describe("MissionService", () => {
-  let satellites: SatelliteRepository;
-  let audit: SweepAuditRepository;
+  let satellites: MissionSatellitePort;
+  let audit: SweepAuditWritePort;
   let nano: NanoResearchService;
   let enrichment: EnrichmentEmitPort;
   let sweepRepo: SweepListProvider;

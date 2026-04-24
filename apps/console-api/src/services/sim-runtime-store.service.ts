@@ -1,10 +1,23 @@
 import type { SimRunStatus } from "@interview/db-schema";
 import type { SimRuntimeStore } from "@interview/sweep";
-import type { SimAgentRepository } from "../repositories/sim-agent.repository";
-import type { SimMemoryRepository } from "../repositories/sim-memory.repository";
-import type { SimRunRepository } from "../repositories/sim-run.repository";
-import type { SimSwarmRepository } from "../repositories/sim-swarm.repository";
-import type { SimTurnRepository } from "../repositories/sim-turn.repository";
+import type {
+  InsertSimAgentInput,
+  SimAgentRow,
+} from "../types/sim-agent.types";
+import type {
+  SimMemoryRow,
+  SimMemoryTopKByRecencyOpts,
+  SimMemoryTopKByVectorOpts,
+  SimMemoryWriteRow,
+} from "../types/sim-memory.types";
+import type { InsertSimRunInput, SimRunRow } from "../types/sim-run.types";
+import type { InsertSimSwarmInput } from "../types/sim-swarm.types";
+import type {
+  InsertGodTurnInput,
+  PersistTurnBatchInput,
+  RecentObservableRow,
+  SimGodEventRow,
+} from "../types/sim-turn.types";
 
 function extractGodEventDetail(action: unknown): string | undefined {
   if (!action || typeof action !== "object") return undefined;
@@ -12,27 +25,56 @@ function extractGodEventDetail(action: unknown): string | undefined {
   return typeof detail === "string" ? detail : undefined;
 }
 
+export interface SimRuntimeRunPort {
+  insert(input: InsertSimRunInput): Promise<bigint>;
+  findById(simRunId: bigint): Promise<SimRunRow | null>;
+  updateStatus(
+    simRunId: bigint,
+    status: SimRunStatus,
+    completedAt?: Date | null,
+  ): Promise<void>;
+}
+
+export interface SimRuntimeAgentPort {
+  insert(input: InsertSimAgentInput): Promise<bigint>;
+  listByRun(simRunId: bigint): Promise<SimAgentRow[]>;
+}
+
+export interface SimRuntimeSwarmPort {
+  insert(input: InsertSimSwarmInput): Promise<bigint>;
+}
+
+export interface SimRuntimeTurnPort {
+  listGodEventsAtOrBefore(
+    simRunId: bigint,
+    turnIndex: number,
+    limit?: number,
+  ): Promise<SimGodEventRow[]>;
+  insertGodTurn(input: InsertGodTurnInput): Promise<bigint>;
+  persistTurnBatch(input: PersistTurnBatchInput): Promise<bigint[]>;
+  countAgentTurnsForRun(simRunId: bigint): Promise<number>;
+  lastTurnCreatedAt(simRunId: bigint): Promise<Date | null>;
+  recentObservable(opts: {
+    simRunId: bigint;
+    sinceTurnIndex: number;
+    excludeAgentId?: bigint;
+    limit: number;
+  }): Promise<RecentObservableRow[]>;
+}
+
+export interface SimRuntimeMemoryPort {
+  writeMany(rows: SimMemoryWriteRow[]): Promise<bigint[]>;
+  topKByVector(opts: SimMemoryTopKByVectorOpts): Promise<SimMemoryRow[]>;
+  topKByRecency(opts: SimMemoryTopKByRecencyOpts): Promise<SimMemoryRow[]>;
+}
+
 export class SimRuntimeStoreService implements SimRuntimeStore {
   constructor(
-    private readonly runRepo: Pick<
-      SimRunRepository,
-      "insert" | "findById" | "updateStatus"
-    >,
-    private readonly agentRepo: Pick<SimAgentRepository, "insert" | "listByRun">,
-    private readonly swarmRepo: Pick<SimSwarmRepository, "insert">,
-    private readonly turnRepo: Pick<
-      SimTurnRepository,
-      | "listGodEventsAtOrBefore"
-      | "insertGodTurn"
-      | "persistTurnBatch"
-      | "countAgentTurnsForRun"
-      | "lastTurnCreatedAt"
-      | "recentObservable"
-    >,
-    private readonly memoryRepo: Pick<
-      SimMemoryRepository,
-      "writeMany" | "topKByVector" | "topKByRecency"
-    >,
+    private readonly runRepo: SimRuntimeRunPort,
+    private readonly agentRepo: SimRuntimeAgentPort,
+    private readonly swarmRepo: SimRuntimeSwarmPort,
+    private readonly turnRepo: SimRuntimeTurnPort,
+    private readonly memoryRepo: SimRuntimeMemoryPort,
   ) {}
 
   async insertSwarm(input: Parameters<SimRuntimeStore["insertSwarm"]>[0]) {
