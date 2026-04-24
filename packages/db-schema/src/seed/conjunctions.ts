@@ -233,7 +233,8 @@ export async function seedConjunctions(db: any, opts: SeedConjunctionsOpts = {})
       const stride = sats.length / maxPerRegime;
       regimeSats = [];
       for (let i = 0; i < maxPerRegime; i++) {
-        regimeSats.push(sats[Math.floor(i * stride)]);
+        const sat = sats[Math.floor(i * stride)];
+        if (sat) regimeSats.push(sat);
       }
     }
 
@@ -269,21 +270,24 @@ export async function seedConjunctions(db: any, opts: SeedConjunctionsOpts = {})
       const t = new Date(now.getTime() + step * stepMs);
       for (let i = 0; i < satrecs.length; i++) {
         const entry = satrecs[i];
+        const positionRow = positions[i];
+        const velocityRow = velocities[i];
+        if (!positionRow || !velocityRow) continue;
         if (!entry) {
-          positions[i][step] = null;
-          velocities[i][step] = null;
+          positionRow[step] = null;
+          velocityRow[step] = null;
           continue;
         }
         const pv = satellite.propagate(entry.rec, t);
         if (pv && pv.position && typeof pv.position !== "boolean") {
-          positions[i][step] = pv.position;
-          velocities[i][step] =
+          positionRow[step] = pv.position;
+          velocityRow[step] =
             pv.velocity && typeof pv.velocity !== "boolean"
               ? pv.velocity
               : null;
         } else {
-          positions[i][step] = null;
-          velocities[i][step] = null;
+          positionRow[step] = null;
+          velocityRow[step] = null;
         }
       }
     }
@@ -308,8 +312,8 @@ export async function seedConjunctions(db: any, opts: SeedConjunctionsOpts = {})
         let minSq = Infinity;
         let minStep = -1;
         for (let step = 0; step < nSteps; step++) {
-          const pi = positions[i][step];
-          const pj = positions[j][step];
+          const pi = positions[i]?.[step];
+          const pj = positions[j]?.[step];
           if (!pi || !pj) continue;
           const dx = pi.x - pj.x;
           const dy = pi.y - pj.y;
@@ -323,8 +327,8 @@ export async function seedConjunctions(db: any, opts: SeedConjunctionsOpts = {})
 
         if (minStep >= 0 && minSq < thresholdSq) {
           const minRange = Math.sqrt(minSq);
-          const vi = velocities[i][minStep];
-          const vj = velocities[j][minStep];
+          const vi = velocities[i]?.[minStep];
+          const vj = velocities[j]?.[minStep];
           let relVel = 0;
           if (vi && vj) {
             const vx = vi.x - vj.x;

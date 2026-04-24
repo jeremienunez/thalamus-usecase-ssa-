@@ -6,6 +6,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "typecheck:strict": "tsc --noEmit -p tsconfig.strict.json",
     "drizzle-kit": "drizzle-kit",
     "generate": "drizzle-kit generate",
     "push": "drizzle-kit push",

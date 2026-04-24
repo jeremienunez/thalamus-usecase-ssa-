@@ -13,6 +13,24 @@ module.exports = {
       },
     },
     {
+      name: "core-no-circular",
+      severity: "error",
+      comment:
+        "Core agentic runtime modules must stay acyclic. Break cycles with ports, " +
+        "narrow DTO modules, or container wiring rather than importing across runtime seams.",
+      from: {
+        path: [
+          "^packages/thalamus/src/",
+          "^packages/sweep/src/services/",
+          "^apps/console-api/src/services/",
+          "^apps/console-api/src/agent/",
+        ],
+      },
+      to: {
+        circular: true,
+      },
+    },
+    {
       name: "no-orphans",
       comment:
         "This is an orphan module - it's likely not used (anymore?). Either use it or " +

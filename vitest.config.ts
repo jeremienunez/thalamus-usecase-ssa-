@@ -1,65 +1,7 @@
 import { defineConfig, defineProject } from "vitest/config";
-import { resolve } from "node:path";
+import { workspaceAliases } from "./vitest.aliases";
 
-/**
- * Match the TS path aliases declared in tsconfig.base.json so Vitest resolves
- * sub-path imports like `@interview/shared/observability` the same way tsc does.
- */
-const aliases = {
-  "@interview/shared/observability/": resolve(
-    __dirname,
-    "packages/shared/src/observability/",
-  ),
-  "@interview/shared/observability": resolve(
-    __dirname,
-    "packages/shared/src/observability/index.ts",
-  ),
-  "@interview/shared/enum/": resolve(__dirname, "packages/shared/src/enum/"),
-  "@interview/shared/enum": resolve(
-    __dirname,
-    "packages/shared/src/enum/index.ts",
-  ),
-  "@interview/shared/utils/": resolve(__dirname, "packages/shared/src/utils/"),
-  "@interview/shared/utils": resolve(
-    __dirname,
-    "packages/shared/src/utils/index.ts",
-  ),
-  "@interview/shared/types": resolve(__dirname, "packages/shared/src/types"),
-  "@interview/shared/schemas": resolve(
-    __dirname,
-    "packages/shared/src/schemas",
-  ),
-  "@interview/shared/config": resolve(
-    __dirname,
-    "packages/shared/src/config/index.ts",
-  ),
-  "@interview/shared": resolve(__dirname, "packages/shared/src/index.ts"),
-  // Thalamus subpath imports used at runtime by sweep services.
-  "@interview/thalamus/explorer/curator": resolve(
-    __dirname,
-    "packages/thalamus/src/explorer/curator.ts",
-  ),
-  "@interview/thalamus/explorer/nano-caller": resolve(
-    __dirname,
-    "packages/thalamus/src/explorer/nano-caller.ts",
-  ),
-  "@interview/thalamus/explorer/nano-swarm": resolve(
-    __dirname,
-    "packages/thalamus/src/explorer/nano-swarm.ts",
-  ),
-  "@interview/thalamus/services/research-graph.service": resolve(
-    __dirname,
-    "packages/thalamus/src/services/research-graph.service.ts",
-  ),
-  "@interview/db-schema": resolve(__dirname, "packages/db-schema/src/index.ts"),
-  "@interview/test-kit": resolve(__dirname, "packages/test-kit/src/index.ts"),
-  "@interview/thalamus": resolve(__dirname, "packages/thalamus/src/index.ts"),
-  "@interview/sweep/internal": resolve(
-    __dirname,
-    "packages/sweep/src/internal.ts",
-  ),
-  "@interview/sweep": resolve(__dirname, "packages/sweep/src/index.ts"),
-};
+const aliases = workspaceAliases(__dirname);
 
 const nodeProjectDefaults = {
   globals: true,

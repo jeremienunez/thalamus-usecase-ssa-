@@ -173,6 +173,7 @@ Specialized commands remain available for local iteration:
 ```bash
 pnpm install
 pnpm -r typecheck   # all packages
+pnpm typecheck:strict # strict shared/db-schema gate
 pnpm test:policy    # structural test contract (no todo/skip/vague placeholders)
 pnpm test           # vitest workspace (unit / integration / e2e)
 

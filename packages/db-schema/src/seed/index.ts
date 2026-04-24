@@ -309,7 +309,11 @@ async function main() {
   const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
   const tles: Tle[] = [];
   for (let i = 0; i + 2 < lines.length; i += 3) {
-    const tle = parseTleBlock(lines[i], lines[i + 1], lines[i + 2]);
+    const name = lines[i];
+    const line1 = lines[i + 1];
+    const line2 = lines[i + 2];
+    if (!name || !line1 || !line2) continue;
+    const tle = parseTleBlock(name, line1, line2);
     if (tle) tles.push(tle);
     if (tles.length >= SEED_COUNT) break;
   }

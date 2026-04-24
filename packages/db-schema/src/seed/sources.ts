@@ -179,6 +179,7 @@ export async function fetchRss(
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml)) !== null && items.length < limit) {
     const block = m[1];
+    if (!block) continue;
     const title = pickFirstTagText(block, "title");
     if (!title) continue;
     const link =
@@ -239,6 +240,7 @@ export async function fetchArxiv(
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml)) !== null && items.length < limit) {
     const block = m[1];
+    if (!block) continue;
     const id = pickFirstTagText(block, "id");
     const title = pickFirstTagText(block, "title");
     if (!id || !title) continue;
@@ -246,7 +248,7 @@ export async function fetchArxiv(
     const published = pickFirstTagText(block, "published");
     const authors = pickAllTagText(block, "name");
     const linkMatch = block.match(/<link\b[^>]*\bhref="([^"]+)"/i);
-    const link = linkMatch ? linkMatch[1] : id;
+    const link = linkMatch?.[1] ?? id;
     items.push({
       sourceId: src.id,
       externalId: id.slice(0, 500),

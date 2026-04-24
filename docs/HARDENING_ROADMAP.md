@@ -16,6 +16,7 @@
 
 ## Type safety
 
+- strict shared/db-schema gates are enforced by `pnpm typecheck:strict`
 - strictNullChecks migration
 - noUncheckedIndexedAccess migration
 - Zod schemas for all LLM outputs
