@@ -62,6 +62,8 @@ export interface CortexOutput {
   findings: CortexFinding[];
   metadata: {
     tokensUsed: number;
+    promptTokens?: number;
+    completionTokens?: number;
     duration: number;
     model: string;
   };

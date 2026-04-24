@@ -76,6 +76,12 @@ export class StrategistStrategy implements CortexExecutionStrategy {
       findings,
       metadata: {
         tokensUsed: result.tokensEstimate,
+        ...(result.promptTokensEstimate !== undefined
+          ? { promptTokens: result.promptTokensEstimate }
+          : {}),
+        ...(result.completionTokensEstimate !== undefined
+          ? { completionTokens: result.completionTokensEstimate }
+          : {}),
         duration,
         model: result.model,
       },

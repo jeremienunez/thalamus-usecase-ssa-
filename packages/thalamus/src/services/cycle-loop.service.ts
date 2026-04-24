@@ -21,6 +21,7 @@ import type {
   ResearchVerificationTargetHint,
 } from "../types/research.types";
 import { throwIfAborted } from "../transports/abort";
+import { estimateCortexOutputCostUsd } from "./cost-estimator";
 
 const logger = createLogger("cycle-loop");
 
@@ -99,7 +100,7 @@ export class CycleLoopRunner {
       throwIfAborted(ctx.signal);
       const newFindings = [...outputs.values()].flatMap((o) => o.findings);
       const iterationCost = [...outputs.values()].reduce(
-        (sum, o) => sum + o.metadata.tokensUsed * 0.000002,
+        (sum, o) => sum + estimateCortexOutputCostUsd(o),
         0,
       );
       totalCost += iterationCost;

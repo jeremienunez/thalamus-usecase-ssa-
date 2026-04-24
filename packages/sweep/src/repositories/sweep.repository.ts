@@ -19,11 +19,13 @@ import type {
 const PREFIX = "sweep:suggestions";
 const IDX_ALL = "sweep:index:all";
 const IDX_PENDING = "sweep:index:pending";
+const IDX_RANKED_PREFIX = "sweep:index:ranked";
 const COUNTER = "sweep:counter";
 const FEEDBACK = "sweep:feedback";
 const TTL_DAYS = 90;
 const TTL_SECS = TTL_DAYS * 86400;
 const DOMAIN_BLOB = "domainBlob";
+const FILTER_SCAN_BATCH = 100;
 
 const RESERVED_HASH_KEYS = new Set([
   "id",
@@ -137,10 +139,12 @@ export class SweepRepository {
     const id = await this.redis.incr(COUNTER);
     const key = `${PREFIX}:${id}`;
     const createdAt = new Date(now).toISOString();
-    pipe.hset(key, this.toHash(suggestion, id, createdAt));
+    const hash = this.toHash(suggestion, id, createdAt);
+    pipe.hset(key, hash);
     pipe.expire(key, TTL_SECS);
     pipe.zadd(IDX_ALL, now, String(id));
     pipe.sadd(IDX_PENDING, String(id));
+    this.indexSuggestion(pipe, String(id), hash, ["all", "pending"]);
     return id;
   }
 
@@ -172,58 +176,36 @@ export class SweepRepository {
     severity?: string;
     reviewed?: boolean;
   }): Promise<{ rows: GenericSuggestionRow[]; total: number }> {
-    let ids: string[];
-    if (opts.reviewed === false) {
-      ids = await this.redis.smembers(IDX_PENDING);
-    } else {
-      ids = await this.redis.zrevrange(IDX_ALL, 0, -1);
-    }
-
-    const pipe = this.redis.pipeline();
-    for (const id of ids) pipe.hgetall(`${PREFIX}:${id}`);
-    const results = await pipe.exec();
-
-    let rows: GenericSuggestionRow[] = (results ?? [])
-      .map(([err, data]) => {
-        if (err || !data || typeof data !== "object") return null;
-        return this.toRow(data as Record<string, string>);
-      })
-      .filter((row): row is GenericSuggestionRow => row !== null);
-
-    if (opts.category) {
-      rows = rows.filter(
-        (row) => String(row.domainFields.category ?? "") === opts.category,
-      );
-    }
-    if (opts.severity) {
-      rows = rows.filter(
-        (row) => String(row.domainFields.severity ?? "") === opts.severity,
-      );
-    }
-    if (opts.reviewed === true) {
-      rows = rows.filter((row) => row.reviewedAt !== null);
-    }
-
-    const severityRank: Record<string, number> = {
-      critical: 0,
-      warning: 1,
-      info: 2,
-    };
-    rows.sort((a, b) => {
-      const left = severityRank[String(a.domainFields.severity ?? "")] ?? 99;
-      const right = severityRank[String(b.domainFields.severity ?? "")] ?? 99;
-      if (left !== right) return left - right;
-      return b.createdAt.localeCompare(a.createdAt);
-    });
-
-    const total = rows.length;
-    const page = opts.page ?? 1;
-    const limit = opts.limit ?? 20;
+    const page = Math.max(1, opts.page ?? 1);
+    const limit = Math.max(1, opts.limit ?? 20);
     const offset = (page - 1) * limit;
+    const scope = scopeFromReviewed(opts.reviewed);
+    await this.ensureRankedIndexesForRead(scope);
+    const severity = normalizeFilter(opts.severity);
+    const category = normalizeFilter(opts.category);
+    const directIndex = this.directListIndex(scope, { severity, category });
+
+    if (directIndex) {
+      const [ids, total] = await Promise.all([
+        this.redis.zrevrange(directIndex, offset, offset + limit - 1),
+        this.redis.zcard(directIndex),
+      ]);
+      const rows = (await this.rowsByIds(ids)).filter((row) =>
+        matchesListFilters(row, { reviewed: opts.reviewed, severity, category }),
+      );
+      return { rows, total };
+    }
+
+    const filtered = await this.scanFilteredIndex(
+      await this.smallestCandidateIndex(scope, { severity, category }),
+      { reviewed: opts.reviewed, severity, category },
+      offset,
+      limit,
+    );
 
     return {
-      rows: rows.slice(offset, offset + limit),
-      total,
+      rows: filtered.rows,
+      total: filtered.total,
     };
   }
 
@@ -254,12 +236,16 @@ export class SweepRepository {
       reviewedAt,
     };
 
-    await this.redis.hset(key, {
+    const pipe = this.redis.pipeline();
+    pipe.hset(key, {
       accepted: patched.accepted,
       reviewerNote: patched.reviewerNote,
       reviewedAt: patched.reviewedAt,
     });
-    await this.redis.srem(IDX_PENDING, id);
+    pipe.srem(IDX_PENDING, id);
+    this.unindexSuggestion(pipe, id, patched, ["pending"]);
+    this.indexSuggestion(pipe, id, patched, ["reviewed"]);
+    await pipe.exec();
 
     const row = this.toRow(patched);
     await this.redis.lpush(
@@ -389,6 +375,301 @@ export class SweepRepository {
       byCategory,
     };
   }
+
+  private indexSuggestion(
+    pipe: ReturnType<IORedis["pipeline"]>,
+    id: string,
+    hash: Record<string, string>,
+    scopes: SuggestionIndexScope[],
+  ): void {
+    const score = rankedScore(hash.createdAt, hash.severity);
+    const severity = normalizeFilter(hash.severity);
+    const category = normalizeFilter(hash.category);
+
+    for (const scope of scopes) {
+      pipe.zadd(scopeIndex(scope), score, id);
+      if (severity) pipe.zadd(severityIndex(scope, severity), score, id);
+      if (category) pipe.zadd(categoryIndex(scope, category), score, id);
+    }
+  }
+
+  private unindexSuggestion(
+    pipe: ReturnType<IORedis["pipeline"]>,
+    id: string,
+    hash: Record<string, string>,
+    scopes: SuggestionIndexScope[],
+  ): void {
+    const severity = normalizeFilter(hash.severity);
+    const category = normalizeFilter(hash.category);
+
+    for (const scope of scopes) {
+      pipe.zrem(scopeIndex(scope), id);
+      if (severity) pipe.zrem(severityIndex(scope, severity), id);
+      if (category) pipe.zrem(categoryIndex(scope, category), id);
+    }
+  }
+
+  private directListIndex(
+    scope: SuggestionIndexScope,
+    filters: { severity?: string; category?: string },
+  ): string | null {
+    if (filters.severity && filters.category) return null;
+    if (filters.severity) return severityIndex(scope, filters.severity);
+    if (filters.category) return categoryIndex(scope, filters.category);
+    return scopeIndex(scope);
+  }
+
+  private async smallestCandidateIndex(
+    scope: SuggestionIndexScope,
+    filters: { severity?: string; category?: string },
+  ): Promise<string> {
+    const candidates = [
+      filters.severity ? severityIndex(scope, filters.severity) : null,
+      filters.category ? categoryIndex(scope, filters.category) : null,
+    ].filter((key): key is string => key !== null);
+
+    if (candidates.length === 0) return scopeIndex(scope);
+    const sizes = await Promise.all(
+      candidates.map(async (key) => ({ key, total: await this.redis.zcard(key) })),
+    );
+    sizes.sort((a, b) => a.total - b.total);
+    return sizes[0]?.key ?? scopeIndex(scope);
+  }
+
+  private async scanFilteredIndex(
+    indexKey: string,
+    filters: {
+      reviewed?: boolean;
+      severity?: string;
+      category?: string;
+    },
+    offset: number,
+    limit: number,
+  ): Promise<{ rows: GenericSuggestionRow[]; total: number }> {
+    const rows: GenericSuggestionRow[] = [];
+    let total = 0;
+    let start = 0;
+
+    while (true) {
+      const ids = await this.redis.zrevrange(
+        indexKey,
+        start,
+        start + FILTER_SCAN_BATCH - 1,
+      );
+      if (ids.length === 0) break;
+
+      for (const row of await this.rowsByIds(ids)) {
+        if (!matchesListFilters(row, filters)) continue;
+        if (total >= offset && rows.length < limit) rows.push(row);
+        total++;
+      }
+
+      if (ids.length < FILTER_SCAN_BATCH) break;
+      start += FILTER_SCAN_BATCH;
+    }
+
+    return { rows, total };
+  }
+
+  private async rowsByIds(ids: string[]): Promise<GenericSuggestionRow[]> {
+    if (ids.length === 0) return [];
+    const pipe = this.redis.pipeline();
+    for (const id of ids) pipe.hgetall(`${PREFIX}:${id}`);
+    const results = await pipe.exec();
+
+    return (results ?? [])
+      .map(([err, data]) => {
+        if (err || !data || typeof data !== "object") return null;
+        return this.toRow(data as Record<string, string>);
+      })
+      .filter((row): row is GenericSuggestionRow => row !== null);
+  }
+
+  private async ensureRankedIndexesForRead(
+    scope: SuggestionIndexScope,
+  ): Promise<void> {
+    const [ranked, legacy] = await Promise.all([
+      this.redis.zcard(scopeIndex("all")),
+      this.redis.zcard(IDX_ALL),
+    ]);
+    if (ranked === 0 && legacy > 0) {
+      await this.rebuildRankedIndexesFromLegacy();
+      return;
+    }
+
+    if (scope === "pending") {
+      await this.ensurePendingRankedIndexForRead();
+    }
+  }
+
+  private async rebuildRankedIndexesFromLegacy(): Promise<void> {
+    const ids = await this.redis.zrevrange(IDX_ALL, 0, -1);
+    const rows = await this.rowsByIds(ids);
+    await Promise.all([
+      this.deleteRankedScopeIndexes("all"),
+      this.deleteRankedScopeIndexes("pending"),
+      this.deleteRankedScopeIndexes("reviewed"),
+    ]);
+    const pipe = this.redis.pipeline();
+    for (const row of rows) {
+      const hash = {
+        createdAt: row.createdAt,
+        severity: String(row.domainFields.severity ?? ""),
+        category: String(row.domainFields.category ?? ""),
+      };
+      this.indexSuggestion(pipe, row.id, hash, ["all"]);
+      this.indexSuggestion(pipe, row.id, hash, [
+        row.reviewedAt ? "reviewed" : "pending",
+      ]);
+    }
+    await pipe.exec();
+  }
+
+  private async ensurePendingRankedIndexForRead(): Promise<void> {
+    const [ranked, pending] = await Promise.all([
+      this.redis.zcard(scopeIndex("pending")),
+      this.redis.scard(IDX_PENDING),
+    ]);
+
+    if (pending === 0) {
+      await this.deleteRankedScopeIndexes("pending");
+      return;
+    }
+    if (ranked === pending && (await this.pendingRankedSampleMatchesSet())) {
+      return;
+    }
+
+    await this.deleteRankedScopeIndexes("pending");
+    const ids = await this.redis.smembers(IDX_PENDING);
+    const rows = await this.rowsByIds(ids);
+    const pipe = this.redis.pipeline();
+    for (const row of rows) {
+      this.indexSuggestion(
+        pipe,
+        row.id,
+        {
+          createdAt: row.createdAt,
+          severity: String(row.domainFields.severity ?? ""),
+          category: String(row.domainFields.category ?? ""),
+        },
+        ["pending"],
+      );
+    }
+    await pipe.exec();
+  }
+
+  private async pendingRankedSampleMatchesSet(): Promise<boolean> {
+    const ids = await this.redis.zrevrange(scopeIndex("pending"), 0, 19);
+    if (ids.length === 0) return false;
+
+    const pipe = this.redis.pipeline();
+    for (const id of ids) pipe.sismember(IDX_PENDING, id);
+    const results = await pipe.exec();
+    return (results ?? []).every(([err, present]) => !err && present === 1);
+  }
+
+  private async deleteRankedScopeIndexes(
+    scope: SuggestionIndexScope,
+  ): Promise<void> {
+    const pattern = `${scopeIndex(scope)}*`;
+    let cursor = "0";
+    let keys: string[] = [];
+
+    do {
+      const [nextCursor, batch] = await this.redis.scan(
+        cursor,
+        "MATCH",
+        pattern,
+        "COUNT",
+        100,
+      );
+      cursor = nextCursor;
+      keys.push(...batch);
+
+      if (keys.length >= 100) {
+        await this.redis.del(...keys);
+        keys = [];
+      }
+    } while (cursor !== "0");
+
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
+}
+
+type SuggestionIndexScope = "all" | "pending" | "reviewed";
+
+function scopeFromReviewed(reviewed: boolean | undefined): SuggestionIndexScope {
+  if (reviewed === false) return "pending";
+  if (reviewed === true) return "reviewed";
+  return "all";
+}
+
+function scopeIndex(scope: SuggestionIndexScope): string {
+  return `${IDX_RANKED_PREFIX}:${scope}`;
+}
+
+function severityIndex(scope: SuggestionIndexScope, severity: string): string {
+  return `${scopeIndex(scope)}:severity:${indexKeyPart(severity)}`;
+}
+
+function categoryIndex(scope: SuggestionIndexScope, category: string): string {
+  return `${scopeIndex(scope)}:category:${indexKeyPart(category)}`;
+}
+
+function rankedScore(createdAt: string, severity: string | null | undefined): number {
+  const time = Date.parse(createdAt);
+  const timeScore = Number.isFinite(time) ? Math.max(0, time) : 0;
+  return severityPriority(severity) * 10_000_000_000_000 + timeScore;
+}
+
+function severityPriority(severity: string | null | undefined): number {
+  switch (normalizeFilter(severity)) {
+    case "critical":
+      return 3;
+    case "warning":
+      return 2;
+    case "info":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function matchesListFilters(
+  row: GenericSuggestionRow,
+  filters: {
+    reviewed?: boolean;
+    severity?: string;
+    category?: string;
+  },
+): boolean {
+  if (filters.reviewed === true && row.reviewedAt === null) return false;
+  if (filters.reviewed === false && row.reviewedAt !== null) return false;
+  if (
+    filters.severity &&
+    normalizeFilter(row.domainFields.severity) !== filters.severity
+  ) {
+    return false;
+  }
+  if (
+    filters.category &&
+    normalizeFilter(row.domainFields.category) !== filters.category
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeFilter(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const normalized = String(value).trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function indexKeyPart(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
 }
 
 function fallbackSerializeDomainFields(input: Record<string, unknown>): {

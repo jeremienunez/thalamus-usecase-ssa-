@@ -73,6 +73,8 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
   findings: CortexFinding[];
   model: string;
   tokensEstimate: number;
+  promptTokensEstimate?: number;
+  completionTokensEstimate?: number;
   status?: CortexLlmStatus;
   diagnostic?: CortexLlmDiagnostic;
 }> {
@@ -225,12 +227,11 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
     );
 
     const duration = Date.now() - start;
-    const tokensEstimate = Math.round(
-      (input.systemPrompt.length +
-        userPrompt.length +
-        response.content.length) /
-        4,
+    const promptTokensEstimate = Math.round(
+      (input.systemPrompt.length + userPrompt.length) / 4,
     );
+    const completionTokensEstimate = Math.round(response.content.length / 4);
+    const tokensEstimate = promptTokensEstimate + completionTokensEstimate;
 
     if (parsedResponse.diagnostic) {
       logger.warn(
@@ -252,6 +253,8 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
         findings: [],
         model: `${response.provider}:invalid`,
         tokensEstimate,
+        promptTokensEstimate,
+        completionTokensEstimate,
         status: parsedResponse.status,
         diagnostic: parsedResponse.diagnostic,
       };
@@ -281,6 +284,8 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
       findings,
       model: `${response.provider}`,
       tokensEstimate,
+      promptTokensEstimate,
+      completionTokensEstimate,
       status: parsedResponse.status,
     };
   } catch (err) {

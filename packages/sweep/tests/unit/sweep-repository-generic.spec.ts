@@ -9,7 +9,7 @@
  *   3. insertOne remains an alias for insertGeneric.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import Redis from "ioredis-mock";
 import { SweepRepository } from "../../src/repositories/sweep.repository";
 import type { FindingDomainSchema } from "../../src/ports";
@@ -144,6 +144,113 @@ describe("SweepRepository generic contract", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]!.domain).toBe("example-domain");
     expect(rows[0]!.domainFields.title).toBeDefined();
+  });
+
+  it("paginates pending suggestions through the ranked index instead of loading every id", async () => {
+    const repo = makeRepo(false);
+    for (let i = 0; i < 5; i++) {
+      await repo.insertGeneric({
+        domain: "generic",
+        domainFields: {
+          title: `Suggestion ${i}`,
+          severity: "info",
+          category: "coverage",
+        },
+        resolutionPayload: null,
+      });
+    }
+
+    const zrevrange = vi.spyOn(redis, "zrevrange");
+    const { rows, total } = await repo.listGeneric({
+      reviewed: false,
+      page: 2,
+      limit: 2,
+    });
+
+    expect(total).toBe(5);
+    expect(rows).toHaveLength(2);
+    expect(zrevrange).toHaveBeenCalledWith(
+      "sweep:index:ranked:pending",
+      2,
+      3,
+    );
+    expect(
+      zrevrange.mock.calls.some(
+        ([key, start, end]) =>
+          key === "sweep:index:all" && start === 0 && end === -1,
+      ),
+    ).toBe(false);
+  });
+
+  it("moves reviewed suggestions from pending indexes to reviewed indexes", async () => {
+    const repo = makeRepo(false);
+    const criticalId = await repo.insertGeneric({
+      domain: "generic",
+      domainFields: {
+        title: "Critical suggestion",
+        severity: "critical",
+        category: "catalog",
+      },
+      resolutionPayload: null,
+    });
+    await repo.insertGeneric({
+      domain: "generic",
+      domainFields: {
+        title: "Warning suggestion",
+        severity: "warning",
+        category: "catalog",
+      },
+      resolutionPayload: null,
+    });
+
+    await expect(repo.review(criticalId, true)).resolves.toBe(true);
+
+    const pending = await repo.listGeneric({
+      reviewed: false,
+      severity: "critical",
+      limit: 10,
+    });
+    const reviewed = await repo.listGeneric({
+      reviewed: true,
+      severity: "critical",
+      limit: 10,
+    });
+
+    expect(pending).toMatchObject({ rows: [], total: 0 });
+    expect(reviewed.total).toBe(1);
+    expect(reviewed.rows[0]?.id).toBe(criticalId);
+  });
+
+  it("clears stale filtered pending indexes when rebuilding from legacy state", async () => {
+    const repo = makeRepo(false);
+    const staleCriticalId = await repo.insertGeneric({
+      domain: "generic",
+      domainFields: {
+        title: "Stale critical suggestion",
+        severity: "critical",
+        category: "catalog",
+      },
+      resolutionPayload: null,
+    });
+    await repo.insertGeneric({
+      domain: "generic",
+      domainFields: {
+        title: "Live warning suggestion",
+        severity: "warning",
+        category: "catalog",
+      },
+      resolutionPayload: null,
+    });
+
+    await redis.srem("sweep:index:pending", staleCriticalId);
+
+    const pendingCritical = await repo.listGeneric({
+      reviewed: false,
+      severity: "critical",
+      limit: 10,
+    });
+
+    expect(pendingCritical).toMatchObject({ rows: [], total: 0 });
   });
 
   it("schema-less mode round-trips flat fields and blob fields", async () => {
