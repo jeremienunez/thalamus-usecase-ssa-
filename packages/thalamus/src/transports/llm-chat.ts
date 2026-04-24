@@ -280,7 +280,7 @@ export function createLlmTransport(
   return new LlmChatTransport(
     {
       systemPrompt,
-      maxRetries: opts?.maxRetries ?? 2,
+      maxRetries: opts?.maxRetries,
       enableWebSearch: opts?.enableWebSearch,
       preferredProvider: opts?.preferredProvider,
       overrides: opts?.overrides,

@@ -5,8 +5,15 @@
 // `@interview/thalamus`'s `createLlmTransportWithMode` without importing the
 // transport package from domain services.
 
+export interface LlmTransportCallOptions {
+  signal?: AbortSignal;
+}
+
 export interface LlmTransportFactory {
   create(systemPrompt: string): {
-    call(input: string): Promise<{ content: string; provider: string }>;
+    call(
+      input: string,
+      options?: LlmTransportCallOptions,
+    ): Promise<{ content: string; provider: string }>;
   };
 }

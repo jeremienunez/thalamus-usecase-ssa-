@@ -34,6 +34,7 @@ export interface ThalamusChatDep {
       userId?: bigint;
       triggerType: ResearchCycleTrigger;
       triggerSource: string;
+      signal?: AbortSignal;
     }): Promise<{
       id: bigint | string;
       verification?: {
@@ -86,7 +87,7 @@ export class ReplChatService {
     const t0 = Date.now();
     const aborted = (): boolean => signal?.aborted === true;
 
-    const intent = await this.classifier.classify(input);
+    const intent = await this.classifier.classify(input, signal);
     if (aborted()) return;
 
     yield {
@@ -99,7 +100,7 @@ export class ReplChatService {
 
     if (intent.action === "chat") {
       if (aborted()) return;
-      const { text, provider } = await this.chatReply.reply(input);
+      const { text, provider } = await this.chatReply.reply(input, signal);
       if (aborted()) return;
       yield { event: "chat.complete", data: { text, provider } };
       yield {
@@ -125,6 +126,7 @@ export class ReplChatService {
         userId,
         triggerType: ResearchCycleTrigger.User,
         triggerSource: "console-chat",
+        ...(signal ? { signal } : {}),
       }),
     );
 
@@ -198,6 +200,7 @@ export class ReplChatService {
       query,
       String(cycleResultId),
       top.map(toReplFindingSummaryView),
+      signal,
     );
     if (aborted()) return;
     yield {
@@ -238,15 +241,18 @@ export class ReplChatService {
     }
 
     if (this.briefingAggregator && cycleResult) {
-      const briefing = await this.briefingAggregator.aggregate({
-        query,
-        parentCycleId: String(cycleResultId),
-        parent: {
-          summary: summary.text,
-          findings: top.map(toReplFindingSummaryView),
+      const briefing = await this.briefingAggregator.aggregate(
+        {
+          query,
+          parentCycleId: String(cycleResultId),
+          parent: {
+            summary: summary.text,
+            findings: top.map(toReplFindingSummaryView),
+          },
+          followUps: [...followUpRuns.values()],
         },
-        followUps: [...followUpRuns.values()],
-      });
+        signal,
+      );
       if (aborted()) return;
       terminalProvider = briefing.provider;
       yield { event: "briefing.complete", data: briefing };

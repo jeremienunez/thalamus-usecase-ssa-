@@ -626,7 +626,7 @@ describe("ResearchGraphService.storeFinding", () => {
     });
   });
 
-  it("links the cycle on a hash dedup hit and skips all insert-only side effects", async () => {
+  it("counts and links the cycle on a hash dedup hit while skipping insert-only side effects", async () => {
     const {
       service,
       upsertByDedupHash,
@@ -653,7 +653,7 @@ describe("ResearchGraphService.storeFinding", () => {
       iteration: 0,
       isDedupHit: true,
     });
-    expect(incrementFindings).not.toHaveBeenCalled();
+    expect(incrementFindings).toHaveBeenCalledWith(1n);
     expect(createMany).not.toHaveBeenCalled();
     expect(callback).not.toHaveBeenCalled();
   });

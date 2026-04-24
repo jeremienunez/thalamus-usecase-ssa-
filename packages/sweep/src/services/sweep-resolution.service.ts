@@ -29,6 +29,7 @@ import {
 } from "../dto/sweep.dto";
 
 const logger = createLogger("sweep-resolution");
+const TERMINAL_RESOLUTION_STATUSES = new Set(["success", "partial", "failed"]);
 
 export interface SweepResolutionDeps {
   registry: ResolutionHandlerRegistry;
@@ -81,6 +82,16 @@ export class SweepResolutionService {
         errors: ["Suggestion not accepted"],
       };
     }
+
+    const existingResolution = toTerminalResolutionResult(generic);
+    if (existingResolution) {
+      logger.info(
+        { suggestionId, status: existingResolution.status },
+        "Resolution already terminal; skipping action dispatch",
+      );
+      return existingResolution;
+    }
+
     if (!generic.resolutionPayload) {
       return {
         status: "failed",
@@ -221,4 +232,33 @@ export class SweepResolutionService {
 
     return result;
   }
+}
+
+function toTerminalResolutionResult(
+  row: GenericSuggestionRow,
+): ResolutionResult | null {
+  if (!TERMINAL_RESOLUTION_STATUSES.has(row.resolutionStatus)) {
+    return null;
+  }
+  const errors = parseResolutionErrors(row.resolutionErrors);
+  return {
+    status: row.resolutionStatus as ResolutionResult["status"],
+    resolvedAt: row.resolvedAt ?? undefined,
+    affectedRows: 0,
+    errors,
+  };
+}
+
+function parseResolutionErrors(raw: string | null): string[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      const errors = parsed.filter((item): item is string => typeof item === "string");
+      return errors.length > 0 ? errors : undefined;
+    }
+  } catch {
+    // Older rows may contain a plain string rather than JSON.
+  }
+  return [raw];
 }

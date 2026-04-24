@@ -63,6 +63,7 @@ export interface SsaReplFollowUpDeps {
       userId?: bigint;
       triggerType: ResearchCycleTrigger;
       triggerSource: string;
+      signal?: AbortSignal;
     }): Promise<ChildCycleResult>;
   };
   findingRepo: {

@@ -27,7 +27,7 @@ export const thalamusLlmTransportFactory: LlmTransportFactory = {
     // and threads preferred provider + per-call overrides down to the
     // underlying transport.
     return {
-      async call(input: string) {
+      async call(input: string, options) {
         const cfg = await getPlannerConfig();
         const transport = createLlmTransportWithMode(systemPrompt, {
           preferredProvider: pickProvider(cfg.provider),
@@ -42,7 +42,7 @@ export const thalamusLlmTransportFactory: LlmTransportFactory = {
             reasoningSplit: cfg.reasoningSplit,
           },
         });
-        return transport.call(input);
+        return options ? transport.call(input, options) : transport.call(input);
       },
     };
   },

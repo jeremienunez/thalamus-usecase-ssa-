@@ -208,6 +208,41 @@ describe("ThalamusService.runCycle", () => {
     });
   });
 
+  it("passes AbortSignal to planner and cycle loop runtime work", async () => {
+    const { service, plan, run } = createHarness();
+    const controller = new AbortController();
+    plan.mockResolvedValueOnce(makePlan({ intent: "Abortable plan" }));
+
+    await service.runCycle({
+      query: "Abortable plan",
+      triggerType: ResearchCycleTrigger.User,
+      signal: controller.signal,
+    });
+
+    expect(plan).toHaveBeenCalledWith("Abortable plan", {
+      hasUser: false,
+      signal: controller.signal,
+    });
+    expect(run.mock.calls[0]?.[3]).toMatchObject({
+      signal: controller.signal,
+    });
+  });
+
+  it("does not create a cycle when the incoming signal is already aborted", async () => {
+    const { service, create } = createHarness();
+    const controller = new AbortController();
+    controller.abort(new Error("client disconnected"));
+
+    await expect(
+      service.runCycle({
+        query: "Abort before work",
+        triggerType: ResearchCycleTrigger.User,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow("client disconnected");
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("keeps the cycle completed and returns persistence metadata when some findings fail to store", async () => {
     const { service, plan, persist, updateStatus } = createHarness();
     plan.mockResolvedValueOnce(makePlan({ intent: "Partial persistence" }));

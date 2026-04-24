@@ -31,9 +31,13 @@ export class ReplBriefingAggregator {
 
   async aggregate(
     input: ReplBriefingAggregateInput,
+    signal?: AbortSignal,
   ): Promise<ReplBriefingReport> {
     const transport = this.llm.create(aggregateBriefingPrompt(input.query));
-    const response = await transport.call(JSON.stringify(input, null, 2));
+    const payload = JSON.stringify(input, null, 2);
+    const response = signal
+      ? await transport.call(payload, { signal })
+      : await transport.call(payload);
     const parsed = parseReport(response.content, input);
 
     return {

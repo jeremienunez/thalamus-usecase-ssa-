@@ -97,6 +97,13 @@ describe("LlmChatTransport", () => {
     });
   });
 
+  it("leaves maxRetries unset by default so runtime config can supply the retry budget", () => {
+    const transport = createLlmTransport("SYSTEM");
+    const config = Reflect.get(transport, "config") as Record<string, unknown>;
+
+    expect(config.maxRetries).toBeUndefined();
+  });
+
   it("tries the preferred provider first and strips the model override on fallback providers", async () => {
     const local = buildProvider("local", false);
     const kimi = buildProvider("kimi");

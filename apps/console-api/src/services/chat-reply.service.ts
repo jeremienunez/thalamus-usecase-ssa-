@@ -9,9 +9,14 @@ import type { LlmTransportFactory } from "./llm-transport.port";
 export class ChatReplyService {
   constructor(private readonly llm: LlmTransportFactory) {}
 
-  async reply(input: string): Promise<{ text: string; provider: string }> {
+  async reply(
+    input: string,
+    signal?: AbortSignal,
+  ): Promise<{ text: string; provider: string }> {
     const chat = this.llm.create(CONSOLE_CHAT_SYSTEM_PROMPT);
-    const response = await chat.call(input);
+    const response = signal
+      ? await chat.call(input, { signal })
+      : await chat.call(input);
     return { text: response.content, provider: response.provider };
   }
 }

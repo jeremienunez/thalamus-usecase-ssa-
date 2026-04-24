@@ -325,6 +325,39 @@ describe("ThalamusDAGExecutor.execute", () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
+  it("aborts the DAG when the parent signal is cancelled", async () => {
+    const execute = typedSpy<CortexExecutor["execute"]>();
+    let capturedSignal: AbortSignal | undefined;
+    execute.mockImplementation(
+      async (_cortexName, input) =>
+        new Promise<CortexOutput>(() => {
+          capturedSignal = input.signal;
+        }),
+    );
+    const service = new ThalamusDAGExecutor(
+      fakePort<CortexExecutor>({ execute }),
+    );
+    const controller = new AbortController();
+
+    const run = service.execute(
+      {
+        intent: "Abort DAG",
+        complexity: "simple",
+        nodes: [{ cortex: "alpha", params: {}, dependsOn: [] }],
+      },
+      15n,
+      undefined,
+      undefined,
+      undefined,
+      controller.signal,
+    );
+    await Promise.resolve();
+    controller.abort(new Error("client aborted"));
+
+    await expect(run).rejects.toThrow("client aborted");
+    expect(capturedSignal?.aborted).toBe(true);
+  });
+
   it("falls back to an error output when the cortex rejects with a non-Error value", async () => {
     const execute = typedSpy<CortexExecutor["execute"]>();
     execute.mockRejectedValueOnce("plain rejection");

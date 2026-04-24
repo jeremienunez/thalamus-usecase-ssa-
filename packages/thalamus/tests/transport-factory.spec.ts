@@ -23,8 +23,10 @@ vi.mock("../src/transports/fixture-transport", () => ({
       mocks.fixtureCtorMock(opts);
     }
 
-    async call(userPrompt: string) {
-      return mocks.fixtureCallMock(userPrompt);
+    async call(userPrompt: string, options?: unknown) {
+      return options
+        ? mocks.fixtureCallMock(userPrompt, options)
+        : mocks.fixtureCallMock(userPrompt);
     }
   },
 }));
@@ -81,6 +83,26 @@ describe("createLlmTransportWithMode", () => {
     });
     expect(mocks.fixtureCtorMock).not.toHaveBeenCalled();
     expect(mocks.realCallMock).toHaveBeenCalledWith("USER");
+  });
+
+  it("forwards call options to the active transport", async () => {
+    mocks.realCallMock.mockResolvedValue({
+      content: "cloud reply",
+      provider: "openai",
+    });
+    const controller = new AbortController();
+
+    const transport = createLlmTransportWithMode("SYSTEM");
+
+    await expect(
+      transport.call("USER", { signal: controller.signal }),
+    ).resolves.toEqual({
+      content: "cloud reply",
+      provider: "openai",
+    });
+    expect(mocks.realCallMock).toHaveBeenCalledWith("USER", {
+      signal: controller.signal,
+    });
   });
 
   it("routes record mode through the fixture transport with the resolved defaults", async () => {

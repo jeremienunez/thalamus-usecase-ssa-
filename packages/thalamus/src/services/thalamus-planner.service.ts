@@ -16,6 +16,7 @@ import type { CortexRegistry } from "../cortices/registry";
 import type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 import { buildGenericPlannerSystemPrompt } from "../prompts";
 import { getPlannerConfig, getCortexConfig } from "../config/runtime-config";
+import { isAbortError } from "../transports/abort";
 
 const logger = createLogger("thalamus-planner");
 
@@ -64,6 +65,7 @@ const dagPlanSchema = z.object({
 export interface PlanOptions {
   /** False when running autonomously — user-scoped cortices are stripped. */
   hasUser?: boolean;
+  signal?: AbortSignal;
 }
 
 export class ThalamusPlanner {
@@ -185,9 +187,10 @@ export class ThalamusPlanner {
     });
 
     try {
-      const response = await transport.call(
-        `Research query: "${query}"\n\nProduce the optimal DAG plan.`,
-      );
+      const prompt = `Research query: "${query}"\n\nProduce the optimal DAG plan.`;
+      const response = opts.signal
+        ? await transport.call(prompt, { signal: opts.signal })
+        : await transport.call(prompt);
       const plan = safeParseDAG(response.content, dagPlanSchema);
 
       // Validate cortex names
@@ -229,6 +232,7 @@ export class ThalamusPlanner {
       });
       return plan;
     } catch (err) {
+      if (isAbortError(err)) throw err;
       logger.error({ query, err }, "Planner LLM failed, using fallback");
       stepLog(logger, "planner", "error", {
         query,
@@ -284,7 +288,6 @@ export class ThalamusPlanner {
     if (disabled.size > 0) {
       kept = kept.filter((n) => !disabled.has(n.cortex));
     }
-    kept = this.dedupeGeneratedNodes(kept);
 
     // 2. force-inject (skip any that are disabled or already present)
     const present = new Set(kept.map((n) => n.cortex));
@@ -332,30 +335,6 @@ export class ThalamusPlanner {
       ...n,
       dependsOn: n.dependsOn.filter((d) => finalNames.has(d)),
     }));
-  }
-
-  private dedupeGeneratedNodes(nodes: DAGNode[]): DAGNode[] {
-    const seen = new Set<string>();
-    const duplicates = new Set<string>();
-    const kept: DAGNode[] = [];
-
-    for (const node of nodes) {
-      if (seen.has(node.cortex)) {
-        duplicates.add(node.cortex);
-        continue;
-      }
-      seen.add(node.cortex);
-      kept.push(node);
-    }
-
-    if (duplicates.size > 0) {
-      logger.warn(
-        { duplicates: [...duplicates] },
-        "Planner emitted duplicate cortices; keeping first occurrence",
-      );
-    }
-
-    return kept;
   }
 
   /**

@@ -20,6 +20,7 @@ import type {
   ResearchCycleVerification,
   ResearchVerificationTargetHint,
 } from "../types/research.types";
+import { throwIfAborted } from "../transports/abort";
 
 const logger = createLogger("cycle-loop");
 
@@ -29,6 +30,7 @@ export interface IterationContext {
   lang?: "fr" | "en";
   mode?: "investment" | "audit";
   userId?: bigint;
+  signal?: AbortSignal;
   /** Original user query — used to build replan prompts. */
   query: string;
   /** Whether a user is in scope — drives filtering of user-scoped cortices. */
@@ -82,6 +84,7 @@ export class CycleLoopRunner {
     let currentPlan = initialPlan;
 
     while (iteration < maxIter) {
+      throwIfAborted(ctx.signal);
       iteration++;
 
       // 1. Execute DAG
@@ -91,7 +94,9 @@ export class CycleLoopRunner {
         ctx.lang,
         ctx.mode,
         ctx.userId,
+        ctx.signal,
       );
+      throwIfAborted(ctx.signal);
       const newFindings = [...outputs.values()].flatMap((o) => o.findings);
       const iterationCost = [...outputs.values()].reduce(
         (sum, o) => sum + o.metadata.tokensUsed * 0.000002,
@@ -169,8 +174,10 @@ export class CycleLoopRunner {
             complexity: initialPlan.complexity,
             remainingBudget: maxCost - totalCost,
             maxIterations: maxIter,
+            ...(ctx.signal ? { signal: ctx.signal } : {}),
           },
         );
+        throwIfAborted(ctx.signal);
         lastReflexion = reflexionResult;
 
         if (!reflexionResult.replan) {
@@ -204,6 +211,7 @@ export class CycleLoopRunner {
         logger.info({ gaps, iteration }, "Reflexion: replanning");
         currentPlan = await this.planner.plan(refinedQuery, {
           hasUser: ctx.hasUser,
+          ...(ctx.signal ? { signal: ctx.signal } : {}),
         });
       }
     }

@@ -95,6 +95,7 @@ export class SsaReplFollowUpExecutor {
         userId: input.userId,
         triggerType: ResearchCycleTrigger.User,
         triggerSource: `console-followup:30d:${input.parentCycleId}`,
+        ...(input.signal ? { signal: input.signal } : {}),
       }),
     );
 
@@ -137,8 +138,10 @@ export class SsaReplFollowUpExecutor {
     }
 
     const findings = await this.deps.findingRepo.findByCycleId(result.id);
+    if (input.signal?.aborted) return;
     const top = findings.slice(0, 10);
     for (const finding of top) {
+      if (input.signal?.aborted) return;
       yield {
         event: "followup.finding",
         data: {
@@ -155,6 +158,7 @@ export class SsaReplFollowUpExecutor {
       query,
       String(result.id),
       top.map(toReplFindingSummaryView),
+      input.signal,
     );
     yield {
       event: "followup.summary",

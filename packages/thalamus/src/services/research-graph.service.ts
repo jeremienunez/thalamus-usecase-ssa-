@@ -245,7 +245,8 @@ export class ResearchGraphService {
         if (!result.inserted) {
           // Hit on dedup_hash — finding already exists with edges +
           // cross-links. Skip insert-only side effects to avoid duplicate
-          // edges and inflated cycle counts, but still link to this cycle.
+          // edges, but still count and link this cycle re-emission.
+          await uow.cycleRepo.incrementFindings(input.finding.researchCycleId);
           await uow.findingRepo.linkToCycle({
             cycleId: input.finding.researchCycleId,
             findingId: result.finding.id,

@@ -31,6 +31,7 @@ type FakeLlmState = {
   summariserPayloads: string[];
   aggregateQueries: string[];
   aggregatePayloads: string[];
+  callSignals: Array<AbortSignal | undefined>;
   lastSummariserPayload: string;
 };
 
@@ -56,7 +57,8 @@ function makeFakeFactory(state: FakeLlmState): LlmTransportFactory {
     create(systemPrompt: string) {
       state.prompts.push(systemPrompt);
       return {
-        async call(input: string) {
+        async call(input: string, options?: { signal?: AbortSignal }) {
+          state.callSignals.push(options?.signal);
           if (systemPrompt === CLASSIFIER_SYSTEM_PROMPT) {
             return { content: state.classifierContent, provider: "kimi" };
           }
@@ -148,6 +150,7 @@ describe("ReplChatService.handleStream — chat branch", () => {
       summariserPayloads: [],
       aggregateQueries: [],
       aggregatePayloads: [],
+      callSignals: [],
       lastSummariserPayload: "",
     };
   });
@@ -184,6 +187,26 @@ describe("ReplChatService.handleStream — chat branch", () => {
     expect(llmState.prompts).toEqual([
       CLASSIFIER_SYSTEM_PROMPT,
       CONSOLE_CHAT_SYSTEM_PROMPT,
+    ]);
+  });
+
+  it("passes the client AbortSignal to classifier and chat reply calls", async () => {
+    const deps = {
+      thalamusService: {
+        runCycle: vi.fn(async () => ({ id: "cyc:unused" })),
+      },
+      findingRepo: {
+        findByCycleId: vi.fn(async (): Promise<ReplFindingRow[]> => []),
+      },
+    } satisfies ReplChatDeps;
+    const svc = buildReplChat(makeFakeFactory(llmState), deps);
+    const controller = new AbortController();
+
+    await drain(svc.handleStream("bonjour", undefined, controller.signal));
+
+    expect(llmState.callSignals).toEqual([
+      controller.signal,
+      controller.signal,
     ]);
   });
 });
@@ -224,6 +247,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       summariserPayloads: [],
       aggregateQueries: [],
       aggregatePayloads: [],
+      callSignals: [],
       lastSummariserPayload: "",
     };
   });
@@ -384,7 +408,10 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       new ReplBriefingAggregator(llm),
     );
 
-    const events = await drain(svc.handleStream("scan conjonctions", 7n));
+    const controller = new AbortController();
+    const events = await drain(
+      svc.handleStream("scan conjonctions", 7n, controller.signal),
+    );
     const types = events.map((evt) => evt.event);
     expect(types).toEqual(
       expect.arrayContaining([
@@ -428,6 +455,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       userId: 7n,
       triggerType: "user",
       triggerSource: "console-chat",
+      signal: controller.signal,
     });
     expect(runCycle).toHaveBeenNthCalledWith(2, {
       query: expect.stringContaining(
@@ -436,6 +464,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       userId: 7n,
       triggerType: "user",
       triggerSource: "console-followup:30d:cyc:42",
+      signal: controller.signal,
     });
     expect(runCycle.mock.calls[1]?.[0].query).toContain("conjonctions");
     expect(runCycle.mock.calls[1]?.[0].query).toContain(
@@ -443,6 +472,12 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
     );
 
     expect(llmState.summariserQueries).toHaveLength(2);
+    expect(llmState.callSignals).toEqual([
+      controller.signal,
+      controller.signal,
+      controller.signal,
+      controller.signal,
+    ]);
     expect(llmState.summariserQueries[0]).toBe("conjonctions");
     expect(llmState.summariserQueries[1]).toContain(
       "Verification follow-up for parent cycle cyc:42.",

@@ -379,6 +379,78 @@ describe("CycleLoopRunner.run", () => {
     );
   });
 
+  it("threads AbortSignal through executor, reflexion, and replanning", async () => {
+    const execute = typedSpy<ThalamusDAGExecutor["execute"]>();
+    const evaluate = typedSpy<ThalamusReflexion["evaluate"]>();
+    const plan = typedSpy<ThalamusPlanner["plan"]>();
+    const shouldStop = typedSpy<StopCriteriaEvaluator["shouldStop"]>();
+    const controller = new AbortController();
+    const initialPlan = makePlan("Trace abortable loop", ["scout"]);
+    const replannedPlan = makePlan("Trace abortable loop - pass 2", ["curator"]);
+
+    execute
+      .mockResolvedValueOnce({
+        outputs: new Map([
+          [
+            "scout",
+            makeOutput([
+              makeFinding({
+                title: "Abortable lead",
+                sourceCortex: "scout",
+                confidence: 0.91,
+              }),
+            ]),
+          ],
+        ]),
+        totalDuration: 1,
+      })
+      .mockResolvedValueOnce({
+        outputs: new Map([["curator", makeOutput([])]]),
+        totalDuration: 1,
+      });
+    shouldStop
+      .mockReturnValueOnce({ stop: false })
+      .mockReturnValueOnce({ stop: true, reason: "max-iterations" });
+    evaluate.mockResolvedValueOnce({
+      replan: true,
+      notes: "Need one more pass.",
+      gaps: ["coverage"],
+      overallConfidence: 0.75,
+    });
+    plan.mockResolvedValueOnce(replannedPlan);
+
+    const runner = new CycleLoopRunner(
+      fakePort<ThalamusDAGExecutor>({ execute }),
+      fakePort<ThalamusReflexion>({ evaluate }),
+      fakePort<ThalamusPlanner>({ plan }),
+      fakePort<StopCriteriaEvaluator>({ shouldStop }),
+    );
+
+    await runner.run(
+      initialPlan,
+      100n,
+      {
+        maxIter: 2,
+        maxCost: 0.5,
+        budget: makeBudget({ maxIterations: 2 }),
+      },
+      {
+        query: "Trace abortable loop",
+        hasUser: true,
+        signal: controller.signal,
+      },
+    );
+
+    expect(execute.mock.calls[0]?.[5]).toBe(controller.signal);
+    expect(evaluate.mock.calls[0]?.[4]).toMatchObject({
+      signal: controller.signal,
+    });
+    expect(plan.mock.calls[0]).toEqual([
+      "Trace abortable loop\n\nIteration 1. Previous findings: Abortable lead\nGaps: coverage",
+      { hasUser: true, signal: controller.signal },
+    ]);
+  });
+
   it("replans without explicit gaps and exits on the iteration limit without a final reflexion pass", async () => {
     const execute = typedSpy<ThalamusDAGExecutor["execute"]>();
     const evaluate = typedSpy<ThalamusReflexion["evaluate"]>();

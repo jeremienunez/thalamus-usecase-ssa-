@@ -309,6 +309,7 @@ describe("ResearchGraphService", () => {
     const {
       service,
       upsertByDedupHash,
+      incrementFindings,
       linkToCycle,
     } = createHarness();
     upsertByDedupHash.mockResolvedValueOnce({
@@ -324,6 +325,7 @@ describe("ResearchGraphService", () => {
       }),
     );
 
+    expect(incrementFindings).toHaveBeenCalledWith(1n);
     expect(linkToCycle).toHaveBeenCalledWith({
       cycleId: 1n,
       findingId: 88n,

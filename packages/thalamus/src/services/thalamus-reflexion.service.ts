@@ -13,6 +13,7 @@ import {
 import { createLogger, stepLog } from "@interview/shared/observability";
 import type { CortexFinding } from "../cortices/types";
 import { buildReflexionSystemPrompt } from "../prompts";
+import { isAbortError } from "../transports/abort";
 
 const logger = createLogger("thalamus-reflexion");
 
@@ -45,6 +46,7 @@ export class ThalamusReflexion {
       complexity?: string;
       remainingBudget?: number;
       maxIterations?: number;
+      signal?: AbortSignal;
     },
   ): Promise<ReflexionResult> {
     stepLog(logger, "reflexion", "start", {
@@ -102,9 +104,10 @@ export class ThalamusReflexion {
       : `Research intent: "${intent}"\nIteration: ${iteration}\n`;
 
     try {
-      const response = await transport.call(
-        `${header}\nRAW findings:\n${rawSummary}\n\nKEPT findings:\n${keptSummary}`,
-      );
+      const prompt = `${header}\nRAW findings:\n${rawSummary}\n\nKEPT findings:\n${keptSummary}`;
+      const response = context?.signal
+        ? await transport.call(prompt, { signal: context.signal })
+        : await transport.call(prompt);
       const result = LlmChatTransport.parseJson(
         response.content,
         reflexionSchema,
@@ -134,6 +137,7 @@ export class ThalamusReflexion {
 
       return result;
     } catch (err) {
+      if (isAbortError(err)) throw err;
       logger.error(
         { err, iteration },
         "Reflexion LLM failed, approving findings",

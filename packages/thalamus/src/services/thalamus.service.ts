@@ -31,6 +31,7 @@ import type {
 import type { ThalamusPlanner, DAGPlan } from "./thalamus-planner.service";
 import type { CycleLoopRunner } from "./cycle-loop.service";
 import type { FindingPersister } from "./finding-persister.service";
+import { throwIfAborted } from "../transports/abort";
 
 // ── Port (structural — repo satisfies this by duck typing) ────────
 export interface CyclesPort {
@@ -60,6 +61,7 @@ export interface RunCycleInput {
   daemonJob?: string;
   lang?: "fr" | "en";
   mode?: "investment" | "audit";
+  signal?: AbortSignal;
 }
 
 export class ThalamusService {
@@ -76,6 +78,7 @@ export class ThalamusService {
    * Returns the cycle record with findings count.
    */
   async runCycle(input: RunCycleInput): Promise<ResearchCycleRunResult> {
+    throwIfAborted(input.signal);
     const cycleStartedAt = Date.now();
     stepLog(logger, "cycle", "start", {
       query: input.query,
@@ -85,6 +88,7 @@ export class ThalamusService {
 
     // 1. Resolve DAG plan
     const plan = await this.resolvePlan(input);
+    throwIfAborted(input.signal);
     if (plan.nodes.length === 0) {
       logger.warn({ query: input.query }, "Empty DAG plan, aborting cycle");
       throw new Error("Planner produced empty DAG — no cortices to activate");
@@ -159,8 +163,10 @@ export class ThalamusService {
             mode: input.mode,
             userId: input.userId,
             hasUser: input.userId !== undefined && input.userId !== null,
+            signal: input.signal,
           },
         );
+      throwIfAborted(input.signal);
 
       // 5. Persist findings to the knowledge graph (cortex resolved from
       // the INITIAL plan — matches pre-refactor behaviour).
@@ -277,6 +283,7 @@ export class ThalamusService {
     }
     return this.planner.plan(input.query, {
       hasUser: input.userId !== undefined && input.userId !== null,
+      ...(input.signal ? { signal: input.signal } : {}),
     });
   }
 }

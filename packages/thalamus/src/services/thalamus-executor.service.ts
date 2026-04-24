@@ -11,6 +11,11 @@ import type { CortexOutput, CortexInput } from "../cortices/types";
 import type { DAGPlan, DAGNode } from "./thalamus-planner.service";
 import { getPlannerConfig, getCortexConfig } from "../config/runtime-config";
 import { DagValidationError, validateDag } from "./dag-validation";
+import {
+  abortSignalReason,
+  isAbortError,
+  throwIfAborted,
+} from "../transports/abort";
 
 const logger = createLogger("thalamus-executor");
 
@@ -90,9 +95,11 @@ export class ThalamusDAGExecutor {
     lang?: "fr" | "en",
     mode?: "investment" | "audit",
     userId?: bigint,
+    signal?: AbortSignal,
   ): Promise<DAGExecutionResult> {
     const start = Date.now();
     const outputs = new Map<string, CortexOutput>();
+    throwIfAborted(signal);
     validateDag(plan.nodes);
     const levels = this.topologicalLevels(plan.nodes);
 
@@ -106,6 +113,7 @@ export class ThalamusDAGExecutor {
     );
 
     for (let i = 0; i < levels.length; i++) {
+      throwIfAborted(signal);
       const level = levels[i];
       logger.info(
         { level: i, cortices: level.map((n) => n.cortex) },
@@ -123,17 +131,22 @@ export class ThalamusDAGExecutor {
             lang,
             mode,
             userId,
+            signal,
           ),
         ),
       );
 
       // Collect results
+      throwIfAborted(signal);
       for (let j = 0; j < level.length; j++) {
         const result = results[j];
         const node = level[j];
         if (result.status === "fulfilled") {
           outputs.set(node.cortex, result.value);
         } else {
+          if (signal?.aborted && isAbortError(result.reason)) {
+            throw result.reason;
+          }
           logger.error(
             { cortex: node.cortex, error: result.reason },
             "Cortex execution failed",
@@ -171,7 +184,9 @@ export class ThalamusDAGExecutor {
     lang?: "fr" | "en",
     mode?: "investment" | "audit",
     userId?: bigint,
+    parentSignal?: AbortSignal,
   ): Promise<CortexOutput> {
+    throwIfAborted(parentSignal);
     // Build context from upstream dependencies
     const previousFindings = node.dependsOn.flatMap((dep) => {
       const upstream = upstreamOutputs.get(dep);
@@ -227,9 +242,26 @@ export class ThalamusDAGExecutor {
     );
     timeoutError.name = "AbortError";
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let removeParentAbortListener: (() => void) | undefined;
     const executionPromise = this.cortexExecutor.execute(node.cortex, input);
+    const parentAbortPromise = parentSignal
+      ? new Promise<CortexOutput>((_, reject) => {
+          const onAbort = (): void => {
+            const reason = abortSignalReason(parentSignal);
+            controller.abort(reason);
+            reject(reason);
+          };
+          if (parentSignal.aborted) {
+            onAbort();
+            return;
+          }
+          parentSignal.addEventListener("abort", onAbort, { once: true });
+          removeParentAbortListener = () =>
+            parentSignal.removeEventListener("abort", onAbort);
+        })
+      : null;
     try {
-      const result = await Promise.race([
+      const races: Array<Promise<CortexOutput>> = [
         executionPromise,
         new Promise<CortexOutput>((_, reject) => {
           timeoutId = setTimeout(() => {
@@ -237,7 +269,9 @@ export class ThalamusDAGExecutor {
             reject(timeoutError);
           }, timeout);
         }),
-      ]);
+      ];
+      if (parentAbortPromise) races.push(parentAbortPromise);
+      const result = await Promise.race(races);
 
       stepLog(logger, "cortex", "done", {
         cortex: node.cortex,
@@ -258,6 +292,7 @@ export class ThalamusDAGExecutor {
       throw err;
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
+      removeParentAbortListener?.();
       executionPromise.catch((): void => undefined);
     }
   }

@@ -232,6 +232,31 @@ describe("ThalamusReflexion.evaluate", () => {
     });
   });
 
+  it("passes AbortSignal to the reflexion LLM and rethrows aborts", async () => {
+    const service = new ThalamusReflexion();
+    const controller = new AbortController();
+    const abort = new Error("reflexion cancelled");
+    abort.name = "AbortError";
+    const keptFindings = [
+      makeFinding({
+        title: "Abortable finding",
+        confidence: 0.88,
+      }),
+    ];
+    mocks.callMock.mockRejectedValue(abort);
+
+    await expect(
+      service.evaluate("Abort reflexion", keptFindings, keptFindings, 5, {
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow("reflexion cancelled");
+    expect(mocks.callMock).toHaveBeenCalledWith(
+      expect.stringContaining('Research intent: "Abort reflexion"'),
+      { signal: controller.signal },
+    );
+    expect(mocks.parseJsonMock).not.toHaveBeenCalled();
+  });
+
   it("stringifies non-Error transport failures and returns zero confidence when nothing was kept", async () => {
     const service = new ThalamusReflexion();
     const rawFindings = [

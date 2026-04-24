@@ -15,10 +15,13 @@ export class CycleSummariser {
     query: string,
     cycleId: string,
     findings: ReplFindingSummaryView[],
+    signal?: AbortSignal,
   ): Promise<{ text: string; provider: string }> {
     const summariser = this.llm.create(summariserPrompt(query));
     const payload = JSON.stringify({ cycleId, findings }, null, 2);
-    const summary = await summariser.call(payload);
+    const summary = signal
+      ? await summariser.call(payload, { signal })
+      : await summariser.call(payload);
     return { text: summary.content, provider: summary.provider };
   }
 }

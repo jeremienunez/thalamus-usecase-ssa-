@@ -221,6 +221,24 @@ describe("ThalamusPlanner.plan", () => {
       nodes: [{ cortex: "alpha", params: {}, dependsOn: [] }],
     });
   });
+
+  it("passes AbortSignal to the planner LLM and does not convert aborts into fallback DAGs", async () => {
+    const planner = new ThalamusPlanner(mkRegistry(["alpha"]), {
+      fallbackCortices: ["alpha"],
+    });
+    const controller = new AbortController();
+    const abort = new Error("planner cancelled");
+    abort.name = "AbortError";
+    mocks.callMock.mockRejectedValue(abort);
+
+    await expect(
+      planner.plan("Abort planner", { signal: controller.signal }),
+    ).rejects.toThrow("planner cancelled");
+    expect(mocks.callMock).toHaveBeenCalledWith(
+      'Research query: "Abort planner"\n\nProduce the optimal DAG plan.',
+      { signal: controller.signal },
+    );
+  });
 });
 
 describe("ThalamusPlanner.getDaemonDag", () => {

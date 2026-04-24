@@ -92,7 +92,7 @@ describe("ThalamusPlanner.applyRuntimeFilters — runtime-config post-filters", 
     expect(result.some((n) => n.cortex === "not_a_cortex")).toBe(false);
   });
 
-  it("given the LLM repeats a cortex, when applied, then the first occurrence is kept and the DAG remains unique", () => {
+  it("given the LLM repeats a cortex, when applied, then duplicates are preserved for DAG validation", () => {
     const firstFleet: DAGNode = {
       cortex: "fleet_analyst",
       params: { pass: "operator-scope" },
@@ -121,11 +121,13 @@ describe("ThalamusPlanner.applyRuntimeFilters — runtime-config post-filters", 
       "launch_scout",
       "fleet_analyst",
       "correlation",
+      "fleet_analyst",
       "strategist",
     ]);
-    expect(result.find((n) => n.cortex === "fleet_analyst")).toEqual(
+    expect(result.filter((n) => n.cortex === "fleet_analyst")).toEqual([
       firstFleet,
-    );
+      duplicateFleet,
+    ]);
     expect(result.find((n) => n.cortex === "correlation")?.dependsOn).toEqual([
       "fleet_analyst",
     ]);

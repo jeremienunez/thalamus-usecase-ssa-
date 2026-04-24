@@ -14,9 +14,11 @@ export type ReplIntent =
 export class IntentClassifier {
   constructor(private readonly llm: LlmTransportFactory) {}
 
-  async classify(input: string): Promise<ReplIntent> {
+  async classify(input: string, signal?: AbortSignal): Promise<ReplIntent> {
     const classifier = this.llm.create(CLASSIFIER_SYSTEM_PROMPT);
-    const routed = await classifier.call(input);
+    const routed = signal
+      ? await classifier.call(input, { signal })
+      : await classifier.call(input);
     try {
       const m = routed.content.match(/\{[\s\S]*\}/);
       return m ? (JSON.parse(m[0]) as ReplIntent) : { action: "chat" };
