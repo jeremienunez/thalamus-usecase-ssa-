@@ -92,6 +92,45 @@ describe("ThalamusPlanner.applyRuntimeFilters — runtime-config post-filters", 
     expect(result.some((n) => n.cortex === "not_a_cortex")).toBe(false);
   });
 
+  it("given the LLM repeats a cortex, when applied, then the first occurrence is kept and the DAG remains unique", () => {
+    const firstFleet: DAGNode = {
+      cortex: "fleet_analyst",
+      params: { pass: "operator-scope" },
+      dependsOn: ["launch_scout"],
+    };
+    const duplicateFleet: DAGNode = {
+      cortex: "fleet_analyst",
+      params: { pass: "duplicate" },
+      dependsOn: ["correlation"],
+    };
+    const dag: DAGNode[] = [
+      node("launch_scout"),
+      firstFleet,
+      node("correlation", ["fleet_analyst"]),
+      duplicateFleet,
+      node("strategist", ["fleet_analyst", "correlation"]),
+    ];
+
+    const result = planner.applyRuntimeFilters(
+      dag,
+      mkPlannerCfg({ mandatoryStrategist: false }),
+      mkCortexCfg(),
+    );
+
+    expect(result.map((n) => n.cortex)).toEqual([
+      "launch_scout",
+      "fleet_analyst",
+      "correlation",
+      "strategist",
+    ]);
+    expect(result.find((n) => n.cortex === "fleet_analyst")).toEqual(
+      firstFleet,
+    );
+    expect(result.find((n) => n.cortex === "correlation")?.dependsOn).toEqual([
+      "fleet_analyst",
+    ]);
+  });
+
   it("given disabledCortices includes strategist, when applied, then strategist is stripped from the result", () => {
     const dag: DAGNode[] = [node("fleet_analyst"), node("strategist")];
     const result = planner.applyRuntimeFilters(

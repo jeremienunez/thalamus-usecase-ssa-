@@ -490,12 +490,39 @@ export class SsaReplFollowUpExecutor {
 }
 
 function build30DayQuery(query: string, parentCycleId: string): string {
+  const focusInstruction = buildFocusInstruction(query);
   return (
     `${query}\n\n` +
     `Verification follow-up for parent cycle ${parentCycleId}. ` +
-    `Extend the horizon to 30 days, corroborate the highest-risk findings, ` +
-    `and focus on operator-scoped conclusions where attribution is explicit.`
+    `Extend the evidence horizon to 30 days for the same user objective. ` +
+    `${focusInstruction} ` +
+    `Corroborate the highest-risk findings and return a terminal synthesis. ` +
+    `Do not switch to fleet inventory or operator portfolio analysis unless ` +
+    `the original query explicitly asks for fleet inventory.`
   );
+}
+
+function buildFocusInstruction(query: string): string {
+  const low = query.toLowerCase();
+  if (/\b(launch|launches|lancement|lancements|manifest)\b/.test(low)) {
+    return (
+      "Keep the follow-up launch-focused: launch windows, launch operators, " +
+      "payload attribution, manifest corroboration, and near-term launch risk."
+    );
+  }
+  if (/\b(conjunction|collision|pc|conjonctions?)\b/.test(low)) {
+    return (
+      "Keep the follow-up focused on conjunction/collision risk, attribution, " +
+      "and corroboration of the same risk events."
+    );
+  }
+  if (/\b(audit|catalog|catalogue|quality|qualite|qualité)\b/.test(low)) {
+    return (
+      "Keep the follow-up focused on catalog quality, provenance gaps, " +
+      "classification issues, and directly blocked conclusions."
+    );
+  }
+  return "Preserve the original domain, entities, and answer shape.";
 }
 
 async function sleep(ms: number, signal?: AbortSignal): Promise<void> {

@@ -5,7 +5,7 @@
 // appropriate collaborators into a single event stream:
 //   - chat branch:      classified → chat.complete → done
 //   - run_cycle branch: classified → cycle.start → step* → finding* →
-//                        summary.complete → done
+//                        summary.complete → followup* → briefing? → done
 //                       (or …→ error → done on cycle failure)
 //
 // All LLM work sits behind the `LlmTransportFactory` port, so the service
@@ -21,6 +21,10 @@ import type { IntentClassifier } from "./intent-classifier.service";
 import type { ChatReplyService } from "./chat-reply.service";
 import type { CycleStreamPump } from "./cycle-stream-pump.service";
 import type { CycleSummariser } from "./cycle-summariser.service";
+import type {
+  ReplBriefingAggregator,
+  ReplBriefingFollowUpInput,
+} from "./repl-briefing-aggregator.service";
 import type { ReplFollowUpService } from "./repl-followup.service";
 
 export interface ThalamusChatDep {
@@ -71,6 +75,7 @@ export class ReplChatService {
     private readonly pump: CycleStreamPump,
     private readonly summariser: CycleSummariser,
     private readonly followUps?: ReplFollowUpService,
+    private readonly briefingAggregator?: ReplBriefingAggregator,
   ) {}
 
   async *handleStream(
@@ -200,6 +205,9 @@ export class ReplChatService {
       data: { text: summary.text, provider: summary.provider },
     };
 
+    let terminalProvider = summary.provider;
+    const followUpRuns = new Map<string, ReplBriefingFollowUpInput>();
+
     if (this.followUps && cycleResult) {
       const plan = await this.followUps.plan({
         query,
@@ -224,18 +232,95 @@ export class ReplChatService {
         signal,
       })) {
         if (aborted()) return;
+        collectFollowUpForBriefing(followUpRuns, evt);
         yield evt;
       }
+    }
+
+    if (this.briefingAggregator && cycleResult) {
+      const briefing = await this.briefingAggregator.aggregate({
+        query,
+        parentCycleId: String(cycleResultId),
+        parent: {
+          summary: summary.text,
+          findings: top.map(toReplFindingSummaryView),
+        },
+        followUps: [...followUpRuns.values()],
+      });
+      if (aborted()) return;
+      terminalProvider = briefing.provider;
+      yield { event: "briefing.complete", data: briefing };
     }
 
     yield {
       event: "done",
       data: {
-        provider: summary.provider,
+        provider: terminalProvider,
         costUsd: 0,
         tookMs: Date.now() - t0,
         findingsCount: findings.length,
       },
     };
   }
+}
+
+function collectFollowUpForBriefing(
+  runs: Map<string, ReplBriefingFollowUpInput>,
+  event: ReplStreamEvent,
+): void {
+  switch (event.event) {
+    case "followup.started": {
+      const run = getOrCreateFollowUpRun(runs, event.data.followupId);
+      run.kind = event.data.kind;
+      run.title = event.data.title;
+      run.status = "running";
+      break;
+    }
+    case "followup.finding": {
+      const run = getOrCreateFollowUpRun(runs, event.data.followupId);
+      run.kind = event.data.kind;
+      run.findings.push({
+        id: event.data.id,
+        title: event.data.title,
+        summary: event.data.summary,
+        cortex: event.data.cortex,
+        findingType: null,
+        urgency: event.data.urgency,
+        confidence: event.data.confidence,
+      });
+      break;
+    }
+    case "followup.summary": {
+      const run = getOrCreateFollowUpRun(runs, event.data.followupId);
+      run.kind = event.data.kind;
+      run.summary = event.data.text;
+      break;
+    }
+    case "followup.done": {
+      const run = getOrCreateFollowUpRun(runs, event.data.followupId);
+      run.kind = event.data.kind;
+      run.status = event.data.status;
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function getOrCreateFollowUpRun(
+  runs: Map<string, ReplBriefingFollowUpInput>,
+  followupId: string,
+): ReplBriefingFollowUpInput {
+  const existing = runs.get(followupId);
+  if (existing) return existing;
+  const created: ReplBriefingFollowUpInput = {
+    followupId,
+    kind: "unknown",
+    title: followupId,
+    status: "running",
+    summary: "",
+    findings: [],
+  };
+  runs.set(followupId, created);
+  return created;
 }

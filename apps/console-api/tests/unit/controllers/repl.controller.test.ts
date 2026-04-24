@@ -252,12 +252,16 @@ describe("registerReplRoutes", () => {
     expect(res.body).toContain("event: followup.done");
     expect(res.body).toContain('"provider":"mock-llm"');
     expect(runCycle).toHaveBeenCalledWith({
-      query:
-        "scan conjonctions\n\nVerification follow-up for parent cycle cyc:1. Extend the horizon to 30 days, corroborate the highest-risk findings, and focus on operator-scoped conclusions where attribution is explicit.",
+      query: expect.stringContaining(
+        "scan conjonctions\n\nVerification follow-up for parent cycle cyc:1. Extend the evidence horizon to 30 days for the same user objective.",
+      ),
       userId: 1n,
       triggerType: "user",
       triggerSource: "console-followup:30d:cyc:1",
     });
+    expect(runCycle.mock.calls[0]?.[0].query).toContain(
+      "Keep the follow-up focused on conjunction/collision risk",
+    );
     expect(findByCycleId).toHaveBeenCalledWith("cyc:child");
     expect(turn.handle).not.toHaveBeenCalled();
     await app.close();

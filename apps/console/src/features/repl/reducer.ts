@@ -12,6 +12,7 @@ export type {
   FollowUpStepData,
   FollowUpSummaryData,
   FollowUpTurn,
+  BriefingData,
   FindingData,
   Turn,
   TurnAction,

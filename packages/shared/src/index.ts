@@ -9,6 +9,9 @@ export type {
   ReplFollowUpKind,
   ReplFollowUpTarget,
   ReplFollowUpPlanItem,
+  ReplBriefingEvidence,
+  ReplBriefingSection,
+  ReplBriefingReport,
 } from "./types/repl-stream";
 export * from "./schemas/payload-profile.schema";
 export * from "./ssa";
