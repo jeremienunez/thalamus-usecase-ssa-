@@ -12,6 +12,10 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
 
 export type Database = NodePgDatabase<typeof schema>;
+export type DatabaseExecutor = Pick<
+  Database,
+  "select" | "insert" | "update" | "delete" | "execute"
+>;
 
 export * from "./schema";
 export * from "./enums";

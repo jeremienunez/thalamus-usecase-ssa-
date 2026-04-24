@@ -13,6 +13,7 @@ import {
 import type { CortexFinding } from "../cortices/types";
 import type { ResearchGraphService } from "./research-graph.service";
 import type { DAGPlan } from "./thalamus-planner.service";
+import type { ResearchPersistenceResult } from "../types/research.types";
 
 const logger = createLogger("finding-persister");
 
@@ -23,6 +24,8 @@ export interface PersistContext {
   entityOverride?: { entityType: string; entityId: bigint };
 }
 
+export type PersistResult = ResearchPersistenceResult;
+
 export class FindingPersister {
   constructor(private graphService: ResearchGraphService) {}
 
@@ -30,13 +33,14 @@ export class FindingPersister {
    * Persist each finding into the knowledge graph.
    * Errors are swallowed per-finding (logged) so one bad row can't sink
    * a whole cycle — matches the original `runCycle` behaviour.
-   * Returns the number of findings actually stored.
+   * Returns stored and failed counts so callers can audit partial persistence.
    */
   async persist(
     findings: CortexFinding[],
     ctx: PersistContext,
-  ): Promise<number> {
+  ): Promise<PersistResult> {
     let storedCount = 0;
+    const failures: PersistResult["failures"] = [];
 
     for (const finding of findings) {
       try {
@@ -78,6 +82,8 @@ export class FindingPersister {
         });
         storedCount++;
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        failures.push({ title: finding.title, message });
         logger.error(
           { finding: finding.title, err },
           "Failed to store finding",
@@ -85,7 +91,11 @@ export class FindingPersister {
       }
     }
 
-    return storedCount;
+    return {
+      storedCount,
+      failedCount: failures.length,
+      failures,
+    };
   }
 }
 

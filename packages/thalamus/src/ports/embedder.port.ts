@@ -14,9 +14,9 @@
  *   length. Callers already treat `null` as "no embedding, skip the
  *   semantic path" — kernel behaviour is identical with or without an
  *   embedder.
- * - Vector dimension is an adapter-owned concern (2048 for voyage-4,
- *   1536 for openai-ada-002, etc.). `ResearchGraphService` does not
- *   assert a specific size — the `pgvector` column does that.
+ * - Vector dimension must match the DB schema's `EMBEDDING_DIMENSIONS`
+ *   before kernel semantic paths or persistence writes use it. `null`
+ *   remains the graceful no-op signal for unavailable embeddings.
  */
 
 export interface EmbedderPort {

@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import { EMBEDDING_DIMENSIONS } from "@interview/db-schema";
 import {
   ResearchFindingType,
   ResearchRelation,
   ResearchStatus,
   ResearchUrgency,
 } from "@interview/shared/enum";
+import { InvalidEmbeddingDimensionError } from "../src/errors/embedding";
 import type { EmbedderPort } from "../src/ports/embedder.port";
 import type { EntityCatalogPort } from "../src/ports/entity-catalog.port";
 import {
@@ -17,6 +19,12 @@ import {
 import type { ResearchFinding, ResearchEdge } from "../src/types/research.types";
 
 type SimilarFinding = ResearchFinding & { similarity: number };
+
+function makeEmbedding(head: number[] = [0.11, 0.22]): number[] {
+  return [...head, ...Array(EMBEDDING_DIMENSIONS - head.length).fill(0)];
+}
+
+const TEST_EMBEDDING = makeEmbedding();
 
 function makeStoredFinding(
   overrides: Partial<ResearchFinding> = {},
@@ -154,7 +162,7 @@ function createHarness() {
 
   const embedQuery = vi.fn<
     EmbedderPort["embedQuery"]
-  >(async () => [0.11, 0.22]);
+  >(async () => TEST_EMBEDDING);
   const embedDocuments = vi.fn<
     EmbedderPort["embedDocuments"]
   >(async (texts) => texts.map(() => null));
@@ -357,7 +365,45 @@ describe("ResearchGraphService", () => {
     await expect(service.semanticSearch("find similar", 7)).resolves.toEqual(
       similar,
     );
-    expect(searchBySimilarity).toHaveBeenCalledWith([0.11, 0.22], 7);
+    expect(searchBySimilarity).toHaveBeenCalledWith(TEST_EMBEDDING, 7);
+  });
+
+  it("rejects storeFinding before repository writes when the embedder returns the wrong dimension", async () => {
+    const {
+      service,
+      embedQuery,
+      upsertByDedupHash,
+      findSimilar,
+      createMany,
+      incrementFindings,
+      linkToCycle,
+    } = createHarness();
+    embedQuery.mockResolvedValueOnce([0.11, 0.22]);
+
+    const result = service.storeFinding(makeInput());
+
+    await expect(result).rejects.toThrow(
+      InvalidEmbeddingDimensionError,
+    );
+    await expect(result).rejects.toThrow("EmbedderPort");
+    expect(upsertByDedupHash).not.toHaveBeenCalled();
+    expect(findSimilar).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
+    expect(incrementFindings).not.toHaveBeenCalled();
+    expect(linkToCycle).not.toHaveBeenCalled();
+  });
+
+  it("rejects semanticSearch before repository lookup when the embedder returns the wrong dimension", async () => {
+    const { service, embedQuery, searchBySimilarity } = createHarness();
+    embedQuery.mockResolvedValueOnce([0.11, 0.22]);
+
+    const result = service.semanticSearch("bad vector");
+
+    await expect(result).rejects.toThrow(
+      InvalidEmbeddingDimensionError,
+    );
+    await expect(result).rejects.toThrow("EmbedderPort");
+    expect(searchBySimilarity).not.toHaveBeenCalled();
   });
 
   it("forwards listFindings with the default empty filter object", async () => {

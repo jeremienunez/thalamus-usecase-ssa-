@@ -91,7 +91,7 @@ describe("FindingPersister.persist", () => {
       fakePort<ResearchGraphService>({ storeFinding }),
     );
 
-    const storedCount = await persister.persist(
+    const result = await persister.persist(
       [
         makeFinding({
           sourceCortex: "scout",
@@ -109,7 +109,11 @@ describe("FindingPersister.persist", () => {
       },
     );
 
-    expect(storedCount).toBe(4);
+    expect(result).toEqual({
+      storedCount: 4,
+      failedCount: 0,
+      failures: [],
+    });
     expect(
       storeFinding.mock.calls.map(
         ([input]) => input.finding.expiresAt?.toISOString(),
@@ -146,7 +150,7 @@ describe("FindingPersister.persist", () => {
       fakePort<ResearchGraphService>({ storeFinding }),
     );
 
-    const storedCount = await persister.persist(
+    const result = await persister.persist(
       [
         makeFinding({
           title: "Unstamped finding",
@@ -168,7 +172,11 @@ describe("FindingPersister.persist", () => {
       },
     );
 
-    expect(storedCount).toBe(1);
+    expect(result).toEqual({
+      storedCount: 1,
+      failedCount: 0,
+      failures: [],
+    });
     expect(storeFinding.mock.calls[0]?.[0]).toMatchObject({
       finding: {
         cortex: "curator",
@@ -194,7 +202,7 @@ describe("FindingPersister.persist", () => {
       fakePort<ResearchGraphService>({ storeFinding }),
     );
 
-    const storedCount = await persister.persist(
+    const result = await persister.persist(
       [
         makeFinding({
           sourceCortex: "curator",
@@ -214,7 +222,11 @@ describe("FindingPersister.persist", () => {
       },
     );
 
-    expect(storedCount).toBe(1);
+    expect(result).toEqual({
+      storedCount: 1,
+      failedCount: 0,
+      failures: [],
+    });
     expect(storeFinding.mock.calls[0]?.[0]).toMatchObject({
       edges: [
         {
@@ -236,7 +248,7 @@ describe("FindingPersister.persist", () => {
       fakePort<ResearchGraphService>({ storeFinding }),
     );
 
-    const storedCount = await persister.persist(
+    const result = await persister.persist(
       [
         makeFinding({
           sourceCortex: undefined,
@@ -260,7 +272,11 @@ describe("FindingPersister.persist", () => {
       },
     );
 
-    expect(storedCount).toBe(1);
+    expect(result).toEqual({
+      storedCount: 1,
+      failedCount: 0,
+      failures: [],
+    });
     expect(storeFinding.mock.calls[0]?.[0]).toEqual({
       finding: expect.objectContaining({
         cortex: "unknown",
@@ -285,7 +301,7 @@ describe("FindingPersister.persist", () => {
       fakePort<ResearchGraphService>({ storeFinding }),
     );
 
-    const storedCount = await persister.persist(
+    const result = await persister.persist(
       [
         makeFinding({
           sourceCortex: "",
@@ -298,7 +314,11 @@ describe("FindingPersister.persist", () => {
       },
     );
 
-    expect(storedCount).toBe(1);
+    expect(result).toEqual({
+      storedCount: 1,
+      failedCount: 0,
+      failures: [],
+    });
     expect(storeFinding.mock.calls[0]?.[0]).toMatchObject({
       finding: {
         cortex: "unknown",
@@ -316,7 +336,7 @@ describe("FindingPersister.persist", () => {
       fakePort<ResearchGraphService>({ storeFinding }),
     );
 
-    const storedCount = await persister.persist(
+    const result = await persister.persist(
       [
         makeFinding({ title: "first finding" }),
         makeFinding({ title: "second finding" }),
@@ -328,7 +348,11 @@ describe("FindingPersister.persist", () => {
       },
     );
 
-    expect(storedCount).toBe(1);
+    expect(result).toEqual({
+      storedCount: 1,
+      failedCount: 1,
+      failures: [{ title: "first finding", message: "write failed" }],
+    });
     expect(storeFinding).toHaveBeenCalledTimes(2);
   });
 });

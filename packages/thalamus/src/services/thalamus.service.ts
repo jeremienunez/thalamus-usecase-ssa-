@@ -164,12 +164,24 @@ export class ThalamusService {
 
       // 5. Persist findings to the knowledge graph (cortex resolved from
       // the INITIAL plan — matches pre-refactor behaviour).
-      const storedCount = await this.persister.persist(allFindings, {
+      const persistence = await this.persister.persist(allFindings, {
         cycleId: cycle.id,
         iteration: iterations,
         plan,
         entityOverride: input.entityOverride,
       });
+
+      if (persistence.failedCount > 0) {
+        logger.warn(
+          {
+            cycleId: cycle.id,
+            storedFindings: persistence.storedCount,
+            failedFindings: persistence.failedCount,
+            failures: persistence.failures,
+          },
+          "Research cycle completed with persistence warnings",
+        );
+      }
 
       // 6. Complete cycle
       await this.cycleRepo.updateStatus(
@@ -184,7 +196,8 @@ export class ThalamusService {
       logger.info(
         {
           cycleId: cycle.id,
-          findings: storedCount,
+          findings: persistence.storedCount,
+          failedFindings: persistence.failedCount,
           iterations,
           cost: totalCost.toFixed(4),
         },
@@ -195,7 +208,8 @@ export class ThalamusService {
         cycleId: cycle.id.toString(),
         durationMs: Date.now() - cycleStartedAt,
         costUsd: totalCost,
-        findings: storedCount,
+        findings: persistence.storedCount,
+        failedFindings: persistence.failedCount,
         iterations,
       });
 
@@ -203,6 +217,7 @@ export class ThalamusService {
       return {
         ...(await this.cycleRepo.findById(cycle.id))!,
         verification,
+        persistence,
       };
     } catch (err) {
       await this.cycleRepo.updateStatus(cycle.id, ResearchCycleStatus.Failed, {

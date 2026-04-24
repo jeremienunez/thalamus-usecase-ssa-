@@ -3,7 +3,7 @@
  */
 
 import { eq, desc, sql } from "drizzle-orm";
-import { researchCycle, type Database } from "@interview/db-schema";
+import { researchCycle, type DatabaseExecutor } from "@interview/db-schema";
 import type {
   ResearchCycleEntity,
   NewResearchCycleEntity,
@@ -16,7 +16,7 @@ import { toResearchCycle } from "../transformers/research.transformer";
 import type { ResearchCycleStatus } from "@interview/shared/enum";
 
 export class ResearchCycleRepository {
-  constructor(private db: Database) {}
+  constructor(private db: DatabaseExecutor) {}
 
   async create(data: NewResearchCycle): Promise<ResearchCycle> {
     const [result] = await this.db

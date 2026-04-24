@@ -31,6 +31,12 @@ export interface ResearchCycleVerification {
   confidence: number;
 }
 
+export interface ResearchPersistenceResult {
+  storedCount: number;
+  failedCount: number;
+  failures: Array<{ title: string; message: string }>;
+}
+
 export interface ResearchCycle {
   id: bigint;
   triggerType: ResearchCycleTrigger;
@@ -48,6 +54,7 @@ export interface ResearchCycle {
 
 export interface ResearchCycleRunResult extends ResearchCycle {
   verification: ResearchCycleVerification;
+  persistence?: ResearchPersistenceResult;
 }
 
 export interface NewResearchCycle {

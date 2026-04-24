@@ -25,6 +25,16 @@ export { ThalamusService } from "./services/thalamus.service";
 export { ThalamusPlanner } from "./services/thalamus-planner.service";
 export { ThalamusDAGExecutor } from "./services/thalamus-executor.service";
 export { ResearchGraphService } from "./services/research-graph.service";
+export type {
+  ResearchGraphTransactionPort,
+  ResearchGraphUnitOfWork,
+} from "./services/research-graph.service";
+export type {
+  PersistContext,
+  PersistResult,
+} from "./services/finding-persister.service";
+export { InvalidEmbeddingDimensionError } from "./errors/embedding";
+export type { EmbeddingOperation } from "./errors/embedding";
 
 // Cortices
 export { CortexExecutor } from "./cortices/executor";

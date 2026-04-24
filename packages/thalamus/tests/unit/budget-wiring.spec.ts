@@ -77,7 +77,11 @@ describe("ThalamusService respects thalamus.budgets provider", () => {
       }),
     } as any;
     const persister = {
-      persist: vi.fn(async () => 0),
+      persist: vi.fn(async () => ({
+        storedCount: 0,
+        failedCount: 0,
+        failures: [],
+      })),
     } as any;
     const cycleRepo = {
       create: vi.fn(async () => ({

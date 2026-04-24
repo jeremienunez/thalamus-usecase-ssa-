@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { EMBEDDING_DIMENSIONS } from "@interview/db-schema";
 import {
   ResearchFindingType,
   ResearchRelation,
@@ -14,6 +15,7 @@ import {
   type CyclesGraphPort,
   type EdgesGraphPort,
   type FindingsGraphPort,
+  type ResearchGraphTransactionPort,
   type StoreFindingInput,
 } from "../src/services/research-graph.service";
 import type { ResearchEdge, ResearchFinding } from "../src/types/research.types";
@@ -24,6 +26,12 @@ type Result<T extends (...args: any[]) => any> = ReturnType<T>;
 function sha25632(input: string): string {
   return createHash("sha256").update(input).digest("hex").slice(0, 32);
 }
+
+function makeEmbedding(head: number[] = [0.11, 0.22]): number[] {
+  return [...head, ...Array(EMBEDDING_DIMENSIONS - head.length).fill(0)];
+}
+
+const TEST_EMBEDDING = makeEmbedding();
 
 function makeStoredFinding(
   overrides: Partial<ResearchFinding> = {},
@@ -93,7 +101,7 @@ function createHarness() {
   const embedQuery = vi.fn<
     Args<EmbedderPort["embedQuery"]>,
     Result<EmbedderPort["embedQuery"]>
-  >(async (_text) => [0.11, 0.22]);
+  >(async (_text) => TEST_EMBEDDING);
   const upsertByDedupHash = vi.fn<
     Args<FindingsGraphPort["upsertByDedupHash"]>,
     Result<FindingsGraphPort["upsertByDedupHash"]>
@@ -244,6 +252,265 @@ function createHarness() {
   };
 }
 
+type GraphState = {
+  findings: Map<bigint, ResearchFinding>;
+  edges: ResearchEdge[];
+  cycleCounts: Map<bigint, number>;
+  cycleLinks: Array<{
+    cycleId: bigint;
+    findingId: bigint;
+    iteration: number;
+    isDedupHit: boolean;
+  }>;
+};
+
+type FailurePoint = "entity-edge-create" | "cycle-link";
+
+function cloneGraphState(state: GraphState): GraphState {
+  return {
+    findings: new Map(
+      [...state.findings.entries()].map(([id, finding]) => [
+        id,
+        { ...finding },
+      ]),
+    ),
+    edges: state.edges.map((edge) => ({ ...edge })),
+    cycleCounts: new Map(state.cycleCounts),
+    cycleLinks: state.cycleLinks.map((link) => ({ ...link })),
+  };
+}
+
+function replaceGraphState(target: GraphState, source: GraphState): void {
+  target.findings = source.findings;
+  target.edges = source.edges;
+  target.cycleCounts = source.cycleCounts;
+  target.cycleLinks = source.cycleLinks;
+}
+
+function createTransactionalHarness() {
+  const state: GraphState = {
+    findings: new Map(),
+    edges: [],
+    cycleCounts: new Map(),
+    cycleLinks: [],
+  };
+  const tx = { commits: 0, rollbacks: 0 };
+  let activeState = state;
+  let failurePoint: FailurePoint | null = null;
+
+  const failAt = (point: FailurePoint): void => {
+    failurePoint = point;
+  };
+
+  const upsertByDedupHash = vi.fn<
+    Args<FindingsGraphPort["upsertByDedupHash"]>,
+    Result<FindingsGraphPort["upsertByDedupHash"]>
+  >(async (data) => {
+    const finding = makeStoredFinding({
+      researchCycleId: data.researchCycleId,
+      cortex: data.cortex,
+      findingType: data.findingType,
+      status: data.status ?? ResearchStatus.Active,
+      urgency: data.urgency ?? null,
+      title: data.title,
+      summary: data.summary,
+      evidence: data.evidence ?? [],
+      reasoning: data.reasoning ?? null,
+      confidence: data.confidence,
+      impactScore: data.impactScore ?? null,
+      extensions: data.extensions ?? null,
+      reflexionNotes: data.reflexionNotes ?? null,
+      iteration: data.iteration ?? 0,
+      dedupHash: data.dedupHash ?? null,
+      embedding: data.embedding ?? null,
+      expiresAt: data.expiresAt ?? null,
+    });
+    activeState.findings.set(finding.id, finding);
+    return { finding, inserted: true };
+  });
+
+  const findSimilar = vi.fn<
+    Args<FindingsGraphPort["findSimilar"]>,
+    Result<FindingsGraphPort["findSimilar"]>
+  >(async () => []);
+  const mergeFinding = vi.fn<
+    Args<FindingsGraphPort["mergeFinding"]>,
+    Result<FindingsGraphPort["mergeFinding"]>
+  >(async (id, data) => {
+    const existing = activeState.findings.get(id);
+    if (!existing) return;
+    activeState.findings.set(id, {
+      ...existing,
+      confidence: Math.max(existing.confidence, data.confidence),
+      evidence: [
+        ...(Array.isArray(existing.evidence) ? existing.evidence : []),
+        ...data.evidence,
+      ],
+      iteration: existing.iteration + 1,
+      updatedAt: new Date("2026-04-22T00:00:00.000Z"),
+    });
+  });
+  const findById = vi.fn<
+    Args<FindingsGraphPort["findById"]>,
+    Result<FindingsGraphPort["findById"]>
+  >(async () => null);
+  const findByEntity = vi.fn<
+    Args<FindingsGraphPort["findByEntity"]>,
+    Result<FindingsGraphPort["findByEntity"]>
+  >(async () => []);
+  const searchBySimilarity = vi.fn<
+    Args<FindingsGraphPort["searchBySimilarity"]>,
+    Result<FindingsGraphPort["searchBySimilarity"]>
+  >(async () => []);
+  const findActive = vi.fn<
+    Args<FindingsGraphPort["findActive"]>,
+    Result<FindingsGraphPort["findActive"]>
+  >(async () => []);
+  const archive = vi.fn<
+    Args<FindingsGraphPort["archive"]>,
+    Result<FindingsGraphPort["archive"]>
+  >(async () => undefined);
+  const expireOld = vi.fn<
+    Args<FindingsGraphPort["expireOld"]>,
+    Result<FindingsGraphPort["expireOld"]>
+  >(async () => 0);
+  const countByCortexAndType = vi.fn<
+    Args<FindingsGraphPort["countByCortexAndType"]>,
+    Result<FindingsGraphPort["countByCortexAndType"]>
+  >(async () => []);
+  const countRecent24h = vi.fn<
+    Args<FindingsGraphPort["countRecent24h"]>,
+    Result<FindingsGraphPort["countRecent24h"]>
+  >(async () => 0);
+  const linkToCycle = vi.fn<
+    Args<FindingsGraphPort["linkToCycle"]>,
+    Result<FindingsGraphPort["linkToCycle"]>
+  >(async (opts) => {
+    if (failurePoint === "cycle-link") {
+      throw new Error("cycle link failed");
+    }
+    activeState.cycleLinks.push(opts);
+  });
+
+  const createMany = vi.fn<
+    Args<EdgesGraphPort["createMany"]>,
+    Result<EdgesGraphPort["createMany"]>
+  >(async (edges) => {
+    if (failurePoint === "entity-edge-create") {
+      throw new Error("edge create failed");
+    }
+    const created = edges.map((edge, index) => ({
+      id: BigInt(activeState.edges.length + index + 1),
+      findingId: edge.findingId,
+      entityType: edge.entityType,
+      entityId: edge.entityId,
+      relation: edge.relation,
+      weight: edge.weight ?? null,
+      context: edge.context ?? null,
+      createdAt: edge.createdAt ?? new Date("2026-04-22T00:00:00.000Z"),
+    }));
+    activeState.edges.push(...created);
+    return created;
+  });
+  const findByFinding = vi.fn<
+    Args<EdgesGraphPort["findByFinding"]>,
+    Result<EdgesGraphPort["findByFinding"]>
+  >(async () => []);
+  const findByFindings = vi.fn<
+    Args<EdgesGraphPort["findByFindings"]>,
+    Result<EdgesGraphPort["findByFindings"]>
+  >(async () => []);
+  const countByEntityType = vi.fn<
+    Args<EdgesGraphPort["countByEntityType"]>,
+    Result<EdgesGraphPort["countByEntityType"]>
+  >(async () => []);
+
+  const incrementFindings = vi.fn<
+    Args<CyclesGraphPort["incrementFindings"]>,
+    Result<CyclesGraphPort["incrementFindings"]>
+  >(async (id) => {
+    activeState.cycleCounts.set(id, (activeState.cycleCounts.get(id) ?? 0) + 1);
+  });
+
+  const findingRepo: FindingsGraphPort = {
+    upsertByDedupHash,
+    findSimilar,
+    mergeFinding,
+    findById,
+    findByEntity,
+    searchBySimilarity,
+    findActive,
+    archive,
+    expireOld,
+    countByCortexAndType,
+    countRecent24h,
+    linkToCycle,
+  };
+  const edgeRepo: EdgesGraphPort = {
+    createMany,
+    findByFinding,
+    findByFindings,
+    countByEntityType,
+  };
+  const cycleRepo: CyclesGraphPort = { incrementFindings };
+  const transactionPort: ResearchGraphTransactionPort = {
+    runInTransaction: async (work) => {
+      const draft = cloneGraphState(state);
+      const previous = activeState;
+      activeState = draft;
+      try {
+        const result = await work({ findingRepo, edgeRepo, cycleRepo });
+        replaceGraphState(state, draft);
+        tx.commits++;
+        return result;
+      } catch (err) {
+        tx.rollbacks++;
+        throw err;
+      } finally {
+        activeState = previous;
+      }
+    },
+  };
+  const embedQuery = vi.fn<
+    Args<EmbedderPort["embedQuery"]>,
+    Result<EmbedderPort["embedQuery"]>
+  >(async () => null);
+  const embedDocuments = vi.fn<
+    Args<EmbedderPort["embedDocuments"]>,
+    Result<EmbedderPort["embedDocuments"]>
+  >(async (texts) => texts.map(() => null));
+
+  const service = new ResearchGraphService(
+    findingRepo,
+    edgeRepo,
+    cycleRepo,
+    {
+      isAvailable: () => true,
+      embedQuery,
+      embedDocuments,
+    },
+    {
+      resolveNames: async () => new Map(),
+      cleanOrphans: async () => 0,
+    },
+    transactionPort,
+  );
+
+  return {
+    service,
+    state,
+    tx,
+    failAt,
+    embedQuery,
+    upsertByDedupHash,
+    findSimilar,
+    mergeFinding,
+    createMany,
+    incrementFindings,
+    linkToCycle,
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -267,7 +534,7 @@ describe("ResearchGraphService.storeFinding", () => {
     expect(upsertByDedupHash).toHaveBeenCalledTimes(1);
     expect(upsertByDedupHash.mock.calls[0]?.[0]).toMatchObject({
       dedupHash: sha25632("catalog:satellite:42:alert"),
-      embedding: [0.11, 0.22],
+      embedding: TEST_EMBEDDING,
     });
   });
 
@@ -415,6 +682,117 @@ describe("ResearchGraphService.storeFinding", () => {
         context: { source: "seed" },
       },
     ]);
+  });
+
+  it("rolls back the inserted finding when entity edge creation fails", async () => {
+    const {
+      service,
+      state,
+      tx,
+      failAt,
+      createMany,
+      incrementFindings,
+      linkToCycle,
+    } = createTransactionalHarness();
+    const callback = vi.fn(async () => undefined);
+    service.onFinding(callback);
+    failAt("entity-edge-create");
+
+    await expect(service.storeFinding(makeInput())).rejects.toThrow(
+      "edge create failed",
+    );
+
+    expect(tx).toEqual({ commits: 0, rollbacks: 1 });
+    expect(state.findings.size).toBe(0);
+    expect(state.edges).toEqual([]);
+    expect(state.cycleCounts.get(1n) ?? 0).toBe(0);
+    expect(state.cycleLinks).toEqual([]);
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(incrementFindings).not.toHaveBeenCalled();
+    expect(linkToCycle).not.toHaveBeenCalled();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it("rolls back finding edges and cycle count when cycle link creation fails", async () => {
+    const {
+      service,
+      state,
+      tx,
+      failAt,
+      createMany,
+      incrementFindings,
+      linkToCycle,
+    } = createTransactionalHarness();
+    const callback = vi.fn(async () => undefined);
+    service.onFinding(callback);
+    failAt("cycle-link");
+
+    await expect(service.storeFinding(makeInput())).rejects.toThrow(
+      "cycle link failed",
+    );
+
+    expect(tx).toEqual({ commits: 0, rollbacks: 1 });
+    expect(state.findings.size).toBe(0);
+    expect(state.edges).toEqual([]);
+    expect(state.cycleCounts.get(1n) ?? 0).toBe(0);
+    expect(state.cycleLinks).toEqual([]);
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(incrementFindings).toHaveBeenCalledWith(1n);
+    expect(linkToCycle).toHaveBeenCalledWith({
+      cycleId: 1n,
+      findingId: 101n,
+      iteration: 0,
+      isDedupHit: false,
+    });
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it("rolls back semantic merge and cycle count when cycle link creation fails", async () => {
+    const {
+      service,
+      state,
+      tx,
+      failAt,
+      embedQuery,
+      findSimilar,
+      mergeFinding,
+      incrementFindings,
+      linkToCycle,
+    } = createTransactionalHarness();
+    const existing = makeStoredFinding({
+      id: 55n,
+      confidence: 0.4,
+      evidence: [{ source: "old evidence" }],
+      iteration: 2,
+    });
+    state.findings.set(existing.id, existing);
+    embedQuery.mockResolvedValueOnce(TEST_EMBEDDING);
+    findSimilar.mockResolvedValueOnce([{ ...existing, similarity: 0.97 }]);
+    failAt("cycle-link");
+
+    await expect(service.storeFinding(makeInput())).rejects.toThrow(
+      "cycle link failed",
+    );
+
+    expect(tx).toEqual({ commits: 0, rollbacks: 1 });
+    expect(state.findings.get(55n)).toMatchObject({
+      confidence: 0.4,
+      evidence: [{ source: "old evidence" }],
+      iteration: 2,
+    });
+    expect(state.cycleCounts.get(1n) ?? 0).toBe(0);
+    expect(state.cycleLinks).toEqual([]);
+    expect(mergeFinding).toHaveBeenCalledWith(55n, {
+      confidence: 0.7,
+      evidence: [{ source: "https://example.org/evidence" }],
+    });
+    expect(incrementFindings).toHaveBeenCalledWith(1n);
+    expect(linkToCycle).toHaveBeenCalledWith({
+      cycleId: 1n,
+      findingId: 55n,
+      iteration: 0,
+      isDedupHit: true,
+    });
   });
 
   it("cross-links inserted findings to related findings with thresholded relations and a hard cap of 3", async () => {

@@ -7,7 +7,7 @@ import {
   researchFinding,
   researchEdge,
   researchCycleFinding,
-  type Database,
+  type DatabaseExecutor,
 } from "@interview/db-schema";
 import type { NewResearchFindingEntity } from "../entities/research.entity";
 import type {
@@ -15,7 +15,14 @@ import type {
   NewResearchFinding,
 } from "../types/research.types";
 import { toResearchFinding } from "../transformers/research.transformer";
-import type { ResearchFindingType } from "@interview/shared/enum";
+import {
+  ResearchStatus,
+  type ResearchFindingType,
+} from "@interview/shared/enum";
+import {
+  assertEmbeddingDimension,
+  type EmbeddingOperation,
+} from "../errors/embedding";
 
 export interface FindActiveOptions {
   cortex?: string;
@@ -26,9 +33,10 @@ export interface FindActiveOptions {
 }
 
 export class ResearchFindingRepository {
-  constructor(private db: Database) {}
+  constructor(private db: DatabaseExecutor) {}
 
   async create(data: NewResearchFinding): Promise<ResearchFinding> {
+    validateRepositoryEmbedding(data.embedding, "createFinding");
     const [result] = await this.db
       .insert(researchFinding)
       .values(data as NewResearchFindingEntity)
@@ -45,38 +53,41 @@ export class ResearchFindingRepository {
   async upsertByDedupHash(
     data: NewResearchFinding,
   ): Promise<{ finding: ResearchFinding; inserted: boolean }> {
+    validateRepositoryEmbedding(data.embedding, "upsertByDedupHash");
     if (!data.dedupHash) {
       return { finding: await this.create(data), inserted: true };
     }
 
-    const [existing] = await this.db
-      .select()
-      .from(researchFinding)
-      .where(
-        and(
-          eq(researchFinding.dedupHash, data.dedupHash),
-          eq(researchFinding.status, "active"),
-        ),
-      )
-      .limit(1);
+    const [inserted] = await this.db
+      .insert(researchFinding)
+      .values(data as NewResearchFindingEntity)
+      .onConflictDoNothing({
+        target: researchFinding.dedupHash,
+        where: sql`dedup_hash IS NOT NULL`,
+      })
+      .returning();
 
-    if (existing) {
-      const [updated] = await this.db
-        .update(researchFinding)
-        .set({
-          confidence: data.confidence,
-          evidence: data.evidence,
-          summary: data.summary,
-          embedding: data.embedding,
-          updatedAt: new Date(),
-          iteration: sql`${researchFinding.iteration} + 1`,
-        })
-        .where(eq(researchFinding.id, existing.id))
-        .returning();
-      return { finding: toResearchFinding(updated), inserted: false };
+    if (inserted) {
+      return { finding: toResearchFinding(inserted), inserted: true };
     }
 
-    return { finding: await this.create(data), inserted: true };
+    const [updated] = await this.db
+      .update(researchFinding)
+      .set({
+        confidence: data.confidence,
+        evidence: data.evidence,
+        summary: data.summary,
+        embedding: data.embedding,
+        status: data.status ?? ResearchStatus.Active,
+        updatedAt: new Date(),
+        iteration: sql`${researchFinding.iteration} + 1`,
+      })
+      .where(eq(researchFinding.dedupHash, data.dedupHash))
+      .returning();
+    if (!updated) {
+      throw new Error("Failed to upsert research finding by dedup hash");
+    }
+    return { finding: toResearchFinding(updated), inserted: false };
   }
 
   async findById(id: bigint): Promise<ResearchFinding | null> {
@@ -168,6 +179,7 @@ export class ResearchFindingRepository {
     embedding: number[],
     limit = 10,
   ): Promise<Array<ResearchFinding & { similarity: number }>> {
+    validateRepositoryEmbedding(embedding, "searchBySimilarity");
     const results = await this.db.execute<
       ResearchFinding & { similarity: number } & Record<string, unknown>
     >(sql`
@@ -221,6 +233,7 @@ export class ResearchFindingRepository {
     limit: number,
     entityFilter?: { entityType: string; entityId: number | bigint },
   ): Promise<Array<ResearchFinding & { similarity: number }>> {
+    validateRepositoryEmbedding(embedding, "findSimilar");
     const vectorStr = `[${embedding.join(",")}]`;
     // When entity filter is provided, only dedup within the SAME entity
     const entityClause = entityFilter
@@ -302,4 +315,15 @@ export class ResearchFindingRepository {
     `);
     return (result.rows[0] as { cnt: number })?.cnt ?? 0;
   }
+}
+
+function validateRepositoryEmbedding(
+  embedding: number[] | null | undefined,
+  operation: EmbeddingOperation,
+): void {
+  if (embedding === undefined) return;
+  assertEmbeddingDimension(embedding, {
+    embedderName: "ResearchFindingRepository",
+    operation,
+  });
 }

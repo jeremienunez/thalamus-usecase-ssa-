@@ -6,7 +6,7 @@
  */
 
 import { eq, and, sql, inArray } from "drizzle-orm";
-import { researchEdge, type Database } from "@interview/db-schema";
+import { researchEdge, type DatabaseExecutor } from "@interview/db-schema";
 import type { NewResearchEdgeEntity } from "../entities/research.entity";
 import type {
   ResearchEdge,
@@ -15,7 +15,7 @@ import type {
 import { toResearchEdge } from "../transformers/research.transformer";
 
 export class ResearchEdgeRepository {
-  constructor(private db: Database) {}
+  constructor(private db: DatabaseExecutor) {}
 
   async createMany(edges: NewResearchEdge[]): Promise<ResearchEdge[]> {
     if (edges.length === 0) return [];

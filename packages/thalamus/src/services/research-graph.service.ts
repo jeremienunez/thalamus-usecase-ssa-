@@ -17,6 +17,7 @@ import type {
 } from "../types/research.types";
 import { ResearchRelation } from "@interview/shared/enum";
 import type { ResearchFindingType } from "@interview/shared/enum";
+import { assertEmbeddingDimension } from "../errors/embedding";
 
 // ── Ports (structural — repos satisfy these by duck typing) ────────
 export interface FindingsGraphPort {
@@ -75,6 +76,18 @@ export interface CyclesGraphPort {
   incrementFindings(id: bigint): Promise<void>;
 }
 
+export interface ResearchGraphUnitOfWork {
+  findingRepo: FindingsGraphPort;
+  edgeRepo: EdgesGraphPort;
+  cycleRepo: CyclesGraphPort;
+}
+
+export interface ResearchGraphTransactionPort {
+  runInTransaction<T>(
+    work: (uow: ResearchGraphUnitOfWork) => Promise<T>,
+  ): Promise<T>;
+}
+
 const logger = createLogger("research-graph");
 
 export interface StoreFindingInput {
@@ -94,6 +107,7 @@ export type FindingCallback = (finding: ResearchFinding) => Promise<void>;
 
 export class ResearchGraphService {
   private onFindingStored: FindingCallback[] = [];
+  private readonly transactionPort: ResearchGraphTransactionPort;
 
   constructor(
     private findingRepo: FindingsGraphPort,
@@ -101,7 +115,19 @@ export class ResearchGraphService {
     private cycleRepo: CyclesGraphPort,
     private embedder: EmbedderPort,
     private entityCatalog: EntityCatalogPort,
-  ) {}
+    transactionPort?: ResearchGraphTransactionPort,
+  ) {
+    this.transactionPort =
+      transactionPort ??
+      ({
+        runInTransaction: async (work) =>
+          work({
+            findingRepo: this.findingRepo,
+            edgeRepo: this.edgeRepo,
+            cycleRepo: this.cycleRepo,
+          }),
+      } satisfies ResearchGraphTransactionPort);
+  }
 
   /**
    * Register a callback fired after each finding is stored.
@@ -120,7 +146,13 @@ export class ResearchGraphService {
   async storeFinding(input: StoreFindingInput): Promise<ResearchFinding> {
     // 1. Compute embedding from title + summary
     const text = `${input.finding.title}\n${input.finding.summary}`;
-    const embedding = await this.embedder.embedQuery(text);
+    const embedding = assertEmbeddingDimension(
+      await this.embedder.embedQuery(text),
+      {
+        embedderName: this.embedderName(),
+        operation: "storeFinding",
+      },
+    );
 
     // 2. Semantic dedup: cosine >= 0.92 AND same primary entity AND same
     //    finding type. Two findings about different entities never merge —
@@ -160,20 +192,22 @@ export class ResearchGraphService {
           },
           "Semantic dedup: merging into existing finding",
         );
-        await this.findingRepo.mergeFinding(sameType.id, {
-          confidence: Math.max(sameType.confidence, input.finding.confidence),
-          evidence: Array.isArray(input.finding.evidence)
-            ? input.finding.evidence
-            : [],
-        });
-        // Still count it for the cycle and link via junction so the
-        // summariser sees this re-emission when it queries the cycle.
-        await this.cycleRepo.incrementFindings(input.finding.researchCycleId);
-        await this.findingRepo.linkToCycle({
-          cycleId: input.finding.researchCycleId,
-          findingId: sameType.id,
-          iteration: input.finding.iteration ?? 0,
-          isDedupHit: true,
+        await this.transactionPort.runInTransaction(async (uow) => {
+          await uow.findingRepo.mergeFinding(sameType.id, {
+            confidence: Math.max(sameType.confidence, input.finding.confidence),
+            evidence: Array.isArray(input.finding.evidence)
+              ? input.finding.evidence
+              : [],
+          });
+          // Still count it for the cycle and link via junction so the
+          // summariser sees this re-emission when it queries the cycle.
+          await uow.cycleRepo.incrementFindings(input.finding.researchCycleId);
+          await uow.findingRepo.linkToCycle({
+            cycleId: input.finding.researchCycleId,
+            findingId: sameType.id,
+            iteration: input.finding.iteration ?? 0,
+            isDedupHit: true,
+          });
         });
         return sameType;
       }
@@ -196,23 +230,50 @@ export class ResearchGraphService {
       .digest("hex")
       .slice(0, 32);
 
-    const { finding, inserted } = await this.findingRepo.upsertByDedupHash({
-      ...input.finding,
-      embedding,
-      dedupHash,
-    });
+    const entityEdges = input.edges.filter(
+      (e) => e.entityId !== 0n && e.entityId !== BigInt(0),
+    );
+
+    const { finding, inserted } = await this.transactionPort.runInTransaction(
+      async (uow) => {
+        const result = await uow.findingRepo.upsertByDedupHash({
+          ...input.finding,
+          embedding,
+          dedupHash,
+        });
+
+        if (!result.inserted) {
+          // Hit on dedup_hash — finding already exists with edges +
+          // cross-links. Skip insert-only side effects to avoid duplicate
+          // edges and inflated cycle counts, but still link to this cycle.
+          await uow.findingRepo.linkToCycle({
+            cycleId: input.finding.researchCycleId,
+            findingId: result.finding.id,
+            iteration: input.finding.iteration ?? 0,
+            isDedupHit: true,
+          });
+          return result;
+        }
+
+        if (entityEdges.length > 0) {
+          await uow.edgeRepo.createMany(
+            entityEdges.map((e) => ({ ...e, findingId: result.finding.id })),
+          );
+        }
+
+        await uow.cycleRepo.incrementFindings(input.finding.researchCycleId);
+        await uow.findingRepo.linkToCycle({
+          cycleId: input.finding.researchCycleId,
+          findingId: result.finding.id,
+          iteration: input.finding.iteration ?? 0,
+          isDedupHit: false,
+        });
+
+        return result;
+      },
+    );
 
     if (!inserted) {
-      // Hit on dedup_hash — finding already exists with edges + cross-links.
-      // Skip steps 4–7 to avoid duplicate edges and inflated cycle counts,
-      // but still link to the current cycle so the summariser sees this
-      // re-emission instead of receiving a partial cycle view.
-      await this.findingRepo.linkToCycle({
-        cycleId: input.finding.researchCycleId,
-        findingId: finding.id,
-        iteration: input.finding.iteration ?? 0,
-        isDedupHit: true,
-      });
       logger.debug(
         {
           findingId: String(finding.id),
@@ -224,17 +285,9 @@ export class ResearchGraphService {
       return finding;
     }
 
-    // 4. Create entity edges (skip unresolved entity_id=0 sentinels)
-    if (input.edges.length > 0) {
-      const edges = input.edges
-        .filter((e) => e.entityId !== 0n && e.entityId !== BigInt(0))
-        .map((e) => ({ ...e, findingId: finding.id }));
-      if (edges.length > 0) {
-        await this.edgeRepo.createMany(edges);
-      }
-    }
-
-    // 5. Cross-link: find related findings (cosine 0.7–0.92) → create finding→finding edges
+    // 4. Cross-link: find related findings (cosine 0.7–0.92) → create finding→finding edges.
+    // Cross-links are intentionally post-commit best-effort: they improve graph
+    // navigation but are not critical to cycle/finding consistency.
     if (embedding) {
       try {
         const related = await this.findingRepo.findSimilar(embedding, 0.7, 5);
@@ -279,15 +332,6 @@ export class ResearchGraphService {
       }
     }
 
-    // 6. Increment cycle finding count + link to junction
-    await this.cycleRepo.incrementFindings(input.finding.researchCycleId);
-    await this.findingRepo.linkToCycle({
-      cycleId: input.finding.researchCycleId,
-      findingId: finding.id,
-      iteration: input.finding.iteration ?? 0,
-      isDedupHit: false,
-    });
-
     logger.info(
       {
         findingId: String(finding.id),
@@ -297,7 +341,7 @@ export class ResearchGraphService {
       "Finding stored",
     );
 
-    // 7. Fire callbacks (notifications, admin alerts, etc.)
+    // 5. Fire callbacks (notifications, admin alerts, etc.)
     for (const cb of this.onFindingStored) {
       try {
         await cb(finding);
@@ -330,7 +374,13 @@ export class ResearchGraphService {
     query: string,
     limit = 10,
   ): Promise<Array<ResearchFinding & { similarity: number }>> {
-    const embedding = await this.embedder.embedQuery(query);
+    const embedding = assertEmbeddingDimension(
+      await this.embedder.embedQuery(query),
+      {
+        embedderName: this.embedderName(),
+        operation: "semanticSearch",
+      },
+    );
     if (!embedding) return [];
     return this.findingRepo.searchBySimilarity(embedding, limit);
   }
@@ -484,6 +534,11 @@ export class ResearchGraphService {
       byEntityType,
       recentCount24h,
     };
+  }
+
+  private embedderName(): string {
+    const name = this.embedder.constructor?.name;
+    return name && name !== "Object" ? name : "EmbedderPort";
   }
 }
 

@@ -1,4 +1,5 @@
 export * from "./research";
+export { EMBEDDING_DIMENSIONS } from "./_vector";
 export * from "./satellite";
 export * from "./launch";
 export * from "./sweep";

@@ -101,7 +101,11 @@ function createHarness() {
       confidence: 0.9,
     },
   });
-  persist.mockResolvedValue(0);
+  persist.mockResolvedValue({
+    storedCount: 0,
+    failedCount: 0,
+    failures: [],
+  });
   expireAndClean.mockResolvedValue({ expired: 0, orphans: 0 });
 
   const service = new ThalamusService(
@@ -201,6 +205,40 @@ describe("ThalamusService.runCycle", () => {
     expect(run.mock.calls[0]?.[3]).toMatchObject({
       hasUser: false,
       userId: null,
+    });
+  });
+
+  it("keeps the cycle completed and returns persistence metadata when some findings fail to store", async () => {
+    const { service, plan, persist, updateStatus } = createHarness();
+    plan.mockResolvedValueOnce(makePlan({ intent: "Partial persistence" }));
+    persist.mockResolvedValueOnce({
+      storedCount: 1,
+      failedCount: 1,
+      failures: [{ title: "bad finding", message: "write failed" }],
+    });
+
+    const result = await service.runCycle({
+      query: "Partial persistence",
+      triggerType: ResearchCycleTrigger.User,
+    });
+
+    expect(updateStatus).toHaveBeenCalledWith(
+      123n,
+      ResearchCycleStatus.Completed,
+      expect.objectContaining({
+        completedAt: expect.any(Date),
+        totalCost: 0.02,
+      }),
+    );
+    expect(updateStatus).not.toHaveBeenCalledWith(
+      123n,
+      ResearchCycleStatus.Completed,
+      expect.objectContaining({ error: expect.any(String) }),
+    );
+    expect(result.persistence).toEqual({
+      storedCount: 1,
+      failedCount: 1,
+      failures: [{ title: "bad finding", message: "write failed" }],
     });
   });
 

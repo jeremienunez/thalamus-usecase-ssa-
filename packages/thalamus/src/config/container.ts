@@ -17,7 +17,10 @@ import type { CortexDataProvider, DomainConfig } from "../cortices/types";
 import { noopDomainConfig } from "../cortices/types";
 import type { WebSearchPort } from "../ports/web-search.port";
 import { NullWebSearchAdapter } from "../transports/openai-web-search.adapter";
-import { ResearchGraphService } from "../services/research-graph.service";
+import {
+  ResearchGraphService,
+  type ResearchGraphTransactionPort,
+} from "../services/research-graph.service";
 import { ThalamusService } from "../services/thalamus.service";
 import { ThalamusPlanner } from "../services/thalamus-planner.service";
 import { ThalamusDAGExecutor } from "../services/thalamus-executor.service";
@@ -102,6 +105,16 @@ export function buildThalamusContainer(
   const cycleRepo = new ResearchCycleRepository(db);
   const findingRepo = new ResearchFindingRepository(db);
   const edgeRepo = new ResearchEdgeRepository(db);
+  const graphTransactions: ResearchGraphTransactionPort = {
+    runInTransaction: (work) =>
+      db.transaction(async (tx) =>
+        work({
+          findingRepo: new ResearchFindingRepository(tx),
+          edgeRepo: new ResearchEdgeRepository(tx),
+          cycleRepo: new ResearchCycleRepository(tx),
+        }),
+      ),
+  };
   const entityCatalog = opts.entityCatalog ?? new NoopEntityCatalog();
   const sourceFetcher = opts.sourceFetcher ?? new NoopSourceFetcher();
   const embedder = opts.embedder ?? new NullEmbedder();
@@ -132,6 +145,7 @@ export function buildThalamusContainer(
     cycleRepo,
     embedder,
     entityCatalog,
+    graphTransactions,
   );
 
   // Thalamus service collaborators — wired here so the service itself
