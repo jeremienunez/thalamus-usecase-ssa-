@@ -188,7 +188,7 @@ describe("ReplFollowUpService.plan", () => {
     const { service } = buildService();
 
     const plan = await service.plan({
-      query: "Dresse un brief SSA priorisé par opérateur sur les 30 jours à venir",
+      query: "Dresse un brief SSA priorisé par opérateur sur les 30 prochains jours",
       parentCycleId: "416",
       verification: {
         needsVerification: true,
@@ -201,6 +201,41 @@ describe("ReplFollowUpService.plan", () => {
 
     expect(
       [...plan.autoLaunched, ...plan.proposed, ...plan.dropped].some(
+        (item) => item.kind === "deep_research_30d",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not keep proposing the same auto 30d branch for the same query signature", async () => {
+    const { service } = buildService();
+    const request: Parameters<typeof service.plan>[0] = {
+      query: "rapport des launch pour les prochains jours",
+      parentCycleId: "416",
+      verification: {
+        needsVerification: true,
+        reasonCodes: ["horizon_insufficient", "needs_monitoring"],
+        confidence: 0.8,
+        targetHints: [],
+      },
+      findings: [],
+    };
+
+    const first = await service.plan(request);
+    const second = await service.plan({
+      ...request,
+      parentCycleId: "417",
+    });
+
+    expect(first.autoLaunched).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "deep_research_30d",
+          title: "Corroborate launch report over 30 days",
+        }),
+      ]),
+    );
+    expect(
+      [...second.autoLaunched, ...second.proposed, ...second.dropped].some(
         (item) => item.kind === "deep_research_30d",
       ),
     ).toBe(false);
@@ -403,12 +438,16 @@ describe("ReplFollowUpService.executeSelected", () => {
       ]),
     );
     expect(runCycle).toHaveBeenCalledWith({
-      query:
-        "Analyse la flotte active\n\nVerification follow-up for parent cycle 419. Extend the horizon to 30 days, corroborate the highest-risk findings, and focus on operator-scoped conclusions where attribution is explicit.",
+      query: expect.stringContaining(
+        "Verification follow-up for parent cycle 419. Extend the evidence horizon to 30 days for the same user objective.",
+      ),
       userId: undefined,
       triggerType: "user",
       triggerSource: "console-followup:30d:419",
     });
+    expect(runCycle.mock.calls[0]?.[0].query).toContain(
+      "Do not switch to fleet inventory or operator portfolio analysis",
+    );
   });
 
   it("runs a targeted sweep with the real runtime payload", async () => {

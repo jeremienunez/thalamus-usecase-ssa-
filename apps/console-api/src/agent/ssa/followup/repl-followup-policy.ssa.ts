@@ -11,6 +11,8 @@ import type {
 } from "./repl-followup.types.ssa";
 
 export class SsaReplFollowUpPolicy {
+  private readonly usedDeepResearchSignatures = new Set<string>();
+
   constructor(
     private readonly deps: Pick<SsaReplFollowUpDeps, "edgeRepo" | "sim" | "sweep">,
   ) {}
@@ -31,6 +33,9 @@ export class SsaReplFollowUpPolicy {
       .map((f) => parseBigIntOrNull(f.id))
       .filter((id): id is bigint => id !== null);
     const edges = await this.deps.edgeRepo.findByFindingIds(ids);
+    const deepResearchAlreadyUsed = this.usedDeepResearchSignatures.has(
+      deepResearchSignature(input.query),
+    );
     const candidates = deduplicateCandidates(
       [
         ...extractCandidatesFromVerification(input.query, verification),
@@ -41,7 +46,12 @@ export class SsaReplFollowUpPolicy {
           input.findings,
         ),
       ].map((candidate) => scoreCandidate(candidate, verification)),
-    ).sort((left, right) => right.score - left.score);
+    )
+      .filter(
+        (candidate) =>
+          !deepResearchAlreadyUsed || candidate.kind !== "deep_research_30d",
+      )
+      .sort((left, right) => right.score - left.score);
 
     const autoLaunched: ReplFollowUpPlanItem[] = [];
     const proposed: ReplFollowUpPlanItem[] = [];
@@ -72,6 +82,10 @@ export class SsaReplFollowUpPolicy {
         continue;
       }
       dropped.push({ ...item, auto: false });
+    }
+
+    if (autoLaunched.some((item) => item.kind === "deep_research_30d")) {
+      this.usedDeepResearchSignatures.add(deepResearchSignature(input.query));
     }
 
     return { autoLaunched, proposed, dropped };
@@ -129,8 +143,11 @@ function extractCandidatesFromVerification(
     out.push({
       followupId: randomUUID(),
       kind: "deep_research_30d",
-      title: "Extend verification horizon to 30 days",
-      rationale: "The parent cycle stopped with a monitoring / horizon signal.",
+      title: buildDeepResearchTitle(query),
+      rationale: buildDeepResearchRationale(
+        query,
+        "The parent cycle stopped with a monitoring / horizon signal.",
+      ),
       reasonCodes: verification.reasonCodes,
       target: null,
       score: 0,
@@ -321,9 +338,11 @@ function extractCandidatesFromEdges(
     out.push({
       followupId: randomUUID(),
       kind: "deep_research_30d",
-      title: "Extend verification horizon to 30 days",
-      rationale:
+      title: buildDeepResearchTitle(query),
+      rationale: buildDeepResearchRationale(
+        query,
         "The parent cycle still recommends monitoring after the first pass.",
+      ),
       reasonCodes: verification.reasonCodes,
       target: null,
       score: 0,
@@ -451,9 +470,49 @@ function toPlanItem(candidate: FollowUpCandidate): ReplFollowUpPlanItem {
 }
 
 function queryRequestsThirtyDays(query: string): boolean {
-  return /\b30 ?jours\b|\b30[- ]day\b|\b30 days\b|\bmonth\b|\bmonthly\b/i.test(
+  return /\b30(?:\s+\p{L}+){0,4}\s+jours?\b|\b30[- ]day\b|\b30 days\b|\bmonth\b|\bmonthly\b/iu.test(
     query,
   );
+}
+
+function deepResearchSignature(query: string): string {
+  return query
+    .toLowerCase()
+    .replace(/\bcycle\s+\S+/g, "cycle")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+function buildDeepResearchTitle(query: string): string {
+  const low = query.toLowerCase();
+  if (/\b(launch|launches|lancement|lancements|manifest)\b/.test(low)) {
+    return "Corroborate launch report over 30 days";
+  }
+  if (/\b(conjunction|collision|pc|conjonctions?)\b/.test(low)) {
+    return "Extend conjunction verification to 30 days";
+  }
+  if (/\b(fleet|flotte|operator|operateur|opérateur)\b/.test(low)) {
+    return "Extend operator risk verification to 30 days";
+  }
+  if (/\b(audit|catalog|catalogue|quality|qualite|qualité)\b/.test(low)) {
+    return "Extend catalog audit verification to 30 days";
+  }
+  return "Extend verification horizon to 30 days";
+}
+
+function buildDeepResearchRationale(query: string, base: string): string {
+  const low = query.toLowerCase();
+  if (/\b(launch|launches|lancement|lancements|manifest)\b/.test(low)) {
+    return `${base} The follow-up stays launch-focused and checks the same manifest horizon.`;
+  }
+  if (/\b(conjunction|collision|pc|conjonctions?)\b/.test(low)) {
+    return `${base} The follow-up stays focused on conjunction risk verification.`;
+  }
+  if (/\b(audit|catalog|catalogue|quality|qualite|qualité)\b/.test(low)) {
+    return `${base} The follow-up stays focused on catalog evidence quality.`;
+  }
+  return base;
 }
 
 function buildTitle(

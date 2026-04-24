@@ -156,6 +156,7 @@ import { IntentClassifier } from "./services/intent-classifier.service";
 import { ChatReplyService } from "./services/chat-reply.service";
 import { CycleStreamPump } from "./services/cycle-stream-pump.service";
 import { CycleSummariser } from "./services/cycle-summariser.service";
+import { ReplBriefingAggregator } from "./services/repl-briefing-aggregator.service";
 import { ReplFollowUpService } from "./services/repl-followup.service";
 import {
   SsaReplFollowUpExecutor,
@@ -559,6 +560,7 @@ export async function buildContainer(
   const chatReplyService = new ChatReplyService(llmFactory);
   const cycleStreamPump = new CycleStreamPump();
   const cycleSummariser = new CycleSummariser(llmFactory);
+  const replBriefingAggregator = new ReplBriefingAggregator(llmFactory);
 
   const simGodChannelService = new SimGodChannelService(
     simRunRepo,
@@ -664,6 +666,7 @@ export async function buildContainer(
     cycleStreamPump,
     cycleSummariser,
     replFollowUps,
+    replBriefingAggregator,
   );
 
   // Satellite sweep chat — per-satellite LLM chat with SSE streaming + HITL

@@ -8,6 +8,7 @@ import { IntentClassifier } from "../../../src/services/intent-classifier.servic
 import { ChatReplyService } from "../../../src/services/chat-reply.service";
 import { CycleStreamPump } from "../../../src/services/cycle-stream-pump.service";
 import { CycleSummariser } from "../../../src/services/cycle-summariser.service";
+import { ReplBriefingAggregator } from "../../../src/services/repl-briefing-aggregator.service";
 import type { LlmTransportFactory } from "../../../src/services/llm-transport.port";
 import {
   CLASSIFIER_SYSTEM_PROMPT,
@@ -23,10 +24,13 @@ import {
 type FakeLlmState = {
   classifierContent: string;
   summariserContent: string;
+  aggregateContent: string;
   chatContent: string;
   prompts: string[];
   summariserQueries: string[];
   summariserPayloads: string[];
+  aggregateQueries: string[];
+  aggregatePayloads: string[];
   lastSummariserPayload: string;
 };
 
@@ -37,10 +41,12 @@ type ReplFindingRow = Awaited<
 
 const SUMMARISER_PROMPT_PREFIX =
   'Role: SSA final synthesis briefer. Executed research query: "';
+const AGGREGATE_PROMPT_PREFIX =
+  'Role: SSA terminal briefing aggregator. Executed research query: "';
 
-function parseSummariserQuery(systemPrompt: string): string | null {
-  if (!systemPrompt.startsWith(SUMMARISER_PROMPT_PREFIX)) return null;
-  const start = SUMMARISER_PROMPT_PREFIX.length;
+function parsePromptQuery(systemPrompt: string, prefix: string): string | null {
+  if (!systemPrompt.startsWith(prefix)) return null;
+  const start = prefix.length;
   const end = systemPrompt.indexOf('"\n', start);
   return end === -1 ? null : systemPrompt.slice(start, end);
 }
@@ -57,12 +63,24 @@ function makeFakeFactory(state: FakeLlmState): LlmTransportFactory {
           if (systemPrompt === CONSOLE_CHAT_SYSTEM_PROMPT) {
             return { content: state.chatContent, provider: "kimi" };
           }
-          const summariserQuery = parseSummariserQuery(systemPrompt);
+          const summariserQuery = parsePromptQuery(
+            systemPrompt,
+            SUMMARISER_PROMPT_PREFIX,
+          );
           if (summariserQuery !== null) {
             state.summariserQueries.push(summariserQuery);
             state.summariserPayloads.push(input);
             state.lastSummariserPayload = input;
             return { content: state.summariserContent, provider: "kimi" };
+          }
+          const aggregateQuery = parsePromptQuery(
+            systemPrompt,
+            AGGREGATE_PROMPT_PREFIX,
+          );
+          if (aggregateQuery !== null) {
+            state.aggregateQueries.push(aggregateQuery);
+            state.aggregatePayloads.push(input);
+            return { content: state.aggregateContent, provider: "kimi" };
           }
           throw new Error(`unexpected system prompt in test: ${systemPrompt.slice(0, 80)}`);
         },
@@ -75,6 +93,7 @@ function buildReplChat(
   llm: LlmTransportFactory,
   deps: ConstructorParameters<typeof ReplChatService>[0],
   followUps?: ConstructorParameters<typeof ReplChatService>[5],
+  briefingAggregator?: ConstructorParameters<typeof ReplChatService>[6],
 ): ReplChatService {
   return new ReplChatService(
     deps,
@@ -83,6 +102,7 @@ function buildReplChat(
     new CycleStreamPump(),
     new CycleSummariser(llm),
     followUps,
+    briefingAggregator,
   );
 }
 
@@ -116,10 +136,18 @@ describe("ReplChatService.handleStream — chat branch", () => {
     llmState = {
       classifierContent: JSON.stringify({ action: "chat" }),
       summariserContent: "summary",
+      aggregateContent: JSON.stringify({
+        title: "Synthese finale",
+        summary: "Synthese agregee",
+        sections: [{ title: "Resultat", body: "ok", bullets: [] }],
+        nextActions: [],
+      }),
       chatContent: "echo:bonjour",
       prompts: [],
       summariserQueries: [],
       summariserPayloads: [],
+      aggregateQueries: [],
+      aggregatePayloads: [],
       lastSummariserPayload: "",
     };
   });
@@ -160,6 +188,20 @@ describe("ReplChatService.handleStream — chat branch", () => {
   });
 });
 
+describe("CLASSIFIER_SYSTEM_PROMPT", () => {
+  it("frames recap and briefing requests as executable research intent for the LLM router", () => {
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain("recap");
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain("récap");
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain("15 prochains jours");
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain(
+      "Do not ask for confirmation when the user directly asks for the output",
+    );
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain(
+      "let the research planner decide the DAG",
+    );
+  });
+});
+
 describe("ReplChatService.handleStream — run_cycle branch", () => {
   let llmState: FakeLlmState;
 
@@ -170,10 +212,18 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
         query: "conjonctions",
       }),
       summariserContent: "n=1 finding resume",
+      aggregateContent: JSON.stringify({
+        title: "Synthese finale",
+        summary: "Synthese agregee",
+        sections: [{ title: "Resultat", body: "ok", bullets: ["#2"] }],
+        nextActions: ["Surveiller les confirmations"],
+      }),
       chatContent: "chat unused",
       prompts: [],
       summariserQueries: [],
       summariserPayloads: [],
+      aggregateQueries: [],
+      aggregatePayloads: [],
       lastSummariserPayload: "",
     };
   });
@@ -226,6 +276,46 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       findingType: "alert",
     });
     expect(llmState.summariserQueries).toEqual(["conjonctions"]);
+  });
+
+  it("emits a terminal briefing even when no follow-up is launched", async () => {
+    const llm = makeFakeFactory(llmState);
+    const runCycle = vi.fn(async () => ({ id: "cyc:42" }));
+    const deps = {
+      thalamusService: { runCycle },
+      findingRepo: {
+        findByCycleId: async () => [findingRow()],
+      },
+    } satisfies ReplChatDeps;
+    const svc = buildReplChat(
+      llm,
+      deps,
+      undefined,
+      new ReplBriefingAggregator(llm),
+    );
+
+    const events = await drain(svc.handleStream("scan conjonctions", 7n));
+    const types = events.map((evt) => evt.event);
+
+    expect(types).toEqual(
+      expect.arrayContaining([
+        "summary.complete",
+        "briefing.complete",
+        "done",
+      ]),
+    );
+    expect(types.indexOf("summary.complete")).toBeLessThan(
+      types.indexOf("briefing.complete"),
+    );
+    expect(types.at(-1)).toBe("done");
+    expect(llmState.aggregateQueries).toEqual(["conjonctions"]);
+    expect(JSON.parse(llmState.aggregatePayloads[0] ?? "{}")).toMatchObject({
+      parentCycleId: "cyc:42",
+      parent: {
+        findings: [expect.objectContaining({ id: "1" })],
+      },
+      followUps: [],
+    });
   });
 
   it("auto-launches a real 30d follow-up after the parent summary when verification requires monitoring", async () => {
@@ -291,6 +381,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       llm,
       deps,
       followUps,
+      new ReplBriefingAggregator(llm),
     );
 
     const events = await drain(svc.handleStream("scan conjonctions", 7n));
@@ -303,6 +394,7 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
         "followup.finding",
         "followup.summary",
         "followup.done",
+        "briefing.complete",
         "done",
       ]),
     );
@@ -311,6 +403,9 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
     );
     expect(types.indexOf("followup.plan")).toBeLessThan(
       types.indexOf("followup.started"),
+    );
+    expect(types.indexOf("followup.done")).toBeLessThan(
+      types.indexOf("briefing.complete"),
     );
     expect(types.at(-1)).toBe("done");
 
@@ -343,6 +438,9 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
       triggerSource: "console-followup:30d:cyc:42",
     });
     expect(runCycle.mock.calls[1]?.[0].query).toContain("conjonctions");
+    expect(runCycle.mock.calls[1]?.[0].query).toContain(
+      "Keep the follow-up focused on conjunction/collision risk",
+    );
 
     expect(llmState.summariserQueries).toHaveLength(2);
     expect(llmState.summariserQueries[0]).toBe("conjonctions");
@@ -362,5 +460,26 @@ describe("ReplChatService.handleStream — run_cycle branch", () => {
         findingType: "brief",
       }),
     ]);
+    expect(llmState.aggregateQueries).toEqual(["conjonctions"]);
+    const aggregatePayload = JSON.parse(llmState.aggregatePayloads[0] ?? "{}") as {
+      parentCycleId: string;
+      followUps: Array<{ title: string; findings: Array<{ id: string }> }>;
+    };
+    expect(aggregatePayload.parentCycleId).toBe("cyc:42");
+    expect(aggregatePayload.followUps[0]).toMatchObject({
+      title: "Extend conjunction verification to 30 days",
+      findings: [{ id: "2" }],
+    });
+    expect(
+      events.find(
+        (evt): evt is Extract<ReplStreamEvent, { event: "briefing.complete" }> =>
+          evt.event === "briefing.complete",
+      )?.data,
+    ).toMatchObject({
+      title: "Synthese finale",
+      evidence: expect.arrayContaining([
+        expect.objectContaining({ id: "2", source: "followup" }),
+      ]),
+    });
   });
 });

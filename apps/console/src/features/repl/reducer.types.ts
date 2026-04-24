@@ -17,6 +17,7 @@ export type FollowUpFindingData = Extract<ReplStreamEvent, { event: "followup.fi
 export type FollowUpSummaryData = Extract<ReplStreamEvent, { event: "followup.summary" }>["data"];
 export type FollowUpDoneData = Extract<ReplStreamEvent, { event: "followup.done" }>["data"];
 export type FollowUpStepData = Extract<ReplStreamEvent, { event: "followup.step" }>["data"];
+export type BriefingData = Extract<ReplStreamEvent, { event: "briefing.complete" }>["data"];
 
 export type FollowUpStatus =
   | "pending"
@@ -60,6 +61,7 @@ export type Turn = {
   findings: FindingData[];
   chatText: string;
   summaryText: string;
+  briefing?: BriefingData;
   provider?: string;
   tookMs?: number;
   followupPlan?: FollowUpPlanData;

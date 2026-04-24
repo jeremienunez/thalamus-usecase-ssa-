@@ -22,6 +22,31 @@ export interface ReplFollowUpPlanItem {
   target?: ReplFollowUpTarget | null;
 }
 
+export interface ReplBriefingEvidence {
+  id: string;
+  title: string;
+  cortex: string | null;
+  confidence: number;
+  source: "parent" | "followup";
+  followupId?: string | null;
+}
+
+export interface ReplBriefingSection {
+  title: string;
+  body: string;
+  bullets: string[];
+}
+
+export interface ReplBriefingReport {
+  parentCycleId: string;
+  title: string;
+  summary: string;
+  sections: ReplBriefingSection[];
+  nextActions: string[];
+  evidence: ReplBriefingEvidence[];
+  provider: string;
+}
+
 export type ReplStreamEvent =
   | {
       event: "classified";
@@ -51,6 +76,7 @@ export type ReplStreamEvent =
       };
     }
   | { event: "summary.complete"; data: { text: string; provider: string } }
+  | { event: "briefing.complete"; data: ReplBriefingReport }
   | {
       event: "done";
       data: {

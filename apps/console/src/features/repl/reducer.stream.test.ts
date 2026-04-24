@@ -73,6 +73,27 @@ describe("repl applyCoreStreamEvent", () => {
       }) ?? turn;
     turn =
       applyCoreStreamEvent(turn, {
+        event: "briefing.complete",
+        data: {
+          parentCycleId: "cycle-1",
+          title: "Final report",
+          summary: "aggregated summary",
+          sections: [{ title: "Result", body: "body", bullets: ["#f-1"] }],
+          nextActions: [],
+          evidence: [
+            {
+              id: "f-1",
+              title: "Finding",
+              cortex: "planner",
+              confidence: 0.8,
+              source: "parent",
+            },
+          ],
+          provider: "kimi",
+        },
+      }) ?? turn;
+    turn =
+      applyCoreStreamEvent(turn, {
         event: "done",
         data: { provider: "minimax", tookMs: 987 },
       }) ?? turn;
@@ -83,6 +104,10 @@ describe("repl applyCoreStreamEvent", () => {
       findings: [{ id: "f-1", title: "Finding", cortex: "planner" }],
       chatText: "chat reply",
       summaryText: "summary text",
+      briefing: {
+        title: "Final report",
+        summary: "aggregated summary",
+      },
       provider: "minimax",
       phase: "done",
       tookMs: 987,

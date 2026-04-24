@@ -43,6 +43,12 @@ export function applyCoreStreamEvent(
         summaryText: event.data.text,
         provider: event.data.provider,
       };
+    case "briefing.complete":
+      return {
+        ...turn,
+        briefing: event.data,
+        provider: event.data.provider,
+      };
     case "done":
       return {
         ...turn,

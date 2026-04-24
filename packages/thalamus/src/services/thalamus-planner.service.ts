@@ -284,6 +284,7 @@ export class ThalamusPlanner {
     if (disabled.size > 0) {
       kept = kept.filter((n) => !disabled.has(n.cortex));
     }
+    kept = this.dedupeGeneratedNodes(kept);
 
     // 2. force-inject (skip any that are disabled or already present)
     const present = new Set(kept.map((n) => n.cortex));
@@ -331,6 +332,30 @@ export class ThalamusPlanner {
       ...n,
       dependsOn: n.dependsOn.filter((d) => finalNames.has(d)),
     }));
+  }
+
+  private dedupeGeneratedNodes(nodes: DAGNode[]): DAGNode[] {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    const kept: DAGNode[] = [];
+
+    for (const node of nodes) {
+      if (seen.has(node.cortex)) {
+        duplicates.add(node.cortex);
+        continue;
+      }
+      seen.add(node.cortex);
+      kept.push(node);
+    }
+
+    if (duplicates.size > 0) {
+      logger.warn(
+        { duplicates: [...duplicates] },
+        "Planner emitted duplicate cortices; keeping first occurrence",
+      );
+    }
+
+    return kept;
   }
 
   /**

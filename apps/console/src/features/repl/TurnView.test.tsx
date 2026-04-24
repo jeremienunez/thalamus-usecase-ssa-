@@ -288,6 +288,69 @@ describe("TurnView follow-up rendering", () => {
     );
   });
 
+  it("renders the aggregate briefing as the terminal view and keeps raw trace available", () => {
+    const turn: Turn = {
+      id: "t-brief",
+      input: "rapport launches",
+      phase: "done",
+      startedAt: Date.now() - 1500,
+      steps: [],
+      findings: [
+        {
+          id: "377",
+          title: "Progress MS-34",
+          cortex: "launch_scout",
+        },
+      ],
+      chatText: "",
+      summaryText: "parent summary",
+      briefing: {
+        parentCycleId: "475",
+        title: "Rapport launch consolide",
+        summary: "Les lancements critiques sont confirmes et priorises.",
+        sections: [
+          {
+            title: "Priorites",
+            body: "Surveiller les fenetres proches.",
+            bullets: ["ROSCOSMOS: Progress MS-34 (#377)"],
+          },
+        ],
+        nextActions: ["Verifier les mises a jour de fenetre"],
+        evidence: [
+          {
+            id: "377",
+            title: "Progress MS-34",
+            cortex: "launch_scout",
+            confidence: 0.85,
+            source: "parent",
+          },
+        ],
+        provider: "kimi",
+      },
+      followupOrder: [],
+      followups: {},
+      tookMs: 321,
+    };
+
+    render(
+      <TurnView
+        turn={turn}
+        onFollowUp={vi.fn()}
+        onUiAction={vi.fn()}
+        onRunFollowUp={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Rapport launch consolide")).toBeInTheDocument();
+    expect(
+      screen.getByText("Les lancements critiques sont confirmes et priorises."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Priorites")).toBeInTheDocument();
+    expect(screen.getByText("ROSCOSMOS: Progress MS-34 (#377)")).toBeInTheDocument();
+    expect(screen.getByText("raw cycle trace")).toBeInTheDocument();
+    expect(screen.getByText("parent summary")).toBeInTheDocument();
+  });
+
   it("falls back to the raw input when the executed query is missing", async () => {
     const user = userEvent.setup();
     const onRunFollowUp = vi.fn();
