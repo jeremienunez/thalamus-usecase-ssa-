@@ -22,12 +22,16 @@ import {
   type CyclesPort,
   ThalamusService,
 } from "../src/services/thalamus.service";
-import type { ThalamusPlanner, DAGPlan } from "../src/services/thalamus-planner.service";
-import type { ResearchCycle, ResearchCycleRunResult } from "../src/types/research.types";
+import type {
+  ThalamusPlanner,
+  DAGPlan,
+} from "../src/services/thalamus-planner.service";
+import type {
+  ResearchCycle,
+  ResearchCycleRunResult,
+} from "../src/types/research.types";
 
-function makePlan(
-  overrides: Partial<DAGPlan> = {},
-): DAGPlan {
+function makePlan(overrides: Partial<DAGPlan> = {}): DAGPlan {
   return {
     intent: "Nominal plan",
     complexity: "moderate",
@@ -36,9 +40,7 @@ function makePlan(
   };
 }
 
-function makeCycle(
-  overrides: Partial<ResearchCycle> = {},
-): ResearchCycle {
+function makeCycle(overrides: Partial<ResearchCycle> = {}): ResearchCycle {
   return {
     id: 123n,
     triggerType: ResearchCycleTrigger.User,
@@ -56,9 +58,7 @@ function makeCycle(
   };
 }
 
-function makeRunResult(
-  cycle: ResearchCycle,
-): ResearchCycleRunResult {
+function makeRunResult(cycle: ResearchCycle): ResearchCycleRunResult {
   return {
     ...cycle,
     verification: {
@@ -73,6 +73,7 @@ function makeRunResult(
 function createHarness() {
   const plan = typedSpy<ThalamusPlanner["plan"]>();
   const getDaemonDag = typedSpy<ThalamusPlanner["getDaemonDag"]>();
+  const buildManualDag = typedSpy<ThalamusPlanner["buildManualDag"]>();
   const run = typedSpy<CycleLoopRunner["run"]>();
   const persist = typedSpy<FindingPersister["persist"]>();
   const create = typedSpy<CyclesPort["create"]>();
@@ -104,7 +105,7 @@ function createHarness() {
   expireAndClean.mockResolvedValue({ expired: 0, orphans: 0 });
 
   const service = new ThalamusService(
-    fakePort<ThalamusPlanner>({ plan, getDaemonDag }),
+    fakePort<ThalamusPlanner>({ plan, getDaemonDag, buildManualDag }),
     fakePort<CycleLoopRunner>({ run }),
     fakePort<FindingPersister>({ persist }),
     fakePort<CyclesPort>({ create, findById, updateStatus }),
@@ -115,6 +116,7 @@ function createHarness() {
     service,
     plan,
     getDaemonDag,
+    buildManualDag,
     run,
     persist,
     create,
@@ -278,6 +280,33 @@ describe("ThalamusService.runCycle", () => {
     expect(plan).not.toHaveBeenCalled();
   });
 
+  it("builds a flat manual DAG when cortices are provided and no dag or daemon job wins", async () => {
+    const { service, plan, getDaemonDag, buildManualDag, run } =
+      createHarness();
+    const manualPlan = makePlan({
+      intent: "Manual cortices",
+      nodes: [
+        { cortex: "alpha", params: {}, dependsOn: [] },
+        { cortex: "beta", params: {}, dependsOn: [] },
+      ],
+    });
+    buildManualDag.mockReturnValueOnce(manualPlan);
+
+    await service.runCycle({
+      query: "Manual cortices",
+      triggerType: ResearchCycleTrigger.User,
+      cortices: ["alpha", "beta"],
+    });
+
+    expect(buildManualDag).toHaveBeenCalledWith("Manual cortices", [
+      "alpha",
+      "beta",
+    ]);
+    expect(plan).not.toHaveBeenCalled();
+    expect(getDaemonDag).not.toHaveBeenCalled();
+    expect(run.mock.calls[0]?.[0]).toBe(manualPlan);
+  });
+
   it("aborts daemon cycles when no predefined DAG exists for the job", async () => {
     const { service, getDaemonDag, create } = createHarness();
     getDaemonDag.mockReturnValueOnce(null);
@@ -306,7 +335,9 @@ describe("ThalamusService wrappers", () => {
     );
     const runCycle = vi.spyOn(service, "runCycle").mockResolvedValueOnce(cycle);
 
-    await expect(service.runDaemonJob("nightly-refresh")).resolves.toEqual(cycle);
+    await expect(service.runDaemonJob("nightly-refresh")).resolves.toEqual(
+      cycle,
+    );
     expect(runCycle).toHaveBeenCalledWith({
       query: "Daemon job: nightly-refresh",
       triggerType: ResearchCycleTrigger.Daemon,

@@ -14,10 +14,7 @@ import type { ProviderName } from "../transports/providers";
 import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJsonObject } from "@interview/shared/utils";
 import type { CortexFinding } from "./types";
-import {
-  getCortexConfig,
-  getPlannerConfig,
-} from "../config/runtime-config";
+import { getCortexConfig, getPlannerConfig } from "../config/runtime-config";
 
 const logger = createLogger("cortex-llm");
 
@@ -72,6 +69,7 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
   findings: CortexFinding[];
   model: string;
   tokensEstimate: number;
+  status?: CortexLlmStatus;
   diagnostic?: CortexLlmDiagnostic;
 }> {
   const start = Date.now();
@@ -98,7 +96,12 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
       tokensEstimate: 0,
       durationMs: 0,
     });
-    return { findings: [], model: "disabled", tokensEstimate: 0 };
+    return {
+      findings: [],
+      model: "disabled",
+      tokensEstimate: 0,
+      status: "empty_valid",
+    };
   }
 
   const pickProvider = (v: string | undefined): ProviderName | undefined => {
@@ -243,6 +246,7 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
         findings: [],
         model: `${response.provider}:invalid`,
         tokensEstimate,
+        status: parsedResponse.status,
         diagnostic: parsedResponse.diagnostic,
       };
     }
@@ -271,8 +275,10 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
       findings,
       model: `${response.provider}`,
       tokensEstimate,
+      status: parsedResponse.status,
     };
   } catch (err) {
+    const diagnostic = diagnosticFromError(err);
     logger.error(
       { cortex: input.cortexName, err },
       "Cortex LLM analysis failed",
@@ -282,7 +288,13 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
       durationMs: Date.now() - start,
       err: err instanceof Error ? err.message : String(err),
     });
-    return { findings: [], model: "none", tokensEstimate: 0 };
+    return {
+      findings: [],
+      model: "none",
+      tokensEstimate: 0,
+      status: diagnostic.kind,
+      diagnostic,
+    };
   }
 }
 
@@ -294,21 +306,31 @@ export function safeParseJson(raw: string): { findings: CortexFinding[] } {
   return { findings: parseCortexResponse(raw).findings };
 }
 
+export type CortexLlmStatus =
+  | "ok"
+  | "empty_valid"
+  | "invalid_json"
+  | "provider_unavailable"
+  | "timeout"
+  | "degenerate_repetition";
+
 export type CortexLlmDiagnostic = {
-  kind: "degenerate_repetition" | "invalid_json";
+  kind: Exclude<CortexLlmStatus, "ok" | "empty_valid">;
   reason: string;
   repeatedUnit?: string;
   repeatedCount?: number;
 };
 
-function parseCortexResponse(raw: string): {
+export function parseCortexResponse(raw: string): {
   findings: CortexFinding[];
+  status: CortexLlmStatus;
   diagnostic?: CortexLlmDiagnostic;
 } {
   const repetition = detectDegenerateRepetition(raw);
   if (repetition) {
     return {
       findings: [],
+      status: "degenerate_repetition",
       diagnostic: {
         kind: "degenerate_repetition",
         reason: `degenerate repetition detected: "${repetition.unit}" x${repetition.count}`,
@@ -318,26 +340,64 @@ function parseCortexResponse(raw: string): {
     };
   }
 
+  if (!raw.trim()) {
+    return invalidCortexResponse("empty provider response");
+  }
+
   const parsed = extractJsonObject(raw);
   if (Array.isArray(parsed.findings)) {
-    return { findings: parsed.findings as CortexFinding[] };
+    const findings = parsed.findings as CortexFinding[];
+    return {
+      findings,
+      status: findings.length === 0 ? "empty_valid" : "ok",
+    };
   }
   // Also handle bare arrays (LLM returns [...] instead of {"findings": [...]})
   if (Array.isArray(parsed.items)) {
-    return { findings: parsed.items as CortexFinding[] };
+    const findings = parsed.items as CortexFinding[];
+    if (findings.length === 0) {
+      return invalidCortexResponse(
+        'empty output must be explicit JSON: {"findings":[]}',
+      );
+    }
+    return { findings, status: "ok" };
   }
 
   if (raw.includes("findings")) {
-    return {
-      findings: [],
-      diagnostic: {
-        kind: "invalid_json",
-        reason: "response mentioned findings but no valid findings array could be parsed",
-      },
-    };
+    return invalidCortexResponse(
+      "response mentioned findings but no valid findings array could be parsed",
+    );
   }
 
-  return { findings: [] };
+  return invalidCortexResponse("response did not contain valid cortex JSON");
+}
+
+function invalidCortexResponse(reason: string): {
+  findings: CortexFinding[];
+  status: "invalid_json";
+  diagnostic: CortexLlmDiagnostic;
+} {
+  return {
+    findings: [],
+    status: "invalid_json",
+    diagnostic: {
+      kind: "invalid_json",
+      reason,
+    },
+  };
+}
+
+function diagnosticFromError(err: unknown): CortexLlmDiagnostic {
+  const message = err instanceof Error ? err.message : String(err);
+  const name = err instanceof Error ? err.name : "";
+  const kind: CortexLlmDiagnostic["kind"] =
+    name === "AbortError" || /timed?\s*out|timeout/i.test(message)
+      ? "timeout"
+      : "provider_unavailable";
+  return {
+    kind,
+    reason: message,
+  };
 }
 
 function detectDegenerateRepetition(

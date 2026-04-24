@@ -36,9 +36,7 @@ function mkRegistry(
 }
 
 function mkPlannerCfg(
-  partial: Partial<
-    Parameters<ThalamusPlanner["applyRuntimeFilters"]>[1]
-  > = {},
+  partial: Partial<Parameters<ThalamusPlanner["applyRuntimeFilters"]>[1]> = {},
 ): Parameters<ThalamusPlanner["applyRuntimeFilters"]>[1] {
   return {
     maxCortices: 5,
@@ -87,7 +85,10 @@ describe("ThalamusPlanner.applyRuntimeFilters — runtime-config post-filters", 
       mkPlannerCfg({ forcedCortices: ["not_a_cortex"] }),
       mkCortexCfg(),
     );
-    expect(result.map((n) => n.cortex)).toEqual(["fleet_analyst", "strategist"]);
+    expect(result.map((n) => n.cortex)).toEqual([
+      "fleet_analyst",
+      "strategist",
+    ]);
     expect(result.some((n) => n.cortex === "not_a_cortex")).toBe(false);
   });
 
@@ -163,6 +164,25 @@ describe("ThalamusPlanner.applyRuntimeFilters — runtime-config post-filters", 
     const last = result[result.length - 1];
     expect(last.cortex).toBe("strategist");
     expect(last.dependsOn).toEqual(expect.arrayContaining(["a", "b"]));
+  });
+
+  it("given maxCortices is already full and strategist is mandatory, when applied, then strategist reserves a slot without exceeding the cap", () => {
+    const dag: DAGNode[] = [
+      node("a"),
+      node("b"),
+      node("c"),
+      node("fleet_analyst"),
+      node("conjunction_analysis"),
+    ];
+    const result = planner.applyRuntimeFilters(
+      dag,
+      mkPlannerCfg({ maxCortices: 4, mandatoryStrategist: true }),
+      mkCortexCfg(),
+    );
+
+    expect(result).toHaveLength(4);
+    expect(result.map((n) => n.cortex)).toEqual(["a", "b", "c", "strategist"]);
+    expect(result[result.length - 1].dependsOn).toEqual(["a", "b", "c"]);
   });
 
   it("given cortexCfg.overrides.fleet_analyst.enabled is false and the dag contains fleet_analyst, when applied, then fleet_analyst is stripped via the override path", () => {

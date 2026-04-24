@@ -179,6 +179,11 @@ pnpm test           # vitest workspace (unit / integration / e2e)
 make console        # Palantir-style operator UI on :5173 (+ console-api :4000)
 ```
 
+Programmatic Thalamus callers can bypass LLM planning with an explicit `dag`.
+If only cortex selection is needed, pass `cortices: ["catalog", "strategist"]`
+to build a flat manual DAG. Resolution order is `dag`, then `daemonJob`, then
+`cortices`, then the LLM planner. Unknown manual cortex names are rejected.
+
 The operator console runs standalone against fixtures — no DB required. For the full end-to-end SSA pipeline (Postgres + Redis + live LLMs or fixture replay), see [SPEC-ARCH-11](docs/specs/architecture/11-running-locally.pdf).
 
 ---

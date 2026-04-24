@@ -15,10 +15,7 @@ import { extractJson } from "@interview/shared/utils";
 import type { CortexRegistry } from "../cortices/registry";
 import type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 import { buildGenericPlannerSystemPrompt } from "../prompts";
-import {
-  getPlannerConfig,
-  getCortexConfig,
-} from "../config/runtime-config";
+import { getPlannerConfig, getCortexConfig } from "../config/runtime-config";
 
 const logger = createLogger("thalamus-planner");
 
@@ -118,6 +115,37 @@ export class ThalamusPlanner {
         params: {},
         dependsOn: [] as string[],
       })),
+    };
+  }
+
+  /**
+   * Build a flat manually-selected DAG. This is the programmatic bypass for
+   * callers that already know which cortices should run and do not want an LLM
+   * planning call.
+   */
+  buildManualDag(query: string, cortices: string[]): DAGPlan {
+    const nodes: DAGNode[] = [];
+    const seen = new Set<string>();
+    const unknown: string[] = [];
+
+    for (const cortex of cortices.map((name) => name.trim()).filter(Boolean)) {
+      if (seen.has(cortex)) continue;
+      seen.add(cortex);
+      if (!this.registry.has(cortex)) {
+        unknown.push(cortex);
+        continue;
+      }
+      nodes.push({ cortex, params: {}, dependsOn: [] });
+    }
+
+    if (unknown.length > 0) {
+      throw new Error(`Unknown manual cortex name(s): ${unknown.join(", ")}`);
+    }
+
+    return {
+      intent: query,
+      complexity: "moderate",
+      nodes,
     };
   }
 
@@ -226,14 +254,13 @@ export class ThalamusPlanner {
    * Apply runtime-config knobs from `thalamus.planner` and `thalamus.cortex`:
    *
    *   1. Strip `disabledCortices` + cortex-level `enabled: false` overrides
-   *   2. Clamp to `maxCortices` — drops tail nodes past the cap (strategist
-   *      is preserved if present, bumped out last)
-   *   3. Inject `forcedCortices` not already in the plan (empty dependsOn)
-   *   4. Ensure `strategist` exists when `mandatoryStrategist` is true,
+   *   2. Inject `forcedCortices` not already in the plan (empty dependsOn)
+   *   3. Ensure `strategist` exists when `mandatoryStrategist` is true,
    *      with dependsOn set to all other nodes
+   *   4. Clamp to `maxCortices` while preserving strategist if present
    *
-   * Order matters: disable first to free budget, then force, then clamp,
-   * then mandatory strategist (so it survives the clamp).
+   * Order matters: disable first to free budget, force, reserve strategist
+   * before clamping when mandatory, then clamp while preserving strategist.
    */
   applyRuntimeFilters(
     nodes: DAGNode[],
@@ -268,7 +295,17 @@ export class ThalamusPlanner {
       present.add(name);
     }
 
-    // 3. clamp to maxCortices (strategist, if present, is held out + re-appended last)
+    // 3. mandatory strategist — reserve its slot before clamping
+    const injectMandatoryStrategist =
+      plannerCfg.mandatoryStrategist &&
+      !disabled.has("strategist") &&
+      this.registry.has("strategist") &&
+      !kept.some((n) => n.cortex === "strategist");
+    if (injectMandatoryStrategist) {
+      kept.push({ cortex: "strategist", params: {}, dependsOn: [] });
+    }
+
+    // 4. clamp to maxCortices (strategist, if present, is held out + re-appended last)
     if (kept.length > plannerCfg.maxCortices) {
       const strategist = kept.find((n) => n.cortex === "strategist");
       const nonStrat = kept.filter((n) => n.cortex !== "strategist");
@@ -279,15 +316,13 @@ export class ThalamusPlanner {
       if (strategist) kept.push(strategist);
     }
 
-    // 4. mandatory strategist — inject if missing and not disabled
-    if (
-      plannerCfg.mandatoryStrategist &&
-      !disabled.has("strategist") &&
-      this.registry.has("strategist") &&
-      !kept.some((n) => n.cortex === "strategist")
-    ) {
-      const others = kept.map((n) => n.cortex);
-      kept.push({ cortex: "strategist", params: {}, dependsOn: others });
+    if (injectMandatoryStrategist) {
+      const others = kept
+        .filter((n) => n.cortex !== "strategist")
+        .map((n) => n.cortex);
+      kept = kept.map((n) =>
+        n.cortex === "strategist" ? { ...n, dependsOn: others } : n,
+      );
     }
 
     // Prune any dependsOn pointing at dropped nodes.
@@ -328,7 +363,6 @@ export class ThalamusPlanner {
       dependsOn: n.dependsOn.filter((d) => !dropped.has(d)),
     }));
   }
-
 }
 
 /**

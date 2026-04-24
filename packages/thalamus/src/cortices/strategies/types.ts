@@ -14,6 +14,6 @@ export interface CortexExecutionStrategy {
   /** Does this strategy handle the given cortex? First match wins. */
   canHandle(cortexName: string): boolean;
 
-  /** Run the cortex. Must resolve (never throw) to a CortexOutput. */
+  /** Run the cortex. May reject; DAG-level callers own failure diagnostics. */
   execute(skill: CortexSkill, input: CortexInput): Promise<CortexOutput>;
 }

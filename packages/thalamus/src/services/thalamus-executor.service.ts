@@ -9,10 +9,8 @@ import { createLogger, stepLog } from "@interview/shared/observability";
 import type { CortexExecutor } from "../cortices/executor";
 import type { CortexOutput, CortexInput } from "../cortices/types";
 import type { DAGPlan, DAGNode } from "./thalamus-planner.service";
-import {
-  getPlannerConfig,
-  getCortexConfig,
-} from "../config/runtime-config";
+import { getPlannerConfig, getCortexConfig } from "../config/runtime-config";
+import { DagValidationError, validateDag } from "./dag-validation";
 
 const logger = createLogger("thalamus-executor");
 
@@ -95,6 +93,7 @@ export class ThalamusDAGExecutor {
   ): Promise<DAGExecutionResult> {
     const start = Date.now();
     const outputs = new Map<string, CortexOutput>();
+    validateDag(plan.nodes);
     const levels = this.topologicalLevels(plan.nodes);
 
     logger.info(
@@ -279,13 +278,11 @@ export class ThalamusDAGExecutor {
       }
 
       if (level.length === 0) {
-        // Circular dependency or unresolvable — dump remaining as last level
-        logger.warn(
+        throw new DagValidationError(
+          "circular_dependency",
+          "DAG topological sort could not resolve remaining dependencies",
           { remaining: remaining.map((n) => n.cortex) },
-          "Unresolvable DAG dependencies, forcing execution",
         );
-        levels.push(remaining);
-        break;
       }
 
       for (const node of level) {

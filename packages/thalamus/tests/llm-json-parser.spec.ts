@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeParseJson } from "../src/cortices/cortex-llm";
+import { parseCortexResponse, safeParseJson } from "../src/cortices/cortex-llm";
 import { extractJsonObject } from "@interview/shared/utils";
 
 describe("llm-json-parser", () => {
@@ -11,9 +11,9 @@ describe("llm-json-parser", () => {
 
   it("preserves findings when the LLM duplicates the same top-level object", () => {
     const raw =
-      '{"findings":[{"title":"MANEUVER: accept candidate","summary":"Source findings align.","findingType":"strategy","urgency":"high","confidence":0.8,"impactScore":8,"evidence":[{"source":"synthesis","weight":1}],"edges":[]}]}'
-      + "\n"
-      + '{"findings":[{"title":"MANEUVER: accept candidate","summary":"Source findings align.","findingType":"strategy","urgency":"high","confidence":0.8,"impactScore":8,"evidence":[{"source":"synthesis","weight":1}],"edges":[]}]}';
+      '{"findings":[{"title":"MANEUVER: accept candidate","summary":"Source findings align.","findingType":"strategy","urgency":"high","confidence":0.8,"impactScore":8,"evidence":[{"source":"synthesis","weight":1}],"edges":[]}]}' +
+      "\n" +
+      '{"findings":[{"title":"MANEUVER: accept candidate","summary":"Source findings align.","findingType":"strategy","urgency":"high","confidence":0.8,"impactScore":8,"evidence":[{"source":"synthesis","weight":1}],"edges":[]}]}';
 
     const parsed = safeParseJson(raw);
 
@@ -42,12 +42,18 @@ describe("llm-json-parser", () => {
     const raw = '{"findings":[],}';
 
     expect(safeParseJson(raw)).toEqual({ findings: [] });
+    expect(parseCortexResponse(raw)).toMatchObject({
+      findings: [],
+      status: "invalid_json",
+      diagnostic: { kind: "invalid_json" },
+    });
   });
 
   it("returns empty findings when the JSON string is unterminated", () => {
     const raw = '{"findings":[{"title":"unfinished';
 
     expect(safeParseJson(raw)).toEqual({ findings: [] });
+    expect(parseCortexResponse(raw).status).toBe("invalid_json");
   });
 
   it("rejects degenerate repeated-token output instead of accepting corrupted findings", () => {
@@ -56,6 +62,10 @@ describe("llm-json-parser", () => {
 \`\`\``;
 
     expect(safeParseJson(raw)).toEqual({ findings: [] });
+    expect(parseCortexResponse(raw)).toMatchObject({
+      status: "degenerate_repetition",
+      diagnostic: { kind: "degenerate_repetition" },
+    });
   });
 
   it("preserves escaped newlines inside string values", () => {
@@ -67,11 +77,43 @@ describe("llm-json-parser", () => {
   });
 
   it("prefers the first complete JSON object when concatenated outputs differ", () => {
-    const raw = '{"findings":[{"title":"first"}]}\n{"findings":[{"title":"second"}]}';
+    const raw =
+      '{"findings":[{"title":"first"}]}\n{"findings":[{"title":"second"}]}';
 
     const parsed = safeParseJson(raw);
 
     expect(parsed.findings).toHaveLength(1);
     expect(parsed.findings[0]?.title).toBe("first");
+  });
+
+  it("treats explicit empty findings JSON as valid empty output", () => {
+    expect(parseCortexResponse('{"findings":[]}')).toEqual({
+      findings: [],
+      status: "empty_valid",
+    });
+  });
+
+  it("diagnoses empty provider output instead of treating it as valid no findings", () => {
+    expect(parseCortexResponse("")).toMatchObject({
+      findings: [],
+      status: "invalid_json",
+      diagnostic: {
+        kind: "invalid_json",
+        reason: "empty provider response",
+      },
+    });
+  });
+
+  it("diagnoses non-JSON text instead of treating it as valid no findings", () => {
+    expect(
+      parseCortexResponse("I cannot comply with that request."),
+    ).toMatchObject({
+      findings: [],
+      status: "invalid_json",
+      diagnostic: {
+        kind: "invalid_json",
+        reason: "response did not contain valid cortex JSON",
+      },
+    });
   });
 });

@@ -26,8 +26,9 @@ export class CortexExecutor {
   ) {}
 
   /**
-   * Execute a single cortex by name. Resolves (never throws) to a
-   * `CortexOutput`; domain-level failures yield an empty output.
+   * Execute a single cortex by name. Registry misses and strategy misses yield
+   * an empty output. Strategy failures are allowed to reject so the DAG layer
+   * can surface explicit per-cortex diagnostics.
    */
   async execute(cortexName: string, input: CortexInput): Promise<CortexOutput> {
     const skill = this.registry.get(cortexName);

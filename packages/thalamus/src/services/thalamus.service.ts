@@ -149,18 +149,18 @@ export class ThalamusService {
       // 4. Run recursive research loop
       const { allFindings, totalCost, iterations, verification } =
         await this.cycleLoop.run(
-        plan,
-        cycle.id,
-        { maxIter, maxCost, budget },
-        {
-          query: input.query,
-          minConfidence: input.minConfidence,
-          lang: input.lang,
-          mode: input.mode,
-          userId: input.userId,
-          hasUser: input.userId !== undefined && input.userId !== null,
-        },
-      );
+          plan,
+          cycle.id,
+          { maxIter, maxCost, budget },
+          {
+            query: input.query,
+            minConfidence: input.minConfidence,
+            lang: input.lang,
+            mode: input.mode,
+            userId: input.userId,
+            hasUser: input.userId !== undefined && input.userId !== null,
+          },
+        );
 
       // 5. Persist findings to the knowledge graph (cortex resolved from
       // the INITIAL plan — matches pre-refactor behaviour).
@@ -243,6 +243,7 @@ export class ThalamusService {
    * Select the DAG plan for a cycle:
    * - Caller-supplied DAG wins (no planner LLM call).
    * - Daemon jobs use pre-baked plans.
+   * - Manual cortex lists build a flat DAG without planner LLM calls.
    * - Otherwise the planner LLM decomposes the query.
    */
   private async resolvePlan(input: RunCycleInput): Promise<DAGPlan> {
@@ -255,6 +256,9 @@ export class ThalamusService {
           nodes: [],
         }
       );
+    }
+    if (input.cortices) {
+      return this.planner.buildManualDag(input.query, input.cortices);
     }
     return this.planner.plan(input.query, {
       hasUser: input.userId !== undefined && input.userId !== null,

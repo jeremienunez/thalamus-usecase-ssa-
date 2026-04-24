@@ -27,9 +27,13 @@ vi.mock("../src/transports/llm-chat", () => ({
 
 import { CortexExecutor } from "../src/cortices/executor";
 import { CortexRegistry, type CortexSkill } from "../src/cortices/registry";
-import { noopDomainConfig, type CortexDataProvider } from "../src/cortices/types";
+import {
+  noopDomainConfig,
+  type CortexDataProvider,
+} from "../src/cortices/types";
 import { StandardStrategy } from "../src/cortices/strategies/standard-strategy";
 import { StrategistStrategy } from "../src/cortices/strategies/strategist-strategy";
+import type { CortexExecutionStrategy } from "../src/cortices/strategies/types";
 import { NullWebSearchAdapter } from "../src/transports/openai-web-search.adapter";
 import type {
   SourceFetcherPort,
@@ -173,7 +177,12 @@ describe("SPEC-TH-003 AC-1 / AC-3 — nominal execution normalises findings", ()
 
     const registry = fakeRegistry({
       catalog: {
-        header: { name: "catalog", description: "", sqlHelper: "none", params: {} },
+        header: {
+          name: "catalog",
+          description: "",
+          sqlHelper: "none",
+          params: {},
+        },
       },
     });
     const executor = new CortexExecutor(
@@ -347,5 +356,35 @@ describe("SPEC-TH-003 AC-5 — helper throw is swallowed, executor keeps going",
     expect(out.findings[0].summary).toContain("rejected before persistence");
     expect(out.findings[0].summary).not.toContain("schema mismatch");
     expect(out.metadata.model).toBe("minimax:invalid");
+  });
+});
+
+describe("CortexExecutor strategy failure contract", () => {
+  it("propagates strategy failures so DAG execution can diagnose them", async () => {
+    const registry = fakeRegistry({
+      catalog: {
+        header: {
+          name: "catalog",
+          description: "",
+          sqlHelper: "none",
+          params: {},
+        },
+      },
+    });
+    const strategy: CortexExecutionStrategy = {
+      canHandle: () => true,
+      execute: async () => {
+        throw new Error("strategy crashed");
+      },
+    };
+    const executor = new CortexExecutor(registry, [strategy]);
+
+    await expect(
+      executor.execute("catalog", {
+        query: "screen",
+        params: {},
+        cycleId: 1n,
+      }),
+    ).rejects.toThrow("strategy crashed");
   });
 });

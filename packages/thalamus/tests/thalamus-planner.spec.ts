@@ -39,7 +39,9 @@ beforeEach(() => {
   setPlannerConfigProvider(
     new StaticConfigProvider(DEFAULT_THALAMUS_PLANNER_CONFIG),
   );
-  setCortexConfigProvider(new StaticConfigProvider(DEFAULT_THALAMUS_CORTEX_CONFIG));
+  setCortexConfigProvider(
+    new StaticConfigProvider(DEFAULT_THALAMUS_CORTEX_CONFIG),
+  );
   mocks.callMock.mockReset();
   mocks.createLlmTransportMock.mockReset();
   mocks.createLlmTransportMock.mockReturnValue({
@@ -51,7 +53,9 @@ afterEach(() => {
   setPlannerConfigProvider(
     new StaticConfigProvider(DEFAULT_THALAMUS_PLANNER_CONFIG),
   );
-  setCortexConfigProvider(new StaticConfigProvider(DEFAULT_THALAMUS_CORTEX_CONFIG));
+  setCortexConfigProvider(
+    new StaticConfigProvider(DEFAULT_THALAMUS_CORTEX_CONFIG),
+  );
   vi.restoreAllMocks();
 });
 
@@ -235,7 +239,11 @@ describe("ThalamusPlanner.getDaemonDag", () => {
           nodes: [
             { cortex: "alpha", params: {}, dependsOn: [] },
             { cortex: "user_scope", params: {}, dependsOn: ["alpha"] },
-            { cortex: "alpha", params: { secondPass: true }, dependsOn: ["user_scope"] },
+            {
+              cortex: "alpha",
+              params: { secondPass: true },
+              dependsOn: ["user_scope"],
+            },
           ],
         },
       },
@@ -289,5 +297,30 @@ describe("ThalamusPlanner.getDaemonDag", () => {
       complexity: "simple",
       nodes: [{ cortex: "alpha", params: {}, dependsOn: [] }],
     });
+  });
+});
+
+describe("ThalamusPlanner.buildManualDag", () => {
+  it("builds a flat manual DAG from known cortex names and deduplicates repeats", () => {
+    const planner = new ThalamusPlanner(mkRegistry(["alpha", "beta"]));
+
+    expect(
+      planner.buildManualDag("Manual run", ["alpha", "beta", "alpha", " "]),
+    ).toEqual({
+      intent: "Manual run",
+      complexity: "moderate",
+      nodes: [
+        { cortex: "alpha", params: {}, dependsOn: [] },
+        { cortex: "beta", params: {}, dependsOn: [] },
+      ],
+    });
+  });
+
+  it("rejects unknown manual cortex names", () => {
+    const planner = new ThalamusPlanner(mkRegistry(["alpha"]));
+
+    expect(() =>
+      planner.buildManualDag("Manual run", ["alpha", "ghost"]),
+    ).toThrow("Unknown manual cortex name(s): ghost");
   });
 });
