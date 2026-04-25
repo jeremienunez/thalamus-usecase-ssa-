@@ -15,6 +15,7 @@ export const SimRunStatusSchema = z.enum([
   "paused",
   "done",
   "failed",
+  "timeout",
 ]);
 export const SimSwarmStatusSchema = z.enum(["pending", "running", "done", "failed"]);
 export const MemoryKindSchema = z.enum(["self_action", "observation", "belief"]);
@@ -41,6 +42,7 @@ export const SimConfigSchema = z.object({
   llmMode: z.enum(["cloud", "fixtures", "record"]),
   seed: z.number().int(),
   nanoModel: z.string(),
+  perFishTimeoutMs: z.number().int().positive().optional(),
 });
 
 // ── Path params ───────────────────────────────────────────────────────

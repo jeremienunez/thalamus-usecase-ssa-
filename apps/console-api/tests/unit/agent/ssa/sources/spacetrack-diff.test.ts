@@ -9,7 +9,6 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-// @ts-expect-error — ioredis-mock ships a default export without matching TS decls
 import RedisMock from "ioredis-mock";
 import {
   snapshotDateKey,

@@ -27,6 +27,7 @@ describe("sim runtime config providers", () => {
       new StaticConfigProvider({
         defaultFishConcurrency: 3,
         defaultQuorumPct: 0.65,
+        defaultPerFishTimeoutMs: 12_345,
       }),
     );
 
@@ -93,6 +94,7 @@ describe("sim runtime config providers", () => {
         config: expect.objectContaining({
           fishConcurrency: 3,
           quorumPct: 0.65,
+          perFishTimeoutMs: 12_345,
         }),
       }),
     );

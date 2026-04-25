@@ -134,6 +134,7 @@ export class SimRunRepository {
     const out: SimSwarmFishCounts = {
       done: 0,
       failed: 0,
+      timeout: 0,
       running: 0,
       pending: 0,
       paused: 0,

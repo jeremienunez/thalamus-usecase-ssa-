@@ -40,7 +40,7 @@ function isLegalRunTransition(current: string, next: string): boolean {
     case "pending":
       return next === "running" || next === "failed";
     case "running":
-      return next === "paused" || next === "done" || next === "failed";
+      return next === "paused" || next === "done" || next === "failed" || next === "timeout";
     case "paused":
       return next === "running" || next === "failed";
     default:
@@ -95,7 +95,7 @@ export function simUpdateRunStatusController(service: SimRunRoutePort) {
       }
       const completedAt =
         body.completedAt === undefined
-          ? body.status === "done" || body.status === "failed"
+          ? body.status === "done" || body.status === "failed" || body.status === "timeout"
             ? new Date()
             : undefined
           : body.completedAt === null

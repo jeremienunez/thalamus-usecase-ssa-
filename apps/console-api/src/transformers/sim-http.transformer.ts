@@ -118,6 +118,7 @@ export function toSwarmFishCountsDto(
   return {
     done: counts.done,
     failed: counts.failed,
+    timeout: counts.timeout,
     running: counts.running,
     pending: counts.pending,
     paused: counts.paused,
@@ -197,6 +198,7 @@ export function toSwarmStatusDto(status: SwarmStatus): SwarmStatusDto {
     size: status.size,
     done: status.done,
     failed: status.failed,
+    timeout: status.timeout,
     running: status.running,
     pending: status.pending,
     reportFindingId: status.reportFindingId === null ? null : String(status.reportFindingId),

@@ -17,6 +17,11 @@ import {
   getThalamusTransportConfig,
   resolveFixturesDir,
 } from "../config/transport-config";
+import {
+  abortError,
+  abortSignalReason,
+  throwIfAborted,
+} from "../transports/abort";
 import { stripThinkingChannels } from "../transports/providers/strip-thinking";
 
 const logger = createLogger("nano-caller");
@@ -56,6 +61,7 @@ export interface NanoRequest {
   instructions: string;
   input: string;
   enableWebSearch?: boolean;
+  signal?: AbortSignal;
   responseFormat?: NanoResponseFormat;
   logitBias?: Record<number, number>;
   /** Per-call overrides that win over the NanoConfig defaults. Used by sim
@@ -196,6 +202,34 @@ export interface NanoResponse {
   error?: string;
 }
 
+function createAbortSignal(
+  parent: AbortSignal | undefined,
+  timeoutMs: number,
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(abortError(`Nano call timed out after ${timeoutMs}ms`));
+  }, timeoutMs);
+  const onAbort = () => {
+    clearTimeout(timeoutId);
+    controller.abort(parent ? abortSignalReason(parent) : abortError());
+  };
+
+  if (parent?.aborted) {
+    onAbort();
+    return { signal: controller.signal, cleanup: () => undefined };
+  }
+
+  parent?.addEventListener("abort", onAbort, { once: true });
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeoutId);
+      parent?.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
 /**
  * Call gpt-5.4-nano with optional web search.
  */
@@ -235,7 +269,9 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
   if (req.enableWebSearch !== false) {
     bodyBase.tools = [{ type: "web_search_preview" }];
   }
+  const abort = createAbortSignal(req.signal, cfg.callTimeoutMs);
   try {
+    throwIfAborted(req.signal);
     const res = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -243,7 +279,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(bodyBase),
-      signal: AbortSignal.timeout(cfg.callTimeoutMs),
+      signal: abort.signal,
     });
 
     const latencyMs = Date.now() - start;
@@ -302,6 +338,8 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
       latencyMs: Date.now() - start,
       error: err instanceof Error ? err.message.slice(0, 80) : "Unknown error",
     };
+  } finally {
+    abort.cleanup();
   }
 }
 
@@ -317,6 +355,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
  * Distinct from LlmChatTransport's key so nano + Kimi fixtures don't collide.
  */
 export async function callNanoWithMode(req: NanoRequest): Promise<NanoResponse> {
+  throwIfAborted(req.signal);
   const transportConfig = await getThalamusTransportConfig();
   const mode = transportConfig.mode.toLowerCase();
   if (mode === "cloud") return callNano(req);

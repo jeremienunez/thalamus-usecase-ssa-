@@ -75,6 +75,7 @@ function buildService(edges: EdgeRow[] = []) {
   countFishByStatus.mockResolvedValue({
     done: 12,
     failed: 0,
+    timeout: 0,
     running: 0,
     pending: 0,
     paused: 0,

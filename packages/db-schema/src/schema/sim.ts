@@ -35,7 +35,13 @@ import { vector, EMBEDDING_DIMENSIONS } from "./_vector";
 
 export type SimKind = string;
 export type SimSwarmStatus = "pending" | "running" | "done" | "failed";
-export type SimRunStatus = "pending" | "running" | "paused" | "done" | "failed";
+export type SimRunStatus =
+  | "pending"
+  | "running"
+  | "paused"
+  | "done"
+  | "failed"
+  | "timeout";
 export type ActorKind = "agent" | "god" | "system";
 export type MemoryKind = "self_action" | "observation" | "belief";
 
@@ -56,6 +62,7 @@ export interface SimConfig {
   llmMode: "cloud" | "fixtures" | "record";
   seed: number;
   nanoModel: string;
+  perFishTimeoutMs?: number;
 }
 
 export type PerturbationSpec = { kind: string; [key: string]: unknown };

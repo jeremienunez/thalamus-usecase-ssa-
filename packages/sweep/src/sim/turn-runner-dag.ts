@@ -43,6 +43,7 @@ export interface DagRunTurnOpts {
   simRunId: number;
   turnIndex: number;
   subjectSnapshots?: Map<number, SimSubjectSnapshot>;
+  signal?: AbortSignal;
 }
 
 export interface DagRunTurnResult {
@@ -95,6 +96,7 @@ export class DagTurnRunner {
           agent,
           turnIndex: opts.turnIndex,
           subjectSnapshot: opts.subjectSnapshots?.get(agent.id) ?? null,
+          signal: opts.signal,
         }),
       ),
     );
@@ -102,7 +104,7 @@ export class DagTurnRunner {
     // Fire all agent calls in parallel. allSettled so one bad agent does
     // not take down the whole turn.
     const llmResults = await Promise.allSettled(
-      contexts.map((ctx) => this.callAgent(ctx)),
+      contexts.map((ctx) => this.callAgent(ctx, opts.signal)),
     );
 
     // Separate successes / failures.
@@ -234,11 +236,12 @@ export class DagTurnRunner {
     }
   }
 
-  private async callAgent(ctx: import("./types").AgentContext) {
+  private async callAgent(ctx: import("./types").AgentContext, signal?: AbortSignal) {
     return callTurnAgent({
       deps: this.deps,
       ctx,
       logger,
+      signal,
     });
   }
 

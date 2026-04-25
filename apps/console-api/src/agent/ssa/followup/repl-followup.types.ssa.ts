@@ -105,6 +105,7 @@ export interface SsaReplFollowUpDeps {
       countFishByStatus(swarmId: bigint): Promise<{
         done: number;
         failed: number;
+        timeout: number;
         running: number;
         pending: number;
         paused: number;

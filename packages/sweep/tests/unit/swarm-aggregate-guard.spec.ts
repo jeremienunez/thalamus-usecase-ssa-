@@ -53,6 +53,7 @@ describe("SwarmService aggregate guard", () => {
     countFishByStatus: vi.fn(async () => ({
       done: 2,
       failed: 0,
+      timeout: 0,
       running: 0,
       pending: 0,
       paused: 0,
@@ -125,6 +126,35 @@ describe("SwarmService aggregate guard", () => {
     });
 
     expect(queue.enqueueSwarmAggregate).toHaveBeenCalledTimes(1);
+    expect(queue.enqueueSwarmAggregate).toHaveBeenCalledWith({
+      swarmId: 11,
+      jobId: "swarm-11-aggregate",
+    });
+  });
+
+  it("counts timed-out fish as accounted for aggregation", async () => {
+    const service = new SwarmService({
+      store,
+      swarmStore,
+      orchestrator,
+      queue,
+      aggregateGate,
+      kindGuard,
+      perturbationPack,
+    });
+    swarmStore.countFishByStatus.mockResolvedValueOnce({
+      done: 1,
+      failed: 0,
+      timeout: 1,
+      running: 0,
+      pending: 0,
+      paused: 0,
+    });
+
+    await expect(service.onFishComplete(11)).resolves.toEqual({
+      aggregateEnqueued: true,
+    });
+
     expect(queue.enqueueSwarmAggregate).toHaveBeenCalledWith({
       swarmId: 11,
       jobId: "swarm-11-aggregate",

@@ -33,6 +33,7 @@ export interface RunTurnOpts {
   simRunId: number;
   turnIndex: number;
   subjectSnapshots?: Map<number, SimSubjectSnapshot>;
+  signal?: AbortSignal;
 }
 
 export interface RunTurnResult {
@@ -77,9 +78,10 @@ export class SequentialTurnRunner {
       agent: speaker,
       turnIndex: opts.turnIndex,
       subjectSnapshot: opts.subjectSnapshots?.get(speaker.id) ?? null,
+      signal: opts.signal,
     });
 
-    const response = await this.callAgent(ctx);
+    const response = await this.callAgent(ctx, opts.signal);
 
     const terminal = isTerminal(response.action);
 
@@ -178,12 +180,13 @@ export class SequentialTurnRunner {
   // LLM call + JSON parse + Zod validation
   // -------------------------------------------------------------------
 
-  private async callAgent(ctx: import("./types").AgentContext) {
+  private async callAgent(ctx: import("./types").AgentContext, signal?: AbortSignal) {
     return callTurnAgent({
       deps: this.deps,
       ctx,
       logger,
       includeValidationSnippet: true,
+      signal,
     });
   }
 

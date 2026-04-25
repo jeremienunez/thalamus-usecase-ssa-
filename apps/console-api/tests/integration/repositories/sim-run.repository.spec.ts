@@ -112,6 +112,7 @@ describe("SimRunRepository", () => {
     expect(await repo.countFishByStatus(1n)).toEqual({
       done: 1,
       failed: 0,
+      timeout: 0,
       running: 1,
       pending: 1,
       paused: 0,
@@ -133,6 +134,7 @@ describe("SimRunRepository", () => {
     expect(await repo.countFishByStatus(1n)).toEqual({
       done: 1,
       failed: 2,
+      timeout: 0,
       running: 0,
       pending: 0,
       paused: 0,

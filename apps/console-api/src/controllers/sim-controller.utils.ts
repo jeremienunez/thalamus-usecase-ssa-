@@ -90,6 +90,9 @@ export function toSimConfig(config: z.infer<typeof SimConfigSchema>): SimConfig 
     llmMode: config.llmMode,
     seed: config.seed,
     nanoModel: config.nanoModel,
+    ...(config.perFishTimeoutMs === undefined
+      ? {}
+      : { perFishTimeoutMs: config.perFishTimeoutMs }),
   };
 }
 

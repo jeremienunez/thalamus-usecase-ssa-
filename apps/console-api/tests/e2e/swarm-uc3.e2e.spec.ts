@@ -535,13 +535,13 @@ async function waitForSwarmDone(
 
 async function fishStatusCounts(
   swarmId: number,
-): Promise<{ done: number; failed: number; pending: number; running: number }> {
+): Promise<{ done: number; failed: number; timeout: number; pending: number; running: number }> {
   const rows = await db.execute(sql`
     SELECT status, count(*)::int AS c
     FROM sim_run WHERE swarm_id = ${BigInt(swarmId)}
     GROUP BY status
   `);
-  const out = { done: 0, failed: 0, pending: 0, running: 0 };
+  const out = { done: 0, failed: 0, timeout: 0, pending: 0, running: 0 };
   for (const r of rows.rows as Array<{ status: keyof typeof out; c: number }>) {
     if (r.status in out) out[r.status] = r.c;
   }

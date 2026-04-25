@@ -66,12 +66,16 @@ Precise, binary-checkable statement. Mapped 1-to-1 to at least one test.
 \section{Traceability}
 
 \begin{center}
-\begin{tabular}{@{}lll@{}}
+\begin{tabular}{@{}llll@{}}
 \toprule
-AC & Test file & Test name \\
+AC & Layer & Test file & Test name \\
 \midrule
-AC-1 & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
-AC-2 & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
+AC-1 & \texttt{unit} & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
+AC-1 & \texttt{integration} & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
+AC-1 & \texttt{e2e} & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
+AC-2 & \texttt{unit} & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
+AC-2 & \texttt{integration} & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
+AC-2 & \texttt{e2e} & \texttt{path/to/file.spec.ts} & \texttt{test name} \\
 \bottomrule
 \end{tabular}
 \end{center}

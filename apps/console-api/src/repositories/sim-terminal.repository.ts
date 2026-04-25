@@ -104,6 +104,7 @@ export class SimTerminalRepository {
       FROM latest l
       LEFT JOIN sim_agent a ON a.id = l.agent_id
       LEFT JOIN turn_counts tc ON tc.sim_run_id = l.sim_run_id
+      ORDER BY l.fish_index ASC, l.sim_run_id ASC
     `);
 
     return rows.rows.map((r) => ({
@@ -136,6 +137,7 @@ export class SimTerminalRepository {
         l.run_status,
         l.action
       FROM latest l
+      ORDER BY l.fish_index ASC, l.sim_run_id ASC
     `);
     return rows.rows.map((r) => ({
       simRunId: BigInt(r.sim_run_id),

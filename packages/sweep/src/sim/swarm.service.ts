@@ -61,6 +61,7 @@ export interface SwarmStatus {
   size: number;
   done: number;
   failed: number;
+  timeout: number;
   running: number;
   pending: number;
   reportFindingId: number | null;
@@ -111,6 +112,7 @@ export class SwarmService {
         llmMode: config.llmMode,
         seed: config.seed + i,
         nanoModel: config.nanoModel,
+        perFishTimeoutMs: config.perFishTimeoutMs,
       };
       const fish = await this.deps.orchestrator.createFish({
         swarmId,
@@ -147,12 +149,18 @@ export class SwarmService {
     const counts = await this.countFishByStatus(swarmId);
     const swarm = await this.loadSwarm(swarmId);
     if (!swarm) return { aggregateEnqueued: false };
-    const accounted = counts.done + counts.failed;
+    const accounted = counts.done + counts.failed + counts.timeout;
     if (accounted < swarm.size) return { aggregateEnqueued: false };
     const claimed = await this.deps.aggregateGate.claim(swarmId);
     if (!claimed) {
       logger.debug(
-        { swarmId, done: counts.done, failed: counts.failed, size: swarm.size },
+        {
+          swarmId,
+          done: counts.done,
+          failed: counts.failed,
+          timeout: counts.timeout,
+          size: swarm.size,
+        },
         "aggregate already claimed for swarm",
       );
       return { aggregateEnqueued: false };
@@ -168,7 +176,13 @@ export class SwarmService {
       throw error;
     }
     logger.info(
-      { swarmId, done: counts.done, failed: counts.failed, size: swarm.size },
+      {
+        swarmId,
+        done: counts.done,
+        failed: counts.failed,
+        timeout: counts.timeout,
+        size: swarm.size,
+      },
       "all fish accounted for — aggregate enqueued",
     );
     return { aggregateEnqueued: true };
@@ -185,6 +199,7 @@ export class SwarmService {
       size: swarm.size,
       done: counts.done,
       failed: counts.failed,
+      timeout: counts.timeout,
       running: counts.running,
       pending: counts.pending,
       reportFindingId: swarm.outcomeReportFindingId,
@@ -203,11 +218,12 @@ export class SwarmService {
 
   private async countFishByStatus(
     swarmId: number,
-  ): Promise<{ done: number; failed: number; running: number; pending: number }> {
+  ): Promise<{ done: number; failed: number; timeout: number; running: number; pending: number }> {
     const counts = await this.deps.swarmStore.countFishByStatus(swarmId);
     return {
       done: counts.done,
       failed: counts.failed,
+      timeout: counts.timeout,
       running: counts.running,
       pending: counts.pending,
     };

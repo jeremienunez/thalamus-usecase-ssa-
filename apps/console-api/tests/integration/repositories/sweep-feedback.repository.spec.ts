@@ -1,4 +1,3 @@
-// @ts-expect-error -- ioredis-mock default export type is looser than ioredis
 import RedisMock from "ioredis-mock";
 import { afterEach, describe, expect, it } from "vitest";
 

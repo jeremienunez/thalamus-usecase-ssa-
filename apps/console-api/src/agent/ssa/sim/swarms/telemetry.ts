@@ -15,6 +15,7 @@ import type {
   SeedRefs,
   SwarmConfig,
 } from "@interview/sweep";
+import { getSimSwarmConfig } from "@interview/sweep";
 import type { LaunchSwarmResult, SwarmService } from "@interview/sweep/internal";
 import { lookupBusPrior } from "../bus-datasheets/loader";
 
@@ -77,6 +78,7 @@ export async function startTelemetrySwarm(
   opts: TelemetrySwarmOpts,
 ): Promise<LaunchSwarmResult> {
   const fishCount = opts.fishCount ?? DEFAULT_FISH_COUNT;
+  const swarmDefaults = await getSimSwarmConfig();
 
   stepLog(logger, "swarm", "start", {
     kind: "uc_telemetry_inference",
@@ -117,11 +119,20 @@ export async function startTelemetrySwarm(
 
     const cfg: SwarmConfig = {
       llmMode: opts.config?.llmMode ?? "cloud",
-      quorumPct: opts.config?.quorumPct ?? 0.6,
-      perFishTimeoutMs: opts.config?.perFishTimeoutMs ?? 60_000,
+      quorumPct: opts.config?.quorumPct ?? swarmDefaults.defaultQuorumPct,
+      perFishTimeoutMs:
+        opts.config?.perFishTimeoutMs ??
+        readPositiveInt(swarmDefaults.defaultPerFishTimeoutMs, 60_000),
       fishConcurrency:
         opts.config?.fishConcurrency ??
-        Math.min(fishCount, MAX_FISH_CONCURRENCY),
+        Math.min(
+          fishCount,
+          readPositiveInt(
+            swarmDefaults.defaultFishConcurrency,
+            MAX_FISH_CONCURRENCY,
+          ),
+          MAX_FISH_CONCURRENCY,
+        ),
       nanoModel: opts.config?.nanoModel ?? "gpt-5-nano",
       seed: opts.config?.seed ?? Math.floor(Math.random() * 1_000_000),
     };
@@ -162,4 +173,10 @@ export async function startTelemetrySwarm(
     });
     throw err;
   }
+}
+
+function readPositiveInt(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : fallback;
 }

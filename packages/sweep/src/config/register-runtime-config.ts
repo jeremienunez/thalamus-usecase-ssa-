@@ -35,6 +35,7 @@ export function registerSweepConfigDomains(
     schema: {
       defaultFishConcurrency: "number",
       defaultQuorumPct: "number",
+      defaultPerFishTimeoutMs: "number",
     },
   });
 

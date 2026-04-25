@@ -9,7 +9,8 @@ export type SimRunStatusDto =
   | "running"
   | "paused"
   | "done"
-  | "failed";
+  | "failed"
+  | "timeout";
 export type SimSwarmStatusDto = "pending" | "running" | "done" | "failed";
 export type MemoryKindDto = "self_action" | "observation" | "belief";
 export type TurnActorKindDto = "agent" | "god" | "system";
@@ -29,6 +30,7 @@ export interface SimConfigDto {
   llmMode: "cloud" | "fixtures" | "record";
   seed: number;
   nanoModel: string;
+  perFishTimeoutMs?: number;
 }
 
 export type SeedRefsDto = Record<string, unknown>;
@@ -90,6 +92,7 @@ export interface SimSwarmDto {
 export interface SwarmFishCountsDto {
   done: number;
   failed: number;
+  timeout: number;
   running: number;
   pending: number;
   paused: number;
@@ -155,6 +158,7 @@ export interface SwarmStatusDto {
   size: number;
   done: number;
   failed: number;
+  timeout: number;
   running: number;
   pending: number;
   reportFindingId: string | null;

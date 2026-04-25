@@ -22,6 +22,7 @@ export interface SimSwarmRecord {
 export interface SimSwarmFishCounts {
   done: number;
   failed: number;
+  timeout: number;
   running: number;
   pending: number;
   paused: number;

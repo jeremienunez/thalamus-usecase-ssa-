@@ -439,7 +439,7 @@ export class SsaReplFollowUpExecutor {
               auto: item.auto,
               text:
                 `Verification swarm ${swarmId} finished with status ${swarm.status}. ` +
-                `Done=${counts.done}, failed=${counts.failed}, pending=${counts.pending}.`,
+                `Done=${counts.done}, failed=${counts.failed}, timeout=${counts.timeout}, pending=${counts.pending}.`,
               provider: "system",
             },
           };

@@ -102,7 +102,10 @@ export class SimOrchestrator {
     const swarmConfig: SwarmConfig = {
       llmMode: opts.llmMode,
       quorumPct: readQuorumPct(swarmDefaults.defaultQuorumPct, 1.0),
-      perFishTimeoutMs: 5 * 60_000,
+      perFishTimeoutMs: readPositiveInt(
+        swarmDefaults.defaultPerFishTimeoutMs,
+        60_000,
+      ),
       fishConcurrency: readPositiveInt(swarmDefaults.defaultFishConcurrency, 1),
       nanoModel: opts.nanoModel ?? "gpt-5.4-nano",
       seed: opts.seed ?? 42,
@@ -133,6 +136,7 @@ export class SimOrchestrator {
       llmMode: opts.llmMode,
       seed: swarmConfig.seed,
       nanoModel: swarmConfig.nanoModel,
+      perFishTimeoutMs: swarmConfig.perFishTimeoutMs,
     };
 
     const fish = await this.createFish({
@@ -280,7 +284,7 @@ export class SimOrchestrator {
   async inject(simRunId: number, event: GodEventInput): Promise<{ simTurnId: number }> {
     const run = await this.loadRun(simRunId);
     if (!run) throw new Error(`sim_run ${simRunId} not found`);
-    if (run.status === "done" || run.status === "failed") {
+    if (run.status === "done" || run.status === "failed" || run.status === "timeout") {
       throw new Error(`cannot inject: status=${run.status}`);
     }
 

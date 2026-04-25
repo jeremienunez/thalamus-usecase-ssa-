@@ -36,6 +36,7 @@ describe("SimSwarmStoreService", () => {
       countFishByStatus: vi.fn(async () => ({
         done: 1,
         failed: 0,
+        timeout: 0,
         running: 2,
         pending: 0,
         paused: 0,
@@ -68,6 +69,7 @@ describe("SimSwarmStoreService", () => {
     expect(await svc.countFishByStatus(42)).toEqual({
       done: 1,
       failed: 0,
+      timeout: 0,
       running: 2,
       pending: 0,
       paused: 0,
@@ -85,6 +87,7 @@ describe("SimSwarmStoreService", () => {
       countFishByStatus: vi.fn(async () => ({
         done: 0,
         failed: 0,
+        timeout: 0,
         running: 0,
         pending: 0,
         paused: 0,

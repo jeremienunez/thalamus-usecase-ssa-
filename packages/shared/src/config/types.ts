@@ -301,11 +301,14 @@ export interface SimSwarmConfig {
   defaultFishConcurrency: number;
   /** Default quorum fraction [0..1] required before aggregate fires. */
   defaultQuorumPct: number;
+  /** Default wall-clock timeout for one fish job. */
+  defaultPerFishTimeoutMs: number;
 }
 
 export const DEFAULT_SIM_SWARM_CONFIG: SimSwarmConfig = {
   defaultFishConcurrency: 8,
   defaultQuorumPct: 0.8,
+  defaultPerFishTimeoutMs: 60_000,
 };
 
 // ─── sim.fish — LLM knobs for fish (agent-turn) calls ─────────────────

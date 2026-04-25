@@ -13,16 +13,18 @@ LaTeX specifications, one file per module. Specs are **the contract**: written b
 
 ```
 docs/specs/<area>/<feature>.tex    ← spec (Context / Goals / Invariants / Scenarios / AC)
-packages/<pkg>/tests/<feature>.spec.ts   ← tests, each tagged with @spec <spec-id>
+packages/<pkg>/tests/<feature>.spec.ts   ← unit evidence
+apps/console-api/tests/integration/*.spec.ts ← integration evidence
+apps/console-api/tests/e2e/*.spec.ts    ← e2e evidence
 packages/<pkg>/src/<feature>.ts    ← implementation
 ```
 
 ### Rules
 
 1. Every public module has a spec under `docs/specs/`.
-2. Every spec declares **Acceptance Criteria** (AC-1, AC-2, ...) and a **Traceability** table mapping each AC to a test.
-3. Every test file starts with `/** @spec docs/specs/<path>.tex */` and each `describe` block references the AC id it covers.
-4. CI fails if a test has no AC reference, or if an AC has no test.
+2. Every spec declares **Acceptance Criteria** (AC-1, AC-2, ...) and a **Traceability** table mapping each AC to `unit`, `integration`, and `e2e` evidence rows.
+3. Every trace row names the concrete test file and test name that covers that AC at that layer.
+4. CI fails if an `APPROVED` or `IMPLEMENTED` spec is missing any layer, references a missing file, or references a test name that is not present.
 
 ## Structure
 
@@ -55,10 +57,13 @@ Each spec declares `\specStatus{...}`:
 
 - `DRAFT` --- being written, not yet reviewable.
 - `REVIEW` --- open for comment.
-- `APPROVED` --- frozen contract; tests and code must comply.
-- `IMPLEMENTED` --- tests green, code shipped.
+- `APPROVED` --- frozen contract; `pnpm spec:check`, `pnpm test:unit`, `pnpm test:integration`, and `pnpm test:e2e` must pass for every AC.
+- `IMPLEMENTED` --- tri-layer evidence is green, code shipped.
 
-## CI hooks (planned)
+Architecture overview docs may use `OVERVIEW` while they are reader-facing prose only. Convert them to AC-bearing specs before moving them to `REVIEW` or `APPROVED`.
 
-- `scripts/spec-check.ts` --- walks every test file, extracts `@spec` tags, asserts each AC has a matching test and vice versa.
+## CI hooks
+
+- `scripts/spec-check.ts` --- asserts each enforced AC has `unit`, `integration`, and `e2e` trace rows and that every referenced test exists.
+- The `spec-validation` CI job runs `pnpm spec:check`, `pnpm test:unit`, `pnpm test:integration`, and `pnpm test:e2e` in order. This is the validation path for moving specs to `APPROVED` / `IMPLEMENTED`.
 - `make all` runs in the `spec-build` job; PDFs published as artifacts.

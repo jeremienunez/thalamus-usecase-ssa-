@@ -43,6 +43,20 @@ export interface TurnRunnerContextInput {
   agent: TurnRunnerAgent;
   turnIndex: number;
   subjectSnapshot: SimSubjectSnapshot | null;
+  signal?: AbortSignal;
+}
+
+function abortError(message: string): Error {
+  const err = new Error(message);
+  err.name = "AbortError";
+  return err;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const reason = signal.reason;
+  if (reason instanceof Error) throw reason;
+  throw abortError(typeof reason === "string" ? reason : "Operation aborted");
 }
 
 export async function callTurnAgent(args: {
@@ -54,7 +68,9 @@ export async function callTurnAgent(args: {
   logger: LoggerLike;
   includeValidationSnippet?: boolean;
   simKind?: string;
+  signal?: AbortSignal;
 }): Promise<TurnResponse> {
+  throwIfAborted(args.signal);
   const userPrompt = args.deps.prompt.render({
     frame: {
       turnIndex: args.ctx.turnIndex,
@@ -88,10 +104,12 @@ export async function callTurnAgent(args: {
   const fishCfg = await getSimFishConfig();
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= MAX_JSON_RETRIES; attempt++) {
+    throwIfAborted(args.signal);
     const res = await callNanoWithMode({
       instructions: skill.body,
       input: userPrompt,
       enableWebSearch: false,
+      signal: args.signal,
       overrides: {
         model: fishCfg.model || undefined,
         reasoningEffort: fishCfg.reasoningEffort,
@@ -101,6 +119,7 @@ export async function callTurnAgent(args: {
     });
 
     if (!res.ok) {
+      throwIfAborted(args.signal);
       lastError = new Error(res.error ?? "nano call failed");
       args.logger.warn(
         {
@@ -123,6 +142,7 @@ export async function callTurnAgent(args: {
       const parsed = responseSchema.parse(raw);
       return parsed as TurnResponse;
     } catch (err) {
+      throwIfAborted(args.signal);
       lastError = err as Error;
       args.logger.warn(
         {
@@ -152,7 +172,9 @@ export async function buildTurnAgentContext(args: {
   turnIndex: number;
   subjectSnapshot: SimSubjectSnapshot | null;
   memoryQuery: string;
+  signal?: AbortSignal;
 }): Promise<AgentContext> {
+  throwIfAborted(args.signal);
   const [topMemories, observable, godEvents, scenarioContext] =
     await Promise.all([
       args.deps.memory.topK({
@@ -173,6 +195,7 @@ export async function buildTurnAgentContext(args: {
         seedHints: {},
       }),
     ]);
+  throwIfAborted(args.signal);
 
   return {
     simRunId: args.simRunId,
@@ -211,6 +234,7 @@ export function createTurnContextLoader(args: {
       turnIndex: input.turnIndex,
       subjectSnapshot: input.subjectSnapshot,
       memoryQuery: args.memoryQuery,
+      signal: input.signal,
     });
 }
 
