@@ -1,0 +1,1124 @@
+# Thalamus / Sweep Repository Audit — Codex Hardening Plan
+
+## Purpose
+
+This document converts the code audit findings into a concrete engineering plan for Codex or another coding agent.
+
+The repository is treated as a public architecture extraction / technical demonstration, not as a production deployment. Authentication and authorization are intentionally stubbed and should not be treated as audit findings unless a future task explicitly targets production deployment.
+
+The main goal is to harden the agentic kernel: LLM provider reliability, DAG correctness, knowledge graph consistency, strict contracts around LLM I/O, and maintainable architecture gates.
+
+---
+
+## Repository Status Assumption
+
+This repository currently mixes three layers:
+
+1. Public demo / interview extraction.
+2. Advanced agentic architecture prototype.
+3. Potentially industrializable foundation.
+
+Codex should not waste effort replacing the intentionally stubbed auth unless explicitly instructed. Instead, prioritize runtime correctness, data consistency, diagnostics, type safety, and documentation clarity.
+
+---
+
+## Priority Legend
+
+* P0: correctness or reliability issue that can silently corrupt behavior, hide failures, burn resources, or make the agentic system unreliable.
+* P1: strong hardening issue; should be fixed before presenting the repo as robust.
+* P2: maintainability, documentation, scaling, or polish issue.
+
+---
+
+# P0 Findings
+
+## P0-001 — LLM transport silently returns provider `none`
+
+### Area
+
+`packages/thalamus/src/transports/llm-chat.ts`
+
+### Current behavior
+
+When every provider fails or is disabled, `LlmChatTransport.call()` returns:
+
+```ts
+{ content: "", provider: "none" }
+```
+
+### Problem
+
+A total LLM outage becomes indistinguishable from an empty model response. Downstream code can interpret this as “no findings” rather than “the model stack failed.” This creates false negatives in the knowledge graph and weakens auditability.
+
+### Required fix
+
+Introduce an explicit error type, for example:
+
+```ts
+export class LlmUnavailableError extends Error {
+  constructor(
+    public readonly attemptedProviders: string[],
+    public readonly failures: Array<{ provider: string; message: string }>,
+  ) {
+    super("All LLM providers failed or were unavailable");
+    this.name = "LlmUnavailableError";
+  }
+}
+```
+
+Then replace the fallback return with a throw.
+
+### Acceptance criteria
+
+* `LlmChatTransport.call()` never returns `provider: "none"` for a total provider failure.
+* Tests cover all providers disabled.
+* Tests cover all providers throwing.
+* Cortex-level code maps this failure to an explicit diagnostic such as `provider_unavailable` instead of silent empty output.
+
+---
+
+## P0-002 — DAG timeout does not cancel the real provider work
+
+### Area
+
+`packages/thalamus/src/services/thalamus-executor.service.ts`
+
+### Current behavior
+
+The executor uses `Promise.race()` with a timeout promise.
+
+### Problem
+
+`Promise.race()` stops waiting, but it does not cancel the underlying LLM/web/provider calls. Token usage, HTTP calls, local model work, or web search can continue after the cortex has timed out.
+
+### Required fix
+
+Propagate `AbortSignal` from the DAG executor through:
+
+* `CortexInput`
+* `CortexExecutor`
+* execution strategies
+* `analyzeCortexData`
+* `LlmChatTransport.call`
+* each provider implementation
+* web search adapters
+* structured source fetchers where possible
+
+Suggested pattern:
+
+```ts
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+try {
+  return await this.cortexExecutor.execute(node.cortex, {
+    ...input,
+    signal: controller.signal,
+  });
+} finally {
+  clearTimeout(timeoutId);
+}
+```
+
+### Acceptance criteria
+
+* `CortexInput` supports `signal?: AbortSignal`.
+* Provider `fetch()` calls receive `signal`.
+* Timeout tests assert that the signal is aborted.
+* No unhandled promise rejection after timeout.
+
+---
+
+## P0-003 — Invalid DAGs can be forced into execution
+
+### Area
+
+`packages/thalamus/src/services/thalamus-executor.service.ts`
+
+### Current behavior
+
+When topological sorting cannot resolve dependencies, the executor logs a warning and pushes remaining nodes as the final level.
+
+### Problem
+
+A malformed LLM plan with cycles, unknown dependencies, or self-dependencies can still execute. That undermines the idea of a governable agentic kernel.
+
+### Required fix
+
+Add a dedicated DAG validation layer before execution:
+
+```ts
+validateDag(nodes: DAGNode[]): void
+```
+
+It should detect:
+
+* duplicate cortex names
+* self-dependency
+* dependency pointing to missing node
+* circular dependency
+* empty DAG if not allowed by caller
+
+Then make `topologicalLevels()` fail hard on unresolved dependencies.
+
+### Acceptance criteria
+
+* Cyclic DAG throws a specific error.
+* Missing dependency throws a specific error.
+* Duplicate cortex throws a specific error.
+* Valid parallel DAG still executes.
+* Valid sequential DAG still executes.
+
+---
+
+## P0-004 — Knowledge graph writes are not transactionally bounded
+
+### Area
+
+`packages/thalamus/src/services/research-graph.service.ts`
+
+### Current behavior
+
+`storeFinding()` performs several sequential operations:
+
+* embedding
+* semantic dedup lookup
+* merge or upsert
+* edge creation
+* cross-linking
+* cycle count increment
+* cycle/finding junction link
+* callbacks
+
+### Problem
+
+If one of the write operations fails halfway, the graph can enter a partial state: finding inserted without edges, cycle count not aligned, cycle link missing, or callbacks skipped.
+
+### Required fix
+
+Split the method into three phases:
+
+1. Pre-transaction work: embedding, semantic lookup, candidate calculation.
+2. Transactional DB writes: finding insert/update, entity edges, cycle increment, cycle/finding link.
+3. Post-commit best-effort side effects: callbacks, notifications, maybe cross-links if intentionally non-critical.
+
+### Acceptance criteria
+
+* Critical writes are executed in one transaction.
+* Tests simulate edge creation failure and assert no partial critical state remains.
+* Tests simulate cycle link failure and assert rollback.
+* Cross-linking may remain best-effort only if documented.
+
+---
+
+# P1 Findings
+
+## P1-001 — `FindingPersister` swallows per-finding errors without exposing partial failure
+
+### Area
+
+`packages/thalamus/src/services/finding-persister.service.ts`
+
+### Current behavior
+
+Persistence errors are logged per finding and the loop continues. The method returns only `storedCount`.
+
+### Problem
+
+The parent cycle can be marked completed even if several findings failed to persist. This is resilient but weakly auditable.
+
+### Required fix
+
+Return a richer result:
+
+```ts
+interface PersistResult {
+  storedCount: number;
+  failedCount: number;
+  failures: Array<{ title: string; message: string }>;
+}
+```
+
+Then let `ThalamusService.runCycle()` mark the cycle as completed with warnings or partial persistence metadata.
+
+### Acceptance criteria
+
+* Failed findings are returned to caller.
+* Cycle logs include failed count.
+* Tests cover partial persistence.
+
+---
+
+## P1-002 — `CortexExecutor.execute()` contract says it never throws but can throw
+
+### Area
+
+`packages/thalamus/src/cortices/executor.ts`
+
+### Current behavior
+
+The comment says execution resolves and never throws. But the method returns `strategy.execute(skill, input)` directly without a try/catch.
+
+### Problem
+
+The documented contract and actual behavior diverge.
+
+### Required fix
+
+Choose one contract:
+
+Option A: never throw.
+
+```ts
+try {
+  return await strategy.execute(skill, input);
+} catch (err) {
+  logger.error({ cortexName, err }, "Cortex strategy failed");
+  return emptyOutput();
+}
+```
+
+Option B: allow throw, update comment and ensure caller handles it.
+
+Recommendation: prefer Option B for hardening, because failures should remain visible to DAG diagnostics.
+
+### Acceptance criteria
+
+* Comment matches behavior.
+* Tests cover strategy throw behavior.
+* DAG executor handles the chosen behavior explicitly.
+
+---
+
+## P1-003 — Numeric normalization accepts Infinity-like values
+
+### Area
+
+`packages/thalamus/src/cortices/strategies/helpers.ts`
+
+### Current behavior
+
+`safeNumber()` uses `Number.isNaN(n)`.
+
+### Problem
+
+`Infinity` and `-Infinity` are not NaN. They can pass into clamp and become maximum or minimum confidence/impact values.
+
+### Required fix
+
+```ts
+function safeNumber(val: unknown, fallback: number): number {
+  const n = Number(val);
+  return Number.isFinite(n) ? n : fallback;
+}
+```
+
+### Acceptance criteria
+
+* Tests cover `Infinity`, `-Infinity`, `NaN`, strings, null, and normal finite numbers.
+* `confidence` and `impactScore` cannot be derived from non-finite values.
+
+---
+
+## P1-004 — Entity IDs are converted through unsafe JS numbers
+
+### Area
+
+`packages/thalamus/src/cortices/strategies/helpers.ts`
+
+### Current behavior
+
+Finding edges are normalized with:
+
+```ts
+entityId: Number(e.entityId) || 0
+```
+
+Later code converts that value to `BigInt`.
+
+### Problem
+
+Large database IDs can lose precision when converted to JS `number`. Invalid values collapse to `0`, which is used as an unresolved sentinel.
+
+### Required fix
+
+Normalize IDs as `bigint` or validated decimal strings.
+
+Suggested helper:
+
+```ts
+function safeEntityId(value: unknown): string {
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return String(value);
+  }
+  if (typeof value === "string" && /^\d+$/.test(value)) return value;
+  return "0";
+}
+```
+
+Then update `CortexFinding` edge typing if necessary.
+
+### Acceptance criteria
+
+* Large numeric string IDs remain exact.
+* Unsafe integer numbers are rejected or mapped to sentinel with diagnostic.
+* Tests cover IDs greater than `Number.MAX_SAFE_INTEGER`.
+
+---
+
+## P1-005 — LLM parsing treats many invalid responses as empty valid output
+
+### Area
+
+`packages/thalamus/src/cortices/cortex-llm.ts`
+
+### Current behavior
+
+`parseCortexResponse()` returns empty findings without diagnostic when no usable findings are found and the raw text does not include the word `findings`.
+
+### Problem
+
+An HTML error page, a plain refusal, empty provider output, or malformed response can become “valid no findings.” That is bad for auditability.
+
+### Required fix
+
+Introduce a result status taxonomy:
+
+```ts
+type CortexLlmStatus =
+  | "ok"
+  | "empty_valid"
+  | "invalid_json"
+  | "provider_unavailable"
+  | "timeout"
+  | "degenerate_repetition";
+```
+
+Require explicit empty JSON to be considered valid empty output, for example `{ "findings": [] }`.
+
+### Acceptance criteria
+
+* Empty string produces diagnostic.
+* Non-JSON text produces diagnostic.
+* `{ "findings": [] }` is valid empty output.
+* Degenerate repetition detection still works.
+
+---
+
+## P1-006 — Mandatory strategist can violate `maxCortices`
+
+### Area
+
+`packages/thalamus/src/services/thalamus-planner.service.ts`
+
+### Current behavior
+
+Runtime filters clamp to `maxCortices`, then inject `strategist` if mandatory.
+
+### Problem
+
+If `maxCortices` is already reached and strategist is missing, the final plan can exceed the configured max.
+
+### Required fix
+
+Reserve a slot for strategist before clamping when `mandatoryStrategist` is true.
+
+### Acceptance criteria
+
+* With `maxCortices = 4` and mandatory strategist, final plan length is never greater than 4.
+* Strategist survives the clamp.
+* Disabled strategist is not injected.
+
+---
+
+## P1-007 — `RunCycleInput.cortices` is declared but unused
+
+### Area
+
+`packages/thalamus/src/services/thalamus.service.ts`
+
+### Current behavior
+
+`RunCycleInput` includes `cortices?: string[]`, but `resolvePlan()` does not use it.
+
+### Problem
+
+The API surface suggests manual cortex selection, but the implementation ignores it.
+
+### Required fix
+
+Either remove the field or implement it.
+
+Recommended implementation:
+
+* `dag` wins if provided.
+* `daemonJob` wins next.
+* `cortices` creates a flat manual DAG.
+* otherwise use LLM planner.
+
+### Acceptance criteria
+
+* Tests cover manual `cortices` input.
+* Unknown cortex names are rejected or filtered with diagnostic.
+* README documents manual cortex execution.
+
+---
+
+## P1-008 — TypeScript strictness is too weak for a kernel with LLM JSON and DB writes
+
+### Area
+
+`tsconfig.base.json`
+
+### Current behavior
+
+* `strict: false`
+* `strictNullChecks: false`
+* `noUncheckedIndexedAccess: false`
+* `noImplicitAny: true`
+
+### Problem
+
+The project relies heavily on dynamic JSON, LLM outputs, Redis hashes, database rows, and provider fallbacks. Weak null/index checking allows many edge cases to slip through.
+
+### Required fix
+
+Create a staged strictness migration.
+
+Recommended order:
+
+1. `packages/shared`
+2. `packages/db-schema`
+3. `packages/thalamus`
+4. `packages/sweep`
+5. `apps/console-api`
+6. `apps/console`
+
+### Acceptance criteria
+
+* Add `tsconfig.strict.json` or per-package strict configs.
+* At least `packages/shared` and `packages/db-schema` compile with `strictNullChecks`.
+* Add roadmap item for full strict migration.
+
+---
+
+## P1-009 — Vector driver parsing can produce silent invalid vectors
+
+### Area
+
+`packages/db-schema/src/schema/_vector.ts`
+
+### Current behavior
+
+```ts
+fromDriver(value: string): number[] {
+  return value.slice(1, -1).split(",").map(Number);
+}
+```
+
+### Problem
+
+Unexpected formats can produce `[NaN]` or malformed vectors silently.
+
+### Required fix
+
+Make parsing defensive and fail on non-finite values.
+
+Suggested implementation:
+
+```ts
+fromDriver(value: string | null): number[] {
+  if (!value) return [];
+  const inner = value.startsWith("[") && value.endsWith("]")
+    ? value.slice(1, -1)
+    : value;
+
+  if (!inner.trim()) return [];
+
+  const parsed = inner.split(",").map(Number);
+  if (parsed.some((x) => !Number.isFinite(x))) {
+    throw new Error("Invalid vector driver value");
+  }
+
+  return parsed;
+}
+```
+
+### Acceptance criteria
+
+* Tests cover empty string, null, malformed vector, valid vector.
+* Malformed vector does not return `[NaN]`.
+
+---
+
+## P1-010 — Embedding dimension contract is hardcoded without enough runtime validation
+
+### Area
+
+`packages/db-schema/src/schema/_vector.ts`
+
+### Current behavior
+
+`EMBEDDING_DIMENSIONS = 2048` and the column is `halfvec(2048)`.
+
+### Problem
+
+If the embedder changes model or dimensions, writes/searches may fail or behave incorrectly.
+
+### Required fix
+
+Validate embedding length at the embedder boundary and before DB writes.
+
+### Acceptance criteria
+
+* Any embedding not exactly `EMBEDDING_DIMENSIONS` throws a typed error.
+* Tests cover wrong dimension.
+* Error message tells which embedder produced the wrong dimension.
+
+---
+
+## P1-011 — Coverage threshold is too absolute to be useful long-term
+
+### Area
+
+`vitest.config.ts`
+
+### Current behavior
+
+Coverage is set to 100% for branches, functions, lines, statements, with `perFile: true`.
+
+### Problem
+
+This can turn coverage into noise. It may block useful refactors over non-critical files while still failing to express meaningful risk.
+
+### Required fix
+
+Use tiered coverage:
+
+* critical packages: high threshold, possibly 95–100%
+* app glue / UI / generated-like code: lower threshold
+* changed-files coverage gate for PRs
+
+### Acceptance criteria
+
+* Coverage policy is documented.
+* `test:coverage` gives actionable failure output.
+* Critical kernel files remain strongly covered.
+
+---
+
+## P1-012 — Circular dependencies are warnings, not errors
+
+### Area
+
+`.dependency-cruiser.js`
+
+### Current behavior
+
+`no-circular` has `severity: "warn"`.
+
+### Problem
+
+For core packages, circular dependencies should not be allowed. They undermine dependency inversion and make agent-generated code drift harder to control.
+
+### Required fix
+
+Make circular dependency an error at least for:
+
+* `packages/thalamus/src`
+* `packages/sweep/src/services`
+* `apps/console-api/src/services`
+* `apps/console-api/src/agent`
+
+### Acceptance criteria
+
+* Core package cycles fail `arch:check`.
+* Existing intentional exceptions are documented explicitly.
+
+---
+
+## P1-013 — Domain-agnostic story is weakened by historical SSA schema names
+
+### Area
+
+`packages/db-schema/src/schema/research.ts`
+
+### Current behavior
+
+The JS property `extensions` maps to DB column `bus_context`.
+
+### Problem
+
+Even with a comment explaining it, this creates visible domain leakage in the schema.
+
+### Required fix
+
+For this public extraction, either:
+
+* add a migration renaming `bus_context` to `extensions`, or
+* document it clearly as an extraction artifact in `HARDENING_ROADMAP.md`.
+
+### Acceptance criteria
+
+* If migrated: code and DB use `extensions` consistently.
+* If not migrated: README/HARDENING explicitly marks it as known historical drift.
+
+---
+
+# P2 Findings
+
+## P2-001 — Kimi circuit breaker needs cooldown / half-open state
+
+### Area
+
+`packages/thalamus/src/transports/llm-chat.ts`
+
+### Current behavior
+
+Kimi is skipped after 3 consecutive failures.
+
+### Problem
+
+There is no visible cooldown window or half-open retry. A temporary failure can cause the process to skip Kimi indefinitely.
+
+### Required fix
+
+Implement state:
+
+```ts
+type CircuitState = "closed" | "open" | "half_open";
+```
+
+Include:
+
+* openedAt timestamp
+* cooldownMs
+* one half-open test call after cooldown
+* reset on success
+
+### Acceptance criteria
+
+* Tests cover trip, cooldown, half-open success, half-open failure.
+
+---
+
+## P2-002 — Global Kimi rate limiter serializes all Kimi calls
+
+### Area
+
+`packages/thalamus/src/transports/providers/kimi.provider.ts`
+
+### Current behavior
+
+A static `lastKimiCallMs` enforces a 2-second minimum interval globally.
+
+### Problem
+
+This is safe but blunt. It serializes all Kimi calls in the process.
+
+### Required fix
+
+Introduce a provider-level rate limiter abstraction or queue, ideally keyed by API key/provider.
+
+### Acceptance criteria
+
+* Current behavior remains safe.
+* Concurrency behavior is tested.
+* Configurable min interval via runtime config.
+
+---
+
+## P2-003 — Prompt injection guardrails are heuristic and should be described honestly
+
+### Area
+
+`packages/thalamus/src/cortices/guardrails.ts`
+
+### Current behavior
+
+Sanitization uses regex patterns, domain keyword filtering, truncation, and payload length caps.
+
+### Problem
+
+This is useful but not a complete prompt-injection defense.
+
+### Required fix
+
+Rename or document as “heuristic sanitization” rather than comprehensive protection.
+
+### Acceptance criteria
+
+* Comments and docs do not overclaim.
+* Tests cover direct prompt injection strings.
+* Add tests for obfuscated variants to define known limitations.
+
+---
+
+## P2-004 — Sweep feedback payload is too thin for meaningful learning
+
+### Area
+
+`packages/sweep/src/repositories/sweep.repository.ts`
+
+### Current behavior
+
+Feedback stores:
+
+* `wasAccepted`
+* `reviewerNote`
+* `domainFields`
+
+### Problem
+
+This is not enough for serious feedback-driven improvement. Missing context includes original suggestion, resolution payload, model/provider metadata, confidence, category, and run/cycle ID.
+
+### Required fix
+
+Expand stored feedback shape.
+
+Suggested shape:
+
+```ts
+interface SuggestionFeedbackRow {
+  suggestionId: string;
+  wasAccepted: boolean;
+  reviewerNote: string | null;
+  domain: string;
+  domainFields: Record<string, unknown>;
+  resolutionPayload: string | null;
+  resolutionStatus: string | null;
+  createdAt: string;
+  reviewedAt: string;
+  sourceRunId?: string;
+  model?: string;
+  provider?: string;
+}
+```
+
+### Acceptance criteria
+
+* Feedback stores enough information to reproduce the accepted/rejected suggestion context.
+* Existing readers are backward compatible.
+
+---
+
+## P2-005 — `NanoSweepService` returns zero-filled metrics
+
+### Area
+
+`packages/sweep/src/services/nano-sweep.service.ts`
+
+### Current behavior
+
+Metrics such as `totalCalls`, `successCalls`, and `estimatedCost` are always `0` after domain-agnostic refactor.
+
+### Problem
+
+Zero suggests measured zero rather than unknown/unavailable.
+
+### Required fix
+
+Use `null` or optional fields for unknown metrics.
+
+### Acceptance criteria
+
+* Dashboard distinguishes unknown from zero.
+* Types reflect optional/provider-specific metrics.
+
+---
+
+## P2-006 — Sweep Redis pagination loads all suggestions before slicing
+
+### Area
+
+`packages/sweep/src/repositories/sweep.repository.ts`
+
+### Current behavior
+
+`list()` loads all IDs, fetches all hashes, filters/sorts in memory, then paginates.
+
+### Problem
+
+Fine for a demo, but it scales poorly.
+
+### Required fix
+
+For pending/unreviewed views, use Redis sorted sets with scores and page by range. For filters, consider secondary indexes or accept documented demo limitation.
+
+### Acceptance criteria
+
+* Large suggestion set does not require `hgetall` for every row on every page.
+* If not fixed, docs mention demo-scale behavior.
+
+---
+
+## P2-007 — Vitest aliases are manually duplicated from TS path aliases
+
+### Area
+
+`vitest.config.ts`
+
+### Current behavior
+
+Vitest defines a large manual alias map.
+
+### Problem
+
+Alias config can drift from `tsconfig.base.json`.
+
+### Required fix
+
+Use a tsconfig paths plugin or centralize aliases in one file imported by both configs.
+
+### Acceptance criteria
+
+* One source of truth for aliases.
+* Tests still resolve all subpath imports.
+
+---
+
+## P2-008 — Docker compose is clearly local-only but should be labeled as such
+
+### Area
+
+`docker-compose.yml`
+
+### Current behavior
+
+Postgres and Redis are exposed on host ports using simple credentials.
+
+### Problem
+
+This is acceptable for local demo but should be explicitly labeled.
+
+### Required fix
+
+Add comment and README note:
+
+```md
+The docker-compose stack is local-development only. It exposes Postgres and Redis on host ports with demo credentials.
+```
+
+### Acceptance criteria
+
+* README onboarding calls out local-only infrastructure.
+
+---
+
+## P2-009 — Migration comment drift
+
+### Area
+
+`packages/db-schema/src/schema/research.ts`
+
+### Current behavior
+
+Comment references `0000_init.sql` for HNSW index, but the actual migration is `0001_hnsw_index.sql`.
+
+### Required fix
+
+Update the comment.
+
+### Acceptance criteria
+
+* Schema comment references the correct migration.
+
+---
+
+## P2-010 — Package metadata still frames the repo as interview extraction
+
+### Area
+
+`package.json`
+
+### Current behavior
+
+Package name and description use `interview` language.
+
+### Problem
+
+This is honest, but if the goal is to make the repo look like a serious public architecture project, the naming undersells it.
+
+### Required fix
+
+Optional. Rename to something like:
+
+```json
+{
+  "name": "thalamus-sweep-ssa",
+  "description": "Public architecture extraction of a multi-cortex agentic research and audit system for Space Situational Awareness"
+}
+```
+
+### Acceptance criteria
+
+* Public-facing metadata matches desired positioning.
+
+---
+
+# Documentation Tasks
+
+## DOC-001 — Add repository status note
+
+### File
+
+`README.md`
+
+### Content to add
+
+```md
+## Repository Status
+
+This repository is a public architecture extraction of the Thalamus/Sweep system.
+
+Production-grade aspects demonstrated here:
+- DAG-based multi-cortex research orchestration
+- runtime-configurable LLM provider chain
+- knowledge graph persistence model
+- Sweep human-in-the-loop review loop
+- architecture gates and test policy
+
+Intentional demo/extraction boundaries:
+- authentication middleware is stubbed
+- Docker credentials are local-development defaults
+- some historical SSA naming remains in schema/migration seams
+- runtime hardening roadmap is tracked separately
+
+Do not deploy this repository as-is on a public network without replacing the demo-only seams.
+```
+
+---
+
+## DOC-002 — Add hardening roadmap
+
+### File
+
+`docs/HARDENING_ROADMAP.md`
+
+### Content outline
+
+```md
+# Hardening Roadmap
+
+## Runtime correctness
+- AbortSignal propagation across DAG executor, cortices, providers, and web search
+- explicit LLM unavailable errors
+- DAG validation before execution
+- cortex result status taxonomy
+
+## Knowledge graph consistency
+- transactional write boundary
+- partial persistence reporting
+- embedding dimension validation
+- safe BigInt entity IDs
+
+## Type safety
+- strictNullChecks migration
+- noUncheckedIndexedAccess migration
+- Zod schemas for all LLM outputs
+
+## Architecture gates
+- circular dependencies as errors in core packages
+- orphan modules as errors in package src
+- single quality gate command
+
+## Extraction cleanup
+- rename interview-specific package metadata if desired
+- isolate legacy SSA seams
+- document public/demo boundaries
+```
+
+---
+
+## DOC-003 — Add a single quality gate command
+
+### File
+
+`package.json`
+
+### Suggested script
+
+```json
+{
+  "scripts": {
+    "quality:gate": "pnpm typecheck && pnpm arch:check:repo && pnpm dup:check && pnpm test:policy && pnpm spec:check && pnpm test"
+  }
+}
+```
+
+### Acceptance criteria
+
+* README tells reviewers to run exactly one command.
+* Existing specialized commands remain available.
+
+---
+
+# Suggested Codex Execution Order
+
+## Phase 1 — Low-risk correctness fixes
+
+1. Fix `safeNumber()` to use `Number.isFinite`.
+2. Harden vector `fromDriver()` parsing.
+3. Fix migration comment drift.
+4. Add README repository status note.
+5. Add `docs/HARDENING_ROADMAP.md`.
+6. Add `quality:gate` script.
+
+## Phase 2 — Agentic kernel correctness
+
+1. Add DAG validation.
+2. Fix `mandatoryStrategist` clamping.
+3. Implement or remove `RunCycleInput.cortices`.
+4. Align `CortexExecutor.execute()` behavior with its documented contract.
+5. Add explicit LLM response status taxonomy.
+
+## Phase 3 — Provider reliability
+
+1. Add `LlmUnavailableError`.
+2. Replace `provider: "none"` fallback.
+3. Add provider failure diagnostics.
+4. Add Kimi circuit breaker cooldown.
+5. Add `AbortSignal` to provider call options.
+6. Propagate cancellation end-to-end.
+
+## Phase 4 — Knowledge graph consistency
+
+1. Return rich result from `FindingPersister.persist()`.
+2. Add transactional boundary around critical graph writes.
+3. Validate embedding dimension before write.
+4. Add tests for partial write rollback.
+
+## Phase 5 — Type and architecture hardening
+
+1. Add strict config for `packages/shared`.
+2. Add strict config for `packages/db-schema`.
+3. Promote circular dependencies to errors in core packages.
+4. Review orphan rules for package source files.
+5. Reduce Vitest alias duplication.
+
+---
+
+# Non-goals For Codex Unless Explicitly Requested
+
+Do not prioritize these unless a separate instruction asks for them:
+
+* replacing the stubbed auth middleware
+* productionizing CORS/secrets
+* creating deployment infrastructure
+* rewriting the frontend UI
+* renaming the entire project
+* replacing the LLM provider stack
+
+Authentication is intentionally stubbed for this public extraction. Codex should not burn cycles on it during this hardening pass.
+
+---
+
+# Final Objective
+
+After this hardening pass, the repo should clearly communicate:
+
+1. It is a public architecture extraction.
+2. Its auth and local infra are intentionally demo-grade.
+3. Its agentic kernel is robust: invalid DAGs fail early, provider failures are explicit, timeouts cancel real work, persistence is auditable, and LLM outputs are diagnosed rather than silently collapsed.
+4. Its quality gates are easy to run and meaningful.
