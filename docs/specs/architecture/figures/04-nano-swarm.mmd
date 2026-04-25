@@ -1,19 +1,23 @@
 flowchart LR
-    subgraph SWARM["50× gpt-5.4-nano workers"]
+    Scout["SSA ExplorerScout<br/>(app pack)"] --> Queries["ExplorationQuery[]"]
+
+    subgraph SWARM["NanoSwarm<br/>runtime-configured waves"]
         direction TB
-        W1["Worker 1<br/>source A"]
-        W2["Worker 2<br/>source B"]
-        W3["Worker 3<br/>source C"]
-        Wn["Worker N<br/>source …"]
+        Profile["NanoSwarmProfile<br/>lenses + prompts"]
+        Decompose["decompose to micro-queries"]
+        Waves["wave executor<br/>waveSize / delay / maxMicroQueries"]
+        Merge["URL dedup + entity extraction"]
     end
 
-    subgraph CURATOR["Curator (strong model)"]
+    subgraph APP["SSA explorer collapse<br/>(app pack)"]
         direction TB
-        Dedup["Deduplicate"]
-        Rank["Rank by confidence"]
-        Tag["Source-class tagging"]
+        Curator["ExplorerCurator<br/>LLM or heuristic fallback"]
+        SourceOps["source_item injection<br/>optional source promotion"]
     end
 
-    SWARM -->|"raw summaries<br/>(parallel, rate-limited)"| CURATOR
-    CURATOR -->|"curated set"| KG["Knowledge Graph"]
-
+    Queries --> Decompose
+    Profile --> Decompose
+    Decompose --> Waves
+    Waves --> Merge
+    Merge -->|"NanoArticle[] + stats"| Curator
+    Curator --> SourceOps

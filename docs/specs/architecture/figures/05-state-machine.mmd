@@ -1,13 +1,13 @@
 stateDiagram-v2
     [*] --> Scan: cron / admin trigger
 
-    Scan --> FindingCreated: nano swarm detects inconsistency
+    Scan --> SuggestionCreated: nano swarm detects inconsistency
     Scan --> Scan: no issues found (continue)
 
-    FindingCreated --> Deduplicated: dedup + rate-limit check
+    SuggestionCreated --> Deduplicated: dedup + rate-limit check
     Deduplicated --> Pending: persisted to Redis
 
-    Pending --> UnderReview: reviewer opens finding
+    Pending --> UnderReview: reviewer opens suggestion
 
     UnderReview --> Accepted: reviewer accepts
     UnderReview --> Rejected: reviewer rejects
@@ -15,22 +15,25 @@ stateDiagram-v2
 
     Edited --> Accepted: confirm edit
 
-    Accepted --> Resolved: Resolution.service<br/>(transactional write + audit row)
+    Accepted --> Resolving: claim Redis lock<br/>reload + preflight
+    Resolving --> Resolved: success / partial
+    Resolving --> Pending: failed is retryable
     Rejected --> Dismissed: logged + feedback captured
 
-    Resolved --> FeedbackLoop: accept signal → prompt tuning
-    Dismissed --> FeedbackLoop: reject signal → prompt tuning
+    Resolved --> FeedbackLoop: feedback available to future audits
+    Dismissed --> FeedbackLoop: rationale available to future audits
 
-    FeedbackLoop --> [*]: calibration applied to next run
+    FeedbackLoop --> [*]: review data stored
 
     note right of Pending
-        Findings are deduped in Redis
+        Suggestions are deduped in Redis
         before reaching the reviewer.
         No duplicate noise.
     end note
 
     note right of Resolved
-        Every write is transactional.
-        Every mutation has an audit row.
-        Every mutation is reversible.
+        App handlers/adapters own durable
+        effects. Current SSA promotion
+        appends sweep_audit; confidence
+        promotion is still placeholder.
     end note

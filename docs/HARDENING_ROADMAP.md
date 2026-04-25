@@ -9,7 +9,7 @@
 
 ## Knowledge graph consistency
 
-- transactional write boundary
+- resolution lock/idempotence boundary plus app-owned audit semantics
 - partial persistence reporting
 - embedding dimension validation
 - safe BigInt entity IDs

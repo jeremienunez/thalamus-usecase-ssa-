@@ -228,8 +228,8 @@ Current fast checks from the trim pass:
 ## Docs, CLI, And Observability
 
 - [ ] `docs/architecture.md` - cortex pattern deep-dive with diagrams.
-- [ ] `docs/sweep-feedback-loop.md` - how rejection signals feed back into
-      prompts.
+- [ ] `docs/sweep-feedback-loop.md` - how reviewer rationale is persisted and
+      reused by later audit prompts.
 - [ ] `docs/threat-intel-mapping.md` - detailed walkthrough of the
       transposition.
 - [ ] Per-package `README.md` for thalamus and sweep.

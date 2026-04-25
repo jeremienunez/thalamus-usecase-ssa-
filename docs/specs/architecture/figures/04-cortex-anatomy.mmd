@@ -1,13 +1,24 @@
 flowchart TB
-    subgraph CORTEX["cortices/{domain}/"]
+    subgraph APP["App domain pack"]
         direction TB
-        Skills["skills/*.md<br/>─────────────<br/>Versioned prompt files<br/>Diffable in PRs<br/>Reviewable by analysts"]
-        SQL["sql-helpers.ts<br/>─────────────<br/>Drizzle-typed queries<br/>No raw SQL"]
-        Sources["sources/*.ts<br/>─────────────<br/>SourceFetcher interface<br/>One per external system<br/>Mockable"]
-        Executor["executor.ts<br/>─────────────<br/>Plan → Dispatch → Write<br/>Owns tool declarations<br/>Budget-aware"]
+        Skills["skills/*.md<br/>frontmatter + prompt body"]
+        Data["CortexDataProvider<br/>sqlHelper name -> fetcher"]
+        Sources["SourceFetcherPort impl<br/>structured external rows"]
+        Domain["DomainConfig<br/>rules, prompts, fallbacks"]
     end
 
-    Executor -->|"reads"| Skills
-    Executor -->|"calls"| SQL
-    Executor -->|"spawns"| Sources
+    subgraph KERNEL["packages/thalamus"]
+        direction TB
+        Registry["CortexRegistry<br/>discovers skill files"]
+        Strategy["Execution strategies<br/>Strategist first, Standard fallback"]
+        Payload["sanitize + preSummarize<br/>mode and sourcing rules"]
+        LLM["LLM transport<br/>provider chain + overrides"]
+    end
 
+    Skills --> Registry
+    Domain --> Strategy
+    Registry --> Strategy
+    Strategy --> Data
+    Strategy --> Sources
+    Strategy --> Payload
+    Payload --> LLM

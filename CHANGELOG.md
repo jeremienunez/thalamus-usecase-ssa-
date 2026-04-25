@@ -1197,7 +1197,7 @@ Helper — [packages/thalamus/src/cortices/queries/conjunction.ts](packages/thal
   `combinedSigmaKm`, `hardBodyRadiusM`, `pcMethod`. Cortex receives the full
   covariance context, not just Pc.
 
-Prompt tuning — strict per-event contract:
+Prompt rules — strict per-event contract:
 
 - [skills/conjunction-analysis.md](packages/thalamus/src/cortices/skills/conjunction-analysis.md)
   rewritten. Hard rules: **one finding per DATA row**, never invent NORAD IDs,
@@ -1699,7 +1699,7 @@ Retroactive specs written in parallel by 10 opus agents (24 total):
 - SPEC-SW-001 `nano-sweep` — bounded swarm DB audit producer.
 - SPEC-SW-002 `finding-routing` — pending buffer dispatch.
 - SPEC-SW-003 `resolution` — reviewer-driven HITL apply/reject.
-- SPEC-SW-010 `feedback-loop` — reject signals feed back into next-run prompt.
+- SPEC-SW-010 `feedback-loop` — reviewer rationale can be reused by next-run prompts.
 - SPEC-SW-011 `editorial-copilot` — reviewer-assist flow.
 - SPEC-SW-012 `chat-rate-limit` — chat repository rate limits.
 

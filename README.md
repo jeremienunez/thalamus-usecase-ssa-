@@ -6,7 +6,7 @@
 Two production agentic backends I designed and shipped, extracted and trimmed so the design can be read end-to-end:
 
 - **Thalamus** — multi-cortex research agent. Decomposes an open question into specialized cortices, plans tool calls, explores sources in parallel via a nano-model swarm, synthesizes, and writes structured findings to a knowledge graph.
-- **Sweep** — continuous knowledge-base auditor with human-in-the-loop. A nano-model swarm scans the DB for inconsistencies, drafts resolutions, surfaces them to a reviewer UI, and uses accept/reject signals to tune the next run.
+- **Sweep** — continuous knowledge-base auditor with human-in-the-loop. A nano-model swarm scans the DB for inconsistencies, drafts reviewer suggestions, gates acceptance through locks and app-owned handlers, and persists review feedback for future audit prompts.
 
 Producer / maintainer halves of the same knowledge loop: Thalamus creates, Sweep maintains.
 
@@ -64,7 +64,7 @@ Screens from the same pass: Sweep review board, command palette, review
 drawer, and REPL summary loop.
 
 <p align="center">
-  <img src="docs/media/readme/sweep-triage-board.png" alt="Sweep triage board with pending, accepted and rejected findings." width="49%" />
+  <img src="docs/media/readme/sweep-triage-board.png" alt="Sweep triage board with pending, accepted and rejected suggestions." width="49%" />
   <img src="docs/media/readme/sweep-review-drawer.png" alt="Sweep review drawer with decision controls and REPL summary." width="49%" />
 </p>
 <p align="center">
@@ -93,34 +93,34 @@ flowchart TB
 
     subgraph THALAMUS["Thalamus — Research Agent"]
         direction TB
-        Orch["Orchestrator"]
+        Orch["ThalamusService<br/>(cycle runner)"]
+        Planner["Planner<br/>(DAG + runtime filters)"]
         Registry["Cortex Registry"]
         Cortices["Cortices<br/>(domain-specialized)"]
-        Explorer["Explorer<br/>(nano swarm ×50)"]
-        Curator["Curator<br/>(strong model)"]
+        Reflexion["Reflexion<br/>(gaps + replan)"]
         KG["Knowledge Graph<br/>(Postgres + pgvector)"]
 
-        Orch -->|"select by query shape"| Registry
+        Orch -->|"resolve plan"| Planner
+        Planner -->|"select by query shape"| Registry
         Registry -->|"dispatch"| Cortices
-        Cortices -->|"plan tools + spawn"| Explorer
-        Explorer -->|"raw summaries"| Curator
-        Curator -->|"ranked findings"| KG
+        Cortices -->|"structured findings"| Reflexion
+        Reflexion -->|"confidence-kept findings"| KG
     end
 
     subgraph SWEEP["Sweep — Auditor + HITL"]
         direction TB
         Cron["Cron / Admin trigger"]
         NanoSweep["NanoSweep service<br/>(nano swarm)"]
-        Redis["Redis<br/>(pending findings)"]
+        Redis["Redis<br/>(pending suggestions)"]
         ReviewerUI["Reviewer UI"]
-        Resolution["Resolution service<br/>(transactional writes)"]
-        Feedback["Feedback loop<br/>(prompt tuning)"]
+        Resolution["Resolution service<br/>(locked dispatch)"]
+        Feedback["Review feedback<br/>(Redis rationale)"]
 
         Cron --> NanoSweep
-        NanoSweep -->|"deduped findings"| Redis
+        NanoSweep -->|"deduped suggestions"| Redis
         Redis --> ReviewerUI
         ReviewerUI -->|"accept / reject / edit"| Resolution
-        Resolution -->|"audit row + DB write"| Feedback
+        Resolution -->|"promotion adapter + feedback"| Feedback
     end
 
     THALAMUS -->|"writes entities"| KG
@@ -138,7 +138,7 @@ flowchart TB
 
 ## What's inside
 
-Deep dives live as LaTeX specs in [`docs/specs/architecture/`](docs/specs/architecture/) — same convention as the existing module specs (`docs/specs/thalamus/`, `docs/specs/sweep/`…). Each one compiles to a standalone PDF; source `.tex` + pre-rendered PDF are both in the repo. Read in this order for the full narrative, or jump to the part you need:
+Deep dives live as LaTeX specs in [`docs/specs/architecture/`](docs/specs/architecture/) — same convention as the existing module specs (`docs/specs/thalamus/`, `docs/specs/sweep/`…). Each one compiles to a standalone PDF; the checked-in PDFs are the portable reading surface, while local `.tex` sources are used to regenerate them in this workspace. Read in this order for the full narrative, or jump to the part you need:
 
 |   # | Spec                                                                    | What's there                                                                       |
 | --: | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -152,9 +152,10 @@ Deep dives live as LaTeX specs in [`docs/specs/architecture/`](docs/specs/archit
 |  08 | [Three swarms](docs/specs/architecture/08-three-swarms.pdf)             | Retrieval / audit / counterfactual — the three flavours of the swarm primitive     |
 |  09 | [Shared foundation](docs/specs/architecture/09-shared-foundation.pdf)   | `@interview/shared` + `db-schema` + 5-layer architecture per package               |
 |  10 | [Design choices](docs/specs/architecture/10-design-choices.pdf)         | Mindmap + 8 architectural decisions with rationale                                 |
-|  11 | [Running locally](docs/specs/architecture/11-running-locally.pdf)       | `pnpm`, `make`, `THALAMUS_MODE=record/fixtures`, full end-to-end SSA pipeline      |
+|  11 | [Running locally](docs/specs/architecture/11-running-locally.pdf)       | `pnpm`, `make`, console-api HTTP cycle runs, fixture-mode caveats                  |
 |  12 | [Consoles](docs/specs/architecture/12-consoles.pdf)                     | SSA CLI (Ink REPL) + Operator console (R3F + sigma.js)                             |
 |  13 | [References](docs/specs/architecture/13-references.pdf)                 | Bibliography (Karpathy, Shazeer, Yao, Christiano, Willison…)                       |
+|  14 | [Package onboarding](docs/specs/architecture/14-package-onboarding.pdf) | Workspace-by-workspace package guide and dependency graph index                    |
 
 Rebuild everything: `make -C docs/specs all` (requires `latexmk` + `pdflatex`; mermaid diagrams rebuild from `.mmd` via `mmdc` installed as a dev-dependency).
 
@@ -189,7 +190,7 @@ diagnostics instead of returning `provider: "none"`. DAG timeouts abort the
 underlying cortex call through `AbortSignal`; fixture replay still supports
 recorded `none` providers for offline demos.
 
-The operator console runs standalone against fixtures — no DB required. For the full end-to-end SSA pipeline (Postgres + Redis + live LLMs or fixture replay), see [SPEC-ARCH-11](docs/specs/architecture/11-running-locally.pdf).
+The operator UI is a separate Vite app, but live backend paths expect `console-api` with Postgres + Redis. For the full end-to-end SSA pipeline and current fixture-mode limits, see [SPEC-ARCH-11](docs/specs/architecture/11-running-locally.pdf).
 
 ---
 
