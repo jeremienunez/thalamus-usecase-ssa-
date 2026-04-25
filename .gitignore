@@ -47,6 +47,7 @@ logs/
 
 # Local demo state
 fixtures/recorded/
+data/evals/
 data/seeds/local/
 
 # Private interview prep (Thales/CortAIx framing — not for the public repo)

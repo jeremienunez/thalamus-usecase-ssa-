@@ -22,6 +22,9 @@
     "test:integration": "vitest run --project integration --passWithNoTests=false",
     "test:e2e": "vitest run --project e2e --passWithNoTests=false",
     "test:watch": "vitest",
+    "evals:list": "node --import tsx scripts/acquire-real-evals.ts --list",
+    "evals:fetch:smoke": "node --import tsx scripts/acquire-real-evals.ts --download --profile smoke",
+    "evals:fetch:full": "node --import tsx scripts/acquire-real-evals.ts --download --profile full",
     "spec:check": "tsx scripts/spec-check.ts",
     "hooks:install": "git config core.hooksPath .githooks && echo '  ✓ git hooks installed (.githooks/)'",
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || echo '  (skipped hooks install — not a git repo yet)'"

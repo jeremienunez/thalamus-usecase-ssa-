@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "storageRoot": "data/evals",
+  "profiles": {
+    "smoke": "Small enough for routine local acquisition and CI-adjacent smoke checks.",
+    "full": "All real sources, including large archives."
+  },
+  "datasets": [
+    {
+      "id": "esa-kelvins-collision-avoidance",
+      "domain": "ssa",
+      "kind": "gold",
+      "purpose": "Gold conjunction-risk dataset for SSA risk prediction, Sim outcome distribution, and maneuver-threshold decisions.",
+      "sourceName": "ESA Advanced Concepts Team / ESA Space Debris Office, hosted by Zenodo",
+      "sourceUrl": "https://zenodo.org/records/4463683",
+      "license": "CC-BY-4.0",
+      "citation": "Uriot et al., Collision Avoidance Challenge dataset, Zenodo, DOI 10.5281/zenodo.4463683",
+      "notes": [
+        "Real anonymized ESA CDMs from 2015-2019.",
+        "The public Zenodo record includes labels that were private during the competition.",
+        "Use event-level splits; do not split rows from the same event across train/eval."
+      ],
+      "assets": [
+        {
+          "id": "zenodo-record-metadata",
+          "profiles": ["smoke", "full"],
+          "url": "https://zenodo.org/api/records/4463683",
+          "path": "ssa/esa-kelvins/zenodo-record-4463683.json",
+          "type": "json"
+        },
+        {
+          "id": "collision-avoidance-dataset-zip",
+          "profiles": ["full"],
+          "url": "https://zenodo.org/records/4463683/files/Collision%20Avoidance%20Challenge%20-%20Dataset.zip?download=1",
+          "path": "ssa/esa-kelvins/Collision Avoidance Challenge - Dataset.zip",
+          "type": "zip",
+          "expectedMd5": "d19dc8875229f2f6893253c38adddc87",
+          "expectedBytes": 221100000
+        }
+      ],
+      "metrics": [
+        "event_final_log_risk_mae",
+        "event_final_log_risk_rmse",
+        "high_risk_auprc",
+        "maneuver_decision_f1",
+        "calibration_brier"
+      ]
+    },
+    {
+      "id": "celestrak-live-ssa",
+      "domain": "ssa",
+      "kind": "live-snapshot",
+      "purpose": "Live public orbital truth for SATCAT/GP ingestion, citation-fidelity, stale-element, and SOCRATES triage smoke evals.",
+      "sourceName": "CelesTrak",
+      "sourceUrl": "https://celestrak.org",
+      "license": "CelesTrak public data; keep attribution and source URL in reports.",
+      "notes": [
+        "Live snapshots are not stable gold labels; lock every download before scoring.",
+        "Use as source-of-truth deltas for Sweep drift checks and live smoke regressions.",
+        "SOCRATES Plus changes each computation run, so compare only within a locked snapshot."
+      ],
+      "assets": [
+        {
+          "id": "satcat-raw-csv",
+          "profiles": ["smoke", "full"],
+          "url": "https://celestrak.org/pub/satcat.csv",
+          "path": "ssa/celestrak/satcat.csv",
+          "type": "csv"
+        },
+        {
+          "id": "active-gp-csv",
+          "profiles": ["smoke", "full"],
+          "url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=CSV",
+          "path": "ssa/celestrak/gp-active.csv",
+          "type": "csv"
+        },
+        {
+          "id": "socrates-max-probability-html",
+          "profiles": ["smoke", "full"],
+          "url": "https://celestrak.org/SOCRATES/table-socrates.php?MAX=1000&NAME=%2C&ORDER=MAXPROB",
+          "path": "ssa/celestrak/socrates-maxprob.html",
+          "type": "html"
+        },
+        {
+          "id": "socrates-min-range-html",
+          "profiles": ["smoke", "full"],
+          "url": "https://celestrak.org/SOCRATES/table-socrates.php?MAX=1000&NAME=%2C&ORDER=MINRANGE",
+          "path": "ssa/celestrak/socrates-minrange.html",
+          "type": "html"
+        }
+      ],
+      "metrics": [
+        "source_parse_success",
+        "norad_id_fidelity",
+        "stale_gp_detection_recall",
+        "socrates_topk_triage_recall",
+        "sweep_drift_precision"
+      ]
+    },
+    {
+      "id": "noaa-swpc-space-weather",
+      "domain": "ssa",
+      "kind": "live-snapshot",
+      "purpose": "Official space-weather context for Thalamus evidence grounding and Sweep/Sim correlation checks.",
+      "sourceName": "NOAA Space Weather Prediction Center",
+      "sourceUrl": "https://services.swpc.noaa.gov",
+      "license": "U.S. government public data; keep NOAA/SWPC attribution in reports.",
+      "assets": [
+        {
+          "id": "planetary-k-index-observed",
+          "profiles": ["smoke", "full"],
+          "url": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
+          "path": "ssa/noaa-swpc/noaa-planetary-k-index.json",
+          "type": "json"
+        },
+        {
+          "id": "planetary-k-index-forecast",
+          "profiles": ["smoke", "full"],
+          "url": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json",
+          "path": "ssa/noaa-swpc/noaa-planetary-k-index-forecast.json",
+          "type": "json"
+        },
+        {
+          "id": "f107-flux-30-day",
+          "profiles": ["smoke", "full"],
+          "url": "https://services.swpc.noaa.gov/products/10cm-flux-30-day.json",
+          "path": "ssa/noaa-swpc/10cm-flux-30-day.json",
+          "type": "json"
+        }
+      ],
+      "metrics": [
+        "space_weather_citation_coverage",
+        "numeric_fidelity",
+        "correlation_claim_error_rate"
+      ]
+    },
+    {
+      "id": "arc-agi-2",
+      "domain": "hrm",
+      "kind": "gold",
+      "purpose": "Official ARC-AGI-2 public training/evaluation tasks for exact reasoning accuracy and pass@2 scoring.",
+      "sourceName": "ARC Prize Foundation",
+      "sourceUrl": "https://github.com/arcprize/ARC-AGI-2",
+      "license": "Apache-2.0",
+      "notes": [
+        "Public evaluation contains 120 calibrated tasks.",
+        "Do not tune prompts or algorithms repeatedly against the public eval split without holding out a locked subset."
+      ],
+      "assets": [
+        {
+          "id": "readme",
+          "profiles": ["smoke", "full"],
+          "url": "https://raw.githubusercontent.com/arcprize/ARC-AGI-2/main/readme.md",
+          "path": "hrm/arc-agi-2/readme.md",
+          "type": "markdown"
+        },
+        {
+          "id": "repo-zip",
+          "profiles": ["full"],
+          "url": "https://github.com/arcprize/ARC-AGI-2/archive/refs/heads/main.zip",
+          "path": "hrm/arc-agi-2/ARC-AGI-2-main.zip",
+          "type": "zip"
+        }
+      ],
+      "metrics": [
+        "exact_accuracy",
+        "pass_at_2",
+        "pixel_accuracy",
+        "cost_per_solved_task"
+      ]
+    },
+    {
+      "id": "sapient-hrm-sudoku-extreme-1k",
+      "domain": "hrm",
+      "kind": "gold",
+      "purpose": "Sapient HRM Sudoku Extreme 1k train/test splits for exact grid-solution accuracy.",
+      "sourceName": "Sapient HRM / Hugging Face",
+      "sourceUrl": "https://huggingface.co/datasets/sapientinc/sudoku-extreme-1k",
+      "license": "ODC-BY",
+      "assets": [
+        {
+          "id": "train",
+          "profiles": ["smoke", "full"],
+          "url": "https://huggingface.co/datasets/sapientinc/sudoku-extreme-1k/resolve/main/train.csv",
+          "path": "hrm/sudoku-extreme-1k/train.csv",
+          "type": "csv"
+        },
+        {
+          "id": "test-sudoku-bench",
+          "profiles": ["smoke", "full"],
+          "url": "https://huggingface.co/datasets/sapientinc/sudoku-extreme-1k/resolve/main/test_sudoku_bench.csv",
+          "path": "hrm/sudoku-extreme-1k/test_sudoku_bench.csv",
+          "type": "csv"
+        },
+        {
+          "id": "test-hard",
+          "profiles": ["smoke", "full"],
+          "url": "https://huggingface.co/datasets/sapientinc/sudoku-extreme-1k/resolve/main/test_hard.csv",
+          "path": "hrm/sudoku-extreme-1k/test_hard.csv",
+          "type": "csv"
+        }
+      ],
+      "metrics": [
+        "exact_solution_accuracy",
+        "invalid_grid_rate",
+        "latency_ms"
+      ]
+    },
+    {
+      "id": "sapient-hrm-maze-30x30-hard-1k",
+      "domain": "hrm",
+      "kind": "gold",
+      "purpose": "Sapient HRM 30x30 hard maze train/test splits for exact path accuracy.",
+      "sourceName": "Sapient HRM / Hugging Face",
+      "sourceUrl": "https://huggingface.co/datasets/sapientinc/maze-30x30-hard-1k",
+      "license": "Hugging Face dataset card; keep Sapient attribution in reports.",
+      "assets": [
+        {
+          "id": "train",
+          "profiles": ["smoke", "full"],
+          "url": "https://huggingface.co/datasets/sapientinc/maze-30x30-hard-1k/resolve/main/train.csv",
+          "path": "hrm/maze-30x30-hard-1k/train.csv",
+          "type": "csv"
+        },
+        {
+          "id": "test",
+          "profiles": ["smoke", "full"],
+          "url": "https://huggingface.co/datasets/sapientinc/maze-30x30-hard-1k/resolve/main/test.csv",
+          "path": "hrm/maze-30x30-hard-1k/test.csv",
+          "type": "csv"
+        }
+      ],
+      "metrics": [
+        "exact_path_accuracy",
+        "valid_path_rate",
+        "shortest_path_optimality_gap",
+        "latency_ms"
+      ]
+    },
+    {
+      "id": "sapient-hrm-reference-code",
+      "domain": "hrm",
+      "kind": "reference",
+      "purpose": "Reference dataset builders and evaluation protocol used by the public HRM release.",
+      "sourceName": "Sapient HRM GitHub",
+      "sourceUrl": "https://github.com/sapientinc/HRM",
+      "license": "Apache-2.0",
+      "assets": [
+        {
+          "id": "readme",
+          "profiles": ["smoke", "full"],
+          "url": "https://raw.githubusercontent.com/sapientinc/HRM/main/README.md",
+          "path": "hrm/sapient-hrm/README.md",
+          "type": "markdown"
+        },
+        {
+          "id": "repo-zip",
+          "profiles": ["full"],
+          "url": "https://github.com/sapientinc/HRM/archive/refs/heads/main.zip",
+          "path": "hrm/sapient-hrm/HRM-main.zip",
+          "type": "zip"
+        }
+      ],
+      "metrics": [
+        "protocol_reproducibility"
+      ]
+    }
+  ]
+}

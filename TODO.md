@@ -267,6 +267,52 @@ Unit, integration, schema, controller, and `test:coverage` items shipped
 - [ ] Feedback loop: reject → next-run prompt includes rejection signal.
 - [ ] Rate-limit + dedupe in the chat repository.
 
+## Production-Grade Evaluation Protocol
+
+- [ ] **EVAL-1 - lock the real eval corpus.** Keep
+      `docs/evals/real-eval-manifest.json` as the source of truth and require
+      `data/evals/_manifest-lock.json` for every scored run. The full profile
+      must include ESA Kelvins CDM gold data, CelesTrak SATCAT/GP/SOCRATES,
+      NOAA SWPC, ARC-AGI-2, Sapient Sudoku Extreme, Sapient Maze 30x30, and
+      Sapient HRM reference code.
+- [ ] **EVAL-2 - build the paired eval runner.** Add one runner that executes
+      agentic and baseline strategies on the same cases, same data snapshot,
+      same seeds, and same budget caps. Output JSONL per call plus one
+      aggregate report per run.
+- [ ] **EVAL-3 - freeze baselines before tuning.** Define:
+      Thalamus agentic loop vs single-pass/retrieval-only baseline, Sweep nano
+      audit vs deterministic null-scan, Sim swarm vs one-fish verdict, and HRM
+      agentic solver vs direct model call.
+- [ ] **EVAL-4 - use nondeterminism correctly.** Run paired seeds, then report
+      mean delta, median delta, win rate, bootstrap confidence interval, and
+      one-sided sign-test p-value. Never compare unrelated random samples.
+- [ ] **EVAL-5 - implement SSA metrics.** Track entity-id exact recall,
+      numeric-fidelity error rate, citation/source coverage, hallucinated-ID
+      rate, ESA CDM final-risk MAE/RMSE, high-risk AUPRC, maneuver-decision F1,
+      and Sim Brier/calibration/cluster coverage.
+- [ ] **EVAL-6 - implement HRM metrics.** Track ARC exact accuracy/pass@2,
+      Sudoku exact solution and invalid-grid rates, Maze exact/valid path rate,
+      shortest-path optimality gap, latency, cost, and failure taxonomy.
+- [ ] **EVAL-7 - add cost and provider telemetry.** Log provider, model,
+      prompt/output/reasoning token estimates or real usage, web-search calls,
+      Voyage embedding calls, retries, timeout, provider failure, parsed-output
+      status, cost estimate, latency, and budget stop reason for every call.
+- [ ] **EVAL-8 - define budget tiers.** Support a `$25` smoke proof, `$50`
+      minimum defensible benchmark, `$100` comfortable internal benchmark, and
+      `$250+` paper-grade pass. Each tier must pin case counts, seeds, model
+      choices, and max web-search usage.
+- [ ] **EVAL-9 - document multimodal status honestly.** Current runtime config
+      is text-first (`kimi-k2-turbo-preview`, `gpt-5.4-nano`,
+      `gpt-5.4-mini`, `MiniMax-M2.7`, local Gemma, Voyage). If image-based
+      ARC/HRM or visual SSA eval is added, introduce an explicit multimodal
+      adapter and separate cost estimator instead of implying it exists.
+- [ ] **EVAL-10 - publish eval artifacts.** Commit protocol docs and example
+      reports, but keep downloaded datasets under ignored `data/evals/`. Each
+      report must include commit SHA, manifest hash, runtime config, model
+      versions, score tables, costs, and residual risks.
+
+---
+
 ## Docs
 
 - [ ] `docs/architecture.md` — cortex pattern deep-dive with diagrams.
