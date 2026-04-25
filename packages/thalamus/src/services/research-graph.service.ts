@@ -62,7 +62,7 @@ export interface FindingsGraphPort {
     findingId: bigint;
     iteration: number;
     isDedupHit: boolean;
-  }): Promise<void>;
+  }): Promise<boolean>;
 }
 
 export interface EdgesGraphPort {
@@ -199,15 +199,10 @@ export class ResearchGraphService {
               ? input.finding.evidence
               : [],
           });
-          // Still count it for the cycle and link via junction so the
-          // summariser sees this re-emission when it queries the cycle.
-          await uow.cycleRepo.incrementFindings(input.finding.researchCycleId);
-          await uow.findingRepo.linkToCycle({
-            cycleId: input.finding.researchCycleId,
-            findingId: sameType.id,
-            iteration: input.finding.iteration ?? 0,
-            isDedupHit: true,
-          });
+          // Still link it for the cycle so the summariser sees this
+          // re-emission when it queries the cycle. Only count a newly-created
+          // junction row; linkToCycle is idempotent inside a cycle.
+          await this.linkCycleEmission(uow, input.finding, sameType.id, true);
         });
         return sameType;
       }
@@ -246,13 +241,12 @@ export class ResearchGraphService {
           // Hit on dedup_hash — finding already exists with edges +
           // cross-links. Skip insert-only side effects to avoid duplicate
           // edges, but still count and link this cycle re-emission.
-          await uow.cycleRepo.incrementFindings(input.finding.researchCycleId);
-          await uow.findingRepo.linkToCycle({
-            cycleId: input.finding.researchCycleId,
-            findingId: result.finding.id,
-            iteration: input.finding.iteration ?? 0,
-            isDedupHit: true,
-          });
+          await this.linkCycleEmission(
+            uow,
+            input.finding,
+            result.finding.id,
+            true,
+          );
           return result;
         }
 
@@ -262,13 +256,12 @@ export class ResearchGraphService {
           );
         }
 
-        await uow.cycleRepo.incrementFindings(input.finding.researchCycleId);
-        await uow.findingRepo.linkToCycle({
-          cycleId: input.finding.researchCycleId,
-          findingId: result.finding.id,
-          iteration: input.finding.iteration ?? 0,
-          isDedupHit: false,
-        });
+        await this.linkCycleEmission(
+          uow,
+          input.finding,
+          result.finding.id,
+          false,
+        );
 
         return result;
       },
@@ -355,6 +348,23 @@ export class ResearchGraphService {
     }
 
     return finding;
+  }
+
+  private async linkCycleEmission(
+    uow: ResearchGraphUnitOfWork,
+    finding: StoreFindingInput["finding"],
+    findingId: bigint,
+    isDedupHit: boolean,
+  ): Promise<void> {
+    const linked = await uow.findingRepo.linkToCycle({
+      cycleId: finding.researchCycleId,
+      findingId,
+      iteration: finding.iteration ?? 0,
+      isDedupHit,
+    });
+    if (linked) {
+      await uow.cycleRepo.incrementFindings(finding.researchCycleId);
+    }
   }
 
   /**

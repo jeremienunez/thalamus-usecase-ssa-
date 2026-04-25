@@ -16,6 +16,7 @@ import type {
 } from "./thalamus-reflexion.service";
 import type { ThalamusPlanner, DAGPlan } from "./thalamus-planner.service";
 import type { StopCriteriaEvaluator } from "./stop-criteria.service";
+import { GAP_PLATEAU_STOP } from "./stop-criteria.service";
 import type {
   ResearchCycleVerification,
   ResearchVerificationTargetHint,
@@ -58,6 +59,7 @@ export class CycleLoopRunner {
     private reflexion: ThalamusReflexion,
     private planner: ThalamusPlanner,
     private stopCriteria: StopCriteriaEvaluator,
+    private isVerificationRelevantEntityType?: (entityType: string) => boolean,
   ) {}
 
   /**
@@ -204,6 +206,15 @@ export class CycleLoopRunner {
         }
         lastGapSignature = gapSignature;
 
+        if (consecutiveIdenticalGaps >= GAP_PLATEAU_STOP) {
+          stopReason = "gap-plateau";
+          logger.info(
+            { iteration, gaps: reflexionResult.gaps ?? [] },
+            "Stopping loop on repeated gap plateau",
+          );
+          break;
+        }
+
         // Replan with accumulated context
         const gaps = reflexionResult.gaps?.join(", ") ?? "need more evidence";
         const prevFindingTitles = allFindings.map((f) => f.title).join("; ");
@@ -217,6 +228,10 @@ export class CycleLoopRunner {
       }
     }
 
+    if (iteration >= maxIter && stopReason === "completed") {
+      stopReason = "max-iterations";
+    }
+
     return {
       allFindings,
       totalCost,
@@ -228,6 +243,8 @@ export class CycleLoopRunner {
         lowConfidenceRounds,
         replanCount,
         stopReason,
+        isVerificationRelevantEntityType:
+          this.isVerificationRelevantEntityType,
       }),
     };
   }
@@ -239,6 +256,7 @@ interface VerificationBuildInput {
   lowConfidenceRounds: number;
   replanCount: number;
   stopReason: string;
+  isVerificationRelevantEntityType?: (entityType: string) => boolean;
 }
 
 export function buildCycleVerification(
@@ -290,10 +308,14 @@ export function buildCycleVerification(
       reasonCodes.add("data_gap");
     }
 
-    // Every edge is a verification target. Domain decides via its own
-    // cortex whether a specific entity type is worth surfacing — kernel
-    // stays agnostic over SSA/threat-intel/etc. vocabulary.
     for (const edge of finding.edges) {
+      if (
+        input.isVerificationRelevantEntityType &&
+        typeof edge.entityType === "string" &&
+        !input.isVerificationRelevantEntityType(edge.entityType)
+      ) {
+        continue;
+      }
       pushVerificationTarget(
         targetKeySet,
         targetHints,

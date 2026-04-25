@@ -28,7 +28,10 @@ function makeRow(
   };
 }
 
-function makeHarness(row: GenericSuggestionRow) {
+function makeHarness(
+  row: GenericSuggestionRow,
+  repoOverrides: Record<string, unknown> = {},
+) {
   const handler: ResolutionHandler = {
     kind: "touch",
     handle: vi.fn(async () => ({ ok: true, affectedRows: 1 })),
@@ -43,6 +46,7 @@ function makeHarness(row: GenericSuggestionRow) {
   const sweepRepo = {
     getGeneric: vi.fn(async () => row),
     updateResolution: vi.fn(async () => undefined),
+    ...repoOverrides,
   };
   const service = new SweepResolutionService({
     registry,
@@ -75,7 +79,7 @@ describe("SweepResolutionService", () => {
     expect(sweepRepo.updateResolution).not.toHaveBeenCalled();
   });
 
-  it("treats failed resolved rows as terminal so retries cannot replay side effects", async () => {
+  it("allows failed resolved rows to retry the action dispatch", async () => {
     const { handler, promotion, sweepRepo, service } = makeHarness(
       makeRow({
         resolutionStatus: "failed",
@@ -84,15 +88,60 @@ describe("SweepResolutionService", () => {
       }),
     );
 
-    await expect(service.resolve("sug-1")).resolves.toEqual({
-      status: "failed",
-      resolvedAt: "2026-04-25T12:00:00.000Z",
-      affectedRows: 0,
-      errors: ["handler threw after mutation"],
+    await expect(service.resolve("sug-1")).resolves.toMatchObject({
+      status: "success",
+      affectedRows: 1,
     });
 
+    expect(handler.handle).toHaveBeenCalledOnce();
+    expect(promotion.promote).toHaveBeenCalledOnce();
+    expect(sweepRepo.updateResolution).toHaveBeenCalledWith(
+      "sug-1",
+      expect.objectContaining({ status: "success" }),
+    );
+  });
+
+  it("does not dispatch actions when another resolver holds the Redis lock", async () => {
+    const claimResolutionLock = vi.fn(async () => false);
+    const releaseResolutionLock = vi.fn(async () => undefined);
+    const { handler, promotion, sweepRepo, service } = makeHarness(makeRow(), {
+      claimResolutionLock,
+      releaseResolutionLock,
+    });
+
+    await expect(service.resolve("sug-1")).resolves.toEqual({
+      status: "failed",
+      affectedRows: 0,
+      errors: ["Resolution already in progress"],
+    });
+
+    expect(claimResolutionLock).toHaveBeenCalledWith(
+      "sug-1",
+      expect.any(String),
+      30_000,
+    );
     expect(handler.handle).not.toHaveBeenCalled();
     expect(promotion.promote).not.toHaveBeenCalled();
     expect(sweepRepo.updateResolution).not.toHaveBeenCalled();
+    expect(releaseResolutionLock).not.toHaveBeenCalled();
+  });
+
+  it("releases the resolution lock after a successful dispatch", async () => {
+    const claimResolutionLock = vi.fn(async () => true);
+    const releaseResolutionLock = vi.fn(async () => undefined);
+    const { handler, service } = makeHarness(makeRow(), {
+      claimResolutionLock,
+      releaseResolutionLock,
+    });
+
+    await expect(service.resolve("sug-1")).resolves.toMatchObject({
+      status: "success",
+    });
+
+    expect(handler.handle).toHaveBeenCalledOnce();
+    expect(releaseResolutionLock).toHaveBeenCalledWith(
+      "sug-1",
+      expect.any(String),
+    );
   });
 });

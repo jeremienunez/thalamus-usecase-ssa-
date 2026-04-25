@@ -44,6 +44,15 @@ import {
   ResearchUrgency,
   ResearchRelation,
 } from "@interview/shared/enum";
+import {
+  DEFAULT_THALAMUS_CORTEX_CONFIG,
+  DEFAULT_THALAMUS_PLANNER_CONFIG,
+  StaticConfigProvider,
+} from "@interview/shared/config";
+import {
+  setCortexConfigProvider,
+  setPlannerConfigProvider,
+} from "../src/config/runtime-config";
 import { analyzeCortexData } from "../src/cortices/cortex-llm";
 
 // Build a fake CortexRegistry that returns canned skills.
@@ -104,6 +113,12 @@ function buildTestStrategies({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  setPlannerConfigProvider(
+    new StaticConfigProvider(DEFAULT_THALAMUS_PLANNER_CONFIG),
+  );
+  setCortexConfigProvider(
+    new StaticConfigProvider(DEFAULT_THALAMUS_CORTEX_CONFIG),
+  );
 });
 
 describe("SPEC-TH-003 AC-2 — unknown cortex yields empty output", () => {
@@ -212,6 +227,55 @@ describe("SPEC-TH-003 AC-1 / AC-3 — nominal execution normalises findings", ()
       ).toContain(f.urgency);
     }
     expect(out.metadata.model).toBe("test-nano");
+  });
+});
+
+describe("CortexExecutor runtime disable guard", () => {
+  it("returns empty before running strategy work when a cortex is disabled", async () => {
+    setCortexConfigProvider(
+      new StaticConfigProvider({
+        overrides: {
+          catalog: { enabled: false },
+        },
+      }),
+    );
+    const sourceFetcher: SourceFetcherPort = {
+      fetchForCortex: vi.fn(async () => [
+        {
+          type: "celestrak",
+          source: "test",
+          url: "x",
+          data: { a: 1 },
+          fetchedAt: new Date().toISOString(),
+          latencyMs: 0,
+        },
+      ]),
+    };
+    const registry = fakeRegistry({
+      catalog: {
+        header: {
+          name: "catalog",
+          description: "",
+          sqlHelper: "none",
+          params: {},
+        },
+      },
+    });
+    const executor = new CortexExecutor(
+      registry,
+      buildTestStrategies({ sourceFetcher }),
+    );
+
+    const out = await executor.execute("catalog", {
+      query: "screen",
+      params: {},
+      cycleId: 1n,
+    });
+
+    expect(out.findings).toEqual([]);
+    expect(out.metadata.model).toBe("none");
+    expect(sourceFetcher.fetchForCortex).not.toHaveBeenCalled();
+    expect(analyzeCortexData).not.toHaveBeenCalled();
   });
 });
 

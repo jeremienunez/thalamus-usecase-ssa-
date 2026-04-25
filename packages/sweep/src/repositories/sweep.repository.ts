@@ -22,6 +22,7 @@ const IDX_PENDING = "sweep:index:pending";
 const IDX_RANKED_PREFIX = "sweep:index:ranked";
 const COUNTER = "sweep:counter";
 const FEEDBACK = "sweep:feedback";
+const RESOLVE_LOCK_PREFIX = "sweep:resolve-lock";
 const TTL_DAYS = 90;
 const TTL_SECS = TTL_DAYS * 86400;
 const DOMAIN_BLOB = "domainBlob";
@@ -80,14 +81,16 @@ export class SweepRepository {
     const serialized = this.schema
       ? this.schema.serialize(input)
       : fallbackSerializeDomainFields(input);
+    const flatFields = Object.fromEntries(
+      Object.entries(serialized.flatFields).map(([key, value]) => [
+        key,
+        value == null ? null : String(value),
+      ]),
+    );
+    assertNoReservedFlatFields(flatFields);
 
     return {
-      flatFields: Object.fromEntries(
-        Object.entries(serialized.flatFields).map(([key, value]) => [
-          key,
-          value == null ? null : String(value),
-        ]),
-      ),
+      flatFields,
       blob: serialized.blob,
     };
   }
@@ -131,12 +134,12 @@ export class SweepRepository {
     };
   }
 
-  private async enqueueWrite(
+  private enqueueWrite(
     pipe: ReturnType<IORedis["pipeline"]>,
     suggestion: GenericInsertSuggestion,
+    id: number,
     now: number,
-  ): Promise<number> {
-    const id = await this.redis.incr(COUNTER);
+  ): number {
     const key = `${PREFIX}:${id}`;
     const createdAt = new Date(now).toISOString();
     const hash = this.toHash(suggestion, id, createdAt);
@@ -149,10 +152,13 @@ export class SweepRepository {
   }
 
   async insertMany(suggestions: GenericInsertSuggestion[]): Promise<number> {
+    if (suggestions.length === 0) return 0;
+    const lastId = await this.redis.incrby(COUNTER, suggestions.length);
+    const firstId = lastId - suggestions.length + 1;
     const pipe = this.redis.pipeline();
     const now = Date.now();
-    for (const suggestion of suggestions) {
-      await this.enqueueWrite(pipe, suggestion, now);
+    for (let i = 0; i < suggestions.length; i++) {
+      this.enqueueWrite(pipe, suggestions[i]!, firstId + i, now);
     }
     await pipe.exec();
     return suggestions.length;
@@ -164,7 +170,8 @@ export class SweepRepository {
 
   async insertGeneric(input: GenericInsertSuggestion): Promise<string> {
     const pipe = this.redis.pipeline();
-    const id = await this.enqueueWrite(pipe, input, Date.now());
+    const id = await this.redis.incr(COUNTER);
+    this.enqueueWrite(pipe, input, id, Date.now());
     await pipe.exec();
     return String(id);
   }
@@ -332,6 +339,30 @@ export class SweepRepository {
         ? JSON.stringify(result.pendingSelections)
         : "",
     });
+  }
+
+  async claimResolutionLock(
+    id: string,
+    token: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const result = await this.redis.set(
+      resolutionLockKey(id),
+      token,
+      "PX",
+      ttlMs,
+      "NX",
+    );
+    return result === "OK";
+  }
+
+  async releaseResolutionLock(id: string, token: string): Promise<void> {
+    await this.redis.eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+      1,
+      resolutionLockKey(id),
+      token,
+    );
   }
 
   async getStats(): Promise<{
@@ -670,6 +701,23 @@ function normalizeFilter(value: unknown): string | undefined {
 
 function indexKeyPart(value: string): string {
   return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function resolutionLockKey(id: string): string {
+  return `${RESOLVE_LOCK_PREFIX}:${id}`;
+}
+
+function assertNoReservedFlatFields(
+  flatFields: Record<string, string | null>,
+): void {
+  const reserved = Object.keys(flatFields).filter((key) =>
+    RESERVED_HASH_KEYS.has(key),
+  );
+  if (reserved.length > 0) {
+    throw new Error(
+      `Sweep domain field(s) use reserved storage key(s): ${reserved.join(", ")}`,
+    );
+  }
 }
 
 function fallbackSerializeDomainFields(input: Record<string, unknown>): {

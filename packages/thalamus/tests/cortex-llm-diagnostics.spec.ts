@@ -82,4 +82,18 @@ describe("cortex LLM provider diagnostics", () => {
       },
     });
   });
+
+  it("rethrows AbortError instead of converting it to a diagnostic", async () => {
+    const abort = new Error("client cancelled");
+    abort.name = "AbortError";
+    mocks.callMock.mockRejectedValue(abort);
+
+    await expect(
+      analyzeCortexData({
+        cortexName: "diagnostic_cortex",
+        systemPrompt: "You are a diagnostic cortex.",
+        dataPayload: "[]",
+      }),
+    ).rejects.toThrow("client cancelled");
+  });
 });

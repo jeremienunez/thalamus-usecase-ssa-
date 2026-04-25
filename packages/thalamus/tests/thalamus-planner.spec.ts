@@ -184,7 +184,7 @@ describe("ThalamusPlanner.plan", () => {
         preferredProvider: undefined,
       }),
     );
-    expect(plan).toBe(fallbackPlan);
+    expect(plan).toEqual(fallbackPlan);
   });
 
   it("falls back when the LLM response does not contain JSON", async () => {
@@ -204,6 +204,31 @@ describe("ThalamusPlanner.plan", () => {
       complexity: "moderate",
       nodes: [{ cortex: "alpha", params: {}, dependsOn: [] }],
     });
+  });
+
+  it("applies runtime and user filters to fallback DAGs", async () => {
+    setPlannerConfigProvider(
+      new StaticConfigProvider({
+        ...DEFAULT_THALAMUS_PLANNER_CONFIG,
+        mandatoryStrategist: false,
+        disabledCortices: ["beta"],
+      }),
+    );
+    const planner = new ThalamusPlanner(mkRegistry(["alpha", "beta", "user_scope"]), {
+      fallbackCortices: ["alpha", "beta", "user_scope"],
+      userScopedCortices: new Set(["user_scope"]),
+    });
+
+    mocks.callMock.mockResolvedValue({
+      content: "No machine-readable DAG here.",
+      provider: "kimi",
+    });
+
+    const plan = await planner.plan("Recover filtered fallback", {
+      hasUser: false,
+    });
+
+    expect(plan.nodes.map((n) => n.cortex)).toEqual(["alpha"]);
   });
 
   it("falls back when the transport rejects", async () => {
@@ -242,13 +267,13 @@ describe("ThalamusPlanner.plan", () => {
 });
 
 describe("ThalamusPlanner.getDaemonDag", () => {
-  it("returns null for unknown daemon jobs", () => {
+  it("returns null for unknown daemon jobs", async () => {
     const planner = new ThalamusPlanner(mkRegistry());
 
-    expect(planner.getDaemonDag("missing-job")).toBeNull();
+    await expect(planner.getDaemonDag("missing-job")).resolves.toBeNull();
   });
 
-  it("strips user-scoped daemon nodes and prunes their dependencies", () => {
+  it("strips user-scoped daemon nodes and prunes their dependencies", async () => {
     const planner = new ThalamusPlanner(mkRegistry(["alpha", "user_scope"]), {
       daemonDags: {
         "daily-refresh": {
@@ -268,7 +293,7 @@ describe("ThalamusPlanner.getDaemonDag", () => {
       userScopedCortices: new Set(["user_scope"]),
     });
 
-    const dag = planner.getDaemonDag("daily-refresh");
+    const dag = await planner.getDaemonDag("daily-refresh");
 
     expect(dag).toEqual({
       intent: "refresh",
@@ -280,7 +305,7 @@ describe("ThalamusPlanner.getDaemonDag", () => {
     });
   });
 
-  it("leaves daemon DAGs untouched when no user-scoped cortices are configured", () => {
+  it("leaves daemon DAGs untouched when no user-scoped cortices are configured", async () => {
     const planner = new ThalamusPlanner(mkRegistry(["alpha"]), {
       daemonDags: {
         heartbeat: {
@@ -291,14 +316,14 @@ describe("ThalamusPlanner.getDaemonDag", () => {
       },
     });
 
-    expect(planner.getDaemonDag("heartbeat")).toEqual({
+    await expect(planner.getDaemonDag("heartbeat")).resolves.toEqual({
       intent: "heartbeat",
       complexity: "simple",
       nodes: [{ cortex: "alpha", params: {}, dependsOn: [] }],
     });
   });
 
-  it("leaves daemon DAGs untouched when user-scoped cortices exist but none are present in the plan", () => {
+  it("leaves daemon DAGs untouched when user-scoped cortices exist but none are present in the plan", async () => {
     const planner = new ThalamusPlanner(mkRegistry(["alpha"]), {
       daemonDags: {
         heartbeat: {
@@ -310,9 +335,37 @@ describe("ThalamusPlanner.getDaemonDag", () => {
       userScopedCortices: new Set(["user_scope"]),
     });
 
-    expect(planner.getDaemonDag("heartbeat")).toEqual({
+    await expect(planner.getDaemonDag("heartbeat")).resolves.toEqual({
       intent: "heartbeat",
       complexity: "simple",
+      nodes: [{ cortex: "alpha", params: {}, dependsOn: [] }],
+    });
+  });
+
+  it("applies runtime filters to daemon DAGs", async () => {
+    setPlannerConfigProvider(
+      new StaticConfigProvider({
+        ...DEFAULT_THALAMUS_PLANNER_CONFIG,
+        mandatoryStrategist: false,
+        disabledCortices: ["beta"],
+      }),
+    );
+    const planner = new ThalamusPlanner(mkRegistry(["alpha", "beta"]), {
+      daemonDags: {
+        refresh: {
+          intent: "refresh",
+          complexity: "moderate",
+          nodes: [
+            { cortex: "alpha", params: {}, dependsOn: [] },
+            { cortex: "beta", params: {}, dependsOn: ["alpha"] },
+          ],
+        },
+      },
+    });
+
+    await expect(planner.getDaemonDag("refresh")).resolves.toEqual({
+      intent: "refresh",
+      complexity: "moderate",
       nodes: [{ cortex: "alpha", params: {}, dependsOn: [] }],
     });
   });

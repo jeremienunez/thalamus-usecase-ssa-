@@ -20,6 +20,7 @@ import type {
   LlmTransportCallOptions,
 } from "./types";
 import { getThalamusTransportConfig } from "../config/transport-config";
+import { extractJsonObject } from "@interview/shared/utils";
 import { abortableDelay, isAbortError, throwIfAborted } from "./abort";
 import {
   KimiProvider,
@@ -59,6 +60,7 @@ export class LlmChatTransport {
   private static kimiConsecutiveFailures = 0;
   private static kimiCircuitState: CircuitState = "closed";
   private static kimiCircuitOpenedAt: number | null = null;
+  private static kimiHalfOpenProbeInFlight = false;
   private static readonly CIRCUIT_BREAKER_THRESHOLD = 3;
   private static readonly KIMI_CIRCUIT_COOLDOWN_MS = 60_000;
 
@@ -93,14 +95,24 @@ export class LlmChatTransport {
         ]
       : this.providers;
 
-    await Promise.all(ordered.map((provider) => provider.refreshConfig?.()));
-    throwIfAborted(options?.signal);
     const transportConfig = await getThalamusTransportConfig();
     const maxRetries = this.config.maxRetries ?? transportConfig.llmMaxRetries;
     const failures: LlmProviderFailure[] = [];
     const attemptedProviders: string[] = [];
 
     for (const provider of ordered) {
+      try {
+        throwIfAborted(options?.signal);
+        await provider.refreshConfig?.();
+      } catch (error) {
+        if (isAbortError(error)) throw error;
+        const message =
+          error instanceof Error ? error.message : String(error);
+        attemptedProviders.push(provider.name);
+        failures.push({ provider: provider.name, message });
+        continue;
+      }
+
       if (!provider.isEnabled()) {
         failures.push({
           provider: provider.name,
@@ -200,14 +212,17 @@ export class LlmChatTransport {
     },
   ): Promise<T> {
     let lastError: Error | undefined;
-    for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
+    const maxAttempts = Number.isFinite(options.maxAttempts)
+      ? Math.max(1, Math.floor(options.maxAttempts))
+      : 1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       throwIfAborted(options.signal);
       try {
         return await fn();
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         if (isAbortError(lastError)) throw lastError;
-        if (attempt < options.maxAttempts) {
+        if (attempt < maxAttempts) {
           options.onRetry?.(attempt, lastError);
           await abortableDelay(
             options.delayMs * Math.pow(2, attempt - 1),
@@ -221,10 +236,17 @@ export class LlmChatTransport {
   }
 
   private static shouldSkipKimi(now: number): boolean {
+    if (LlmChatTransport.kimiCircuitState === "half_open") {
+      if (LlmChatTransport.kimiHalfOpenProbeInFlight) return true;
+      LlmChatTransport.kimiHalfOpenProbeInFlight = true;
+      return false;
+    }
     if (LlmChatTransport.kimiCircuitState !== "open") return false;
     const openedAt = LlmChatTransport.kimiCircuitOpenedAt ?? now;
     if (now - openedAt >= LlmChatTransport.KIMI_CIRCUIT_COOLDOWN_MS) {
       LlmChatTransport.kimiCircuitState = "half_open";
+      if (LlmChatTransport.kimiHalfOpenProbeInFlight) return true;
+      LlmChatTransport.kimiHalfOpenProbeInFlight = true;
       return false;
     }
     return true;
@@ -234,6 +256,7 @@ export class LlmChatTransport {
     LlmChatTransport.kimiConsecutiveFailures = 0;
     LlmChatTransport.kimiCircuitState = "closed";
     LlmChatTransport.kimiCircuitOpenedAt = null;
+    LlmChatTransport.kimiHalfOpenProbeInFlight = false;
   }
 
   private static recordKimiFailure(now: number): boolean {
@@ -245,6 +268,7 @@ export class LlmChatTransport {
     ) {
       LlmChatTransport.kimiCircuitState = "open";
       LlmChatTransport.kimiCircuitOpenedAt = now;
+      LlmChatTransport.kimiHalfOpenProbeInFlight = false;
       return true;
     }
     return false;
@@ -256,9 +280,10 @@ export class LlmChatTransport {
    * it is a cross-provider utility, not a provider-specific parser.
    */
   static parseJson<T>(content: string, schema: z.ZodType<T>): T {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON object found in LLM response");
-    const raw = JSON.parse(jsonMatch[0]);
+    const raw = extractJsonObject(content);
+    if (Object.keys(raw).length === 0 && !content.includes("{")) {
+      throw new Error("No JSON object found in LLM response");
+    }
     return schema.parse(raw);
   }
 }

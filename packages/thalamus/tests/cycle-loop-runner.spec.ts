@@ -451,6 +451,68 @@ describe("CycleLoopRunner.run", () => {
     ]);
   });
 
+  it("stops on a repeated gap plateau before issuing another replan", async () => {
+    const execute = typedSpy<ThalamusDAGExecutor["execute"]>();
+    const evaluate = typedSpy<ThalamusReflexion["evaluate"]>();
+    const plan = typedSpy<ThalamusPlanner["plan"]>();
+    const shouldStop = typedSpy<StopCriteriaEvaluator["shouldStop"]>();
+
+    const initialPlan = makePlan("Plateau probe", ["scout"]);
+    const pass2 = makePlan("Plateau probe - pass 2", ["curator"]);
+    const pass3 = makePlan("Plateau probe - pass 3", ["verifier"]);
+
+    execute.mockResolvedValue({
+      outputs: new Map([["scout", makeOutput([], 0)]]),
+      totalDuration: 1,
+    });
+    shouldStop.mockReturnValue({ stop: false });
+    evaluate
+      .mockResolvedValueOnce({
+        replan: true,
+        notes: "Need coverage.",
+        gaps: ["coverage"],
+        overallConfidence: 0.4,
+      })
+      .mockResolvedValueOnce({
+        replan: true,
+        notes: "Need coverage.",
+        gaps: ["coverage"],
+        overallConfidence: 0.4,
+      })
+      .mockResolvedValueOnce({
+        replan: true,
+        notes: "Need coverage.",
+        gaps: ["coverage"],
+        overallConfidence: 0.4,
+      });
+    plan.mockResolvedValueOnce(pass2).mockResolvedValueOnce(pass3);
+
+    const runner = new CycleLoopRunner(
+      fakePort<ThalamusDAGExecutor>({ execute }),
+      fakePort<ThalamusReflexion>({ evaluate }),
+      fakePort<ThalamusPlanner>({ plan }),
+      fakePort<StopCriteriaEvaluator>({ shouldStop }),
+    );
+
+    const result = await runner.run(
+      initialPlan,
+      110n,
+      {
+        maxIter: 4,
+        maxCost: 0.5,
+        budget: makeBudget({ maxIterations: 4 }),
+      },
+      {
+        query: "Plateau probe",
+      },
+    );
+
+    expect(result.iterations).toBe(3);
+    expect(result.finalPlan).toBe(pass3);
+    expect(evaluate).toHaveBeenCalledTimes(3);
+    expect(plan).toHaveBeenCalledTimes(2);
+  });
+
   it("replans without explicit gaps and exits on the iteration limit without a final reflexion pass", async () => {
     const execute = typedSpy<ThalamusDAGExecutor["execute"]>();
     const evaluate = typedSpy<ThalamusReflexion["evaluate"]>();
@@ -554,6 +616,7 @@ describe("CycleLoopRunner.run", () => {
     expect(result.verification.reasonCodes).toEqual(
       expect.arrayContaining([
         "replan_requested",
+        "iteration_limit_reached",
         "low_confidence_round",
         "low_overall_confidence",
       ]),

@@ -53,6 +53,7 @@ afterEach(() => {
   Reflect.set(LlmChatTransport, "kimiConsecutiveFailures", 0);
   Reflect.set(LlmChatTransport, "kimiCircuitState", "closed");
   Reflect.set(LlmChatTransport, "kimiCircuitOpenedAt", null);
+  Reflect.set(LlmChatTransport, "kimiHalfOpenProbeInFlight", false);
   vi.useRealTimers();
   vi.restoreAllMocks();
   logger.debug.mockReset();
@@ -276,6 +277,67 @@ describe("LlmChatTransport", () => {
     expect(Reflect.get(LlmChatTransport, "kimiCircuitState")).toBe("open");
   });
 
+  it("allows only one half-open Kimi probe at a time", () => {
+    const shouldSkipKimi = Reflect.get(
+      LlmChatTransport,
+      "shouldSkipKimi",
+    ) as (now: number) => boolean;
+    const now = Date.parse("2026-04-22T00:02:00Z");
+    Reflect.set(LlmChatTransport, "kimiCircuitState", "open");
+    Reflect.set(
+      LlmChatTransport,
+      "kimiCircuitOpenedAt",
+      now - 60_000,
+    );
+
+    expect(shouldSkipKimi(now)).toBe(false);
+    expect(Reflect.get(LlmChatTransport, "kimiCircuitState")).toBe(
+      "half_open",
+    );
+    expect(shouldSkipKimi(now)).toBe(true);
+  });
+
+  it("treats refreshConfig failure as a failure of only that provider", async () => {
+    const local = buildProvider("local");
+    const openai = buildProvider("openai");
+    local.refreshConfig.mockRejectedValueOnce(new Error("refresh failed"));
+    openai.call.mockResolvedValueOnce("openai answer");
+
+    const transport = new LlmChatTransport(
+      {
+        systemPrompt: "SYSTEM",
+        maxRetries: 1,
+      },
+      [local, openai],
+    );
+
+    await expect(transport.call("USER")).resolves.toEqual({
+      content: "openai answer",
+      provider: "openai",
+    });
+    expect(local.call).not.toHaveBeenCalled();
+    expect(openai.call).toHaveBeenCalledOnce();
+  });
+
+  it("clamps invalid retry budgets to one provider attempt", async () => {
+    const openai = buildProvider("openai");
+    openai.call.mockResolvedValueOnce("openai answer");
+
+    const transport = new LlmChatTransport(
+      {
+        systemPrompt: "SYSTEM",
+        maxRetries: 0,
+      },
+      [openai],
+    );
+
+    await expect(transport.call("USER")).resolves.toEqual({
+      content: "openai answer",
+      provider: "openai",
+    });
+    expect(openai.call).toHaveBeenCalledOnce();
+  });
+
   it("throws an unavailable error when every enabled provider fails", async () => {
     const local = buildProvider("local");
     const minimax = buildProvider("minimax");
@@ -384,6 +446,21 @@ describe("LlmChatTransport", () => {
   it("parses JSON objects from markdown-wrapped content", () => {
     const parsed = LlmChatTransport.parseJson(
       'Planner reply:\n```json\n{"ready":true,"count":2}\n```',
+      z.object({
+        ready: z.boolean(),
+        count: z.number(),
+      }),
+    );
+
+    expect(parsed).toEqual({
+      ready: true,
+      count: 2,
+    });
+  });
+
+  it("parses the first balanced JSON object instead of a greedy outer match", () => {
+    const parsed = LlmChatTransport.parseJson(
+      '{"ready":true,"count":2}\n{"ready":false,"count":0}',
       z.object({
         ready: z.boolean(),
         count: z.number(),

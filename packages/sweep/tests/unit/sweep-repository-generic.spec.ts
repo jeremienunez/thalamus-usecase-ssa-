@@ -146,6 +146,75 @@ describe("SweepRepository generic contract", () => {
     expect(rows[0]!.domainFields.title).toBeDefined();
   });
 
+  it("allocates insertMany ids with one Redis INCRBY", async () => {
+    const repo = makeRepo(false);
+    const incr = vi.spyOn(redis, "incr");
+    const incrby = vi.spyOn(redis, "incrby");
+
+    await expect(
+      repo.insertMany([
+        {
+          domain: "generic",
+          domainFields: { title: "A", severity: "info" },
+          resolutionPayload: null,
+        },
+        {
+          domain: "generic",
+          domainFields: { title: "B", severity: "info" },
+          resolutionPayload: null,
+        },
+        {
+          domain: "generic",
+          domainFields: { title: "C", severity: "info" },
+          resolutionPayload: null,
+        },
+      ]),
+    ).resolves.toBe(3);
+
+    expect(incrby).toHaveBeenCalledWith("sweep:counter", 3);
+    expect(incr).not.toHaveBeenCalled();
+    await expect(repo.getGeneric("3")).resolves.toMatchObject({
+      id: "3",
+      domainFields: expect.objectContaining({ title: "C" }),
+    });
+  });
+
+  it("rejects flat domain fields that collide with reserved hash keys", async () => {
+    const repo = makeRepo(false);
+
+    await expect(
+      repo.insertGeneric({
+        domain: "generic",
+        domainFields: {
+          id: "domain-id",
+          title: "Reserved collision",
+        },
+        resolutionPayload: null,
+      }),
+    ).rejects.toThrow("reserved storage key");
+  });
+
+  it("claims and releases resolution locks with token ownership", async () => {
+    const repo = makeRepo(false);
+
+    await expect(
+      repo.claimResolutionLock("42", "token-a", 30_000),
+    ).resolves.toBe(true);
+    await expect(
+      repo.claimResolutionLock("42", "token-b", 30_000),
+    ).resolves.toBe(false);
+
+    await repo.releaseResolutionLock("42", "wrong-token");
+    await expect(
+      repo.claimResolutionLock("42", "token-b", 30_000),
+    ).resolves.toBe(false);
+
+    await repo.releaseResolutionLock("42", "token-a");
+    await expect(
+      repo.claimResolutionLock("42", "token-b", 30_000),
+    ).resolves.toBe(true);
+  });
+
   it("paginates pending suggestions through the ranked index instead of loading every id", async () => {
     const repo = makeRepo(false);
     for (let i = 0; i < 5; i++) {

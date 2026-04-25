@@ -13,6 +13,7 @@ import {
   createLlmTransport,
   LlmUnavailableError,
 } from "../transports/llm-chat";
+import { isAbortError } from "../transports/abort";
 import type { ProviderName } from "../transports/providers";
 import { createLogger, stepLog } from "@interview/shared/observability";
 import { extractJsonObject } from "@interview/shared/utils";
@@ -289,6 +290,7 @@ Keep it SHORT. Max ${effectiveMaxFindings} findings.`;
       status: parsedResponse.status,
     };
   } catch (err) {
+    if (isAbortError(err)) throw err;
     const diagnostic = diagnosticFromError(err);
     logger.error(
       { cortex: input.cortexName, err },

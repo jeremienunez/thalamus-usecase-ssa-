@@ -163,7 +163,7 @@ function createHarness() {
     Args<FindingsGraphPort["linkToCycle"]>,
     Result<FindingsGraphPort["linkToCycle"]>
   >(
-    async (_opts) => undefined,
+    async (_opts) => true,
   );
   const createMany = vi.fn<
     Args<EdgesGraphPort["createMany"]>,
@@ -389,7 +389,16 @@ function createTransactionalHarness() {
     if (failurePoint === "cycle-link") {
       throw new Error("cycle link failed");
     }
+    if (
+      activeState.cycleLinks.some(
+        (link) =>
+          link.cycleId === opts.cycleId && link.findingId === opts.findingId,
+      )
+    ) {
+      return false;
+    }
     activeState.cycleLinks.push(opts);
+    return true;
   });
 
   const createMany = vi.fn<
@@ -737,7 +746,7 @@ describe("ResearchGraphService.storeFinding", () => {
     expect(state.cycleCounts.get(1n) ?? 0).toBe(0);
     expect(state.cycleLinks).toEqual([]);
     expect(createMany).toHaveBeenCalledTimes(1);
-    expect(incrementFindings).toHaveBeenCalledWith(1n);
+    expect(incrementFindings).not.toHaveBeenCalled();
     expect(linkToCycle).toHaveBeenCalledWith({
       cycleId: 1n,
       findingId: 101n,
@@ -786,7 +795,7 @@ describe("ResearchGraphService.storeFinding", () => {
       confidence: 0.7,
       evidence: [{ source: "https://example.org/evidence" }],
     });
-    expect(incrementFindings).toHaveBeenCalledWith(1n);
+    expect(incrementFindings).not.toHaveBeenCalled();
     expect(linkToCycle).toHaveBeenCalledWith({
       cycleId: 1n,
       findingId: 55n,

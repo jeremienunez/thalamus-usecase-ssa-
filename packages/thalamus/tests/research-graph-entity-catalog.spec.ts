@@ -67,7 +67,7 @@ function mkFindingRepo(overrides: Partial<FindingsGraphPort> = {}): FindingsGrap
     expireOld: async () => 0,
     countByCortexAndType: async () => [],
     countRecent24h: async () => 0,
-    linkToCycle: async () => undefined,
+    linkToCycle: async () => true,
     ...overrides,
   };
 }

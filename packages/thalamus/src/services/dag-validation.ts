@@ -2,6 +2,7 @@ import type { DAGNode } from "../cortices/types";
 
 export type DagValidationCode =
   | "empty_dag"
+  | "unknown_cortex"
   | "duplicate_cortex"
   | "self_dependency"
   | "missing_dependency"
@@ -20,7 +21,7 @@ export class DagValidationError extends Error {
 
 export function validateDag(
   nodes: DAGNode[],
-  opts: { allowEmpty?: boolean } = {},
+  opts: { allowEmpty?: boolean; knownCortices?: Iterable<string> } = {},
 ): void {
   if (!opts.allowEmpty && nodes.length === 0) {
     throw new DagValidationError(
@@ -30,7 +31,16 @@ export function validateDag(
   }
 
   const byName = new Map<string, DAGNode>();
+  const known =
+    opts.knownCortices !== undefined ? new Set(opts.knownCortices) : null;
   for (const node of nodes) {
+    if (known && !known.has(node.cortex)) {
+      throw new DagValidationError(
+        "unknown_cortex",
+        `DAG references unknown cortex "${node.cortex}"`,
+        { cortex: node.cortex },
+      );
+    }
     if (byName.has(node.cortex)) {
       throw new DagValidationError(
         "duplicate_cortex",

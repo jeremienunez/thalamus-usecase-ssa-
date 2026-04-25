@@ -185,6 +185,49 @@ describe("buildCycleVerification", () => {
     ]);
   });
 
+  it("filters verification target hints through the domain entity predicate", () => {
+    const verification = buildCycleVerification({
+      allFindings: [
+        {
+          title: "Mixed entities",
+          summary: "Only one entity type should be surfaced.",
+          findingType: ResearchFindingType.Alert,
+          urgency: ResearchUrgency.High,
+          evidence: [],
+          confidence: 0.83,
+          impactScore: 7,
+          edges: [
+            {
+              entityType: "satellite",
+              entityId: 15,
+              relation: ResearchRelation.About,
+            },
+            {
+              entityType: "operator",
+              entityId: 3,
+              relation: ResearchRelation.About,
+            },
+          ],
+        },
+      ],
+      finalReflexion: {
+        replan: false,
+        notes: "Evidence is sufficient.",
+        gaps: [],
+        overallConfidence: 0.83,
+      },
+      lowConfidenceRounds: 0,
+      replanCount: 0,
+      stopReason: "completed",
+      isVerificationRelevantEntityType: (entityType) =>
+        entityType === "satellite",
+    });
+
+    expect(verification.targetHints).toEqual([
+      expect.objectContaining({ entityType: "satellite", entityId: 15n }),
+    ]);
+  });
+
   it("ignores blank text for pattern matching and clamps non-finite confidence to zero", () => {
     const verification = buildCycleVerification({
       allFindings: [],

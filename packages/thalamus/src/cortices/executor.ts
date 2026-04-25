@@ -16,6 +16,7 @@ import type { CortexInput, CortexOutput } from "./types";
 import { createLlmTransportWithMode } from "../transports/factory";
 import type { CortexExecutionStrategy } from "./strategies/types";
 import { emptyOutput } from "./strategies/helpers";
+import { getCortexConfig, getPlannerConfig } from "../config/runtime-config";
 
 const logger = createLogger("cortex-executor");
 
@@ -31,6 +32,18 @@ export class CortexExecutor {
    * can surface explicit per-cortex diagnostics.
    */
   async execute(cortexName: string, input: CortexInput): Promise<CortexOutput> {
+    const [plannerCfg, cortexCfg] = await Promise.all([
+      getPlannerConfig(),
+      getCortexConfig(),
+    ]);
+    if (
+      plannerCfg.disabledCortices.includes(cortexName) ||
+      cortexCfg.overrides[cortexName]?.enabled === false
+    ) {
+      logger.info({ cortexName }, "Cortex disabled, skipping execution");
+      return emptyOutput();
+    }
+
     const skill = this.registry.get(cortexName);
 
     if (!skill) {
@@ -53,6 +66,10 @@ export class CortexExecutor {
     }
 
     return strategy.execute(skill, input);
+  }
+
+  knownCortices(): string[] {
+    return this.registry.names();
   }
 
   /**

@@ -141,7 +141,7 @@ function createHarness() {
   >(async () => 0);
   const linkToCycle = vi.fn<
     FindingsGraphPort["linkToCycle"]
-  >(async () => undefined);
+  >(async () => true);
 
   const createMany = vi.fn<
     EdgesGraphPort["createMany"]
@@ -332,6 +332,23 @@ describe("ResearchGraphService", () => {
       iteration: 0,
       isDedupHit: true,
     });
+  });
+
+  it("does not increment the cycle count when the cycle link already exists", async () => {
+    const { service, embedQuery, linkToCycle, incrementFindings } =
+      createHarness();
+    embedQuery.mockResolvedValueOnce(null);
+    linkToCycle.mockResolvedValueOnce(false);
+
+    await service.storeFinding(makeInput({ edges: [] }));
+
+    expect(linkToCycle).toHaveBeenCalledWith({
+      cycleId: 1n,
+      findingId: 101n,
+      iteration: 0,
+      isDedupHit: false,
+    });
+    expect(incrementFindings).not.toHaveBeenCalled();
   });
 
   it("forwards queryByEntity to the repository", async () => {

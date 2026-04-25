@@ -177,3 +177,51 @@ describe("ResearchFindingRepository.upsertByDedupHash", () => {
     );
   });
 });
+
+describe("ResearchFindingRepository cycle links and semantic rows", () => {
+  it("returns whether linkToCycle inserted a new junction row", async () => {
+    const returning = vi
+      .fn()
+      .mockResolvedValueOnce([{ researchFindingId: 101n }])
+      .mockResolvedValueOnce([]);
+    const onConflictDoNothing = vi.fn(() => ({ returning }));
+    const insertValues = vi.fn(() => ({ onConflictDoNothing }));
+    const db = makeDb({
+      insert: vi.fn(() => ({ values: insertValues })),
+    });
+    const repo = new ResearchFindingRepository(db);
+
+    await expect(
+      repo.linkToCycle({
+        cycleId: 1n,
+        findingId: 101n,
+        iteration: 0,
+        isDedupHit: false,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      repo.linkToCycle({
+        cycleId: 1n,
+        findingId: 101n,
+        iteration: 0,
+        isDedupHit: false,
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it("normalizes raw SQL similarity rows through the finding transformer", async () => {
+    const row = { ...makeFindingRow(), similarity: "0.91" };
+    const db = makeDb({
+      execute: vi.fn(async () => ({ rows: [row] })),
+    });
+    const repo = new ResearchFindingRepository(db);
+
+    await expect(repo.searchBySimilarity(makeEmbedding(), 1)).resolves.toEqual([
+      expect.objectContaining({
+        id: 101n,
+        title: "Repository finding",
+        similarity: 0.91,
+      }),
+    ]);
+  });
+});

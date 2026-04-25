@@ -209,6 +209,32 @@ describe("ThalamusDAGExecutor.execute", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("rejects unknown cortex names before dispatching to the cortex executor", async () => {
+    const execute = typedSpy<CortexExecutor["execute"]>();
+
+    const service = new ThalamusDAGExecutor(
+      fakePort<CortexExecutor>({
+        execute,
+        knownCortices: () => ["alpha"],
+      }),
+    );
+
+    await expect(
+      service.execute(
+        {
+          intent: "Unknown cortex",
+          complexity: "simple",
+          nodes: [{ cortex: "ghost", params: {}, dependsOn: [] }],
+        },
+        10n,
+      ),
+    ).rejects.toMatchObject({
+      name: "DagValidationError",
+      code: "unknown_cortex",
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects cyclic DAGs with a validation error", async () => {
     const execute = typedSpy<CortexExecutor["execute"]>();
     const service = new ThalamusDAGExecutor(

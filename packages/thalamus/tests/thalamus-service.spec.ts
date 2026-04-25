@@ -74,6 +74,7 @@ function createHarness() {
   const plan = typedSpy<ThalamusPlanner["plan"]>();
   const getDaemonDag = typedSpy<ThalamusPlanner["getDaemonDag"]>();
   const buildManualDag = typedSpy<ThalamusPlanner["buildManualDag"]>();
+  const finalizePlan = typedSpy<ThalamusPlanner["finalizePlan"]>();
   const run = typedSpy<CycleLoopRunner["run"]>();
   const persist = typedSpy<FindingPersister["persist"]>();
   const create = typedSpy<CyclesPort["create"]>();
@@ -107,9 +108,15 @@ function createHarness() {
     failures: [],
   });
   expireAndClean.mockResolvedValue({ expired: 0, orphans: 0 });
+  finalizePlan.mockImplementation(async (dag) => dag);
 
   const service = new ThalamusService(
-    fakePort<ThalamusPlanner>({ plan, getDaemonDag, buildManualDag }),
+    fakePort<ThalamusPlanner>({
+      plan,
+      getDaemonDag,
+      buildManualDag,
+      finalizePlan,
+    }),
     fakePort<CycleLoopRunner>({ run }),
     fakePort<FindingPersister>({ persist }),
     fakePort<CyclesPort>({ create, findById, updateStatus }),
@@ -121,6 +128,7 @@ function createHarness() {
     plan,
     getDaemonDag,
     buildManualDag,
+    finalizePlan,
     run,
     persist,
     create,
@@ -145,7 +153,8 @@ afterEach(() => {
 
 describe("ThalamusService.runCycle", () => {
   it("bypasses the planner when an explicit DAG is provided and falls back to the moderate budget row for unknown complexity", async () => {
-    const { service, plan, getDaemonDag, run, persist } = createHarness();
+    const { service, plan, getDaemonDag, finalizePlan, run, persist } =
+      createHarness();
     setPlannerConfigProvider(
       new StaticConfigProvider({
         ...DEFAULT_THALAMUS_PLANNER_CONFIG,
@@ -171,6 +180,7 @@ describe("ThalamusService.runCycle", () => {
 
     expect(plan).not.toHaveBeenCalled();
     expect(getDaemonDag).not.toHaveBeenCalled();
+    expect(finalizePlan).toHaveBeenCalledWith(dag, { hasUser: false }, "Manual DAG");
     expect(run).toHaveBeenCalledWith(
       dag,
       123n,
@@ -336,7 +346,7 @@ describe("ThalamusService.runCycle", () => {
 
   it("uses daemon DAGs when a daemon job is provided", async () => {
     const { service, plan, getDaemonDag } = createHarness();
-    getDaemonDag.mockReturnValueOnce(
+    getDaemonDag.mockResolvedValueOnce(
       makePlan({
         intent: "Daemon DAG",
         complexity: "simple",
@@ -382,7 +392,7 @@ describe("ThalamusService.runCycle", () => {
 
   it("aborts daemon cycles when no predefined DAG exists for the job", async () => {
     const { service, getDaemonDag, create } = createHarness();
-    getDaemonDag.mockReturnValueOnce(null);
+    getDaemonDag.mockResolvedValueOnce(null);
 
     await expect(
       service.runCycle({

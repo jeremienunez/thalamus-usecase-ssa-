@@ -268,10 +268,15 @@ export class ThalamusService {
    * - Otherwise the planner LLM decomposes the query.
    */
   private async resolvePlan(input: RunCycleInput): Promise<DAGPlan> {
-    if (input.dag) return input.dag;
+    const planOpts = {
+      hasUser: input.userId !== undefined && input.userId !== null,
+    };
+    if (input.dag) {
+      return this.planner.finalizePlan(input.dag, planOpts, input.query);
+    }
     if (input.daemonJob) {
       return (
-        this.planner.getDaemonDag(input.daemonJob) ?? {
+        (await this.planner.getDaemonDag(input.daemonJob)) ?? {
           intent: input.query,
           complexity: "moderate" as const,
           nodes: [],
@@ -279,7 +284,11 @@ export class ThalamusService {
       );
     }
     if (input.cortices) {
-      return this.planner.buildManualDag(input.query, input.cortices);
+      return this.planner.finalizePlan(
+        this.planner.buildManualDag(input.query, input.cortices),
+        planOpts,
+        input.query,
+      );
     }
     return this.planner.plan(input.query, {
       hasUser: input.userId !== undefined && input.userId !== null,

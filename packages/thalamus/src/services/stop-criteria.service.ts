@@ -45,7 +45,7 @@ export interface StopDecision {
 }
 
 /** Two identical reflexion-gap rounds in a row = plateau, force stop. */
-const GAP_PLATEAU_STOP = 2;
+export const GAP_PLATEAU_STOP = 2;
 
 export class StopCriteriaEvaluator {
   /**

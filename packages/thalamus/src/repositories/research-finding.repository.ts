@@ -132,8 +132,8 @@ export class ResearchFindingRepository {
     findingId: bigint;
     iteration: number;
     isDedupHit: boolean;
-  }): Promise<void> {
-    await this.db
+  }): Promise<boolean> {
+    const rows = await this.db
       .insert(researchCycleFinding)
       .values({
         researchCycleId: opts.cycleId,
@@ -141,7 +141,11 @@ export class ResearchFindingRepository {
         iteration: opts.iteration,
         isDedupHit: opts.isDedupHit,
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({
+        researchFindingId: researchCycleFinding.researchFindingId,
+      });
+    return rows.length > 0;
   }
 
   /**
@@ -191,7 +195,10 @@ export class ResearchFindingRepository {
       ORDER BY rf.embedding <=> ${JSON.stringify(embedding)}::halfvec
       LIMIT ${limit}
     `);
-    return results.rows;
+    return results.rows.map((row) => ({
+      ...toResearchFinding(row),
+      similarity: Number(row.similarity),
+    }));
   }
 
   async findActive(opts: FindActiveOptions = {}): Promise<ResearchFinding[]> {
@@ -256,7 +263,10 @@ export class ResearchFindingRepository {
       ORDER BY embedding <=> ${vectorStr}::halfvec ASC
       LIMIT ${limit}
     `);
-    return results.rows;
+    return results.rows.map((row) => ({
+      ...toResearchFinding(row),
+      similarity: Number(row.similarity),
+    }));
   }
 
   /**

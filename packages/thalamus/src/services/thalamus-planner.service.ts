@@ -193,20 +193,26 @@ export class ThalamusPlanner {
         : await transport.call(prompt);
       const plan = safeParseDAG(response.content, dagPlanSchema);
 
-      // Validate cortex names
-      plan.nodes = plan.nodes.filter((n) => this.registry.has(n.cortex));
+      const finalizedPlan = this.finalizePlanWithConfig(
+        plan,
+        opts,
+        plannerCfg,
+        cortexCfg,
+        {
+          context: query,
+          dropUnknown: true,
+        },
+      );
 
-      // Apply runtime-config post-filters (OCP: the prompt rubric is a
-      // soft hint; the filters are the hard contract).
-      plan.nodes = this.applyRuntimeFilters(plan.nodes, plannerCfg, cortexCfg);
-
-      // Drop user-scoped cortices when running without a user context —
-      // they'd short-circuit to empty output and burn a DAG slot.
-      plan.nodes = this.stripUserScoped(plan.nodes, opts, query);
-
-      if (plan.nodes.length === 0) {
+      if (finalizedPlan.nodes.length === 0) {
         logger.warn({ query }, "Planner produced empty DAG, using fallback");
-        const fallback = this.resolveFallbackPlan(query);
+        const fallback = this.finalizePlanWithConfig(
+          this.resolveFallbackPlan(query),
+          opts,
+          plannerCfg,
+          cortexCfg,
+          { context: query },
+        );
         stepLog(logger, "planner", "done", {
           intent: fallback.intent,
           cortices: fallback.nodes.map((n) => n.cortex),
@@ -219,18 +225,18 @@ export class ThalamusPlanner {
 
       logger.info(
         {
-          intent: plan.intent,
-          cortices: plan.nodes.map((n) => n.cortex),
+          intent: finalizedPlan.intent,
+          cortices: finalizedPlan.nodes.map((n) => n.cortex),
         },
         "DAG plan generated",
       );
       stepLog(logger, "planner", "done", {
-        intent: plan.intent,
-        cortices: plan.nodes.map((n) => n.cortex),
-        complexity: plan.complexity,
+        intent: finalizedPlan.intent,
+        cortices: finalizedPlan.nodes.map((n) => n.cortex),
+        complexity: finalizedPlan.complexity,
         durationMs: Date.now() - plannerStartedAt,
       });
-      return plan;
+      return finalizedPlan;
     } catch (err) {
       if (isAbortError(err)) throw err;
       logger.error({ query, err }, "Planner LLM failed, using fallback");
@@ -239,7 +245,13 @@ export class ThalamusPlanner {
         err: err instanceof Error ? err.message : String(err),
         durationMs: Date.now() - plannerStartedAt,
       });
-      return this.resolveFallbackPlan(query);
+      return this.finalizePlanWithConfig(
+        this.resolveFallbackPlan(query),
+        opts,
+        plannerCfg,
+        cortexCfg,
+        { context: query },
+      );
     }
   }
 
@@ -247,11 +259,24 @@ export class ThalamusPlanner {
    * Get a predefined DAG for daemon triggers.
    * Daemon runs never have a user, so user-scoped cortices are stripped.
    */
-  getDaemonDag(jobName: string): DAGPlan | null {
+  async getDaemonDag(jobName: string): Promise<DAGPlan | null> {
     const base = this.daemonDags[jobName];
     if (!base) return null;
-    const nodes = this.stripUserScoped(base.nodes, { hasUser: false }, jobName);
-    return { ...base, nodes };
+    return this.finalizePlan(base, { hasUser: false }, jobName);
+  }
+
+  async finalizePlan(
+    plan: DAGPlan,
+    opts: PlanOptions = {},
+    context = plan.intent,
+  ): Promise<DAGPlan> {
+    const [plannerCfg, cortexCfg] = await Promise.all([
+      getPlannerConfig(),
+      getCortexConfig(),
+    ]);
+    return this.finalizePlanWithConfig(plan, opts, plannerCfg, cortexCfg, {
+      context,
+    });
   }
 
   /**
@@ -366,6 +391,25 @@ export class ThalamusPlanner {
       ...n,
       dependsOn: n.dependsOn.filter((d) => !dropped.has(d)),
     }));
+  }
+
+  private finalizePlanWithConfig(
+    plan: DAGPlan,
+    opts: PlanOptions,
+    plannerCfg: Parameters<ThalamusPlanner["applyRuntimeFilters"]>[1],
+    cortexCfg: Parameters<ThalamusPlanner["applyRuntimeFilters"]>[2],
+    options: { context: string; dropUnknown?: boolean },
+  ): DAGPlan {
+    const knownNodes = options.dropUnknown
+      ? plan.nodes.filter((n) => this.registry.has(n.cortex))
+      : plan.nodes;
+    const runtimeFiltered = this.applyRuntimeFilters(
+      knownNodes,
+      plannerCfg,
+      cortexCfg,
+    );
+    const nodes = this.stripUserScoped(runtimeFiltered, opts, options.context);
+    return { ...plan, nodes };
   }
 }
 

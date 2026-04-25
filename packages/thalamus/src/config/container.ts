@@ -165,6 +165,7 @@ export function buildThalamusContainer(
     reflexion,
     planner,
     stopCriteria,
+    domainConfig.isVerificationRelevantEntityType,
   );
   const persister = new FindingPersister(graphService);
 

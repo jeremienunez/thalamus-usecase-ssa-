@@ -15,6 +15,7 @@
  *   - resolve(id, selections)                2-arg form (disambiguation)
  */
 
+import { randomUUID } from "node:crypto";
 import { createLogger } from "@interview/shared/observability";
 import type {
   GenericSuggestionRow,
@@ -29,7 +30,8 @@ import {
 } from "../dto/sweep.dto";
 
 const logger = createLogger("sweep-resolution");
-const TERMINAL_RESOLUTION_STATUSES = new Set(["success", "partial", "failed"]);
+const TERMINAL_RESOLUTION_STATUSES = new Set(["success", "partial"]);
+const RESOLUTION_LOCK_TTL_MS = 30_000;
 
 export interface SweepResolutionDeps {
   registry: ResolutionHandlerRegistry;
@@ -48,6 +50,12 @@ export interface SweepResolutionStorePort {
       pendingSelections?: unknown[];
     },
   ): Promise<void>;
+  claimResolutionLock?(
+    id: string,
+    token: string,
+    ttlMs: number,
+  ): Promise<boolean>;
+  releaseResolutionLock?(id: string, token: string): Promise<void>;
 }
 
 export class SweepResolutionService {
@@ -66,7 +74,6 @@ export class SweepResolutionService {
     suggestionId: string,
     selections?: Record<string, string | number>,
   ): Promise<ResolutionResult> {
-    // 1. Load the generic row. The injected store owns schema details.
     const generic = await this.deps.sweepRepo.getGeneric(suggestionId);
     if (!generic) {
       return {
@@ -75,24 +82,55 @@ export class SweepResolutionService {
         errors: ["Suggestion not found"],
       };
     }
-    if (generic.accepted !== true) {
-      return {
-        status: "failed",
-        affectedRows: 0,
-        errors: ["Suggestion not accepted"],
-      };
-    }
 
-    const existingResolution = toTerminalResolutionResult(generic);
-    if (existingResolution) {
-      logger.info(
-        { suggestionId, status: existingResolution.status },
-        "Resolution already terminal; skipping action dispatch",
+    const preflight = preflightResolutionRow(generic);
+    if (preflight) return preflight;
+
+    if (
+      this.deps.sweepRepo.claimResolutionLock &&
+      this.deps.sweepRepo.releaseResolutionLock
+    ) {
+      const token = randomUUID();
+      const claimed = await this.deps.sweepRepo.claimResolutionLock(
+        suggestionId,
+        token,
+        RESOLUTION_LOCK_TTL_MS,
       );
-      return existingResolution;
+      if (!claimed) {
+        return {
+          status: "failed",
+          affectedRows: 0,
+          errors: ["Resolution already in progress"],
+        };
+      }
+
+      try {
+        const refreshed = await this.deps.sweepRepo.getGeneric(suggestionId);
+        if (!refreshed) {
+          return {
+            status: "failed",
+            affectedRows: 0,
+            errors: ["Suggestion not found"],
+          };
+        }
+        const refreshedPreflight = preflightResolutionRow(refreshed);
+        if (refreshedPreflight) return refreshedPreflight;
+        return this.resolveLoaded(suggestionId, refreshed, selections);
+      } finally {
+        await this.deps.sweepRepo.releaseResolutionLock(suggestionId, token);
+      }
     }
 
-    if (!generic.resolutionPayload) {
+    return this.resolveLoaded(suggestionId, generic, selections);
+  }
+
+  private async resolveLoaded(
+    suggestionId: string,
+    generic: GenericSuggestionRow,
+    selections?: Record<string, string | number>,
+  ): Promise<ResolutionResult> {
+    const resolutionPayload = generic.resolutionPayload;
+    if (!resolutionPayload) {
       return {
         status: "failed",
         affectedRows: 0,
@@ -103,7 +141,7 @@ export class SweepResolutionService {
     // 2. Parse + validate payload.
     let payload: ResolutionPayload;
     try {
-      const raw = JSON.parse(generic.resolutionPayload);
+      const raw = JSON.parse(resolutionPayload);
       const parsed = resolutionPayloadSchema.safeParse(raw);
       if (!parsed.success) {
         return {
@@ -196,7 +234,7 @@ export class SweepResolutionService {
           suggestionId,
           domain: generic.domain,
           domainFields: generic.domainFields,
-          resolutionPayload: generic.resolutionPayload,
+          resolutionPayload,
           reviewer: null,
           reviewerNote: generic.reviewerNote,
         });
@@ -247,6 +285,37 @@ function toTerminalResolutionResult(
     affectedRows: 0,
     errors,
   };
+}
+
+function preflightResolutionRow(
+  row: GenericSuggestionRow,
+): ResolutionResult | null {
+  if (row.accepted !== true) {
+    return {
+      status: "failed",
+      affectedRows: 0,
+      errors: ["Suggestion not accepted"],
+    };
+  }
+
+  const existingResolution = toTerminalResolutionResult(row);
+  if (existingResolution) {
+    logger.info(
+      { suggestionId: row.id, status: existingResolution.status },
+      "Resolution already terminal; skipping action dispatch",
+    );
+    return existingResolution;
+  }
+
+  if (!row.resolutionPayload) {
+    return {
+      status: "failed",
+      affectedRows: 0,
+      errors: ["No resolution payload"],
+    };
+  }
+
+  return null;
 }
 
 function parseResolutionErrors(raw: string | null): string[] | undefined {

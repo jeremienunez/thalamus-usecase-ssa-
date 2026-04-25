@@ -100,7 +100,17 @@ export class ThalamusDAGExecutor {
     const start = Date.now();
     const outputs = new Map<string, CortexOutput>();
     throwIfAborted(signal);
-    validateDag(plan.nodes);
+    let knownCortices: string[] | undefined;
+    try {
+      const getKnown = (
+        this.cortexExecutor as unknown as { knownCortices?: () => string[] }
+      ).knownCortices;
+      knownCortices =
+        typeof getKnown === "function" ? getKnown.call(this.cortexExecutor) : undefined;
+    } catch {
+      knownCortices = undefined;
+    }
+    validateDag(plan.nodes, { knownCortices });
     const levels = this.topologicalLevels(plan.nodes);
 
     logger.info(
