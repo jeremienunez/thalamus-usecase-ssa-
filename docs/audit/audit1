@@ -32,27 +32,28 @@ Codex should not waste effort replacing the intentionally stubbed auth unless ex
 
 # P0 Findings
 
-## P0-001 — LLM transport silently returns provider `none`
+## P0-001 — LLM transport silently returns an empty fallback
 
 ### Area
 
 `packages/thalamus/src/transports/llm-chat.ts`
 
-### Current behavior
+### Current code status
 
-When every provider fails or is disabled, `LlmChatTransport.call()` returns:
+Resolved in the current codebase. `LlmChatTransport.call()` now throws
+`LlmUnavailableError` when every live provider fails or is disabled. The error
+captures attempted providers plus provider-level failure messages.
 
-```ts
-{ content: "", provider: "none" }
-```
+### Historical problem
 
-### Problem
+Earlier revisions could make a total LLM outage indistinguishable from an empty
+model response. Downstream code could interpret that as “no findings” rather than
+“the model stack failed,” creating false negatives in the knowledge graph and
+weakening auditability.
 
-A total LLM outage becomes indistinguishable from an empty model response. Downstream code can interpret this as “no findings” rather than “the model stack failed.” This creates false negatives in the knowledge graph and weakens auditability.
+### Implemented fix
 
-### Required fix
-
-Introduce an explicit error type, for example:
+The live transport now defines and throws:
 
 ```ts
 export class LlmUnavailableError extends Error {
@@ -66,11 +67,13 @@ export class LlmUnavailableError extends Error {
 }
 ```
 
-Then replace the fallback return with a throw.
+Fixture replay can still surface recorded `none` providers for offline demo
+artifacts, but the live provider chain no longer collapses total provider failure
+into an empty success.
 
 ### Acceptance criteria
 
-* `LlmChatTransport.call()` never returns `provider: "none"` for a total provider failure.
+* Live transport throws `LlmUnavailableError` for total provider failure.
 * Tests cover all providers disabled.
 * Tests cover all providers throwing.
 * Cortex-level code maps this failure to an explicit diagnostic such as `provider_unavailable` instead of silent empty output.
@@ -1075,12 +1078,11 @@ Do not deploy this repository as-is on a public network without replacing the de
 
 ## Phase 3 — Provider reliability
 
-1. Add `LlmUnavailableError`.
-2. Replace `provider: "none"` fallback.
-3. Add provider failure diagnostics.
-4. Add Kimi circuit breaker cooldown.
-5. Add `AbortSignal` to provider call options.
-6. Propagate cancellation end-to-end.
+Current code has implemented the core provider-reliability items: explicit
+`LlmUnavailableError`, live-provider failure diagnostics, Kimi circuit-breaker
+cooldown, provider-call `AbortSignal`, and end-to-end timeout cancellation. Keep
+future work focused on additional tests or provider-specific observability rather
+than re-implementing the already-landed fallback removal.
 
 ## Phase 4 — Knowledge graph consistency
 

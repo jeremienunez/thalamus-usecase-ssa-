@@ -228,7 +228,7 @@ export class StandardStrategy implements CortexExecutionStrategy {
     return [
       {
         type: "web_search",
-        source: "openai",
+        source: "web_search",
         query: searchQuery,
         content: text.slice(0, 3000),
       },

@@ -1,14 +1,15 @@
 # Thalamus & Sweep — Agentic Systems Portfolio
 
 > **Two production agentic backends. One shared typed foundation.**
-> Thalamus creates knowledge. Sweep maintains it. Together they close the loop.
+> Thalamus creates knowledge. Sweep maintains it. Fish stress-tests counterfactual futures before suggestions reach reviewers.
 
 Two production agentic backends I designed and shipped, extracted and trimmed so the design can be read end-to-end:
 
 - **Thalamus** — multi-cortex research agent. Decomposes an open question into specialized cortices, plans tool calls, explores sources in parallel via a nano-model swarm, synthesizes, and writes structured findings to a knowledge graph.
 - **Sweep** — continuous knowledge-base auditor with human-in-the-loop. A nano-model swarm scans the DB for inconsistencies, drafts reviewer suggestions, gates acceptance through locks and app-owned handlers, and persists review feedback for future audit prompts.
+- **Fish** — counterfactual simulation worker inside Sweep. A sim swarm fans out isolated fish (`sim_run` rows), each with its own agents, turns, and memory, then aggregates terminal outcomes into reviewer-facing suggestions.
 
-Producer / maintainer halves of the same knowledge loop: Thalamus creates, Sweep maintains.
+Producer / maintainer halves of the same knowledge loop: Thalamus creates, Sweep maintains, and Fish gives Sweep a counterfactual lane without changing the HITL boundary.
 
 > The architecture is domain-agnostic. Illustrated on a critical-system use case — orbital collision avoidance, where a false negative ends in a Kessler cascade and a false positive burns a satellite's delta-v budget — then transposed to threat intelligence, pharmacovigilance and maritime surveillance with the same orchestrator, swarm, and HITL loop.
 
@@ -39,9 +40,9 @@ Do not deploy this repository as-is on a public network without replacing the de
 
 ## Quality snapshot
 
-As of `2026-04-23` on `main`:
+As of `2026-04-25` on `main`:
 
-- `pnpm test`: `1528` passing, `9` skipped
+- `pnpm test`: `1619` passing, `9` skipped
 - `pnpm -r typecheck`, `pnpm arch:check`, `pnpm test:policy`, `pnpm spec:check`: green
 - `pnpm test:coverage`: `71.45%` lines / `70.61%` statements / `67.06%` functions / `63.97%` branches
 
@@ -76,7 +77,7 @@ drawer, and REPL summary loop.
 
 ## System topology
 
-The two subsystems share a typed foundation and form a closed knowledge loop: Thalamus writes to the knowledge graph, Sweep audits it, human decisions refine both.
+The subsystems share a typed foundation and form a bounded knowledge loop: Thalamus writes to the knowledge graph, Sweep audits it, Fish explores counterfactual futures inside Sweep, and reviewer feedback is kept for later audits.
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'background':'#0b0f17','primaryColor':'#11182a','primaryTextColor':'#e6edf3','primaryBorderColor':'#4cc9f0','secondaryColor':'#1a2033','tertiaryColor':'#141a28','secondaryTextColor':'#e6edf3','tertiaryTextColor':'#e6edf3','noteTextColor':'#e6edf3','noteBkgColor':'#1a2033','noteBorderColor':'#4cc9f0','lineColor':'#7dd3fc','textColor':'#e6edf3','mainBkg':'#11182a','secondBkg':'#1a2033','clusterBkg':'#0d1320','clusterBorder':'#4cc9f0','titleColor':'#e6edf3','edgeLabelBackground':'#0b0f17','labelBoxBkgColor':'#11182a','labelBoxBorderColor':'#4cc9f0','labelTextColor':'#e6edf3','actorBkg':'#11182a','actorBorder':'#4cc9f0','actorTextColor':'#e6edf3','actorLineColor':'#7dd3fc','signalColor':'#e6edf3','signalTextColor':'#e6edf3','activationBkgColor':'#1a2033','activationBorderColor':'#4cc9f0','sequenceNumberColor':'#0b0f17','classText':'#e6edf3'}}}%%
@@ -111,6 +112,8 @@ flowchart TB
         direction TB
         Cron["Cron / Admin trigger"]
         NanoSweep["NanoSweep service<br/>(nano swarm)"]
+        Fish["Fish swarm<br/>(sim_run fan-out)"]
+        Aggregator["Aggregator<br/>(quorum + clusters)"]
         Redis["Redis<br/>(pending suggestions)"]
         ReviewerUI["Reviewer UI"]
         Resolution["Resolution service<br/>(locked dispatch)"]
@@ -118,6 +121,8 @@ flowchart TB
 
         Cron --> NanoSweep
         NanoSweep -->|"deduped suggestions"| Redis
+        Fish -->|"terminal outcomes"| Aggregator
+        Aggregator -->|"modal suggestions"| Redis
         Redis --> ReviewerUI
         ReviewerUI -->|"accept / reject / edit"| Resolution
         Resolution -->|"promotion adapter + feedback"| Feedback
@@ -125,7 +130,8 @@ flowchart TB
 
     THALAMUS -->|"writes entities"| KG
     KG -.->|"audited by"| SWEEP
-    Feedback -.->|"calibrates next run"| NanoSweep
+    KG -.->|"scenario seeds"| Fish
+    Feedback -.->|"informs later audit prompts"| NanoSweep
     FOUNDATION --- THALAMUS
     FOUNDATION --- SWEEP
 
@@ -133,6 +139,22 @@ flowchart TB
     style THALAMUS fill:#161b22,stroke:#4cc9f0,color:#e6edf3
     style SWEEP fill:#161b22,stroke:#f72585,color:#e6edf3
 ```
+
+---
+
+## Complexity map
+
+The shortest way to read the repository is as three loops with different artifacts:
+
+| Loop | Owns | Produces | Collapse rule | Storage boundary |
+| ---- | ---- | -------- | ------------- | ---------------- |
+| **Thalamus** | research orchestration | KG `Finding` rows | reflexion + confidence threshold | Postgres `research_*` |
+| **Sweep** | audit / review / resolution | reviewer `Suggestion` rows | Redis dedup + HITL decision | Redis suggestions + app-owned promotion |
+| **Fish** | counterfactual simulation inside Sweep | clustered futures and optional suggestions | quorum + vector/action clustering | Postgres `sim_*`, then Sweep suggestions |
+
+This distinction is the main architectural point. Thalamus is not the reviewer, Sweep is not the research planner, and a fish is not a global agent with shared memory. A fish is one isolated `sim_run`; cross-fish meaning appears only when `AggregatorService` clusters terminal summaries.
+
+For the compact reader guide, see [docs/architecture-complexity-map.md](docs/architecture-complexity-map.md).
 
 ---
 
@@ -204,6 +226,7 @@ Frontend beyond the console, ingestion pipelines, voice agent, multi-tenant / bi
 
 - [TODO.md](TODO.md) — extraction state + planned test coverage
 - [CHANGELOG.md](CHANGELOG.md) — extraction history
+- [docs/architecture-complexity-map.md](docs/architecture-complexity-map.md) — one-page map of Thalamus, Sweep, and Fish responsibilities
 - [docs/testing/README.md](docs/testing/README.md) — repo testability strategy + CI contract
 - [apps/console-api/src/agent/ssa/skills/](apps/console-api/src/agent/ssa/skills/) — SSA skill prompts as markdown
 - [docs/specs/thalamus/dual-stream-confidence.tex](docs/specs/thalamus/dual-stream-confidence.tex) — SPEC-TH-040

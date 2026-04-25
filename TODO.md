@@ -115,6 +115,65 @@ Current fast checks from the trim pass:
 
 ---
 
+## Doc-Demoted Fish / Sim Features
+
+These were removed or softened in the architecture docs because the current
+code does not fully implement them yet. They are real implementation candidates,
+not documentation promises.
+
+- [ ] **SIM-F1 - enforce `perFishTimeoutMs` for swarm fish.** `sim_swarm.config`
+      stores `perFishTimeoutMs`, but `swarm-fish.worker.ts` currently drains the
+      inline turn loop without a wall-clock timeout. Wrap the fish run with
+      cancellation/timeout semantics, propagate `AbortSignal` into turn runners
+      and nano calls, mark timed-out runs as `timeout`, and still call
+      `onFishComplete()` so quorum/aggregation progresses.
+- [ ] **SIM-F2 - make swarm launch LLM config executable, not just metadata.**
+      `llmMode` and `nanoModel` are persisted on `sim_swarm` / `sim_run`, but
+      turn execution currently uses global `sim.fish` runtime config plus the
+      global Thalamus transport mode. Thread run/swarm config into
+      `callTurnAgent()` / `callNanoWithMode()` so fixture, record, cloud, model,
+      reasoning effort, output-token, and temperature choices are reproducible
+      per swarm.
+- [ ] **SIM-F3 - apply `fishConcurrency` as a real launch constraint.**
+      `swarm-fish.worker.ts` uses process-level worker concurrency
+      (`deps.concurrency ?? 8`), while launch config stores `fishConcurrency`.
+      Decide whether this should create per-swarm queue groups, a semaphore, or
+      remain process-level only; if kept, expose it as runtime worker config and
+      remove the per-launch field.
+- [ ] **SIM-F4 - pass rich selector hints for specialized fish skills.**
+      `SimCortexSelector` can choose telemetry/PC-specific skills, but the turn
+      runner only passes `hasScenarioContext` unless callers provide stronger
+      hints. Thread sim kind, seed target hints, telemetry target, PC target, and
+      subject context into `pickCortexName()` so telemetry and PC swarms do not
+      silently fall back to `sim_operator_agent` when a specialized skill exists.
+- [ ] **SIM-F5 - define baseline/control fish policy.** Some generators include
+      `{ kind: "noop" }`, but `launchSwarm()` does not inject a control fish.
+      Decide whether every counterfactual swarm must have fish 0 as a baseline,
+      or whether baseline is caller-owned. Then enforce it in launch validation,
+      perturbation generation, aggregation labels, and eval reporting.
+- [ ] **SIM-F6 - add runnable sim smoke commands only after the runtime contract
+      is real.** The docs no longer promise `/admin/sim` or `make sim-uc`.
+      Reintroduce a CLI/Make smoke path only when it can launch UC telemetry,
+      PC, and conjunction swarms against fixture data and assert terminal
+      aggregation without live cloud spend.
+- [ ] **SIM-F7 - build a 3D operator Fish UI.** Add a dedicated Three.js/R3F UI
+      for launching, watching, and interrogating a fish swarm. The primary view
+      should be a full-bleed 3D murmuration: each fish is an instanced/pickable
+      particle or lightweight mesh; motion/position/color encode status,
+      divergence, cluster, confidence, and terminal action. The operator can
+      orbit/fly the camera, scrub time, filter by cluster/status, click a fish
+      to inspect its seed, perturbation, persona, timeline, memory snippets,
+      provider/model metadata, and terminal rationale, then ask follow-up
+      questions to one fish, a selected cluster, or the whole swarm. Persist
+      question/answer as review evidence without contaminating fish memory unless
+      explicitly promoted. Required backend surfaces: swarm list/status stream,
+      fish turn timeline, terminal clusters, per-fish trace export, and a
+      read-only Q&A endpoint for post-run interrogation. Required frontend
+      checks: desktop/mobile screenshots, nonblank canvas pixel check, picking
+      test, camera control test, and stable performance for at least 200 fish.
+
+---
+
 ## Runtime Hardening Still Open
 
 - [ ] Safe entity IDs - `packages/thalamus/src/cortices/strategies/helpers.ts`
@@ -144,7 +203,96 @@ Current fast checks from the trim pass:
 
 ## Spec, Test, And CI Gaps
 
-- [ ] Move specs from DRAFT -> REVIEW -> APPROVED as contracts are validated.
+- [ ] **SPEC-GATE - no spec is validated without unit + integration + e2e
+      proof.** A spec may move to `APPROVED` / `IMPLEMENTED` only when every
+      acceptance criterion has all three traceability rows:
+      `unit`, `integration`, and `e2e`. The referenced test files and test
+      names must exist, and the matching `pnpm test:unit`,
+      `pnpm test:integration`, and `pnpm test:e2e` runs must be green. If any
+      layer is missing or red, the spec remains `DRAFT` / `REVIEW`; it is not
+      validated.
+- [ ] Upgrade `scripts/spec-check.ts` so enforced specs require the three
+      evidence layers per AC instead of a single generic test row. The checker
+      must fail when a trace row is missing `unit`, `integration`, or `e2e`,
+      when a referenced test is absent, or when the test name is not present.
+- [ ] Add a spec validation CI path that runs, in order:
+      `pnpm spec:check`, `pnpm test:unit`, `pnpm test:integration`, and
+      `pnpm test:e2e`. This path is the only way to mark a spec validated.
+- [ ] Move specs from DRAFT -> REVIEW -> APPROVED only after the tri-layer
+      validation above passes for that spec.
+- [ ] Spec validation backlog - add unit + integration + e2e traceability for
+      every current contract spec before approving it:
+      - `SPEC-SH-001` `docs/specs/shared/try-async.tex`
+      - `SPEC-SH-002` `docs/specs/shared/app-error.tex`
+      - `SPEC-SH-003` `docs/specs/shared/completeness-scorer.tex`
+      - `SPEC-SH-004` `docs/specs/shared/domain-normalizer.tex`
+      - `SPEC-SH-005` `docs/specs/shared/observability.tex`
+      - `SPEC-DB-001` `docs/specs/db-schema/schema-contract.tex`
+      - `SPEC-DB-002` `docs/specs/db-schema/typed-repos.tex`
+      - `SPEC-TH-001` `docs/specs/thalamus/orchestrator.tex`
+      - `SPEC-TH-002` `docs/specs/thalamus/cortex-registry.tex`
+      - `SPEC-TH-003` `docs/specs/thalamus/cortex-pattern.tex`
+      - `SPEC-TH-010` `docs/specs/thalamus/nano-swarm.tex`
+      - `SPEC-TH-011` `docs/specs/thalamus/source-fetchers.tex`
+      - `SPEC-TH-012` `docs/specs/thalamus/curator.tex`
+      - `SPEC-TH-020` `docs/specs/thalamus/guardrails.tex`
+      - `SPEC-TH-030` `docs/specs/thalamus/knowledge-graph-write.tex`
+      - `SPEC-TH-031` `docs/specs/thalamus/skills-as-files.tex`
+      - `SPEC-TH-040` `docs/specs/thalamus/dual-stream-confidence.tex`
+      - `SPEC-TH-041` `docs/specs/thalamus/field-correlation.tex`
+      - `SPEC-SW-001` `docs/specs/sweep/nano-sweep.tex`
+      - `SPEC-SW-002` `docs/specs/sweep/finding-routing.tex`
+      - `SPEC-SW-003` `docs/specs/sweep/resolution.tex`
+      - `SPEC-SW-006` `docs/specs/sweep/multi-agent-sim.tex`
+      - `SPEC-SW-010` `docs/specs/sweep/feedback-loop.tex`
+      - `SPEC-SW-011` `docs/specs/sweep/editorial-copilot.tex`
+      - `SPEC-SW-012` `docs/specs/sweep/chat-rate-limit.tex`
+- [ ] Overview docs are not validated specs until converted to AC-bearing
+      specs with the same unit + integration + e2e traceability:
+      `SPEC-ARCH-01` through `SPEC-ARCH-14`. Until then, keep them as
+      `OVERVIEW` and do not count them as passed specs.
+- [ ] Must-have architecture spec backlog - convert the reader-facing
+      architecture PDFs advertised in `README.md` into AC-bearing contract specs:
+      - `SPEC-ARCH-01` `docs/specs/architecture/01-ontology.tex` - vocabulary,
+        artifact ownership, and hard boundaries between Thalamus, Sweep, fish,
+        findings, suggestions, and promotions.
+      - `SPEC-ARCH-02` `docs/specs/architecture/02-design-stance.tex` -
+        design principles, LLM-as-kernel constraints, and acceptable analogy
+        boundaries.
+      - `SPEC-ARCH-03` `docs/specs/architecture/03-layout.tex` - workspace
+        layout, app/package ownership, and five-layer backend convention.
+      - `SPEC-ARCH-04` `docs/specs/architecture/04-thalamus.tex` - orchestration
+        sequence, cortex anatomy, explorer/nano swarm, KG write cycle, and
+        reflexion loop.
+      - `SPEC-ARCH-05` `docs/specs/architecture/05-sweep.tex` - suggestion
+        lifecycle, resolution state machine, locks, handlers, adapters, and
+        audit trail.
+      - `SPEC-ARCH-06` `docs/specs/architecture/06-ssa-primary-build.tex` -
+        SSA dual-stream fusion, confidence propagation, cortices, and entity
+        model.
+      - `SPEC-ARCH-07` `docs/specs/architecture/07-transpositions.tex` -
+        domain-pack transposition rules for threat intel, pharmacovigilance,
+        IUU maritime, and regulatory review.
+      - `SPEC-ARCH-08` `docs/specs/architecture/08-three-swarms.tex` -
+        retrieval, audit, and counterfactual swarm contracts, including fish
+        isolation and aggregation semantics.
+      - `SPEC-ARCH-09` `docs/specs/architecture/09-shared-foundation.tex` -
+        shared utilities, db-schema contracts, and package-level five-layer
+        responsibilities.
+      - `SPEC-ARCH-10` `docs/specs/architecture/10-design-choices.tex` -
+        architectural decision records with invariants and regression tests.
+      - `SPEC-ARCH-11` `docs/specs/architecture/11-running-locally.tex` -
+        local run modes, fixture/cloud behavior, required services, and command
+        contracts.
+      - `SPEC-ARCH-12` `docs/specs/architecture/12-consoles.tex` - CLI REPL,
+        operator console, API contracts, and expected UI/backend coupling.
+      - `SPEC-ARCH-13` `docs/specs/architecture/13-references.tex` - reference
+        bibliography, claim provenance, and citation hygiene.
+      - `SPEC-ARCH-14` `docs/specs/architecture/14-package-onboarding.tex` -
+        package onboarding, dependency graph, import boundaries, and allowed
+        extension points.
+- [ ] Exclude `docs/specs/architecture/preamble-arch.tex` from
+      `scripts/spec-check.ts`; it is a LaTeX preamble, not a spec contract.
 - [ ] Add `spec-build` CI job - run `make all` in `docs/specs/` and publish
       PDFs as artifacts.
 - [ ] Sweep spec tests still missing as spec-named coverage:

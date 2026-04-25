@@ -4,6 +4,54 @@ All notable changes to the interview extraction of Thalamus + Sweep.
 
 ## [Unreleased]
 
+### Real eval protocol + orchestration hardening — 2026-04-25
+
+`4738dbe` adds the production-grade eval corpus/protocol. `9211e0d` hardens
+the remaining orchestration contracts. The current follow-up makes web-search
+fallback explicit when OpenAI rate-limits.
+
+**Real evaluation protocol**
+
+- Added `docs/evals/real-eval-manifest.json` and
+  `scripts/acquire-real-evals.ts` for real SSA/HRM eval acquisition instead of
+  mock fixtures.
+- Documented the canonical eval protocol in
+  `docs/evals/evaluation-protocol.md`, covering paired agentic-vs-baseline
+  runs, nondeterministic seeds, SSA/HRM metrics, cost telemetry, budget tiers,
+  and multimodal status.
+- Added `evals:list`, `evals:fetch:smoke`, and `evals:fetch:full` npm scripts,
+  with downloaded assets kept under ignored `data/evals/`.
+
+**Runtime contracts**
+
+- `ThalamusPlanner.finalizePlan()` now applies the same runtime/user filters
+  to caller-supplied, daemon, manual, LLM, and fallback DAGs, then rejects
+  unknown cortex names with `DagValidationError("unknown_cortex")`.
+- Sweep resolution now treats `success` and `partial` as terminal, allows
+  failed rows to retry, and uses a Redis resolution lock so concurrent
+  resolution attempts do not double-dispatch actions.
+- Research graph write paths now count findings only when the
+  `research_cycle_finding` junction insert actually succeeds, keeping cycle
+  counters aligned with idempotent links.
+
+**Web-search fallback**
+
+- OpenAI web search remains the primary path, but `429`, `5xx`, transport
+  errors, and empty OpenAI responses now fall back to a Kimi-only transport
+  with Kimi builtin `$web_search` enabled.
+- Web fallback output is tagged with the provider/reason and the cortex payload
+  now records the provider-neutral source `web_search` instead of hardcoding
+  `openai`.
+- Abort signals still propagate through both OpenAI and fallback paths, so
+  cancellation does not become a silent empty result.
+
+**Verification**
+
+- `pnpm vitest run packages/thalamus/tests/thalamus-planner.spec.ts packages/sweep/tests/unit/sweep-resolution.service.spec.ts`
+- `pnpm vitest run packages/thalamus/tests/openai-web-search.adapter.spec.ts`
+- `pnpm run typecheck`
+- `git diff --check`
+
 ### Console API repository DIP hardening — 2026-04-24
 
 This branch closes the repository-coupling regression found during console API

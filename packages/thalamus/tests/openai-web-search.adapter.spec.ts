@@ -87,11 +87,50 @@ describe("OpenAIWebSearchAdapter", () => {
       json: async () => ({}),
     }));
     vi.stubGlobal("fetch", fetchMock);
-    const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search");
+    const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search", {
+      fallbackTransportFactory: null,
+    });
 
     await expect(
       adapter.search("Search the web", "ignored query"),
     ).resolves.toBe("");
+  });
+
+  it("falls back to a Kimi web-search transport when OpenAI web search is rate limited", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      json: async () => ({}),
+    }));
+    const call = vi.fn(async () => ({
+      content: "source-grounded fallback note",
+      provider: "kimi" as const,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search", {
+      fallbackTransportFactory: () => ({ call }),
+    });
+
+    await expect(
+      adapter.search("Search the web", "celestrak conjunctions", {
+        signal: controller.signal,
+      }),
+    ).resolves.toBe(
+      "[kimi web-search fallback after openai_http_429]\nsource-grounded fallback note",
+    );
+    expect(call).toHaveBeenCalledWith(
+      expect.stringContaining("Search query: celestrak conjunctions"),
+      { signal: controller.signal },
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      {
+        provider: "kimi",
+        reason: "openai_http_429",
+        chars: "source-grounded fallback note".length,
+      },
+      "Web search fallback produced data",
+    );
   });
 
   it("returns an empty string when the Responses payload does not contain output messages", async () => {
@@ -100,7 +139,9 @@ describe("OpenAIWebSearchAdapter", () => {
       json: async () => ({}),
     }));
     vi.stubGlobal("fetch", fetchMock);
-    const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search");
+    const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search", {
+      fallbackTransportFactory: null,
+    });
 
     await expect(
       adapter.search("Search the web", "ignored query"),
@@ -112,7 +153,9 @@ describe("OpenAIWebSearchAdapter", () => {
       throw new Error("network down");
     });
     vi.stubGlobal("fetch", fetchMock);
-    const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search");
+    const adapter = new OpenAIWebSearchAdapter("sk-test", "gpt-search", {
+      fallbackTransportFactory: null,
+    });
 
     await expect(
       adapter.search("Search the web", "ignored query"),
