@@ -108,6 +108,17 @@ describe("SimRunRepository", () => {
     expect(await repo.findById(999n)).toBeNull();
   });
 
+  it("finds a run by swarm-local fish index", async () => {
+    await expect(repo.findBySwarmFish(1n, 1)).resolves.toMatchObject({
+      id: 11n,
+      swarmId: 1n,
+      fishIndex: 1,
+      status: "running",
+      perturbation: { kind: "noisy" },
+    });
+    await expect(repo.findBySwarmFish(1n, 99)).resolves.toBeNull();
+  });
+
   it("counts fish by status and updates statuses", async () => {
     expect(await repo.countFishByStatus(1n)).toEqual({
       done: 1,

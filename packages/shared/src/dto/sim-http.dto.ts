@@ -185,3 +185,95 @@ export interface StartStandaloneDto {
   simRunId: string;
   agentIds: string[];
 }
+
+export interface OperatorSwarmSummaryDto {
+  id: string;
+  kind: string;
+  title: string;
+  size: number;
+  status: SimSwarmStatusDto | string;
+  counts: SwarmFishCountsDto;
+  aggregateKeys: string[];
+  outcomeReportFindingId: string | null;
+  suggestionId: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface OperatorSwarmListDto {
+  swarms: OperatorSwarmSummaryDto[];
+  nextCursor: string | null;
+}
+
+export interface OperatorSwarmStatusDto extends SwarmStatusDto {
+  aggregateKeys: string[];
+}
+
+export interface FishTimelineAgentDto {
+  id: string;
+  operatorId: string | null;
+  agentIndex: number;
+  persona: string;
+  goals: string[];
+  constraints: Record<string, unknown>;
+}
+
+export interface FishTimelineTurnDto {
+  id: string;
+  turnIndex: number;
+  actorKind: TurnActorKindDto;
+  agentId: string | null;
+  agentIndex: number | null;
+  action: Record<string, unknown>;
+  rationale: string;
+  observableSummary: string;
+  llmCostUsd: number | null;
+  createdAt: string;
+}
+
+export interface FishTimelineDto {
+  swarmId: string;
+  simRunId: string;
+  fishIndex: number;
+  kind: string;
+  status: SimRunStatusDto | string;
+  seedApplied: SeedRefsDto;
+  perturbation: PerturbationSpecDto;
+  config: SimConfigDto | Record<string, unknown>;
+  agents: FishTimelineAgentDto[];
+  turns: FishTimelineTurnDto[];
+  totalLlmCostUsd: number | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface SwarmClustersDto {
+  swarmId: string;
+  source: "aggregate" | "pcAggregate" | "telemetryAggregate" | null;
+  clusters: Array<Record<string, unknown>>;
+  summary: Record<string, unknown>;
+}
+
+export interface FishTraceDto extends FishTimelineDto {
+  exportedAt: string;
+}
+
+export type SimReviewScopeDto = "swarm" | "fish" | "cluster";
+
+export interface SimReviewEvidenceDto {
+  id: string;
+  swarmId: string;
+  simRunId: string | null;
+  scope: SimReviewScopeDto;
+  question: string;
+  answer: string;
+  evidenceRefs: Array<Record<string, unknown>>;
+  traceExcerpt: Record<string, unknown>;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface AskSimReviewQuestionDto {
+  evidence: SimReviewEvidenceDto;
+  provider: string;
+}

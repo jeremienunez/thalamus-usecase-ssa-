@@ -294,6 +294,8 @@ describe("SPEC-DB-001 AC-6 — schema hygiene", () => {
     "goals",
     "constraints",
     "action",
+    "evidence_refs",
+    "trace_excerpt",
     // ITU filing raw payload (Phase 3f)
     "raw",
   ]);

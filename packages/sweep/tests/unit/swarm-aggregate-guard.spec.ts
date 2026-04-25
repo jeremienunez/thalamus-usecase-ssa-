@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Redis from "ioredis-mock";
+import { stepContextStore, type StepEvent } from "@interview/shared/observability";
 import { SwarmService } from "../../src/sim/swarm.service";
 import { RedisSwarmAggregateGate } from "../../src/sim/swarm-aggregate-gate";
 
@@ -106,23 +107,34 @@ describe("SwarmService aggregate guard", () => {
       perturbationPack,
     });
 
-    const result = await service.launchSwarm({
-      kind: "telemetry",
-      title: "test swarm",
-      baseSeed: { target: 7 },
-      perturbations: [{ kind: "noop" }, { kind: "shifted" }],
-      config: {
-        llmMode: "fixtures",
-        quorumPct: 0.6,
-        perFishTimeoutMs: 1000,
-        fishConcurrency: 2,
-        nanoModel: "stub",
-        seed: 42,
-      },
-    });
+    const events: StepEvent[] = [];
+    const result = await stepContextStore.run(
+      { onStep: (event) => events.push(event) },
+      () =>
+        service.launchSwarm({
+          kind: "telemetry",
+          title: "test swarm",
+          baseSeed: { target: 7 },
+          perturbations: [{ kind: "noop" }, { kind: "shifted" }],
+          config: {
+            llmMode: "fixtures",
+            quorumPct: 0.6,
+            perFishTimeoutMs: 1000,
+            fishConcurrency: 2,
+            nanoModel: "stub",
+            seed: 42,
+          },
+        }),
+    );
 
     expect(result.swarmId).toBe(11);
     expect(aggregateGate.reset).toHaveBeenCalledWith(11);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ step: "swarm", phase: "start", swarmId: 11 }),
+        expect.objectContaining({ step: "swarm", phase: "done", swarmId: 11 }),
+      ]),
+    );
   });
 
   it("only enqueues up to fishConcurrency at launch", async () => {
@@ -267,9 +279,13 @@ describe("SwarmService aggregate guard", () => {
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
 
-    await expect(service.onFishComplete(11)).resolves.toEqual({
-      aggregateEnqueued: true,
-    });
+    const events: StepEvent[] = [];
+    await expect(
+      stepContextStore.run(
+        { onStep: (event) => events.push(event) },
+        () => service.onFishComplete(11),
+      ),
+    ).resolves.toEqual({ aggregateEnqueued: true });
     await expect(service.onFishComplete(11)).resolves.toEqual({
       aggregateEnqueued: false,
     });
@@ -279,6 +295,16 @@ describe("SwarmService aggregate guard", () => {
       swarmId: 11,
       jobId: "swarm-11-aggregate",
     });
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          step: "aggregator",
+          phase: "start",
+          swarmId: 11,
+          queued: true,
+        }),
+      ]),
+    );
   });
 
   it("counts timed-out fish as accounted for aggregation", async () => {

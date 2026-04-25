@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { stepContextStore, type StepEvent } from "@interview/shared/observability";
 import {
   researchCycle,
   researchCycleFinding,
@@ -92,12 +93,25 @@ describe("SimPromotionService.emitSuggestionFromModal", () => {
       embed: vi.fn(async () => [0.1, 0.2]),
     });
 
-    const suggestionId = await service.emitSuggestionFromModal(
-      42,
-      buildAggregate(),
+    const events: StepEvent[] = [];
+    const suggestionId = await stepContextStore.run(
+      { onStep: (event) => events.push(event) },
+      () => service.emitSuggestionFromModal(42, buildAggregate()),
     );
 
     expect(suggestionId).toBe(303);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          step: "suggestion.emit",
+          phase: "done",
+          swarmId: 42,
+          suggestionId: "303",
+          researchCycleId: 101,
+          researchFindingId: 202,
+        }),
+      ]),
+    );
     expect(store.createCycle).toHaveBeenCalledOnce();
     expect(store.createFinding).toHaveBeenCalledOnce();
     expect(store.linkCycleFinding).toHaveBeenCalledWith({

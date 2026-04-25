@@ -185,6 +185,7 @@ import { SimAgentRepository } from "./repositories/sim-agent.repository";
 import { SimSwarmRepository } from "./repositories/sim-swarm.repository";
 import { SimMemoryRepository } from "./repositories/sim-memory.repository";
 import { SimTerminalRepository } from "./repositories/sim-terminal.repository";
+import { SimReviewEvidenceRepository } from "./repositories/sim-review-evidence.repository";
 import { SimAgentService } from "./services/sim-agent.service";
 import { SimGodChannelService } from "./services/sim-god-channel.service";
 import { SimTargetService } from "./services/sim-target.service";
@@ -195,6 +196,7 @@ import { SimSwarmService } from "./services/sim-swarm.service";
 import { SimTurnService } from "./services/sim-turn.service";
 import { SimMemoryService } from "./services/sim-memory.service";
 import { SimTerminalService } from "./services/sim-terminal.service";
+import { SimOperatorService } from "./services/sim-operator.service";
 import { SimPromotionService } from "./services/sim-promotion.service";
 import { RuntimeConfigService } from "./services/runtime-config.service";
 import { SatelliteSweepChatRepository } from "./repositories/satellite-sweep-chat.repository";
@@ -437,6 +439,7 @@ export async function buildContainer(
   const simSwarmRepo = new SimSwarmRepository(db);
   const simMemoryRepo = new SimMemoryRepository(db);
   const simTerminalRepo = new SimTerminalRepository(db);
+  const simReviewEvidenceRepo = new SimReviewEvidenceRepository(db);
   const simTargetService = new SimTargetService(
     simRunRepo,
     satelliteDimensionRepo,
@@ -578,6 +581,16 @@ export async function buildContainer(
   const simTurnService = new SimTurnService(simTurnRepo);
   const simMemoryService = new SimMemoryService(simMemoryRepo);
   const simTerminalService = new SimTerminalService(simTerminalRepo);
+  const simOperatorService = new SimOperatorService({
+    swarmRepo: simSwarmRepo,
+    runRepo: simRunRepo,
+    agentRepo: simAgentRepo,
+    turnRepo: simTurnRepo,
+    terminalRepo: simTerminalRepo,
+    evidenceRepo: simReviewEvidenceRepo,
+    swarmStatus: sweep.sim.swarmService,
+    llm: llmFactory,
+  });
   const simPromotionService = new SimPromotionService({
     store: {
       async createCycle(value) {
@@ -727,6 +740,7 @@ export async function buildContainer(
       turn: simTurnService,
       memory: simMemoryService,
       terminal: simTerminalService,
+      operator: simOperatorService,
       queue: {
         enqueueSimTurn: async ({ simRunId, turnIndex, jobId }) => {
           await simTurnQueue.add(

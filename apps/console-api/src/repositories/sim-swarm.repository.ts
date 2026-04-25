@@ -13,7 +13,7 @@
  * Introduced: Plan 5 Task 1.A.1.
  */
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
 import type {
@@ -25,6 +25,8 @@ import type {
   CloseSimSwarmInput,
   InsertSimSwarmInput,
   LinkOutcomeInput,
+  ListOperatorSwarmsInput,
+  ListOperatorSwarmsResult,
   SnapshotAggregateInput,
   SimSwarmRow,
 } from "../types/sim-swarm.types";
@@ -33,6 +35,8 @@ export type {
   CloseSimSwarmInput,
   InsertSimSwarmInput,
   LinkOutcomeInput,
+  ListOperatorSwarmsInput,
+  ListOperatorSwarmsResult,
   SnapshotAggregateInput,
   SimSwarmRow,
 };
@@ -82,20 +86,30 @@ export class SimSwarmRepository {
       .limit(1);
     const r = rows[0];
     if (!r) return null;
+    return toRow(r);
+  }
+
+  /** Operator list read, newest first, cursoring by swarm id. */
+  async listForOperator(
+    input: ListOperatorSwarmsInput,
+  ): Promise<ListOperatorSwarmsResult> {
+    const conditions = [];
+    if (input.status !== undefined) conditions.push(eq(simSwarm.status, input.status));
+    if (input.kind !== undefined) conditions.push(eq(simSwarm.kind, input.kind));
+    if (input.cursor !== undefined) conditions.push(lt(simSwarm.id, input.cursor));
+
+    const rows = await this.db
+      .select()
+      .from(simSwarm)
+      .where(conditions.length === 0 ? undefined : and(...conditions))
+      .orderBy(desc(simSwarm.id))
+      .limit(input.limit + 1);
+
+    const page = rows.slice(0, input.limit);
+    const next = rows.length > input.limit ? page[page.length - 1]?.id ?? null : null;
     return {
-      id: r.id,
-      kind: r.kind,
-      title: r.title,
-      baseSeed: r.baseSeed,
-      perturbations: r.perturbations,
-      size: r.size,
-      config: r.config,
-      status: r.status,
-      outcomeReportFindingId: r.outcomeReportFindingId,
-      suggestionId: r.suggestionId,
-      startedAt: r.startedAt,
-      completedAt: r.completedAt,
-      createdBy: r.createdBy,
+      rows: page.map(toRow),
+      nextCursor: next,
     };
   }
 
@@ -197,4 +211,22 @@ export class SimSwarmRepository {
       .set(patch)
       .where(eq(simSwarm.id, input.swarmId));
   }
+}
+
+function toRow(r: typeof simSwarm.$inferSelect): SimSwarmRow {
+  return {
+    id: r.id,
+    kind: r.kind,
+    title: r.title,
+    baseSeed: r.baseSeed,
+    perturbations: r.perturbations,
+    size: r.size,
+    config: r.config,
+    status: r.status,
+    outcomeReportFindingId: r.outcomeReportFindingId,
+    suggestionId: r.suggestionId,
+    startedAt: r.startedAt,
+    completedAt: r.completedAt,
+    createdBy: r.createdBy,
+  };
 }

@@ -1,4 +1,4 @@
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import type { SimOrchestrator } from "./sim-orchestrator.service";
 import type { SwarmConfig, SimConfig, SimKind } from "./types";
 import type {
@@ -99,6 +99,12 @@ export class SwarmService {
       status: "running",
       createdBy: opts.createdBy ?? null,
     });
+    stepLog(logger, "swarm", "start", {
+      swarmId,
+      kind,
+      fishCount: perturbations.length,
+      fishConcurrency: config.fishConcurrency,
+    });
     await this.deps.aggregateGate.reset(swarmId);
 
     const maxTurns = this.deps.kindGuard.defaultMaxTurns(kind);
@@ -131,6 +137,12 @@ export class SwarmService {
 
     await this.activatePendingFish(swarmId, swarmConfig);
 
+    stepLog(logger, "swarm", "done", {
+      swarmId,
+      kind,
+      fishCount: perturbations.length,
+      firstSimRunId: firstSimRunIds[0],
+    });
     logger.info(
       { swarmId, kind, fishCount: perturbations.length, concurrency: config.fishConcurrency },
       "swarm launched",
@@ -172,8 +184,20 @@ export class SwarmService {
       });
     } catch (error) {
       await this.deps.aggregateGate.release(swarmId);
+      stepLog(logger, "aggregator", "error", {
+        swarmId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
+    stepLog(logger, "aggregator", "start", {
+      swarmId,
+      queued: true,
+      done: counts.done,
+      failed: counts.failed,
+      timeout: counts.timeout,
+      size: swarm.size,
+    });
     logger.info(
       {
         swarmId,
@@ -251,6 +275,14 @@ export class SwarmService {
       });
     }
     if (claimed.length > 0) {
+      stepLog(logger, "fish.spawn", "done", {
+        swarmId,
+        claimed: claimed.length,
+        fishConcurrency,
+        runningBefore: counts.running,
+        pendingBefore: counts.pending,
+        fishIndexes: claimed.map((fish) => fish.fishIndex),
+      });
       logger.info(
         {
           swarmId,

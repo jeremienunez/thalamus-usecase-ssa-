@@ -100,18 +100,17 @@ export class SimTurnRepository {
       .limit(1);
     const r = rows[0];
     if (!r) return null;
-    return {
-      id: r.id,
-      simRunId: r.simRunId,
-      turnIndex: r.turnIndex,
-      actorKind: r.actorKind,
-      agentId: r.agentId,
-      action: r.action,
-      rationale: r.rationale,
-      observableSummary: r.observableSummary,
-      llmCostUsd: r.llmCostUsd,
-      createdAt: r.createdAt,
-    };
+    return toRow(r);
+  }
+
+  /** Full operator-facing timeline for a run, oldest first. */
+  async listTimelineForRun(simRunId: bigint): Promise<SimTurnRow[]> {
+    const rows = await this.db
+      .select()
+      .from(simTurn)
+      .where(eq(simTurn.simRunId, simRunId))
+      .orderBy(asc(simTurn.turnIndex), asc(simTurn.createdAt), asc(simTurn.id));
+    return rows.map(toRow);
   }
 
   /**
@@ -266,4 +265,19 @@ export class SimTurnRepository {
       observableSummary: r.observableSummary,
     }));
   }
+}
+
+function toRow(r: typeof simTurn.$inferSelect): SimTurnRow {
+  return {
+    id: r.id,
+    simRunId: r.simRunId,
+    turnIndex: r.turnIndex,
+    actorKind: r.actorKind,
+    agentId: r.agentId,
+    action: r.action,
+    rationale: r.rationale,
+    observableSummary: r.observableSummary,
+    llmCostUsd: r.llmCostUsd,
+    createdAt: r.createdAt,
+  };
 }

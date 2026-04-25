@@ -65,20 +65,21 @@ export class SimRunRepository {
       .limit(1);
     const r = rows[0];
     if (!r) return null;
-    return {
-      id: r.id,
-      swarmId: r.swarmId,
-      fishIndex: r.fishIndex,
-      kind: r.kind,
-      seedApplied: r.seedApplied,
-      perturbation: r.perturbation,
-      config: r.config,
-      status: r.status,
-      reportFindingId: r.reportFindingId,
-      llmCostUsd: r.llmCostUsd,
-      startedAt: r.startedAt,
-      completedAt: r.completedAt,
-    };
+    return toRow(r);
+  }
+
+  /** Full row by its swarm-local fish index; null if missing. */
+  async findBySwarmFish(
+    swarmId: bigint,
+    fishIndex: number,
+  ): Promise<SimRunRow | null> {
+    const rows = await this.db
+      .select()
+      .from(simRun)
+      .where(and(eq(simRun.swarmId, swarmId), eq(simRun.fishIndex, fishIndex)))
+      .limit(1);
+    const r = rows[0];
+    return r ? toRow(r) : null;
   }
 
   /**
@@ -192,4 +193,21 @@ export class SimRunRepository {
         ),
       );
   }
+}
+
+function toRow(r: typeof simRun.$inferSelect): SimRunRow {
+  return {
+    id: r.id,
+    swarmId: r.swarmId,
+    fishIndex: r.fishIndex,
+    kind: r.kind,
+    seedApplied: r.seedApplied,
+    perturbation: r.perturbation,
+    config: r.config,
+    status: r.status,
+    reportFindingId: r.reportFindingId,
+    llmCostUsd: r.llmCostUsd,
+    startedAt: r.startedAt,
+    completedAt: r.completedAt,
+  };
 }

@@ -44,6 +44,7 @@ export type SimRunStatus =
   | "timeout";
 export type ActorKind = "agent" | "god" | "system";
 export type MemoryKind = "self_action" | "observation" | "belief";
+export type SimReviewScope = "swarm" | "fish" | "cluster";
 
 export type SeedRefs = Record<string, unknown>;
 
@@ -239,6 +240,43 @@ export const simAgentMemory = pgTable(
 );
 
 // -----------------------------------------------------------------------
+// Review evidence — durable operator Q&A over completed swarms
+// -----------------------------------------------------------------------
+
+export const simReviewEvidence = pgTable(
+  "sim_review_evidence",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    swarmId: bigint("swarm_id", { mode: "bigint" })
+      .notNull()
+      .references(() => simSwarm.id, { onDelete: "cascade" }),
+    simRunId: bigint("sim_run_id", { mode: "bigint" }).references(
+      () => simRun.id,
+      { onDelete: "set null" },
+    ),
+    scope: text("scope").$type<SimReviewScope>().notNull(),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    evidenceRefs: jsonb("evidence_refs")
+      .$type<Array<Record<string, unknown>>>()
+      .notNull()
+      .default([]),
+    traceExcerpt: jsonb("trace_excerpt")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdBy: bigint("created_by", { mode: "bigint" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    swarmIdx: index("idx_sim_review_evidence_swarm").on(t.swarmId, t.createdAt),
+    runIdx: index("idx_sim_review_evidence_run").on(t.simRunId),
+  }),
+);
+
+// -----------------------------------------------------------------------
 // Inferred types
 // -----------------------------------------------------------------------
 
@@ -256,3 +294,6 @@ export type NewSimTurn = typeof simTurn.$inferInsert;
 
 export type SimAgentMemory = typeof simAgentMemory.$inferSelect;
 export type NewSimAgentMemory = typeof simAgentMemory.$inferInsert;
+
+export type SimReviewEvidence = typeof simReviewEvidence.$inferSelect;
+export type NewSimReviewEvidence = typeof simReviewEvidence.$inferInsert;

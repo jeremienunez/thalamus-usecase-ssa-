@@ -61,6 +61,12 @@ export const SimSwarmIdParamsSchema = z.object({
 });
 export type SimSwarmIdParams = z.infer<typeof SimSwarmIdParamsSchema>;
 
+export const SimSwarmFishParamsSchema = z.object({
+  id: NumericIdStringSchema,
+  fishIndex: z.string().regex(/^\d+$/, "fishIndex must be numeric"),
+});
+export type SimSwarmFishParams = z.infer<typeof SimSwarmFishParamsSchema>;
+
 // ── God-event injection ───────────────────────────────────────────────
 
 export const GodEventKindSchema = z.enum([
@@ -204,6 +210,48 @@ export const ObservableQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(20),
   excludeAgentId: NumericIdStringSchema.optional(),
 });
+
+// ── Operator review API ─────────────────────────────────────────────────
+
+export const OperatorSwarmsQuerySchema = z.object({
+  status: SimSwarmStatusSchema.optional(),
+  kind: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: NumericIdStringSchema.optional(),
+});
+
+export const FishTraceQuerySchema = z.object({
+  format: z.enum(["json", "ndjson"]).default("json"),
+});
+
+export const AskSimReviewQuestionBodySchema = z
+  .object({
+    scope: z.enum(["swarm", "fish", "cluster"]).default("swarm"),
+    question: z.string().min(1).max(4000),
+    fishIndex: z.number().int().nonnegative().optional(),
+    clusterIndex: z.number().int().nonnegative().optional(),
+    clusterLabel: z.string().min(1).optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (body.scope === "fish" && body.fishIndex === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["fishIndex"],
+        message: "fishIndex is required for fish scope",
+      });
+    }
+    if (
+      body.scope === "cluster" &&
+      body.clusterIndex === undefined &&
+      body.clusterLabel === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["clusterIndex"],
+        message: "clusterIndex or clusterLabel is required for cluster scope",
+      });
+    }
+  });
 
 // ── Queue ─────────────────────────────────────────────────────────────
 

@@ -51,3 +51,15 @@ export interface CloseSimSwarmInput {
   reportFindingId?: bigint | null;
   completedAt?: Date;
 }
+
+export interface ListOperatorSwarmsInput {
+  status?: SimSwarmStatus;
+  kind?: string;
+  limit: number;
+  cursor?: bigint;
+}
+
+export interface ListOperatorSwarmsResult {
+  rows: SimSwarmRow[];
+  nextCursor: bigint | null;
+}

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { stepContextStore, type StepEvent } from "@interview/shared/observability";
 import {
   AggregatorService,
   type SwarmAggregate,
@@ -61,9 +62,24 @@ const strategy: SimAggregationStrategy = {
 
 describe("Seeded sim aggregate determinism", () => {
   it("replays the same fixture-backed swarm terminals into the same aggregate shape", async () => {
-    const first = await aggregateFixtureSwarm();
+    const events: StepEvent[] = [];
+    const first = await stepContextStore.run(
+      { onStep: (event) => events.push(event) },
+      aggregateFixtureSwarm,
+    );
     const second = await aggregateFixtureSwarm();
 
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ step: "aggregator", phase: "start", swarmId: 77 }),
+        expect.objectContaining({
+          step: "aggregator",
+          phase: "done",
+          swarmId: 77,
+          clusterCount: 2,
+        }),
+      ]),
+    );
     expect(aggregateShape(second)).toEqual(aggregateShape(first));
     expect(aggregateShape(first)).toEqual({
       totalFish: 4,

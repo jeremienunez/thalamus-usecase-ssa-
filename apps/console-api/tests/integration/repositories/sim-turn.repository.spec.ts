@@ -147,6 +147,20 @@ describe("SimTurnRepository", () => {
     expect(ids).toHaveLength(2);
     expect(await repo.countAgentTurnsForRun(10n)).toBe(2);
     expect(await repo.lastTurnCreatedAt(10n)).toBeInstanceOf(Date);
+    expect(await repo.listTimelineForRun(10n)).toEqual([
+      expect.objectContaining({
+        id: ids[0],
+        turnIndex: 1,
+        action: { kind: "plan", step: "one" },
+        rationale: "plan rationale",
+      }),
+      expect.objectContaining({
+        id: ids[1],
+        turnIndex: 2,
+        action: { kind: "maneuver", deltaVmps: 1.5 },
+        rationale: "maneuver rationale",
+      }),
+    ]);
     expect(
       await repo.recentObservable({
         simRunId: 10n,

@@ -9,6 +9,7 @@ import { registerSimSwarmRoutes } from "./sim-swarm.routes";
 import { registerSimLauncherRoutes } from "./sim-launcher.routes";
 import { registerSimControlRoutes } from "./sim-control.routes";
 import { registerSimKernelRoutes } from "./sim-kernel.routes";
+import { registerSimOperatorRoutes } from "./sim-operator.routes";
 export type { SimRouteServices } from "./sim-route-services";
 import type { SimRouteServices } from "./sim-route-services";
 
@@ -29,6 +30,7 @@ export function registerSimRoutes(
     registerSimSwarmRoutes(simApp, s);
     registerSimLauncherRoutes(simApp, s);
     registerSimControlRoutes(simApp, s);
+    registerSimOperatorRoutes(simApp, s);
     done();
   });
 

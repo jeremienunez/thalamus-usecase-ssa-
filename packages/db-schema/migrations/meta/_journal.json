@@ -85,6 +85,13 @@
       "when": 1776440566073,
       "tag": "0011_complete_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777125133511,
+      "tag": "0012_gigantic_black_tarantula",
+      "breakpoints": true
     }
   ]
 }

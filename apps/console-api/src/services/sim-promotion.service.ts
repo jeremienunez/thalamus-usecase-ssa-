@@ -14,7 +14,7 @@ import {
   ResearchStatus,
   ResearchUrgency,
 } from "@interview/shared";
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import type {
   SimPromoteInput,
   SimPromoteResult,
@@ -116,7 +116,14 @@ export class SimPromotionService {
     swarmId: number,
     aggregate: SwarmAggregate,
   ): Promise<number | null> {
-    if (!aggregate.modal) return null;
+    if (!aggregate.modal) {
+      stepLog(logger, "suggestion.emit", "done", {
+        swarmId,
+        emitted: false,
+        reason: "no modal outcome",
+      });
+      return null;
+    }
 
     const modalAction = aggregate.modal.exemplarAction as SsaAction;
     const targetSatelliteId =
@@ -281,6 +288,15 @@ export class SimPromotionService {
       simDistribution,
     });
 
+    stepLog(logger, "suggestion.emit", "done", {
+      swarmId,
+      suggestionId,
+      researchCycleId: Number(cycleRow.id),
+      researchFindingId: findingId !== null ? Number(findingId) : null,
+      modalKind: aggregate.modal.actionKind,
+      modalFraction: aggregate.modal.fraction,
+      targetSatelliteId,
+    });
     logger.info(
       {
         swarmId,
@@ -305,12 +321,27 @@ export class SimPromotionService {
   async emitTelemetrySuggestions(
     aggregate: TelemetryAggregate,
   ): Promise<number[]> {
-    if (!aggregate.quorumMet) return [];
+    if (!aggregate.quorumMet) {
+      stepLog(logger, "suggestion.emit", "done", {
+        swarmId: aggregate.swarmId,
+        emitted: false,
+        reason: "telemetry quorum not met",
+      });
+      return [];
+    }
 
     const sat = await this.deps.satelliteRepo.findByIdFull(
       BigInt(aggregate.satelliteId),
     );
-    if (!sat) return [];
+    if (!sat) {
+      stepLog(logger, "suggestion.emit", "done", {
+        swarmId: aggregate.swarmId,
+        emitted: false,
+        reason: "target satellite not found",
+        satelliteId: aggregate.satelliteId,
+      });
+      return [];
+    }
 
     const nullColumns = await this.deps.satelliteRepo.findNullTelemetryColumns(
       BigInt(aggregate.satelliteId),
@@ -393,6 +424,13 @@ export class SimPromotionService {
       });
     }
 
+    stepLog(logger, "suggestion.emit", "done", {
+      swarmId: aggregate.swarmId,
+      emitted: suggestionIds.length > 0,
+      suggestionCount: suggestionIds.length,
+      suggestionIds,
+      satelliteId: aggregate.satelliteId,
+    });
     return suggestionIds;
   }
 }

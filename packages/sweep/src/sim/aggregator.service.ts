@@ -12,7 +12,7 @@
  * than 2 distinct vectors, clustering degrades to bucketing by action.kind.
  */
 
-import { createLogger } from "@interview/shared/observability";
+import { createLogger, stepLog } from "@interview/shared/observability";
 import { mapWithConcurrency } from "@interview/shared/utils";
 import { getSimEmbeddingConfig } from "../config/sim-embedding-config";
 import type { EmbedFn } from "./memory.service";
@@ -69,12 +69,19 @@ export class AggregatorService {
   constructor(private readonly deps: AggregatorDeps) {}
 
   async aggregate(swarmId: number): Promise<SwarmAggregate> {
+    stepLog(logger, "aggregator", "start", { swarmId });
     const [swarm, fish] = await Promise.all([
       this.loadSwarm(swarmId),
       this.loadTerminals(swarmId),
     ]);
 
-    if (!swarm) throw new Error(`sim_swarm ${swarmId} not found`);
+    if (!swarm) {
+      stepLog(logger, "aggregator", "error", {
+        swarmId,
+        error: "sim_swarm not found",
+      });
+      throw new Error(`sim_swarm ${swarmId} not found`);
+    }
 
     const succeeded = fish.filter((f) => f.status === "done");
     const failed = fish.filter((f) => f.status !== "done").length;
@@ -82,6 +89,14 @@ export class AggregatorService {
     const quorumMet = succeeded.length >= quorumRequired;
 
     if (!quorumMet) {
+      stepLog(logger, "aggregator", "done", {
+        swarmId,
+        quorumMet,
+        succeededFish: succeeded.length,
+        failedFish: failed,
+        quorumRequired,
+        clusterCount: 0,
+      });
       logger.warn(
         { swarmId, succeededFish: succeeded.length, quorumRequired },
         "quorum not met — returning empty aggregate",
@@ -129,6 +144,15 @@ export class AggregatorService {
       divergenceScore,
     };
 
+    stepLog(logger, "aggregator", "done", {
+      swarmId,
+      quorumMet: true,
+      succeededFish: succeeded.length,
+      failedFish: failed,
+      clusterCount: sorted.length,
+      modal: agg.modal?.actionKind ?? null,
+      divergenceScore: Number(divergenceScore.toFixed(3)),
+    });
     logger.info(
       {
         swarmId,

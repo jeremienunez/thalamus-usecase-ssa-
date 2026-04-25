@@ -373,6 +373,94 @@ describe("UC3 swarm — E2E", () => {
       expect(aggregate!.divergenceScore).toBeGreaterThanOrEqual(0);
       expect(aggregate!.divergenceScore).toBeLessThanOrEqual(1);
 
+      const operatorList = await fetch(
+        `${BASE}/api/sim/operator/swarms?kind=uc3_conjunction&limit=10`,
+      );
+      expect(operatorList.status).toBe(200);
+      const operatorListBody = (await operatorList.json()) as {
+        swarms: Array<{ id: string; aggregateKeys: string[] }>;
+      };
+      expect(operatorListBody.swarms).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: String(launch.swarmId),
+            aggregateKeys: expect.arrayContaining(["aggregate"]),
+          }),
+        ]),
+      );
+
+      const operatorStatus = await fetch(
+        `${BASE}/api/sim/operator/swarms/${launch.swarmId}/status`,
+      );
+      expect(operatorStatus.status).toBe(200);
+      const operatorStatusBody = (await operatorStatus.json()) as {
+        status: string;
+        done: number;
+        aggregateKeys: string[];
+      };
+      expect(operatorStatusBody.status).toBe("done");
+      expect(operatorStatusBody.done).toBe(counts.done);
+      expect(operatorStatusBody.aggregateKeys).toEqual(
+        expect.arrayContaining(["aggregate"]),
+      );
+
+      const operatorEvents = await fetch(
+        `${BASE}/api/sim/operator/swarms/${launch.swarmId}/events`,
+      );
+      expect(operatorEvents.status).toBe(200);
+      const operatorEventsText = await operatorEvents.text();
+      expect(operatorEventsText).toContain("event: status");
+      expect(operatorEventsText).toContain("event: aggregate");
+      expect(operatorEventsText).toContain("event: terminals");
+      expect(operatorEventsText).toContain("event: done");
+
+      const timeline = await fetch(
+        `${BASE}/api/sim/operator/swarms/${launch.swarmId}/fish/0/timeline`,
+      );
+      expect(timeline.status).toBe(200);
+      const timelineBody = (await timeline.json()) as {
+        swarmId: string;
+        fishIndex: number;
+        agents: unknown[];
+        turns: Array<{ kind?: string; action?: Record<string, unknown> }>;
+      };
+      expect(timelineBody.swarmId).toBe(String(launch.swarmId));
+      expect(timelineBody.fishIndex).toBe(0);
+      expect(timelineBody.agents.length).toBe(2);
+      expect(timelineBody.turns.length).toBeGreaterThanOrEqual(1);
+      expect(timelineBody.turns[0]?.action).toEqual(expect.any(Object));
+
+      const clusters = await fetch(
+        `${BASE}/api/sim/operator/swarms/${launch.swarmId}/clusters`,
+      );
+      expect(clusters.status).toBe(200);
+      const clustersBody = (await clusters.json()) as {
+        source: string | null;
+        clusters: Array<{ label: string; memberFishIndexes: number[] }>;
+        summary: { quorumMet?: boolean };
+      };
+      expect(clustersBody.source).toBe("aggregate");
+      expect(clustersBody.clusters.length).toBeGreaterThanOrEqual(1);
+      expect(clustersBody.summary.quorumMet).toBe(true);
+
+      const trace = await fetch(
+        `${BASE}/api/sim/operator/swarms/${launch.swarmId}/fish/0/trace?format=ndjson`,
+      );
+      expect(trace.status).toBe(200);
+      expect(trace.headers.get("content-type") ?? "").toContain(
+        "application/x-ndjson",
+      );
+      const traceRows = (await trace.text())
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { kind: string; fishIndex?: number });
+      expect(traceRows[0]).toEqual(
+        expect.objectContaining({ kind: "trace", fishIndex: 0 }),
+      );
+      expect(traceRows).toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: "turn" })]),
+      );
+
       // ---------------------------------------------------------------
       // Phase 5 — closing the loop: modal outcome emitted as a suggestion
       // ---------------------------------------------------------------

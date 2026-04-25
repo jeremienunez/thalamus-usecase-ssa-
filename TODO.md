@@ -95,22 +95,33 @@ Exit checks:
 Goal: expose enough backend surface for an operator to inspect and interrogate a
 swarm without touching DB internals.
 
+Status: closed 2026-04-25. The operator API now exposes swarm list/status/SSE,
+fish timelines, aggregate-backed clusters, trace export, and terminal post-run
+Q&A through durable review evidence. It reuses existing sim read models and the
+central Thalamus LLM transport; no private DB shortcut or duplicate clustering
+path was introduced. Closure details moved to
+[DONE.md](DONE.md#sprint-2---fish-operator-api).
+
 Scope:
 
-- Swarm list/status stream.
-- Fish turn timeline API.
-- Terminal cluster API.
-- Per-fish trace export.
-- Read-only post-run Q&A endpoint.
-- Aggregator / swarm-service / promotion `stepLog` emission.
-- Fish/provider/model/cost metadata in traces where available.
+- Swarm list/status stream. Done.
+- Fish turn timeline API. Done.
+- Terminal cluster API. Done.
+- Per-fish trace export. Done.
+- Read-only post-run Q&A endpoint. Done.
+- Aggregator / swarm-service / promotion `stepLog` emission. Done.
+- Fish/provider/model/cost metadata in traces where available. Done where the
+  current turn rows expose provider/cost metadata.
 
 Exit checks:
 
 - One API-level test launches a fixture swarm and reads status, timeline,
-  clusters, and trace export.
+  clusters, and trace export. Done:
+  `apps/console-api/tests/e2e/swarm-uc3.e2e.spec.ts`.
 - Q&A is persisted as review evidence and does not mutate fish memory unless a
-  promotion path explicitly does so.
+  promotion path explicitly does so. Done: `sim_review_evidence` integration
+  coverage plus operator service unit coverage for terminal-only Q&A and
+  no memory writes.
 
 ### Sprint 3 - 3D Fish Operator UI
 

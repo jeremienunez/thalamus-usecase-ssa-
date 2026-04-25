@@ -52,6 +52,28 @@ Sister files: [TODO.md](TODO.md) (open), [TO-REVIEW.md](TO-REVIEW.md) (partial).
       `make sim-smoke` run fixture-backed telemetry, PC, and UC3 swarm e2e
       coverage without live cloud spend.
 
+### Sprint 2 - Fish Operator API
+
+- [x] **Operator HTTP surface landed.** Added `/api/sim/operator/swarms`,
+      status, SSE events, fish timeline, aggregate-backed clusters, trace
+      export, Q&A, and evidence routes under the existing authenticated sim
+      route group.
+- [x] **Review evidence is durable and isolated.** Added
+      `sim_review_evidence` with Drizzle schema/migration and repository
+      coverage. Q&A writes only this table and is rejected until the swarm is
+      terminal.
+- [x] **No duplicated sim logic.** Operator reads reuse `SimSwarmRepository`,
+      `SimRunRepository`, `SimTurnRepository`, `SimTerminalRepository`, stored
+      aggregate snapshots, and the centralized Thalamus LLM transport.
+- [x] **Operator traces and observability are covered.** Fish timelines expose
+      actions, rationales, observable summaries, and LLM cost fields where
+      present. Aggregator, swarm service, and promotion paths now emit
+      `stepLog` events.
+- [x] **Exit checks passed.** `swarm-uc3.e2e.spec.ts` launches a fixture swarm
+      and reads operator list/status/SSE/timeline/clusters/NDJSON trace.
+      Q&A persistence/no-memory-write behavior is covered by operator service
+      unit tests and `sim_review_evidence` integration coverage.
+
 ## Migrated from TODO - 2026-04-25 trim
 
 These entries were removed from `TODO.md` because the live tree shows the work

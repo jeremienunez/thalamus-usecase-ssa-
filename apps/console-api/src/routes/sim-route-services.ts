@@ -8,6 +8,7 @@ import type { SimSwarmService } from "../services/sim-swarm.service";
 import type { SimTurnService } from "../services/sim-turn.service";
 import type { SimMemoryService } from "../services/sim-memory.service";
 import type { SimTerminalService } from "../services/sim-terminal.service";
+import type { SimOperatorService } from "../services/sim-operator.service";
 import type { SimPromotionRoutePort } from "../controllers/sim-promotion.controller";
 import type { SimQueueRoutePort } from "../controllers/sim-queue.controller";
 import type { SimLauncherRoutePort } from "../controllers/sim-launcher.controller";
@@ -49,6 +50,7 @@ export interface SimRouteServices {
   turn: SimTurnService;
   memory: SimMemoryService;
   terminal: SimTerminalService;
+  operator: SimOperatorService;
   queue: SimQueueRoutePort;
   launcher: SimLauncherRoutePort;
   godChannel: SimGodChannelService;
