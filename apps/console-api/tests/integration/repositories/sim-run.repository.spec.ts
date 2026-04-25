@@ -33,7 +33,7 @@ async function seedFixtures(): Promise<void> {
       'telemetry',
       'Primary swarm',
       '{"target": 7}'::jsonb,
-      '[{"kind":"baseline"}]'::jsonb,
+      '[{"kind":"noop"}]'::jsonb,
       3,
       '{"llmMode":"fixtures","quorumPct":60,"perFishTimeoutMs":1000,"fishConcurrency":1,"nanoModel":"stub","seed":42}'::jsonb,
       'running'
@@ -49,7 +49,7 @@ async function seedFixtures(): Promise<void> {
         0,
         'telemetry',
         '{"target": 7, "variant": "alpha"}'::jsonb,
-        '{"kind":"baseline"}'::jsonb,
+        '{"kind":"noop"}'::jsonb,
         '{"turnsPerDay":4,"maxTurns":8,"llmMode":"fixtures","seed":42,"nanoModel":"stub"}'::jsonb,
         'pending'
       ),
@@ -126,6 +126,23 @@ describe("SimRunRepository", () => {
       status: "done",
       completedAt,
     });
+  });
+
+  it("claims pending fish in fish_index order and marks them running", async () => {
+    await expect(repo.claimPendingFishForSwarm(1n, 1)).resolves.toEqual([
+      { simRunId: 10n, fishIndex: 0 },
+    ]);
+    expect(await repo.countFishByStatus(1n)).toEqual({
+      done: 1,
+      failed: 0,
+      timeout: 0,
+      running: 2,
+      pending: 0,
+      paused: 0,
+    });
+
+    await expect(repo.claimPendingFishForSwarm(1n, 1)).resolves.toEqual([]);
+    await expect(repo.claimPendingFishForSwarm(1n, 0)).resolves.toEqual([]);
   });
 
   it("fails pending and running runs for a swarm without touching done rows", async () => {

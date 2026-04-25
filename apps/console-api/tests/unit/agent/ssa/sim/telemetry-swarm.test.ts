@@ -103,6 +103,7 @@ describe("startTelemetrySwarm", () => {
       "powerDraw",
     );
     expect(arg.perturbations.length).toBe(5);
+    expect(arg.perturbations[0]).toEqual({ kind: "noop" });
   });
 
   it("launches with null busDatasheetPrior when bus is unknown", async () => {
@@ -174,5 +175,24 @@ describe("startTelemetrySwarm", () => {
     expect(profiles).toContain("conservative");
     expect(profiles).toContain("balanced");
     expect(profiles).toContain("aggressive");
+  });
+
+  it("keeps fishCount=1 as a baseline-only swarm", async () => {
+    const satelliteRepo = mockSatelliteRepo({
+      id: 5,
+      name: "BaselineSat",
+      operatorId: 12,
+      busName: "SSL-1300",
+    });
+    const { svc, launch } = mockSwarmService();
+
+    await startTelemetrySwarm(
+      { satelliteRepo, swarmService: svc },
+      { satelliteId: 5, fishCount: 1 },
+    );
+
+    const arg = launch.mock.calls[0]![0];
+    expect(arg.perturbations).toEqual([{ kind: "noop" }]);
+    expect(arg.config.fishConcurrency).toBe(1);
   });
 });

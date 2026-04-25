@@ -45,7 +45,7 @@ describe("SwarmService aggregate guard", () => {
       title: "swarm",
       baseSeed: {},
       size: 2,
-      config: {},
+      config: { fishConcurrency: 2 },
       status: "running",
       outcomeReportFindingId: null,
       suggestionId: null,
@@ -58,6 +58,7 @@ describe("SwarmService aggregate guard", () => {
       pending: 0,
       paused: 0,
     })),
+    claimPendingFishForSwarm: vi.fn(async () => []),
     abortSwarm: vi.fn(async () => undefined),
   };
   const kindGuard = {
@@ -72,6 +73,26 @@ describe("SwarmService aggregate guard", () => {
     vi.clearAllMocks();
     aggregateGate.claim.mockResolvedValue(true);
     queue.enqueueSwarmAggregate.mockResolvedValue(undefined);
+    swarmStore.getSwarm.mockResolvedValue({
+      id: 11,
+      kind: "telemetry",
+      title: "swarm",
+      baseSeed: {},
+      size: 2,
+      config: { fishConcurrency: 2 },
+      status: "running",
+      outcomeReportFindingId: null,
+      suggestionId: null,
+    });
+    swarmStore.countFishByStatus.mockResolvedValue({
+      done: 2,
+      failed: 0,
+      timeout: 0,
+      running: 0,
+      pending: 0,
+      paused: 0,
+    });
+    swarmStore.claimPendingFishForSwarm.mockResolvedValue([]);
   });
 
   it("resets stale aggregate claims when launching a new swarm", async () => {
@@ -89,7 +110,7 @@ describe("SwarmService aggregate guard", () => {
       kind: "telemetry",
       title: "test swarm",
       baseSeed: { target: 7 },
-      perturbations: [{ kind: "baseline" }, { kind: "shifted" }],
+      perturbations: [{ kind: "noop" }, { kind: "shifted" }],
       config: {
         llmMode: "fixtures",
         quorumPct: 0.6,
@@ -102,6 +123,134 @@ describe("SwarmService aggregate guard", () => {
 
     expect(result.swarmId).toBe(11);
     expect(aggregateGate.reset).toHaveBeenCalledWith(11);
+  });
+
+  it("only enqueues up to fishConcurrency at launch", async () => {
+    const service = new SwarmService({
+      store,
+      swarmStore,
+      orchestrator,
+      queue,
+      aggregateGate,
+      kindGuard,
+      perturbationPack,
+    });
+    swarmStore.countFishByStatus.mockResolvedValueOnce({
+      done: 0,
+      failed: 0,
+      timeout: 0,
+      running: 0,
+      pending: 3,
+      paused: 0,
+    });
+    swarmStore.claimPendingFishForSwarm.mockResolvedValueOnce([
+      { simRunId: 100, fishIndex: 0 },
+      { simRunId: 101, fishIndex: 1 },
+    ]);
+
+    await service.launchSwarm({
+      kind: "telemetry",
+      title: "test swarm",
+      baseSeed: { target: 7 },
+      perturbations: [{ kind: "noop" }, { kind: "shifted" }, { kind: "lagged" }],
+      config: {
+        llmMode: "fixtures",
+        quorumPct: 0.6,
+        perFishTimeoutMs: 1000,
+        fishConcurrency: 2,
+        nanoModel: "stub",
+        seed: 42,
+      },
+    });
+
+    expect(swarmStore.claimPendingFishForSwarm).toHaveBeenCalledWith(11, 2);
+    expect(queue.enqueueSwarmFish).toHaveBeenCalledTimes(2);
+    expect(queue.enqueueSwarmFish).toHaveBeenNthCalledWith(1, {
+      swarmId: 11,
+      simRunId: 100,
+      fishIndex: 0,
+      jobId: "swarm-11-fish-0",
+    });
+    expect(queue.enqueueSwarmFish).toHaveBeenNthCalledWith(2, {
+      swarmId: 11,
+      simRunId: 101,
+      fishIndex: 1,
+      jobId: "swarm-11-fish-1",
+    });
+  });
+
+  it("claims the next pending fish on completion before aggregation", async () => {
+    const service = new SwarmService({
+      store,
+      swarmStore,
+      orchestrator,
+      queue,
+      aggregateGate,
+      kindGuard,
+      perturbationPack,
+    });
+    swarmStore.countFishByStatus
+      .mockResolvedValueOnce({
+        done: 1,
+        failed: 0,
+        timeout: 0,
+        running: 1,
+        pending: 1,
+        paused: 0,
+      })
+      .mockResolvedValueOnce({
+        done: 1,
+        failed: 0,
+        timeout: 0,
+        running: 2,
+        pending: 0,
+        paused: 0,
+      });
+    swarmStore.claimPendingFishForSwarm.mockResolvedValueOnce([
+      { simRunId: 102, fishIndex: 2 },
+    ]);
+
+    await expect(service.onFishComplete(11)).resolves.toEqual({
+      aggregateEnqueued: false,
+    });
+
+    expect(swarmStore.claimPendingFishForSwarm).toHaveBeenCalledWith(11, 1);
+    expect(queue.enqueueSwarmFish).toHaveBeenCalledWith({
+      swarmId: 11,
+      simRunId: 102,
+      fishIndex: 2,
+      jobId: "swarm-11-fish-2",
+    });
+    expect(queue.enqueueSwarmAggregate).not.toHaveBeenCalled();
+  });
+
+  it("rejects swarms that do not reserve fish 0 for a noop baseline", async () => {
+    const service = new SwarmService({
+      store,
+      swarmStore,
+      orchestrator,
+      queue,
+      aggregateGate,
+      kindGuard,
+      perturbationPack,
+    });
+
+    await expect(
+      service.launchSwarm({
+        kind: "telemetry",
+        title: "test swarm",
+        baseSeed: { target: 7 },
+        perturbations: [{ kind: "shifted" }],
+        config: {
+          llmMode: "fixtures",
+          quorumPct: 0.6,
+          perFishTimeoutMs: 1000,
+          fishConcurrency: 2,
+          nanoModel: "stub",
+          seed: 42,
+        },
+      }),
+    ).rejects.toThrow(/fish 0 perturbation/);
   });
 
   it("enqueues aggregate only once when concurrent completions race", async () => {

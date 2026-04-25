@@ -21,6 +21,7 @@
     "test:unit": "vitest run --project unit --passWithNoTests=false",
     "test:integration": "vitest run --project integration --passWithNoTests=false",
     "test:e2e": "vitest run --project e2e --passWithNoTests=false",
+    "sim:smoke": "vitest run --project e2e apps/console-api/tests/e2e/telemetry-swarm.e2e.spec.ts apps/console-api/tests/e2e/swarm-uc3.e2e.spec.ts --passWithNoTests=false",
     "test:watch": "vitest",
     "evals:list": "node --import tsx scripts/acquire-real-evals.ts --list",
     "evals:fetch:smoke": "node --import tsx scripts/acquire-real-evals.ts --download --profile smoke",

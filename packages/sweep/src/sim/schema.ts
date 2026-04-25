@@ -23,11 +23,13 @@ export function buildTurnResponseSchema<T extends z.ZodTypeAny>(action: T) {
   });
 }
 
-export const swarmConfigSchema = z.object({
-  llmMode: z.enum(["cloud", "fixtures", "record"]),
-  quorumPct: z.number().min(0).max(1).default(0.8),
-  perFishTimeoutMs: z.number().int().positive().default(60_000),
-  fishConcurrency: z.number().int().min(1).max(50).default(8),
-  nanoModel: z.string().default("gpt-5.4-nano"),
-  seed: z.number().int().default(42),
-});
+export const swarmConfigSchema = z
+  .object({
+    llmMode: z.enum(["cloud", "fixtures", "record"]),
+    quorumPct: z.number().min(0).max(1).default(0.8),
+    perFishTimeoutMs: z.number().int().positive().default(60_000),
+    fishConcurrency: z.number().int().min(1).max(50).default(8),
+    nanoModel: z.string().default("gpt-5.4-nano"),
+    seed: z.number().int().default(42),
+  })
+  .strict();

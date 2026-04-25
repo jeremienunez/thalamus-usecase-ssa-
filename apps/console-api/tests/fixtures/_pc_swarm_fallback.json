@@ -1,0 +1,5 @@
+{
+  "text": "{\n  \"action\": {\n    \"kind\": \"estimate_pc\",\n    \"conjunctionId\": 9902300,\n    \"pcEstimate\": 0.00021,\n    \"pcBand\": { \"p5\": 0.00008, \"p50\": 0.00021, \"p95\": 0.00047 },\n    \"dominantMode\": \"short-encounter\",\n    \"rationale\": \"Fixture fallback estimates a medium-risk short-encounter Pc so the PC aggregate path can be exercised without live model calls.\",\n    \"assumptions\": {\n      \"hardBodyRadiusMeters\": 10,\n      \"covarianceScale\": \"nominal\",\n      \"conjunctionGeometry\": \"LEO short encounter with fixture covariance envelope\"\n    },\n    \"flags\": [\"high-uncertainty\"]\n  },\n  \"rationale\": \"Fixture fallback PC estimate. The fish reports one complete estimate_pc action so the PC aggregate reducer can compute a deterministic distribution.\",\n  \"observableSummary\": \"Estimates medium Pc for the fixture conjunction using nominal covariance assumptions.\"\n}\n",
+  "model": "gpt-5.4-nano",
+  "recordedAt": "2026-04-25T00:00:00.000Z"
+}

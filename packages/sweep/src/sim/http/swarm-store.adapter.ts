@@ -1,6 +1,7 @@
 import type { SimSwarmStore } from "../ports/swarm-store.port";
 import type { TurnAction } from "../types";
 import type {
+  ClaimedSwarmFishDto,
   SimFishTerminalActionDto,
   SimFishTerminalDto,
   SimSwarmDto,
@@ -23,6 +24,17 @@ export class SimSwarmStoreHttpAdapter implements SimSwarmStore {
 
   countFishByStatus(swarmId: number) {
     return this.http.get<SwarmFishCountsDto>(`/api/sim/swarms/${swarmId}/fish-counts`);
+  }
+
+  async claimPendingFishForSwarm(swarmId: number, limit: number) {
+    const rows = await this.http.post<ClaimedSwarmFishDto[]>(
+      `/api/sim/swarms/${swarmId}/claim-pending-fish`,
+      { limit },
+    );
+    return rows.map((row) => ({
+      simRunId: Number(row.simRunId),
+      fishIndex: row.fishIndex,
+    }));
   }
 
   async abortSwarm(swarmId: number) {

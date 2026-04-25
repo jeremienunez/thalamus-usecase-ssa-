@@ -21,6 +21,10 @@ type SimSwarmStatusPort = Pick<SwarmService, "status">;
 
 type SimSwarmStoreRoutePort = {
   abortSwarm(swarmId: number): Promise<void>;
+  claimPendingFishForSwarm(
+    swarmId: number,
+    limit: number,
+  ): Promise<Array<{ simRunId: number; fishIndex: number }>>;
   snapshotAggregate(input: {
     swarmId: number;
     key: string;

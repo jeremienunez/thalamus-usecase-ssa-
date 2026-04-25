@@ -76,6 +76,9 @@ export class SwarmService {
     if (perturbations.length < 1) {
       throw new Error("launchSwarm requires at least 1 perturbation");
     }
+    if (!isNoopPerturbation(perturbations[0])) {
+      throw new Error("launchSwarm requires fish 0 perturbation to be { kind: \"noop\" }");
+    }
     this.deps.kindGuard.validateLaunch({ kind, baseSeed });
 
     const swarmConfig: SwarmConfig = {
@@ -123,15 +126,10 @@ export class SwarmService {
         config: simConfig,
       });
 
-      await this.deps.store.updateRunStatus(fish.simRunId, "running");
-      await this.deps.queue.enqueueSwarmFish({
-        swarmId,
-        simRunId: fish.simRunId,
-        fishIndex: i,
-        jobId: `swarm-${swarmId}-fish-${i}`,
-      });
       firstSimRunIds.push(fish.simRunId);
     }
+
+    await this.activatePendingFish(swarmId, swarmConfig);
 
     logger.info(
       { swarmId, kind, fishCount: perturbations.length, concurrency: config.fishConcurrency },
@@ -146,9 +144,10 @@ export class SwarmService {
   }
 
   async onFishComplete(swarmId: number): Promise<{ aggregateEnqueued: boolean }> {
-    const counts = await this.countFishByStatus(swarmId);
     const swarm = await this.loadSwarm(swarmId);
     if (!swarm) return { aggregateEnqueued: false };
+    await this.activatePendingFish(swarmId, swarm.config);
+    const counts = await this.countFishByStatus(swarmId);
     const accounted = counts.done + counts.failed + counts.timeout;
     if (accounted < swarm.size) return { aggregateEnqueued: false };
     const claimed = await this.deps.aggregateGate.claim(swarmId);
@@ -228,10 +227,55 @@ export class SwarmService {
       pending: counts.pending,
     };
   }
+
+  private async activatePendingFish(
+    swarmId: number,
+    config: Pick<SwarmConfig, "fishConcurrency">,
+  ): Promise<number> {
+    const counts = await this.countFishByStatus(swarmId);
+    if (counts.pending < 1) return 0;
+    const fishConcurrency = readPositiveInt(config.fishConcurrency, 1);
+    const openSlots = fishConcurrency - counts.running;
+    if (openSlots < 1) return 0;
+
+    const claimed = await this.deps.swarmStore.claimPendingFishForSwarm(
+      swarmId,
+      Math.min(openSlots, counts.pending),
+    );
+    for (const fish of claimed) {
+      await this.deps.queue.enqueueSwarmFish({
+        swarmId,
+        simRunId: fish.simRunId,
+        fishIndex: fish.fishIndex,
+        jobId: `swarm-${swarmId}-fish-${fish.fishIndex}`,
+      });
+    }
+    if (claimed.length > 0) {
+      logger.info(
+        {
+          swarmId,
+          claimed: claimed.length,
+          fishConcurrency,
+          runningBefore: counts.running,
+          pendingBefore: counts.pending,
+        },
+        "swarm fish claimed and enqueued",
+      );
+    }
+    return claimed.length;
+  }
 }
 
 function readPositiveInt(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : fallback;
+}
+
+function isNoopPerturbation(value: unknown): boolean {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    (value as { kind?: unknown }).kind === "noop"
+  );
 }

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  simClaimPendingFishController,
   simCloseSwarmController,
   simCreateSwarmController,
   simFishCountsController,
@@ -39,4 +40,8 @@ export function registerSimSwarmRoutes(
   );
   app.get("/api/sim/swarms/:id/status", simSwarmStatusController(s.swarmStatus));
   app.post("/api/sim/swarms/:id/abort", simSwarmAbortController(s.swarmStore));
+  app.post(
+    "/api/sim/swarms/:id/claim-pending-fish",
+    simClaimPendingFishController(s.swarmStore),
+  );
 }

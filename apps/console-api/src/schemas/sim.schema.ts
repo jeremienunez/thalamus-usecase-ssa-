@@ -27,23 +27,27 @@ const OpaqueKindedBagSchema = z.object({ kind: z.string().min(1) }).catchall(z.u
 export const SeedRefsSchema = OpaqueBagSchema;
 export const PerturbationSpecSchema = OpaqueKindedBagSchema;
 
-export const SwarmConfigSchema = z.object({
-  llmMode: z.enum(["cloud", "fixtures", "record"]),
-  quorumPct: z.number().min(0).max(1),
-  perFishTimeoutMs: z.number().int().positive(),
-  fishConcurrency: z.number().int().positive(),
-  nanoModel: z.string(),
-  seed: z.number().int(),
-});
+export const SwarmConfigSchema = z
+  .object({
+    llmMode: z.enum(["cloud", "fixtures", "record"]),
+    quorumPct: z.number().min(0).max(1),
+    perFishTimeoutMs: z.number().int().positive(),
+    fishConcurrency: z.number().int().positive(),
+    nanoModel: z.string(),
+    seed: z.number().int(),
+  })
+  .strict();
 
-export const SimConfigSchema = z.object({
-  turnsPerDay: z.number().int().positive(),
-  maxTurns: z.number().int().positive(),
-  llmMode: z.enum(["cloud", "fixtures", "record"]),
-  seed: z.number().int(),
-  nanoModel: z.string(),
-  perFishTimeoutMs: z.number().int().positive().optional(),
-});
+export const SimConfigSchema = z
+  .object({
+    turnsPerDay: z.number().int().positive(),
+    maxTurns: z.number().int().positive(),
+    llmMode: z.enum(["cloud", "fixtures", "record"]),
+    seed: z.number().int(),
+    nanoModel: z.string(),
+    perFishTimeoutMs: z.number().int().positive().optional(),
+  })
+  .strict();
 
 // ── Path params ───────────────────────────────────────────────────────
 
@@ -122,6 +126,10 @@ export const CloseSwarmBodySchema = z.object({
   suggestionId: NumericIdStringSchema.nullable().optional(),
   reportFindingId: NumericIdStringSchema.nullable().optional(),
   completedAt: z.string().datetime().optional(),
+});
+
+export const ClaimPendingFishBodySchema = z.object({
+  limit: z.number().int().positive().max(100),
 });
 
 // ── Turn persistence ──────────────────────────────────────────────────

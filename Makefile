@@ -166,6 +166,10 @@ test-policy: ## Enforce executable expected-behavior test rules
 spec-check: ## Verify every APPROVED/IMPLEMENTED spec AC has a test
 	pnpm spec:check
 
+.PHONY: sim-smoke
+sim-smoke: ## Fixture-backed telemetry, PC, and UC3 swarm smoke tests
+	pnpm sim:smoke
+
 .PHONY: hooks-install
 hooks-install: ## Point git at .githooks/ (pre-commit gate)
 	pnpm hooks:install

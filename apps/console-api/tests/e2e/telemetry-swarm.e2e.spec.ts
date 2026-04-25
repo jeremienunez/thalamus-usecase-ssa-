@@ -53,6 +53,11 @@ import { PcAggregatorService } from "../../src/agent/ssa/sim/aggregators/pc";
 import { TelemetryAggregatorService } from "../../src/agent/ssa/sim/aggregators/telemetry";
 import { SsaSimOutcomeResolverService } from "../../src/services/ssa-sim-outcome-resolver.service";
 import { DEFAULT_SIM_KERNEL_SHARED_SECRET } from "../../src/server";
+import {
+  cleanupConjunctionFixture,
+  CONJUNCTION_ID,
+  seedConjunctionFixture,
+} from "./helpers/db-fixtures";
 
 const DB_URL =
   process.env.DATABASE_URL ??
@@ -62,7 +67,8 @@ const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 const KERNEL_SECRET =
   process.env.SIM_KERNEL_SHARED_SECRET ?? DEFAULT_SIM_KERNEL_SHARED_SECRET;
 const FIXTURES_DIR = resolve(__dirname, "..", "fixtures");
-const FALLBACK = "_telemetry_swarm_fallback";
+const TELEMETRY_FALLBACK = "_telemetry_swarm_fallback";
+const PC_FALLBACK = "_pc_swarm_fallback";
 const SEED_TAG = "e2e-telemetry-swarm";
 
 const disabledAuditProvider: DomainAuditProvider = {
@@ -96,15 +102,8 @@ let targetSatelliteId: number;
 beforeAll(async () => {
   process.env.THALAMUS_MODE = "fixtures";
   process.env.FIXTURES_DIR = FIXTURES_DIR;
-  process.env.FIXTURES_FALLBACK = FALLBACK;
-  setThalamusTransportConfigProvider(
-    new StaticConfigProvider({
-      ...DEFAULT_THALAMUS_TRANSPORT_CONFIG,
-      mode: "fixtures",
-      fixturesDir: FIXTURES_DIR,
-      fallbackFixture: FALLBACK,
-    }),
-  );
+  process.env.FIXTURES_FALLBACK = TELEMETRY_FALLBACK;
+  useFixtureFallback(TELEMETRY_FALLBACK);
 
   pool = new Pool({ connectionString: DB_URL });
   db = drizzle(pool);
@@ -114,15 +113,26 @@ beforeAll(async () => {
   const skillsDir = resolve(__dirname, "../../src/agent/ssa/skills");
   registry = new CortexRegistry(skillsDir);
   registry.discover();
-  if (!registry.get("sim_operator_agent")) {
+  for (const skillName of [
+    "sim_operator_agent",
+    "telemetry_inference_agent",
+    "pc_estimator_agent",
+  ]) {
+    if (registry.get(skillName)) continue;
     throw new Error(
-      `sim_operator_agent skill not found in registry at ${skillsDir}`,
+      `${skillName} skill not found in registry at ${skillsDir}`,
     );
   }
 
   await cleanE2E();
   await drainQueues().catch((): void => undefined);
   targetSatelliteId = await seedTelemetryTarget();
+  const fixtureClient = await pool.connect();
+  try {
+    await seedConjunctionFixture(fixtureClient);
+  } finally {
+    fixtureClient.release();
+  }
 
   const ssaPersona = new SsaPersonaComposer();
   const ssaPrompt = new SsaPromptRenderer();
@@ -220,6 +230,17 @@ afterAll(async () => {
     await aggregateWorker?.close().catch((): void => {
       // Teardown best-effort in e2e cleanup.
     });
+    await cleanE2E().catch((): void => {
+      // Teardown best-effort in e2e cleanup.
+    });
+    const fixtureClient = await pool?.connect().catch((): null => null);
+    if (fixtureClient) {
+      try {
+        await cleanupConjunctionFixture(fixtureClient);
+      } finally {
+        fixtureClient.release();
+      }
+    }
   } finally {
     await redis?.quit().catch((): void => {
       // Teardown best-effort in e2e cleanup.
@@ -336,7 +357,76 @@ describe("Telemetry swarm — E2E", () => {
     },
     90_000,
   );
+
+  it(
+    "launches PC via HTTP, aggregates estimate_pc fish, and snapshots pcAggregate",
+    async () => {
+      useFixtureFallback(PC_FALLBACK);
+
+      const res = await fetch(`${BASE}/api/sim/pc/start`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conjunctionId: String(CONJUNCTION_ID),
+          fishCount: 4,
+          config: {
+            llmMode: "fixtures",
+            quorumPct: 0.5,
+            perFishTimeoutMs: 60_000,
+            fishConcurrency: 2,
+            nanoModel: "gpt-5.4-nano",
+            seed: 84,
+          },
+        }),
+      });
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as {
+        swarmId: string;
+        conjunctionId: string;
+        fishCount: number;
+      };
+      const swarmId = Number(body.swarmId);
+      expect(body.conjunctionId).toBe(String(CONJUNCTION_ID));
+      expect(body.fishCount).toBe(4);
+
+      const finalStatus = await waitForSwarmDone(swarmId, 60_000);
+      expect(finalStatus.status).toBe("done");
+
+      const counts = await fishStatusCounts(swarmId);
+      expect(counts.done).toBe(4);
+      expect(counts.failed).toBe(0);
+
+      const swarmRow = await db
+        .select({
+          status: simSwarm.status,
+          config: simSwarm.config,
+        })
+        .from(simSwarm)
+        .where(eq(simSwarm.id, BigInt(swarmId)))
+        .limit(1)
+        .then((rows) => rows[0]);
+      expect(swarmRow?.status).toBe("done");
+      const pcAggregate = (
+        swarmRow?.config as { pcAggregate?: { fishCount?: number; medianPc?: number } }
+      )?.pcAggregate;
+      expect(pcAggregate).toBeTruthy();
+      expect(pcAggregate?.fishCount).toBe(4);
+      expect(pcAggregate?.medianPc).toBe(0.00021);
+    },
+    90_000,
+  );
 });
+
+function useFixtureFallback(fallbackFixture: string): void {
+  setThalamusTransportConfigProvider(
+    new StaticConfigProvider({
+      ...DEFAULT_THALAMUS_TRANSPORT_CONFIG,
+      mode: "fixtures",
+      fixturesDir: FIXTURES_DIR,
+      fallbackFixture,
+    }),
+  );
+}
 
 function createFetchSimTransport(baseUrl: string) {
   return {
@@ -506,8 +596,15 @@ async function cleanE2E(): Promise<void> {
       AND o.slug LIKE ${`${SEED_TAG}%`}
   `);
   await db.execute(sql`
+    DELETE FROM sim_run r
+    USING sim_swarm s
+    WHERE r.swarm_id = s.id
+      AND s.title = ${`uc_pc_estimator:${CONJUNCTION_ID}`}
+  `);
+  await db.execute(sql`
     DELETE FROM sim_swarm
     WHERE title LIKE ${`uc_telemetry:%:${SEED_TAG}%`}
+       OR title = ${`uc_pc_estimator:${CONJUNCTION_ID}`}
   `);
   await db.execute(sql`DELETE FROM satellite WHERE slug LIKE ${`${SEED_TAG}%`}`);
   await db.execute(sql`DELETE FROM operator WHERE slug LIKE ${`${SEED_TAG}%`}`);

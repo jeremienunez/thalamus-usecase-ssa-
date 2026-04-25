@@ -4,6 +4,7 @@ import type { SimSwarmService } from "../services/sim-swarm.service";
 import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 import {
+  ClaimPendingFishBodySchema,
   CloseSwarmBodySchema,
   CreateSwarmBodySchema,
   LinkOutcomeBodySchema,
@@ -21,6 +22,7 @@ import {
   toSwarmConfig,
 } from "./sim-controller.utils";
 import {
+  toClaimedSwarmFishDto,
   toCreateSwarmDto,
   toEmptyDto,
   toSimSwarmDto,
@@ -40,6 +42,10 @@ type SimSwarmRowPort = Pick<
 type SimSwarmStatusPort = Pick<SwarmService, "status">;
 type SimSwarmStoreRoutePort = {
   abortSwarm(swarmId: number): Promise<void>;
+  claimPendingFishForSwarm(
+    swarmId: number,
+    limit: number,
+  ): Promise<Array<{ simRunId: number; fishIndex: number }>>;
   snapshotAggregate(input: {
     swarmId: number;
     key: string;
@@ -174,6 +180,24 @@ export function simSwarmAbortController(service: SimSwarmStoreRoutePort) {
     await service.abortSwarm(swarmId);
     return toEmptyDto();
   });
+}
+
+export function simClaimPendingFishController(
+  service: SimSwarmStoreRoutePort,
+) {
+  return asyncHandler<FastifyRequest<{ Params: unknown; Body: unknown }>>(
+    async (req, reply) => {
+      const params = parseOrReply(req.params, SimSwarmIdParamsSchema, reply);
+      if (params === null) return;
+      const body = parseOrReply(req.body, ClaimPendingFishBodySchema, reply);
+      if (body === null) return;
+      const rows = await service.claimPendingFishForSwarm(
+        parseSafeNumberId(params.id, "swarmId"),
+        body.limit,
+      );
+      return rows.map(toClaimedSwarmFishDto);
+    },
+  );
 }
 
 export function simSnapshotAggregateController(service: SimSwarmStoreRoutePort) {

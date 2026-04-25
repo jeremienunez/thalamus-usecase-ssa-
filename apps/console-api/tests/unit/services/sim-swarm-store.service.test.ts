@@ -41,6 +41,9 @@ describe("SimSwarmStoreService", () => {
         pending: 0,
         paused: 0,
       })),
+      claimPendingFishForSwarm: vi.fn(async () => [
+        { simRunId: 77n, fishIndex: 2 },
+      ]),
     };
     const terminalRepo = {
       listTerminalsForSwarm: vi.fn(async () => []),
@@ -74,6 +77,10 @@ describe("SimSwarmStoreService", () => {
       pending: 0,
       paused: 0,
     });
+    expect(await svc.claimPendingFishForSwarm(42, 1)).toEqual([
+      { simRunId: 77, fishIndex: 2 },
+    ]);
+    expect(runRepo.claimPendingFishForSwarm).toHaveBeenCalledWith(42n, 1);
   });
 
   it("delegates abort, aggregate snapshots and close writes to the swarm repo", async () => {
@@ -92,6 +99,7 @@ describe("SimSwarmStoreService", () => {
         pending: 0,
         paused: 0,
       })),
+      claimPendingFishForSwarm: vi.fn(async () => []),
     };
     const terminalRepo = {
       listTerminalsForSwarm: vi.fn(async () => []),

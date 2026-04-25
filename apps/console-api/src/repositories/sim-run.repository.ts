@@ -147,6 +147,34 @@ export class SimRunRepository {
     return out;
   }
 
+  async claimPendingFishForSwarm(
+    swarmId: bigint,
+    limit: number,
+  ): Promise<Array<{ simRunId: bigint; fishIndex: number }>> {
+    if (limit < 1) return [];
+    const rows = await this.db.execute<{ id: string; fish_index: number }>(sql`
+      WITH picked AS (
+        SELECT id
+        FROM sim_run
+        WHERE swarm_id = ${swarmId}
+          AND status = 'pending'
+        ORDER BY fish_index ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT ${limit}
+      )
+      UPDATE sim_run r
+      SET status = 'running'
+      FROM picked
+      WHERE r.id = picked.id
+      RETURNING r.id::text AS id, r.fish_index
+    `);
+
+    return rows.rows.map((row) => ({
+      simRunId: BigInt(row.id),
+      fishIndex: row.fish_index,
+    }));
+  }
+
   /**
    * Cascade failure: mark every sim_run in the swarm whose status is still
    * pending or running as failed. Called by the abort service as part of

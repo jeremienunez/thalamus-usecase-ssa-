@@ -19,6 +19,10 @@ export interface SimSwarmStoreSwarmPort {
 
 export interface SimSwarmStoreRunPort {
   countFishByStatus(swarmId: bigint): Promise<SimSwarmFishCounts>;
+  claimPendingFishForSwarm(
+    swarmId: bigint,
+    limit: number,
+  ): Promise<Array<{ simRunId: bigint; fishIndex: number }>>;
 }
 
 export interface SimSwarmStoreTerminalPort {
@@ -57,6 +61,17 @@ export class SimSwarmStoreService implements SimSwarmStore {
 
   countFishByStatus(swarmId: number) {
     return this.runRepo.countFishByStatus(BigInt(swarmId));
+  }
+
+  async claimPendingFishForSwarm(swarmId: number, limit: number) {
+    const rows = await this.runRepo.claimPendingFishForSwarm(
+      BigInt(swarmId),
+      limit,
+    );
+    return rows.map((row) => ({
+      simRunId: Number(row.simRunId),
+      fishIndex: row.fishIndex,
+    }));
   }
 
   async abortSwarm(swarmId: number): Promise<void> {

@@ -3,14 +3,248 @@
 Portfolio-readiness checklist for Thalamus + Sweep.
 
 **Trimmed 2026-04-25** - verified-done and stale entries moved to
-[DONE.md](DONE.md#migrated-from-todo--2026-04-25-trim). This file now tracks
-confirmed open work only. `tasks/todo.md` is historical: all 59 items are done.
+[DONE.md](DONE.md#migrated-from-todo--2026-04-25-trim). Sprint 0 and the
+closed Sprint 1 runtime items are also tracked in
+[DONE.md](DONE.md#sprint-closures--2026-04-25). This file now tracks confirmed
+open work only. `tasks/todo.md` is historical: all 59 items are done.
 
 Current fast checks from the trim pass:
 
-- `pnpm test:policy` - green, 294 files scanned, 0 grandfather casts.
-- `pnpm spec:check` - green, but 40 specs are still DRAFT/REVIEW and 0 are
+- `pnpm test:policy` - green, 307 files scanned, 0 grandfather casts.
+- `pnpm spec:check` - green, but 39 specs are still DRAFT/REVIEW and 0 are
   enforced.
+- `pnpm sim:smoke` - green for fixture-backed telemetry, PC, and UC3 swarms.
+- Sim LLM config boundary tests are green: sim launch/run config rejects
+  provider/model/reasoning/token/temperature knobs; executable fish LLM tuning
+  stays in the centralized `sim.fish` / Thalamus config path.
+
+---
+
+## Sprint Roadmap
+
+This is the execution order. The detailed backlog remains below; sprint entries
+reference the named items in the backlog. Do not start a downstream UI/eval
+sprint until the runtime/API exit checks from the earlier sprint are green.
+`TO-REVIEW.md` is treated as review intake: actionable items are mapped into
+this sprint roadmap, while stale/resolved review notes stay there as archive.
+
+### Sprint 0 - Done - Spec Gate Implementation
+
+Goal: turn the documentation surface into enforceable contracts instead of
+reader-only PDFs.
+
+Status: implementation closed 2026-04-25. The gate, CI jobs, strategic proof
+tests, and preamble/template exclusions moved to
+[DONE.md](DONE.md#sprint-closures--2026-04-25). Converting every current spec
+to APPROVED/IMPLEMENTED remains open under "Spec, Test, And CI Gaps".
+
+Scope:
+
+- `SPEC-GATE`, tri-layer traceability, spec validation CI, and DRAFT -> REVIEW
+  -> APPROVED policy.
+- `scripts/spec-check.ts` preamble exclusion and spec-build CI.
+- Minimum sweep/spec smoke coverage needed before any spec is called validated.
+- TO-REVIEW strategic-test gaps: labelled Thalamus query -> executor -> graph
+  write proof, labelled Sweep trigger -> finding -> reviewer accept -> audit
+  proof, and seeded sim determinism assertion.
+
+Exit checks:
+
+- `pnpm spec:check`
+- `make -C docs/specs all`
+- `pnpm test:unit`
+- `pnpm test:integration`
+- `pnpm test:e2e`
+
+### Sprint 1 - Fish Runtime Truth
+
+Goal: make Fish behavior match the architecture we want to present.
+
+Status: closed 2026-04-25. `SIM-F2` is closed as an architecture rejection:
+per-swarm LLM tuning is not allowed; `sim.fish` / Thalamus remains the unique
+executable LLM source of truth. `SIM-F3` through `SIM-F6` are implemented and
+moved to [DONE.md](DONE.md#sprint-closures--2026-04-25).
+
+Scope:
+
+- `SIM-F1` fish timeout and cancellation. Done.
+- `SIM-F2` per-swarm LLM config. Rejected/reframed: add guards, do not
+  duplicate `model`, `temperature`, `reasoningEffort`, or token knobs in sim
+  launch/run config.
+- `SIM-F3` real or explicitly removed fish concurrency semantics.
+- `SIM-F4` rich selector hints for specialized fish skills.
+- `SIM-F5` baseline/control fish policy.
+- `SIM-F6` fixture-backed sim smoke commands.
+
+Exit checks:
+
+- Fixture swarm launches and reaches aggregation without live cloud spend. Done
+  for current e2e fixture coverage.
+- Timed-out fish become `timeout` and still unblock aggregation. Done.
+- Telemetry/PC swarms select specialized skills when the seed exposes targets.
+  Done.
+- `fishConcurrency` is implemented as a real per-swarm claim/enqueue
+  constraint. Done.
+- Baseline/control fish policy is explicit: fish 0 must be `{ kind: "noop" }`.
+  Done.
+- Runnable sim smoke commands exist for fixture-backed telemetry, PC, and
+  conjunction swarms. Done: `pnpm sim:smoke` / `make sim-smoke`.
+
+### Sprint 2 - Fish Operator API
+
+Goal: expose enough backend surface for an operator to inspect and interrogate a
+swarm without touching DB internals.
+
+Scope:
+
+- Swarm list/status stream.
+- Fish turn timeline API.
+- Terminal cluster API.
+- Per-fish trace export.
+- Read-only post-run Q&A endpoint.
+- Aggregator / swarm-service / promotion `stepLog` emission.
+- Fish/provider/model/cost metadata in traces where available.
+
+Exit checks:
+
+- One API-level test launches a fixture swarm and reads status, timeline,
+  clusters, and trace export.
+- Q&A is persisted as review evidence and does not mutate fish memory unless a
+  promotion path explicitly does so.
+
+### Sprint 3 - 3D Fish Operator UI
+
+Goal: build the operator-facing 3D murmuration view for watching and questioning
+Fish swarms.
+
+Scope:
+
+- `SIM-F7` full-bleed Three.js/R3F swarm scene.
+- Instanced/pickable fish meshes or particles.
+- Orbit/fly camera, timeline scrubber, cluster/status filters.
+- Fish/cluster/swarm interrogation panel.
+- Bundle split so 3D dependencies stay scoped to the operator surface.
+- TO-REVIEW bundle-size warning: route-level lazy loading and manual chunks for
+  3D, graph, and base-shell dependencies.
+
+Exit checks:
+
+- Desktop and mobile Playwright screenshots.
+- Nonblank canvas pixel check.
+- Picking test.
+- Camera control test.
+- Stable performance with at least 200 fish.
+
+### Sprint 4 - Evaluation Protocol
+
+Goal: prove the architecture with paired, reproducible evals instead of anecdotal
+demos.
+
+Scope:
+
+- `EVAL-1` through `EVAL-10`.
+- Real eval corpus lock and manifest.
+- Paired runner, frozen baselines, nondeterminism statistics.
+- SSA + HRM metrics, provider telemetry, budget tiers, reports.
+
+Exit checks:
+
+- `$25` smoke run produces JSONL plus aggregate report.
+- Report includes commit SHA, manifest hash, model config, costs, scores, and
+  residual risks.
+
+### Sprint 5 - Core Architecture Debt
+
+Goal: reduce package-boundary ambiguity before expanding more product surface.
+
+Scope:
+
+- `C1`, `C2`, `C4`, `I5`, `I6`.
+- `M1`, `M2`, `M3`, `M4`, `M8`.
+
+Exit checks:
+
+- Research KG writes go through one approved writer surface.
+- Sim promotion is split into smaller services/ports.
+- Sweep/Thalamus coupling is either accepted as a merge or extracted behind a
+  third shared kernel boundary.
+- Redis full-list reads are bounded.
+
+### Sprint 6 - Runtime Hardening And Coverage
+
+Goal: close the remaining correctness and regression gaps.
+
+Scope:
+
+- Safe entity IDs.
+- Sweep feedback reproducibility payload.
+- `NanoSweepService` nullable/optional metrics.
+- Kimi limiter/queue policy.
+- Guardrail docs/tests.
+- Coverage policy, Vitest alias drift, CI coverage artifacts.
+- e2e smoke coverage, db-schema fresh-PG smoke, migration round-trip, strategic
+  sweep tests.
+
+Exit checks:
+
+- `pnpm test:policy`
+- `pnpm test`
+- `pnpm -r build`
+- Required CI path publishes coverage and spec artifacts.
+
+### Sprint 7 - Product, Docs, And Domain Polish
+
+Goal: finish the portfolio-grade edges once contracts, Fish runtime, and evals
+are grounded.
+
+Scope:
+
+- Per-query cortex filter UI and API plumbing.
+- TO-REVIEW frontend polish: decide whether the shared drawer should become
+  route-driven, add a shared `FindingCard` only if a third consumer appears, and
+  keep feature shells separate until then.
+- TO-REVIEW CLI cleanup: finish `telemetry.start` over HTTP, shrink
+  `packages/cli/src/boot.ts`, remove unnecessary heavy CLI infra deps, and add a
+  CLI arch-guard.
+- Planner-bias follow-ups and seed enrichment.
+- Env key documentation.
+- SGP4 cache LRU.
+- PG read-view/function follow-ups.
+- Skill prompt cleanup and SSE browser sanity check.
+- Broaden targeted Sweep auto-runs beyond the narrow `operator_country` path.
+- MissionService generation counter and user-triggered Thalamus budget decision.
+- Docs/CLI/observability tasks and domain follow-ups.
+
+Exit checks:
+
+- Updated docs link to the implemented flows.
+- One clean browser/operator walkthrough exercises REPL, Sweep suggestions,
+  reflexion, and Fish UI without known stream/API mismatch.
+
+---
+
+## TO-REVIEW Intake Map
+
+`TO-REVIEW.md` is ignored by Git, so the active mapping is tracked here. Use this
+section when draining old review notes into the sprint roadmap.
+
+- Bundle size warning -> Sprint 3 / Sprint 7 bundle split and lazy route
+  loading.
+- Zustand drawer concern -> Sprint 7 and "Shared drawer routing review".
+- SGP4 cache -> Sprint 7 and "SGP4 cache LRU".
+- FindingReadout / FindingsPanel duplication -> Sprint 7 and "Finding card
+  extraction trigger".
+- REPL follow-up gaps -> Sprint 7, "Live browser SSE sanity check", and
+  "Broaden targeted sweep auto-runs beyond `operator_country`".
+- Plan 5 / Plan 6 sim-kernel notes -> mostly resolved or superseded by C1/C2/M4
+  plus Sprint 1 Fish runtime work.
+- CLI Plan 3 leftovers -> Sprint 7 and "CLI Plan 3 cleanup".
+- Remaining strategic sweep gaps -> Sprint 6 and the strategic test backlog.
+- Fish quick-wins -> `SIM-F8`.
+
+---
+
+## Detailed Backlog
 
 ---
 
@@ -82,9 +316,17 @@ Current fast checks from the trim pass:
 - [ ] Bundle split - `build.rollupOptions.output.manualChunks` per mode
       (3D libs for ops only, sigma/graphology for thalamus only) plus lazy
       TanStack Router file routes per mode.
+- [ ] Shared drawer routing review - `shared/ui/uiStore.ts` currently owns a
+      cross-feature `drawerId` used by Ops, Thalamus, and Sweep. Decide whether
+      drawer state should become route-driven for back/forward/deep-link support,
+      or split into per-feature drawers behind a route-level state machine.
 - [ ] SGP4 cache LRU - `apps/console/src/adapters/propagator/sgp4.ts`
       still keeps `satrecByLine1` in an unbounded `Map`; add a small LRU
       (10,000 entries is ample).
+- [ ] Finding card extraction trigger - `FindingReadout` and `FindingsPanel`
+      still duplicate outer card chrome around severity, evidence, and decision
+      footer. Keep feature-specific shells for now; extract a presentational
+      `shared/ui/finding/FindingCard` only when a third consumer appears.
 - [ ] PG Step 5 - extract read-only views for `satellite-audit`
       (`auditDataCompleteness`, `auditClassification`) from
       `apps/console-api/src/repositories/satellite-audit.repository.ts`.
@@ -98,6 +340,10 @@ Current fast checks from the trim pass:
 - [ ] Live browser SSE sanity check - record one end-to-end REPL run where the
       parent summary is emitted first, child follow-up events follow, and the UI
       stream contract has no mismatch.
+- [ ] Broaden targeted sweep auto-runs beyond `operator_country`. The REPL
+      follow-up stack can launch current narrow targeted audits; add more target
+      policies only when each has deterministic fixture coverage and reviewer
+      outcome traces.
 - [ ] Keep the kernel generic as follow-up logic expands. Extend generic
       contracts only; keep SSA policy/execution in the app pack unless a second
       pack needs the same semantics.
@@ -119,43 +365,8 @@ Current fast checks from the trim pass:
 
 These were removed or softened in the architecture docs because the current
 code does not fully implement them yet. They are real implementation candidates,
-not documentation promises.
-
-- [ ] **SIM-F1 - enforce `perFishTimeoutMs` for swarm fish.** `sim_swarm.config`
-      stores `perFishTimeoutMs`, but `swarm-fish.worker.ts` currently drains the
-      inline turn loop without a wall-clock timeout. Wrap the fish run with
-      cancellation/timeout semantics, propagate `AbortSignal` into turn runners
-      and nano calls, mark timed-out runs as `timeout`, and still call
-      `onFishComplete()` so quorum/aggregation progresses.
-- [ ] **SIM-F2 - make swarm launch LLM config executable, not just metadata.**
-      `llmMode` and `nanoModel` are persisted on `sim_swarm` / `sim_run`, but
-      turn execution currently uses global `sim.fish` runtime config plus the
-      global Thalamus transport mode. Thread run/swarm config into
-      `callTurnAgent()` / `callNanoWithMode()` so fixture, record, cloud, model,
-      reasoning effort, output-token, and temperature choices are reproducible
-      per swarm.
-- [ ] **SIM-F3 - apply `fishConcurrency` as a real launch constraint.**
-      `swarm-fish.worker.ts` uses process-level worker concurrency
-      (`deps.concurrency ?? 8`), while launch config stores `fishConcurrency`.
-      Decide whether this should create per-swarm queue groups, a semaphore, or
-      remain process-level only; if kept, expose it as runtime worker config and
-      remove the per-launch field.
-- [ ] **SIM-F4 - pass rich selector hints for specialized fish skills.**
-      `SimCortexSelector` can choose telemetry/PC-specific skills, but the turn
-      runner only passes `hasScenarioContext` unless callers provide stronger
-      hints. Thread sim kind, seed target hints, telemetry target, PC target, and
-      subject context into `pickCortexName()` so telemetry and PC swarms do not
-      silently fall back to `sim_operator_agent` when a specialized skill exists.
-- [ ] **SIM-F5 - define baseline/control fish policy.** Some generators include
-      `{ kind: "noop" }`, but `launchSwarm()` does not inject a control fish.
-      Decide whether every counterfactual swarm must have fish 0 as a baseline,
-      or whether baseline is caller-owned. Then enforce it in launch validation,
-      perturbation generation, aggregation labels, and eval reporting.
-- [ ] **SIM-F6 - add runnable sim smoke commands only after the runtime contract
-      is real.** The docs no longer promise `/admin/sim` or `make sim-uc`.
-      Reintroduce a CLI/Make smoke path only when it can launch UC telemetry,
-      PC, and conjunction swarms against fixture data and assert terminal
-      aggregation without live cloud spend.
+not documentation promises. `SIM-F3` through `SIM-F6` are closed and moved to
+DONE; only open candidates remain below.
 - [ ] **SIM-F7 - build a 3D operator Fish UI.** Add a dedicated Three.js/R3F UI
       for launching, watching, and interrogating a fish swarm. The primary view
       should be a full-bleed 3D murmuration: each fish is an instanced/pickable
@@ -171,6 +382,12 @@ not documentation promises.
       read-only Q&A endpoint for post-run interrogation. Required frontend
       checks: desktop/mobile screenshots, nonblank canvas pixel check, picking
       test, camera control test, and stable performance for at least 200 fish.
+- [ ] **SIM-F8 - convert Fish quick-wins into scoped product specs.** The
+      `TO-REVIEW.md` quick-win list is valuable but too broad to implement as
+      one lump. Split into specs for: maneuver cost estimator with Pareto front,
+      why/provenance button from `research_edge`, anomaly triage micro-swarms,
+      operator posture inference, "dig into" follow-up micro-swarm, debris decay
+      forecaster, and what-if SSO deployment scenario.
 
 ---
 
@@ -203,23 +420,9 @@ not documentation promises.
 
 ## Spec, Test, And CI Gaps
 
-- [ ] **SPEC-GATE - no spec is validated without unit + integration + e2e
-      proof.** A spec may move to `APPROVED` / `IMPLEMENTED` only when every
-      acceptance criterion has all three traceability rows:
-      `unit`, `integration`, and `e2e`. The referenced test files and test
-      names must exist, and the matching `pnpm test:unit`,
-      `pnpm test:integration`, and `pnpm test:e2e` runs must be green. If any
-      layer is missing or red, the spec remains `DRAFT` / `REVIEW`; it is not
-      validated.
-- [ ] Upgrade `scripts/spec-check.ts` so enforced specs require the three
-      evidence layers per AC instead of a single generic test row. The checker
-      must fail when a trace row is missing `unit`, `integration`, or `e2e`,
-      when a referenced test is absent, or when the test name is not present.
-- [ ] Add a spec validation CI path that runs, in order:
-      `pnpm spec:check`, `pnpm test:unit`, `pnpm test:integration`, and
-      `pnpm test:e2e`. This path is the only way to mark a spec validated.
-- [ ] Move specs from DRAFT -> REVIEW -> APPROVED only after the tri-layer
-      validation above passes for that spec.
+- [ ] Keep specs in DRAFT / REVIEW until their unit + integration + e2e
+      traceability rows pass under `pnpm spec:check` and the matching test
+      suites are green.
 - [ ] Spec validation backlog - add unit + integration + e2e traceability for
       every current contract spec before approving it:
       - `SPEC-SH-001` `docs/specs/shared/try-async.tex`
@@ -291,10 +494,6 @@ not documentation promises.
       - `SPEC-ARCH-14` `docs/specs/architecture/14-package-onboarding.tex` -
         package onboarding, dependency graph, import boundaries, and allowed
         extension points.
-- [ ] Exclude `docs/specs/architecture/preamble-arch.tex` from
-      `scripts/spec-check.ts`; it is a LaTeX preamble, not a spec contract.
-- [ ] Add `spec-build` CI job - run `make all` in `docs/specs/` and publish
-      PDFs as artifacts.
 - [ ] Sweep spec tests still missing as spec-named coverage:
       `nano-sweep.{batching,parser,callbacks,cost,cap}`,
       `nano-sweep.readonly`, `finding-routing`, `resolution`, `feedback-loop`,
@@ -313,10 +512,9 @@ not documentation promises.
 - [ ] db-schema fresh-PG typed helper smoke beyond the current static
       `typed-repos.spec.ts`.
 - [ ] Schema migration round-trip.
-- [ ] Strategic sweep tests:
+- [ ] Strategic sweep tests still missing beyond the closed labelled resolution
+      proof:
       - `nano-sweep.service` emits the finding shape expected by finding routing
-      - `resolution.service` applies accepted suggestions in a transaction and
-        writes an audit row
       - reject feedback appears in the next-run prompt
       - rate-limit + dedupe in the chat repository
 - [ ] Unit tests for `applySatelliteFieldUpdate` + `applyKnnFill` (DB UPDATE +
@@ -381,8 +579,11 @@ not documentation promises.
 - [ ] `docs/threat-intel-mapping.md` - detailed walkthrough of the
       transposition.
 - [ ] Per-package `README.md` for thalamus and sweep.
-- [ ] `buildRealAdapters` in `packages/cli/src/boot.ts` - wire
-      thalamus/telemetry/graph/resolution/why to real services.
+- [ ] CLI Plan 3 cleanup - `buildRealAdapters` now wires runCycle, graph, why,
+      resolution, and candidate reads, but `telemetry.start` is still disabled.
+      Finish `POST /api/sim/telemetry/start` wiring, shrink
+      `packages/cli/src/boot.ts`, remove unnecessary heavy infra deps from
+      `packages/cli/package.json`, and add `packages/cli/tests/arch-guard.spec.ts`.
 - [ ] `analyst_briefing` end-to-end in `runCycle` output.
 - [ ] Aggregator / swarm-service / promotion `stepLog` emission.
 - [ ] HTTP `/metrics` endpoint on port 8080 serving `registry.metrics()`

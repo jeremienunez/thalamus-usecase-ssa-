@@ -98,6 +98,11 @@ export interface SwarmFishCountsDto {
   paused: number;
 }
 
+export interface ClaimedSwarmFishDto {
+  simRunId: string;
+  fishIndex: number;
+}
+
 export interface SimTurnInsertDto {
   simTurnId: string;
 }

@@ -77,7 +77,7 @@ export async function startTelemetrySwarm(
   },
   opts: TelemetrySwarmOpts,
 ): Promise<LaunchSwarmResult> {
-  const fishCount = opts.fishCount ?? DEFAULT_FISH_COUNT;
+  const fishCount = readPositiveInt(opts.fishCount, DEFAULT_FISH_COUNT);
   const swarmDefaults = await getSimSwarmConfig();
 
   stepLog(logger, "swarm", "start", {
@@ -109,13 +109,15 @@ export async function startTelemetrySwarm(
       busDatasheetPrior: priorLookup.prior ?? undefined,
     };
 
-    const personas = pickPersonas(fishCount);
-    const perturbations: PerturbationSpec[] = personas.map((riskProfile, i) => ({
-      kind: "persona_tweak",
-      agentIndex: 0,
-      riskProfile,
-      ...(i > 2 ? {} : {}),
-    }));
+    const personas = pickPersonas(Math.max(0, fishCount - 1));
+    const perturbations: PerturbationSpec[] = [
+      { kind: "noop" },
+      ...personas.map((riskProfile) => ({
+        kind: "persona_tweak",
+        agentIndex: 0,
+        riskProfile,
+      })),
+    ];
 
     const cfg: SwarmConfig = {
       llmMode: opts.config?.llmMode ?? "cloud",

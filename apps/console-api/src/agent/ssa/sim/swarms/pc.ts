@@ -42,6 +42,10 @@ export interface PcSwarmConjunctionReadPort {
   ): Promise<ConjunctionWithSatellitesRow | null>;
 }
 
+export interface PcSwarmLaunchPort {
+  launchSwarm: SwarmService["launchSwarm"];
+}
+
 async function loadConjunctionMeta(
   conjunctionRepo: PcSwarmConjunctionReadPort,
   conjunctionId: number,
@@ -56,8 +60,8 @@ async function loadConjunctionMeta(
 
 /** Build K perturbations cycling through radius × covariance pairs. */
 function buildPerturbations(fishCount: number): PerturbationSpec[] {
-  const specs: PerturbationSpec[] = [];
-  for (let i = 0; i < fishCount; i++) {
+  const specs: PerturbationSpec[] = [{ kind: "noop" }];
+  for (let i = 0; i < fishCount - 1; i++) {
     const radius = RADII_M[i % RADII_M.length]!;
     const cov = COV_SCALES[Math.floor(i / RADII_M.length) % COV_SCALES.length]!;
     specs.push({
@@ -72,11 +76,11 @@ function buildPerturbations(fishCount: number): PerturbationSpec[] {
 export async function startPcEstimatorSwarm(
   deps: {
     conjunctionRepo: PcSwarmConjunctionReadPort;
-    swarmService: SwarmService;
+    swarmService: PcSwarmLaunchPort;
   },
   opts: PcEstimatorSwarmOpts,
 ): Promise<LaunchSwarmResult & { conjunctionId: number }> {
-  const fishCount = opts.fishCount ?? DEFAULT_FISH_COUNT;
+  const fishCount = readPositiveInt(opts.fishCount, DEFAULT_FISH_COUNT);
   const swarmDefaults = await getSimSwarmConfig();
 
   stepLog(logger, "swarm", "start", {

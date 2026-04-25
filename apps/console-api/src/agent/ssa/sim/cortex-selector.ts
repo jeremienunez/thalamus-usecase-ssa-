@@ -5,9 +5,9 @@
  * PC_ESTIMATOR_CORTEX_NAME constants that lived in turn-runner-dag.ts +
  * turn-runner-sequential.ts. Dispatch:
  *
- *   hints.hasPcEstimatorTarget          → "pc_estimator_agent"
- *   hints.hasTelemetryTarget (and not Pc) → "telemetry_inference_agent"
- *   otherwise                            → "sim_operator_agent"
+ *   pc sim kind or hints.hasPcEstimatorTarget                 → "pc_estimator_agent"
+ *   telemetry sim kind or hints.hasTelemetryTarget (and not Pc) → "telemetry_inference_agent"
+ *   otherwise                                                  → "sim_operator_agent"
  */
 
 import type {
@@ -22,8 +22,21 @@ const PC_ESTIMATOR_CORTEX_NAME = "pc_estimator_agent";
 export class SsaCortexSelector implements SimCortexSelector {
   pickCortexName(input: CortexSelectionInput): string {
     const hints = input.hints ?? {};
-    if (hints.hasPcEstimatorTarget) return PC_ESTIMATOR_CORTEX_NAME;
-    if (hints.hasTelemetryTarget) return TELEMETRY_CORTEX_NAME;
+    const simKind = input.simKind;
+    if (isPcEstimatorKind(simKind) || hints.hasPcEstimatorTarget) {
+      return PC_ESTIMATOR_CORTEX_NAME;
+    }
+    if (isTelemetryKind(simKind) || hints.hasTelemetryTarget) {
+      return TELEMETRY_CORTEX_NAME;
+    }
     return DEFAULT_CORTEX_NAME;
   }
+}
+
+function isTelemetryKind(simKind: string): boolean {
+  return simKind === "uc_telemetry_inference" || simKind === "telemetry";
+}
+
+function isPcEstimatorKind(simKind: string): boolean {
+  return simKind === "uc_pc_estimator" || simKind === "pc";
 }

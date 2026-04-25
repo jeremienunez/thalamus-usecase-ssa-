@@ -28,6 +28,11 @@ export interface SimSwarmFishCounts {
   paused: number;
 }
 
+export interface SimSwarmPendingFish {
+  simRunId: number;
+  fishIndex: number;
+}
+
 export interface SimSwarmTerminalRow {
   simRunId: number;
   fishIndex: number;
@@ -47,6 +52,10 @@ export interface SimSwarmTerminalActionRow {
 export interface SimSwarmStore {
   getSwarm(swarmId: number): Promise<SimSwarmRecord | null>;
   countFishByStatus(swarmId: number): Promise<SimSwarmFishCounts>;
+  claimPendingFishForSwarm(
+    swarmId: number,
+    limit: number,
+  ): Promise<SimSwarmPendingFish[]>;
   abortSwarm(swarmId: number): Promise<void>;
   listTerminalsForSwarm(swarmId: number): Promise<SimSwarmTerminalRow[]>;
   listTerminalActionsForSwarm(

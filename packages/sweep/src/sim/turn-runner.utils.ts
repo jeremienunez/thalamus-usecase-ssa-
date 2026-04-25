@@ -90,9 +90,7 @@ export async function callTurnAgent(args: {
   const cortexName = args.deps.cortexSelector.pickCortexName({
     simKind: args.simKind ?? "",
     turnIndex: args.ctx.turnIndex,
-    hints: {
-      hasScenarioContext: args.ctx.scenarioContext !== null,
-    },
+    hints: buildCortexSelectionHints(args.ctx),
   });
   const skill = args.deps.cortexRegistry.get(cortexName);
   if (!skill) {
@@ -163,6 +161,30 @@ export async function callTurnAgent(args: {
   throw new Error(
     `${cortexName} response invalid after ${MAX_JSON_RETRIES + 1} attempts: ${lastError?.message}`,
   );
+}
+
+function buildCortexSelectionHints(ctx: AgentContext): Record<string, unknown> {
+  const scenarioContext = isRecord(ctx.scenarioContext) ? ctx.scenarioContext : null;
+  const subjectAttributes = isRecord(ctx.subjectSnapshot?.attributes)
+    ? ctx.subjectSnapshot.attributes
+    : {};
+
+  return {
+    hasScenarioContext: scenarioContext !== null,
+    hasTelemetryTarget:
+      scenarioContext?.telemetryTarget !== undefined ||
+      scenarioContext?.telemetryTargetSatelliteId !== undefined,
+    hasPcEstimatorTarget:
+      scenarioContext?.pcEstimatorTarget !== undefined ||
+      scenarioContext?.conjunctionEvent !== undefined,
+    scenarioContextKeys: scenarioContext ? Object.keys(scenarioContext).sort() : [],
+    subjectDisplayName: ctx.subjectSnapshot?.displayName ?? null,
+    subjectAttributeKeys: Object.keys(subjectAttributes).sort(),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 export async function buildTurnAgentContext(args: {

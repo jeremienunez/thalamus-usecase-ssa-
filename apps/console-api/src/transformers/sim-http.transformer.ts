@@ -1,4 +1,5 @@
 import type {
+  ClaimedSwarmFishDto,
   CreateAgentDto,
   CreateRunDto,
   CreateSwarmDto,
@@ -122,6 +123,16 @@ export function toSwarmFishCountsDto(
     running: counts.running,
     pending: counts.pending,
     paused: counts.paused,
+  };
+}
+
+export function toClaimedSwarmFishDto(input: {
+  simRunId: number;
+  fishIndex: number;
+}): ClaimedSwarmFishDto {
+  return {
+    simRunId: String(input.simRunId),
+    fishIndex: input.fishIndex,
   };
 }
 
