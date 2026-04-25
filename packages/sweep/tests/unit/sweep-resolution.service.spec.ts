@@ -110,7 +110,7 @@ describe("SweepResolutionService", () => {
     });
 
     await expect(service.resolve("sug-1")).resolves.toEqual({
-      status: "failed",
+      status: "pending_selection",
       affectedRows: 0,
       errors: ["Resolution already in progress"],
     });

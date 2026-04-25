@@ -98,7 +98,7 @@ export class SweepResolutionService {
       );
       if (!claimed) {
         return {
-          status: "failed",
+          status: "pending_selection",
           affectedRows: 0,
           errors: ["Resolution already in progress"],
         };

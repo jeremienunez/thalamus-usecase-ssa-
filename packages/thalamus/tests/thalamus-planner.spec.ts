@@ -371,6 +371,27 @@ describe("ThalamusPlanner.getDaemonDag", () => {
   });
 });
 
+describe("ThalamusPlanner.finalizePlan", () => {
+  it("rejects caller-supplied DAG nodes that reference unknown cortices", async () => {
+    const planner = new ThalamusPlanner(mkRegistry(["alpha"]));
+
+    await expect(
+      planner.finalizePlan({
+        intent: "caller supplied",
+        complexity: "moderate",
+        nodes: [
+          { cortex: "alpha", params: {}, dependsOn: [] },
+          { cortex: "ghost", params: {}, dependsOn: [] },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      name: "DagValidationError",
+      code: "unknown_cortex",
+      details: { cortex: "ghost" },
+    });
+  });
+});
+
 describe("ThalamusPlanner.buildManualDag", () => {
   it("builds a flat manual DAG from known cortex names and deduplicates repeats", () => {
     const planner = new ThalamusPlanner(mkRegistry(["alpha", "beta"]));

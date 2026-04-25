@@ -17,6 +17,7 @@ import type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 import { buildGenericPlannerSystemPrompt } from "../prompts";
 import { getPlannerConfig, getCortexConfig } from "../config/runtime-config";
 import { isAbortError } from "../transports/abort";
+import { DagValidationError } from "./dag-validation";
 
 const logger = createLogger("thalamus-planner");
 
@@ -409,7 +410,20 @@ export class ThalamusPlanner {
       cortexCfg,
     );
     const nodes = this.stripUserScoped(runtimeFiltered, opts, options.context);
+    this.assertKnownCortices(nodes);
     return { ...plan, nodes };
+  }
+
+  private assertKnownCortices(nodes: DAGNode[]): void {
+    for (const node of nodes) {
+      if (!this.registry.has(node.cortex)) {
+        throw new DagValidationError(
+          "unknown_cortex",
+          `DAG references unknown cortex "${node.cortex}"`,
+          { cortex: node.cortex },
+        );
+      }
+    }
   }
 }
 
