@@ -15,4 +15,16 @@ export const qk = {
   sweepSuggestions: () => ["sweep-suggestions"] as const,
   missionStatus: () => ["sweep-mission-status"] as const,
   autonomyStatus: () => ["autonomy-status"] as const,
+  operatorSwarms: (status?: string, kind?: string, cursor?: string) =>
+    ["sim-operator-swarms", status, kind, cursor] as const,
+  operatorSwarmStatus: (swarmId: string) =>
+    ["sim-operator-swarm-status", swarmId] as const,
+  operatorSwarmClusters: (swarmId: string) =>
+    ["sim-operator-swarm-clusters", swarmId] as const,
+  operatorSwarmTerminals: (swarmId: string) =>
+    ["sim-operator-swarm-terminals", swarmId] as const,
+  operatorFishTimeline: (swarmId: string, fishIndex: number) =>
+    ["sim-operator-fish-timeline", swarmId, fishIndex] as const,
+  operatorReviewEvidence: (swarmId: string) =>
+    ["sim-operator-review-evidence", swarmId] as const,
 };

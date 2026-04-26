@@ -12,6 +12,7 @@ export interface SimFishTerminalRow {
 
 export interface SimFishTerminalActionRow {
   simRunId: bigint;
+  fishIndex: number;
   runStatus: SimRunStatus;
   action: TurnAction | null;
 }

@@ -596,7 +596,6 @@ DONE; only open candidates remain below.
       `packages/cli/src/boot.ts`, remove unnecessary heavy infra deps from
       `packages/cli/package.json`, and add `packages/cli/tests/arch-guard.spec.ts`.
 - [ ] `analyst_briefing` end-to-end in `runCycle` output.
-- [ ] Aggregator / swarm-service / promotion `stepLog` emission.
 - [ ] HTTP `/metrics` endpoint on port 8080 serving `registry.metrics()`
       (`prom-client` text format).
 - [ ] Instrumentation at five points:

@@ -46,6 +46,34 @@ function makeSwarm(status: "done" | "running" = "done"): SimSwarmRow {
   };
 }
 
+function makePcSwarm(): SimSwarmRow {
+  return {
+    ...makeSwarm("done"),
+    kind: "uc_pc_estimator",
+    config: {
+      ...makeSwarm("done").config,
+      aggregate: undefined,
+      pcAggregate: {
+        conjunctionId: 99,
+        medianPc: 0.00021,
+        fishCount: 3,
+        clusters: [
+          {
+            label: "elliptical-overlap / degraded-covariance",
+            mode: "elliptical-overlap",
+            flags: ["degraded-covariance"],
+            pcRange: [0.0002, 0.0003],
+            fishCount: 2,
+            memberFishIndexes: [1, 2],
+            exemplarFishIndex: 1,
+            exemplarSimRunId: 11,
+          },
+        ],
+      },
+    } as SimSwarmRow["config"],
+  };
+}
+
 const run: SimRunRow = {
   id: 10n,
   swarmId: 1n,
@@ -226,5 +254,48 @@ describe("SimOperatorService", () => {
       source: "aggregate",
       clusters: [expect.objectContaining({ label: "maneuver" })],
     });
+  });
+
+  it("normalizes pcAggregate clusters into fish-member DTOs", async () => {
+    const { service, deps } = makeService("done");
+    deps.swarmRepo.findById.mockResolvedValue(makePcSwarm());
+
+    await expect(service.getClusters(1n)).resolves.toMatchObject({
+      swarmId: "1",
+      source: "pcAggregate",
+      clusters: [
+        {
+          label: "elliptical-overlap / degraded-covariance",
+          memberFishIndexes: [1, 2],
+          exemplarFishIndex: 1,
+          exemplarSimRunId: "11",
+          fishCount: 2,
+          pcRange: [0.0002, 0.0003],
+          mode: "elliptical-overlap",
+          flags: ["degraded-covariance"],
+        },
+      ],
+    });
+  });
+
+  it("seeds deterministic auto-review evidence for terminal aggregate swarms", async () => {
+    const { service, llmCall, evidenceInsert } = makeService("done");
+
+    const rows = await service.listEvidence(1n);
+
+    expect(llmCall).not.toHaveBeenCalled();
+    expect(evidenceInsert).toHaveBeenCalledTimes(3);
+    expect(rows.map((row) => row.question)).toEqual([
+      "Auto-review: What is the swarm-level outcome?",
+      "Auto-review: Which cluster drove the aggregate?",
+      "Auto-review: Which fish looks outlier or uncertain?",
+    ]);
+    expect(evidenceInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: "swarm",
+        question: "Auto-review: What is the swarm-level outcome?",
+        createdBy: null,
+      }),
+    );
   });
 });

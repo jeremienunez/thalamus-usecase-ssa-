@@ -246,6 +246,11 @@ export interface ThalamusTransportConfig {
   minimaxApiKey: string;
   minimaxModel: string;
   minimaxMaxTokens: number;
+
+  deepseekApiUrl: string;
+  deepseekApiKey: string;
+  deepseekModel: string;
+  deepseekMaxTokens: number;
 }
 
 export const DEFAULT_THALAMUS_TRANSPORT_CONFIG: ThalamusTransportConfig = {
@@ -267,6 +272,10 @@ export const DEFAULT_THALAMUS_TRANSPORT_CONFIG: ThalamusTransportConfig = {
   minimaxApiKey: "",
   minimaxModel: "MiniMax-M2.7",
   minimaxMaxTokens: 8192,
+  deepseekApiUrl: "https://api.deepseek.com/chat/completions",
+  deepseekApiKey: "",
+  deepseekModel: "deepseek-v4-flash",
+  deepseekMaxTokens: 8192,
 };
 
 // ─── console.autonomy — autonomous loop capacity caps ───────────────
@@ -321,7 +330,7 @@ export interface SimFishConfig {
   /** Cap on generated tokens per fish turn. 0 = provider default. */
   maxOutputTokens: number;
   temperature: number;
-  /** Enable thinking mode (Kimi K2.5 / Gemma 4 locally). */
+  /** Enable provider-native thinking mode (Kimi K2.5 / DeepSeek / Gemma 4 locally). */
   thinking: boolean;
 }
 
@@ -461,7 +470,7 @@ export type DomainSchema<D extends RuntimeConfigDomain> = {
  */
 export const MODEL_PRESETS: Array<{
   value: string;
-  provider: "local" | "kimi" | "openai" | "minimax";
+  provider: "local" | "kimi" | "openai" | "minimax" | "deepseek";
   label: string;
   /** Tunables the provider actually reads. UI greys out others. */
   supports: {
@@ -483,7 +492,7 @@ export const MODEL_PRESETS: Array<{
       reasoningEffort: true,
       maxOutputTokens: true,
       verbosity: true,
-      temperature: true,
+      temperature: false,
       topP: true,
     },
   },
@@ -559,6 +568,30 @@ export const MODEL_PRESETS: Array<{
     },
   },
   {
+    value: "deepseek-v4-flash",
+    provider: "deepseek",
+    label: "DeepSeek · V4 Flash",
+    supports: {
+      reasoningEffort: true,
+      maxOutputTokens: true,
+      thinking: true,
+      temperature: false,
+      topP: true,
+    },
+  },
+  {
+    value: "deepseek-v4-pro",
+    provider: "deepseek",
+    label: "DeepSeek · V4 Pro",
+    supports: {
+      reasoningEffort: true,
+      maxOutputTokens: true,
+      thinking: true,
+      temperature: false,
+      topP: true,
+    },
+  },
+  {
     value: "local/gemma-4-26B-A4B-it-Q3_K_M",
     provider: "local",
     label: "Local · Gemma 4 26B MoE Q3 (llama.cpp)",
@@ -584,11 +617,32 @@ export const MODEL_PRESETS: Array<{
   },
 ];
 
+export function modelSupportsTemperature(model: string): boolean {
+  const preset = MODEL_PRESETS.find((entry) => entry.value === model);
+  return preset?.supports.temperature !== false;
+}
+
+export type ModelPresetProvider = (typeof MODEL_PRESETS)[number]["provider"];
+
+export function modelPresetProvider(
+  model: string,
+): ModelPresetProvider | undefined {
+  const preset = MODEL_PRESETS.find((entry) => entry.value === model);
+  if (preset) return preset.provider;
+  if (model.startsWith("deepseek-")) return "deepseek";
+  if (model.startsWith("gpt-")) return "openai";
+  if (model.startsWith("kimi-")) return "kimi";
+  if (model.startsWith("MiniMax-")) return "minimax";
+  if (model.startsWith("local/")) return "local";
+  return undefined;
+}
+
 export const PROVIDER_CHOICES: readonly string[] = [
   "local",
   "kimi",
   "openai",
   "minimax",
+  "deepseek",
 ];
 
 export interface DomainSpec<D extends RuntimeConfigDomain> {

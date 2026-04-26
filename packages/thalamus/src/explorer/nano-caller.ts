@@ -11,18 +11,22 @@ import {
   type ConfigProvider,
   type NanoConfig,
   DEFAULT_NANO_CONFIG,
+  modelPresetProvider,
+  modelSupportsTemperature,
   StaticConfigProvider,
 } from "@interview/shared/config";
 import {
   getThalamusTransportConfig,
   resolveFixturesDir,
 } from "../config/transport-config";
+import { getDeepSeekConfig } from "../config/enrichment";
 import {
   abortError,
   abortSignalReason,
   throwIfAborted,
 } from "../transports/abort";
 import { stripThinkingChannels } from "../transports/providers/strip-thinking";
+import { callDeepSeekChatCompletion } from "../transports/providers/deepseek.client";
 
 const logger = createLogger("nano-caller");
 
@@ -72,6 +76,7 @@ export interface NanoRequest {
     reasoningEffort?: string;
     maxOutputTokens?: number;
     temperature?: number;
+    thinking?: boolean;
   };
 }
 
@@ -231,10 +236,18 @@ function createAbortSignal(
 }
 
 /**
- * Call gpt-5.4-nano with optional web search.
+ * Call the configured nano model. OpenAI models use Responses API; DeepSeek
+ * models use DeepSeek chat completions because the endpoint is OpenAI-compatible
+ * but not Responses-compatible.
  */
 export async function callNano(req: NanoRequest): Promise<NanoResponse> {
   const transportConfig = await getThalamusTransportConfig();
+  const cfg = await nanoConfigProvider.get();
+  const ov = req.overrides ?? {};
+  const model = ov.model && ov.model !== "" ? ov.model : cfg.model;
+  if (modelPresetProvider(model) === "deepseek") {
+    return callDeepSeekNano(req, model, ov, cfg.callTimeoutMs);
+  }
   if (!transportConfig.openaiApiKey) {
     return {
       ok: false,
@@ -245,9 +258,6 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
     };
   }
 
-  const cfg = await nanoConfigProvider.get();
-  const ov = req.overrides ?? {};
-  const model = ov.model && ov.model !== "" ? ov.model : cfg.model;
   const effort = ov.reasoningEffort ?? "low";
   const start = Date.now();
   const bodyBase: Record<string, unknown> = {
@@ -263,7 +273,7 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
   if (ov.maxOutputTokens && ov.maxOutputTokens > 0) {
     bodyBase.max_output_tokens = ov.maxOutputTokens;
   }
-  if (typeof ov.temperature === "number") {
+  if (typeof ov.temperature === "number" && modelSupportsTemperature(model)) {
     bodyBase.temperature = ov.temperature;
   }
   if (req.enableWebSearch !== false) {
@@ -343,6 +353,66 @@ export async function callNano(req: NanoRequest): Promise<NanoResponse> {
   }
 }
 
+async function callDeepSeekNano(
+  req: NanoRequest,
+  model: string,
+  ov: NonNullable<NanoRequest["overrides"]>,
+  timeoutMs: number,
+): Promise<NanoResponse> {
+  const config = await getDeepSeekConfig();
+  if (!config.apiKey) {
+    return {
+      ok: false,
+      text: "",
+      urls: [],
+      latencyMs: 0,
+      error: "DEEPSEEK_API_KEY missing",
+    };
+  }
+
+  const start = Date.now();
+  const abort = createAbortSignal(req.signal, timeoutMs);
+  try {
+    throwIfAborted(req.signal);
+    const result = await callDeepSeekChatCompletion(config, {
+      systemPrompt: req.instructions,
+      userPrompt: req.input,
+      model,
+      maxOutputTokens: ov.maxOutputTokens,
+      thinking: ov.thinking,
+      reasoningEffort: ov.reasoningEffort,
+      responseFormat: req.responseFormat ? "json_object" : undefined,
+      signal: abort.signal,
+    });
+    const text = stripThinkingChannels(result.content);
+    if (result.finishReason === "length") {
+      logger.warn(
+        {
+          model,
+          maxOutputTokens: ov.maxOutputTokens ?? null,
+          inputTokens: result.usage?.prompt_tokens,
+          outputTokens: result.usage?.completion_tokens,
+          reasoningTokens:
+            result.usage?.completion_tokens_details?.reasoning_tokens,
+          completionChars: text.length,
+        },
+        "DeepSeek nano call truncated",
+      );
+    }
+    return { ok: true, text, urls: extractUrls(text), latencyMs: Date.now() - start };
+  } catch (err: unknown) {
+    return {
+      ok: false,
+      text: "",
+      urls: [],
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message.slice(0, 120) : "Unknown error",
+    };
+  } finally {
+    abort.cleanup();
+  }
+}
+
 /**
  * Mode-aware nano call — honours THALAMUS_MODE=fixtures|record|cloud.
  *
@@ -361,7 +431,11 @@ export async function callNanoWithMode(req: NanoRequest): Promise<NanoResponse> 
   if (mode === "cloud") return callNano(req);
 
   const cfg = await nanoConfigProvider.get();
-  const hash = hashNano(req, cfg.model);
+  const model =
+    req.overrides?.model && req.overrides.model !== ""
+      ? req.overrides.model
+      : cfg.model;
+  const hash = hashNano(req, model);
   const dir = resolveFixturesDir(transportConfig.fixturesDir);
   const path = join(dir, `${hash}.json`);
 
@@ -397,7 +471,7 @@ export async function callNanoWithMode(req: NanoRequest): Promise<NanoResponse> 
     mkdirSync(dir, { recursive: true });
     const file: NanoFixtureFile = {
       text: live.text,
-      model: cfg.model,
+      model,
       recordedAt: new Date().toISOString(),
     };
     writeFileSync(path, JSON.stringify(file, null, 2), "utf-8");

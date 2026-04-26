@@ -2,7 +2,7 @@
  * Fixture LLM transport — disk-replay layer for offline / deterministic demos.
  *
  * Fixture file layout: fixtures/recorded/<sha256(systemPrompt + "\n--\n" + userPrompt)>.json
- * Shape: { content: string, provider: "local"|"kimi"|"openai"|"minimax"|"none", recordedAt: ISO string }
+ * Shape: { content: string, provider: "local"|"kimi"|"openai"|"minimax"|"deepseek"|"none", recordedAt: ISO string }
  *
  * Modes:
  *   - "fixtures" (read-only): replays from disk, throws on miss
@@ -20,6 +20,7 @@ import type {
   LlmTransport,
   LlmTransportCallOptions,
 } from "./types";
+import type { ProviderName } from "./providers/types";
 
 const logger = createLogger("fixture-transport");
 
@@ -44,7 +45,7 @@ export interface FixtureTransportOpts {
 
 interface FixtureFile {
   content: string;
-  provider: "local" | "kimi" | "openai" | "minimax" | "none";
+  provider: ProviderName | "none";
   recordedAt: string;
 }
 

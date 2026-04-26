@@ -109,8 +109,11 @@ export class SimRuntimeStoreHttpAdapter implements SimRuntimeStore {
   }
 
   async persistTurnBatch(input: Parameters<SimRuntimeStore["persistTurnBatch"]>[0]) {
+    const simRunId = input.agentTurns[0]?.simRunId ?? input.memoryRows[0]?.simRunId;
+    if (simRunId === undefined) return [];
+
     const dto = await this.http.post<PersistTurnBatchDto>(
-      `/api/sim/runs/${input.agentTurns[0]?.simRunId ?? input.memoryRows[0]?.simRunId}/turns/batch`,
+      `/api/sim/runs/${simRunId}/turns/batch`,
       {
         agentTurns: input.agentTurns.map((turn) => ({
           turnIndex: turn.turnIndex,

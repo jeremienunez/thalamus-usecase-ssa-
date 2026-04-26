@@ -59,18 +59,33 @@ describe("computePcAggregate", () => {
   });
 
   it("surfaces clusters with >= 2 fish, sorted by fishCount desc", () => {
-    const agg = computePcAggregate([
-      est(1e-4, "short-encounter", []),
-      est(2e-4, "short-encounter", []),
-      est(5e-3, "elliptical-overlap", ["degraded-covariance"]),
-      est(6e-3, "elliptical-overlap", ["degraded-covariance"]),
-      est(7e-3, "elliptical-overlap", ["degraded-covariance"]),
-      est(3e-6, "long-encounter"),
-    ])!;
+    const agg = computePcAggregate(
+      [
+        est(1e-4, "short-encounter", []),
+        est(2e-4, "short-encounter", []),
+        est(5e-3, "elliptical-overlap", ["degraded-covariance"]),
+        est(6e-3, "elliptical-overlap", ["degraded-covariance"]),
+        est(7e-3, "elliptical-overlap", ["degraded-covariance"]),
+        est(3e-6, "long-encounter"),
+      ],
+      42,
+      [
+        { fishIndex: 10, simRunId: 100 },
+        { fishIndex: 11, simRunId: 101 },
+        { fishIndex: 20, simRunId: 200 },
+        { fishIndex: 21, simRunId: 201 },
+        { fishIndex: 22, simRunId: 202 },
+        { fishIndex: 30, simRunId: 300 },
+      ],
+    )!;
     expect(agg.clusters.length).toBe(2);
     expect(agg.clusters[0]!.fishCount).toBe(3);
     expect(agg.clusters[0]!.mode).toBe("elliptical-overlap");
     expect(agg.clusters[0]!.flags).toEqual(["degraded-covariance"]);
+    expect(agg.clusters[0]!.label).toBe("elliptical-overlap / degraded-covariance");
+    expect(agg.clusters[0]!.memberFishIndexes).toEqual([20, 21, 22]);
+    expect(agg.clusters[0]!.exemplarFishIndex).toBe(21);
+    expect(agg.clusters[0]!.exemplarSimRunId).toBe(201);
   });
 
   it("derives severity from median", () => {

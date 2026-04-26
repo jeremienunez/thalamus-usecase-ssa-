@@ -9,6 +9,10 @@ import { createCyclesApi, type CyclesApiPort } from "./cycles";
 import { createSweepApi, type SweepApiPort } from "./sweep";
 import { createMissionApi, type MissionApiPort } from "./mission";
 import { createAutonomyApi, type AutonomyApiPort } from "./autonomy";
+import {
+  createSimOperatorApi,
+  type SimOperatorApiPort,
+} from "./sim-operator";
 
 export type { ApiFetcher };
 export type {
@@ -22,6 +26,7 @@ export type {
   SweepApiPort,
   MissionApiPort,
   AutonomyApiPort,
+  SimOperatorApiPort,
 };
 export type { CycleKind } from "./cycles";
 
@@ -36,6 +41,7 @@ export interface ApiClient {
   sweep: SweepApiPort;
   mission: MissionApiPort;
   autonomy: AutonomyApiPort;
+  simOperator: SimOperatorApiPort;
 }
 
 export function createApiClient(opts?: { fetcher?: ApiFetcher }): ApiClient {
@@ -51,5 +57,6 @@ export function createApiClient(opts?: { fetcher?: ApiFetcher }): ApiClient {
     sweep: createSweepApi(f),
     mission: createMissionApi(f),
     autonomy: createAutonomyApi(f),
+    simOperator: createSimOperatorApi(f),
   };
 }

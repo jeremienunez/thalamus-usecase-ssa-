@@ -8,7 +8,12 @@
  * and register it in the factory — no edits to the orchestrator.
  */
 
-export type ProviderName = "local" | "kimi" | "openai" | "minimax";
+export type ProviderName =
+  | "local"
+  | "kimi"
+  | "openai"
+  | "minimax"
+  | "deepseek";
 
 /**
  * Runtime per-call overrides. Every field is optional; providers read only
@@ -34,7 +39,7 @@ export interface LlmProviderCallOpts {
   /** OpenAI `text.verbosity`: low | medium | high. */
   verbosity?: string;
 
-  /** Kimi K2.5 / K2-thinking + Gemma 4 thinking toggle. */
+  /** Kimi K2.5 / DeepSeek V4 + Gemma 4 thinking toggle. */
   thinking?: boolean;
   /** llama.cpp server `reasoning_format`: none | deepseek | deepseek-legacy. */
   reasoningFormat?: string;

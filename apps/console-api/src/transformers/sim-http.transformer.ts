@@ -196,6 +196,7 @@ export function toSimFishTerminalActionDto(
 ): SimFishTerminalActionDto {
   return {
     simRunId: row.simRunId.toString(),
+    fishIndex: row.fishIndex,
     runStatus: row.runStatus,
     action: row.action as Record<string, unknown> | null,
   };

@@ -149,6 +149,13 @@ export class DagTurnRunner {
           llmCostUsd: null as number | null,
         }),
       );
+    if (agentTurns.length === 0) {
+      throw new Error(
+        `DAG turn failed for all agents: ${failures
+          .map((f) => `${f.agent.id}:${f.reason}`)
+          .join("; ")}`,
+      );
+    }
     const memoryRows: Parameters<DagRunnerDeps["store"]["persistTurnBatch"]>[0]["memoryRows"] = [];
     for (const s of successes) {
       memoryRows.push({

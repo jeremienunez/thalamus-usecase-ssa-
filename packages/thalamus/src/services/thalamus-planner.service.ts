@@ -172,7 +172,8 @@ export class ThalamusPlanner {
         plannerCfg.provider === "local" ||
         plannerCfg.provider === "kimi" ||
         plannerCfg.provider === "openai" ||
-        plannerCfg.provider === "minimax"
+        plannerCfg.provider === "minimax" ||
+        plannerCfg.provider === "deepseek"
           ? plannerCfg.provider
           : undefined,
       overrides: {

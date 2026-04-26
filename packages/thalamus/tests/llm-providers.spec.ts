@@ -5,6 +5,7 @@ import {
   type ThalamusTransportConfig,
 } from "@interview/shared/config";
 import { setThalamusTransportConfigProvider } from "../src/config/runtime-config";
+import { DeepSeekProvider } from "../src/transports/providers/deepseek.provider";
 import { KimiProvider } from "../src/transports/providers/kimi.provider";
 import { LocalProvider } from "../src/transports/providers/local.provider";
 import { MiniMaxProvider } from "../src/transports/providers/minimax.provider";
@@ -533,6 +534,120 @@ describe("MiniMaxProvider", () => {
       minimaxApiKey: "",
     });
     const provider = new MiniMaxProvider();
+
+    await provider.refreshConfig();
+
+    expect(provider.isEnabled()).toBe(false);
+  });
+});
+
+describe("DeepSeekProvider", () => {
+  it("forwards DeepSeek thinking knobs and strips inline thinking markers", async () => {
+    setTransportConfig({
+      deepseekApiUrl: "https://deepseek.test/chat/completions",
+      deepseekApiKey: "sk-deepseek",
+      deepseekModel: "deepseek-v4-flash",
+      deepseekMaxTokens: 144,
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "<think>hidden</think>done",
+              reasoning_content: "chain",
+            },
+          },
+        ],
+        usage: {
+          completion_tokens_details: { reasoning_tokens: 12 },
+        },
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DeepSeekProvider();
+
+    await provider.refreshConfig();
+    const result = await provider.call("SYSTEM", "USER", {
+      model: "deepseek-v4-pro",
+      maxOutputTokens: 50,
+      temperature: 0.2,
+      thinking: true,
+      reasoningEffort: "high",
+    });
+    const body = readBody(fetchMock);
+
+    expect(provider.isEnabled()).toBe(true);
+    expect(result).toBe("done");
+    expect(body).toMatchObject({
+      model: "deepseek-v4-pro",
+      max_tokens: 50,
+      thinking: { type: "enabled" },
+      reasoning_effort: "high",
+    });
+    expect(body).not.toHaveProperty("temperature");
+  });
+
+  it("uses config defaults and still omits temperature when DeepSeek thinking is disabled", async () => {
+    setTransportConfig({
+      deepseekApiUrl: "https://deepseek.test",
+      deepseekApiKey: "sk-deepseek",
+      deepseekModel: "deepseek-v4-flash",
+      deepseekMaxTokens: 144,
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "plain" } }],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DeepSeekProvider();
+
+    const result = await provider.call("SYSTEM", "USER", {
+      temperature: 0.3,
+      thinking: false,
+    });
+    const body = readBody(fetchMock);
+
+    expect(result).toBe("plain");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://deepseek.test/chat/completions",
+    );
+    expect(body).toMatchObject({
+      model: "deepseek-v4-flash",
+      max_tokens: 144,
+      thinking: { type: "disabled" },
+    });
+    expect(body).not.toHaveProperty("reasoning_effort");
+    expect(body).not.toHaveProperty("temperature");
+  });
+
+  it("throws a detailed error when the DeepSeek API fails", async () => {
+    setTransportConfig({
+      deepseekApiUrl: "https://deepseek.test/chat/completions",
+      deepseekApiKey: "sk-deepseek",
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      text: async () => "rate limited",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DeepSeekProvider();
+
+    await expect(provider.call("SYSTEM", "USER", {})).rejects.toThrow(
+      "DeepSeek API error 429: rate limited",
+    );
+  });
+
+  it("reports disabled when no DeepSeek API key is configured", async () => {
+    setTransportConfig({
+      deepseekApiKey: "",
+    });
+    const provider = new DeepSeekProvider();
 
     await provider.refreshConfig();
 

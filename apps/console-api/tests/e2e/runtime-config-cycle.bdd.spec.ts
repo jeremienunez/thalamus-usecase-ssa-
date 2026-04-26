@@ -11,7 +11,7 @@
  *
  * Structure:
  *   1. Provider smoke matrix — one test per provider in
- *      ["openai","kimi","minimax","local"]. Proves the chain reorder reaches
+ *      ["openai","kimi","minimax","deepseek","local"]. Proves the chain reorder reaches
  *      the real transport for that provider (no error + findingsEmitted ≥ 0).
  *   2. Universal behavioral tests — budget override, cortex kill switch,
  *      reflexion cap, run once against the cheapest config
@@ -34,13 +34,14 @@ import { patchConfig, resetAllConfig } from "./helpers/runtime-config";
 const RUN_LLM = process.env.RUN_LLM_E2E === "1";
 const BASE = process.env.CONSOLE_API_URL ?? "http://localhost:4000";
 
-const PROVIDERS = ["openai", "kimi", "minimax", "local"] as const;
+const PROVIDERS = ["openai", "kimi", "minimax", "deepseek", "local"] as const;
 type Provider = (typeof PROVIDERS)[number];
 
 const CHEAPEST_MODEL: Record<Provider, string> = {
   openai: "gpt-5.4-nano",
   kimi: "kimi-k2",
   minimax: "MiniMax-M2.7",
+  deepseek: "deepseek-v4-flash",
   local: "local/gemma-e4b-q8",
 };
 
@@ -52,6 +53,8 @@ function providerKeyPresent(p: string): boolean {
       return !!(process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY);
     case "minimax":
       return !!process.env.MINIMAX_API_KEY;
+    case "deepseek":
+      return !!process.env.DEEPSEEK_API_KEY;
     case "local":
       return !!process.env.LOCAL_LLM_URL;
     default:

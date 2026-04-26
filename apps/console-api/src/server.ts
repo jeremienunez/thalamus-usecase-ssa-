@@ -117,6 +117,19 @@ function readThalamusTransportConfigFromEnv(
       env.MINIMAX_MAX_TOKENS,
       DEFAULT_THALAMUS_TRANSPORT_CONFIG.minimaxMaxTokens,
     ),
+    deepseekApiUrl:
+      env.DEEPSEEK_API_URL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.deepseekApiUrl,
+    deepseekApiKey:
+      env.DEEPSEEK_API_KEY ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.deepseekApiKey,
+    deepseekModel:
+      env.DEEPSEEK_MODEL ??
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.deepseekModel,
+    deepseekMaxTokens: readNumberEnv(
+      env.DEEPSEEK_MAX_TOKENS,
+      DEFAULT_THALAMUS_TRANSPORT_CONFIG.deepseekMaxTokens,
+    ),
   };
 }
 

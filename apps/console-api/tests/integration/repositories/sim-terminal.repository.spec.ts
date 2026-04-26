@@ -116,11 +116,13 @@ describe("SimTerminalRepository", () => {
     expect(rows).toEqual([
       {
         simRunId: 10n,
+        fishIndex: 0,
         runStatus: "done",
         action: { kind: "maneuver", deltaVmps: 2.5 },
       },
       {
         simRunId: 11n,
+        fishIndex: 1,
         runStatus: "failed",
         action: null,
       },

@@ -91,4 +91,109 @@ describe("thalamus transport config provider", () => {
       }),
     );
   });
+
+  it("omits temperature for nano models that do not support it", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        output: [
+          {
+            type: "message",
+            content: [{ type: "output_text", text: "ok" }],
+          },
+        ],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    setThalamusTransportConfigProvider(
+      new StaticConfigProvider({
+        ...DEFAULT_THALAMUS_TRANSPORT_CONFIG,
+        openaiApiKey: "sk-test",
+      }),
+    );
+    setNanoConfigProvider(
+      new StaticConfigProvider({
+        ...DEFAULT_NANO_CONFIG,
+        model: "gpt-5.4-nano",
+      }),
+    );
+
+    await expect(
+      callNano({
+        instructions: "system",
+        input: "user",
+        enableWebSearch: false,
+        overrides: { temperature: 0.2 },
+      }),
+    ).resolves.toMatchObject({ ok: true, text: "ok" });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({ model: "gpt-5.4-nano" });
+    expect(body).not.toHaveProperty("temperature");
+  });
+
+  it("routes DeepSeek nano models through the DeepSeek chat endpoint", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "{\"action\":\"ok\"}",
+              reasoning_content: "hidden",
+            },
+          },
+        ],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    setThalamusTransportConfigProvider(
+      new StaticConfigProvider({
+        ...DEFAULT_THALAMUS_TRANSPORT_CONFIG,
+        deepseekApiUrl: "https://deepseek.test",
+        deepseekApiKey: "sk-deepseek",
+      }),
+    );
+    setNanoConfigProvider(
+      new StaticConfigProvider({
+        ...DEFAULT_NANO_CONFIG,
+        model: "deepseek-v4-flash",
+      }),
+    );
+
+    await expect(
+      callNano({
+        instructions: "Return json.",
+        input: "user",
+        enableWebSearch: false,
+        responseFormat: {
+          type: "json_schema",
+          name: "action",
+          strict: true,
+          schema: { type: "object" },
+        },
+        overrides: {
+          thinking: true,
+          reasoningEffort: "high",
+          temperature: 0.2,
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      text: "{\"action\":\"ok\"}",
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://deepseek.test/chat/completions",
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({
+      model: "deepseek-v4-flash",
+      thinking: { type: "enabled" },
+      reasoning_effort: "high",
+      response_format: { type: "json_object" },
+    });
+    expect(body).not.toHaveProperty("temperature");
+  });
 });

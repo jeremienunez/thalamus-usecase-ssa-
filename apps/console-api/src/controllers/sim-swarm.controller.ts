@@ -59,6 +59,9 @@ type SimSwarmStoreRoutePort = {
     completedAt?: Date;
   }): Promise<void>;
 };
+type SimSwarmAutoReviewPort = {
+  recordAutoReviewEvidence(swarmId: bigint): Promise<void>;
+};
 
 export function simCreateSwarmController(service: SimSwarmRowPort) {
   return asyncHandler<FastifyRequest<{ Body: unknown }>>(async (req, reply) => {
@@ -217,15 +220,19 @@ export function simSnapshotAggregateController(service: SimSwarmStoreRoutePort) 
   );
 }
 
-export function simCloseSwarmController(service: SimSwarmStoreRoutePort) {
+export function simCloseSwarmController(
+  service: SimSwarmStoreRoutePort,
+  autoReview?: SimSwarmAutoReviewPort,
+) {
   return asyncHandler<FastifyRequest<{ Params: unknown; Body: unknown }>>(
     async (req, reply) => {
       const params = parseOrReply(req.params, SimSwarmIdParamsSchema, reply);
       if (params === null) return;
       const body = parseOrReply(req.body, CloseSwarmBodySchema, reply);
       if (body === null) return;
+      const swarmId = parseSafeNumberId(params.id, "swarmId");
       await service.closeSwarm({
-        swarmId: parseSafeNumberId(params.id, "swarmId"),
+        swarmId,
         status: body.status,
         suggestionId:
           body.suggestionId === undefined
@@ -242,6 +249,14 @@ export function simCloseSwarmController(service: SimSwarmStoreRoutePort) {
         completedAt:
           body.completedAt === undefined ? undefined : new Date(body.completedAt),
       });
+      try {
+        await autoReview?.recordAutoReviewEvidence(BigInt(swarmId));
+      } catch (err) {
+        req.log.warn(
+          { err, swarmId },
+          "sim auto-review evidence seeding failed after close",
+        );
+      }
       return toEmptyDto();
     },
   );

@@ -84,6 +84,7 @@ describe("LlmChatTransport", () => {
       "local",
       "kimi",
       "minimax",
+      "deepseek",
       "openai",
     ]);
     expect(config).toEqual({

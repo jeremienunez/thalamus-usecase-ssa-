@@ -82,3 +82,7 @@ design-system/
 /thalamus-*.png
 /ops-snapshot-*.md
 /palette-snapshot*.md
+
+# Heavy frontend binary assets — fetched/generated locally, not committed
+apps/console/public/assets/models/*.glb
+apps/console/public/assets/models/*.gltf

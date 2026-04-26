@@ -10,4 +10,5 @@ export { LocalProvider } from "./local.provider";
 export { KimiProvider } from "./kimi.provider";
 export { OpenAIProvider } from "./openai.provider";
 export { MiniMaxProvider } from "./minimax.provider";
+export { DeepSeekProvider } from "./deepseek.provider";
 export { stripThinkingChannels } from "./strip-thinking";

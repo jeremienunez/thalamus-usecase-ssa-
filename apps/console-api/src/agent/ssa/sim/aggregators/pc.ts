@@ -28,6 +28,10 @@ const logger = createLogger("sim-pc-aggregator");
 export type PcSeverity = "high" | "medium" | "info";
 
 export interface PcCluster {
+  label: string;
+  memberFishIndexes: number[];
+  exemplarFishIndex: number;
+  exemplarSimRunId: number | null;
   mode: string;
   flags: string[];
   pcRange: [number, number];
@@ -69,6 +73,20 @@ interface PcEstimateAction {
   flags: string[];
 }
 
+interface PcActionMetadata {
+  fishIndex?: number;
+  simRunId?: number;
+}
+
+interface PcEstimateSample {
+  conjunctionId: number;
+  pcEstimate: number;
+  dominantMode: string;
+  flags: string[];
+  fishIndex: number;
+  simRunId: number | null;
+}
+
 export function severityFromMedian(median: number): PcSeverity {
   if (median >= 1e-3) return "high";
   if (median >= 1e-4) return "medium";
@@ -82,12 +100,25 @@ export function severityFromMedian(median: number): PcSeverity {
 export function computePcAggregate(
   actions: SsaTurnAction[],
   fallbackConjunctionId?: number,
+  metadata: PcActionMetadata[] = [],
 ): PcAggregate | null {
   const estimates = actions
-    .filter((action): action is SsaTurnAction & { kind: "estimate_pc" } => {
-      return action?.kind === "estimate_pc";
+    .map((action, ordinal) => ({ action, ordinal }))
+    .filter((row): row is { action: SsaTurnAction & { kind: "estimate_pc" }; ordinal: number } => {
+      return row.action?.kind === "estimate_pc";
     })
-    .map((action) => action as unknown as PcEstimateAction);
+    .map(({ action, ordinal }): PcEstimateSample => {
+      const estimate = action as unknown as PcEstimateAction;
+      const meta = metadata[ordinal];
+      return {
+        conjunctionId: estimate.conjunctionId,
+        pcEstimate: estimate.pcEstimate,
+        dominantMode: estimate.dominantMode,
+        flags: estimate.flags,
+        fishIndex: meta?.fishIndex ?? ordinal,
+        simRunId: meta?.simRunId ?? null,
+      };
+    });
   if (estimates.length === 0) return null;
 
   const samples = estimates.map((e) => e.pcEstimate).sort((a, b) => a - b);
@@ -99,29 +130,37 @@ export function computePcAggregate(
   // Cluster by (mode, sorted(flags)). Emit clusters with ≥ 2 fish.
   const clusterMap = new Map<
     string,
-    { mode: string; flags: string[]; pcs: number[] }
+    { mode: string; flags: string[]; samples: PcEstimateSample[] }
   >();
   for (const e of estimates) {
     const flags = [...e.flags].sort();
     const key = `${e.dominantMode}|${flags.join(",")}`;
-    const cur: { mode: string; flags: string[]; pcs: number[] } =
+    const cur: { mode: string; flags: string[]; samples: PcEstimateSample[] } =
       clusterMap.get(key) ?? {
       mode: e.dominantMode,
       flags,
-      pcs: [],
+      samples: [],
       };
-    cur.pcs.push(e.pcEstimate);
+    cur.samples.push(e);
     clusterMap.set(key, cur);
   }
   const clusters: PcCluster[] = [];
-  for (const { mode, flags, pcs } of clusterMap.values()) {
-    if (pcs.length < 2) continue;
-    const sorted = [...pcs].sort((a, b) => a - b);
+  for (const { mode, flags, samples: clusterSamples } of clusterMap.values()) {
+    if (clusterSamples.length < 2) continue;
+    const sorted = [...clusterSamples].sort((a, b) => a.pcEstimate - b.pcEstimate);
+    const exemplar = sorted[Math.floor((sorted.length - 1) / 2)]!;
+    const memberFishIndexes = [...clusterSamples]
+      .map((sample) => sample.fishIndex)
+      .sort((a, b) => a - b);
     clusters.push({
+      label: clusterLabel(mode, flags),
+      memberFishIndexes,
+      exemplarFishIndex: exemplar.fishIndex,
+      exemplarSimRunId: exemplar.simRunId,
       mode,
       flags,
-      pcRange: [sorted[0]!, sorted[sorted.length - 1]!],
-      fishCount: pcs.length,
+      pcRange: [sorted[0]!.pcEstimate, sorted[sorted.length - 1]!.pcEstimate],
+      fishCount: clusterSamples.length,
     });
   }
   clusters.sort((a, b) => b.fishCount - a.fishCount);
@@ -139,6 +178,10 @@ export function computePcAggregate(
     samples,
     severity: severityFromMedian(median),
   };
+}
+
+function clusterLabel(mode: string, flags: string[]): string {
+  return flags.length === 0 ? mode : `${mode} / ${flags.join("+")}`;
 }
 
 export function aggregateToSuggestion(agg: PcAggregate): PcSweepSuggestion {
@@ -186,13 +229,15 @@ export class PcAggregatorService {
     );
 
     const actions: SsaTurnAction[] = [];
+    const metadata: PcActionMetadata[] = [];
     for (const row of rows) {
       if (row.runStatus === "done" && row.action) {
         actions.push(row.action as SsaTurnAction);
+        metadata.push({ fishIndex: row.fishIndex, simRunId: row.simRunId });
       }
     }
 
-    const aggregate = computePcAggregate(actions, conjunctionId);
+    const aggregate = computePcAggregate(actions, conjunctionId, metadata);
     if (!aggregate) {
       logger.warn({ swarmId: opts.swarmId }, "pc aggregator: no estimates");
       return { aggregate: null, suggestion: null };

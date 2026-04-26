@@ -45,6 +45,7 @@ export interface SimSwarmTerminalRow {
 
 export interface SimSwarmTerminalActionRow {
   simRunId: number;
+  fishIndex: number;
   runStatus: SimRunStatus;
   action: TurnAction | null;
 }

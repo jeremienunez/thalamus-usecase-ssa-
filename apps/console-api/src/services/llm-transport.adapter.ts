@@ -13,8 +13,14 @@ import type { LlmTransportFactory } from "./llm-transport.port";
 
 function pickProvider(
   v: string | undefined,
-): "local" | "kimi" | "openai" | "minimax" | undefined {
-  if (v === "local" || v === "kimi" || v === "openai" || v === "minimax") {
+): "local" | "kimi" | "openai" | "minimax" | "deepseek" | undefined {
+  if (
+    v === "local" ||
+    v === "kimi" ||
+    v === "openai" ||
+    v === "minimax" ||
+    v === "deepseek"
+  ) {
     return v;
   }
   return undefined;

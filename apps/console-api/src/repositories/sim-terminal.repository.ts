@@ -5,8 +5,8 @@
  * This repo owns two queries only:
  *   - full terminals (sim_run + terminal sim_turn + sim_agent + turn
  *     count) for the narrative aggregator's clustering input;
- *   - slim terminal actions (sim_run + terminal sim_turn action JSONB)
- *     for the scalar (telemetry) aggregator's stats input.
+ *   - slim terminal actions (sim_run + fish index + terminal sim_turn action
+ *     JSONB) for scalar aggregators that need per-fish cluster membership.
  *
  * Both queries use `SELECT DISTINCT ON` to pick the latest agent turn per
  * fish. Runs with zero agent turns (quorum-fail cases) still appear with
@@ -128,12 +128,14 @@ export class SimTerminalRepository {
   ): Promise<SimFishTerminalActionRow[]> {
     const rows = await this.db.execute<{
       sim_run_id: string;
+      fish_index: number;
       run_status: SimRunStatus;
       action: TurnAction | null;
     }>(sql`
       ${simTerminalBaseCtes(swarmId)}
       SELECT
         l.sim_run_id::text AS sim_run_id,
+        l.fish_index,
         l.run_status,
         l.action
       FROM latest l
@@ -141,6 +143,7 @@ export class SimTerminalRepository {
     `);
     return rows.rows.map((r) => ({
       simRunId: BigInt(r.sim_run_id),
+      fishIndex: r.fish_index,
       runStatus: r.run_status,
       action: r.action,
     }));

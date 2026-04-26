@@ -121,6 +121,7 @@ export function fromSimFishTerminalActionDto(
 ): SimSwarmTerminalActionRow {
   return {
     simRunId: parseDtoId(dto.simRunId, "simRunId"),
+    fishIndex: dto.fishIndex,
     runStatus: dto.runStatus,
     action: dto.action as TurnAction | null,
   };

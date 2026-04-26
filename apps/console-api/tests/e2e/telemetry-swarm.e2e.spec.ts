@@ -407,11 +407,29 @@ describe("Telemetry swarm — E2E", () => {
         .then((rows) => rows[0]);
       expect(swarmRow?.status).toBe("done");
       const pcAggregate = (
-        swarmRow?.config as { pcAggregate?: { fishCount?: number; medianPc?: number } }
+        swarmRow?.config as {
+          pcAggregate?: {
+            fishCount?: number;
+            medianPc?: number;
+            clusters?: Array<{
+              label?: string;
+              memberFishIndexes?: number[];
+              exemplarFishIndex?: number;
+              exemplarSimRunId?: number | null;
+            }>;
+          };
+        }
       )?.pcAggregate;
       expect(pcAggregate).toBeTruthy();
       expect(pcAggregate?.fishCount).toBe(4);
       expect(pcAggregate?.medianPc).toBe(0.00021);
+      expect(pcAggregate?.clusters?.[0]).toEqual(
+        expect.objectContaining({
+          label: expect.any(String),
+          memberFishIndexes: expect.any(Array),
+          exemplarFishIndex: expect.any(Number),
+        }),
+      );
     },
     90_000,
   );

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ThalamusRouteImport } from './routes/thalamus'
 import { Route as SweepRouteImport } from './routes/sweep'
 import { Route as OpsRouteImport } from './routes/ops'
+import { Route as FishRouteImport } from './routes/fish'
 import { Route as ConfigRouteImport } from './routes/config'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -30,6 +31,11 @@ const OpsRoute = OpsRouteImport.update({
   path: '/ops',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FishRoute = FishRouteImport.update({
+  id: '/fish',
+  path: '/fish',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConfigRoute = ConfigRouteImport.update({
   id: '/config',
   path: '/config',
@@ -44,6 +50,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/config': typeof ConfigRoute
+  '/fish': typeof FishRoute
   '/ops': typeof OpsRoute
   '/sweep': typeof SweepRoute
   '/thalamus': typeof ThalamusRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/config': typeof ConfigRoute
+  '/fish': typeof FishRoute
   '/ops': typeof OpsRoute
   '/sweep': typeof SweepRoute
   '/thalamus': typeof ThalamusRoute
@@ -59,21 +67,23 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/config': typeof ConfigRoute
+  '/fish': typeof FishRoute
   '/ops': typeof OpsRoute
   '/sweep': typeof SweepRoute
   '/thalamus': typeof ThalamusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/config' | '/ops' | '/sweep' | '/thalamus'
+  fullPaths: '/' | '/config' | '/fish' | '/ops' | '/sweep' | '/thalamus'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/config' | '/ops' | '/sweep' | '/thalamus'
-  id: '__root__' | '/' | '/config' | '/ops' | '/sweep' | '/thalamus'
+  to: '/' | '/config' | '/fish' | '/ops' | '/sweep' | '/thalamus'
+  id: '__root__' | '/' | '/config' | '/fish' | '/ops' | '/sweep' | '/thalamus'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConfigRoute: typeof ConfigRoute
+  FishRoute: typeof FishRoute
   OpsRoute: typeof OpsRoute
   SweepRoute: typeof SweepRoute
   ThalamusRoute: typeof ThalamusRoute
@@ -102,6 +112,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OpsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fish': {
+      id: '/fish'
+      path: '/fish'
+      fullPath: '/fish'
+      preLoaderRoute: typeof FishRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/config': {
       id: '/config'
       path: '/config'
@@ -122,6 +139,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConfigRoute: ConfigRoute,
+  FishRoute: FishRoute,
   OpsRoute: OpsRoute,
   SweepRoute: SweepRoute,
   ThalamusRoute: ThalamusRoute,

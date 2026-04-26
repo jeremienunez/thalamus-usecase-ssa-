@@ -24,6 +24,7 @@ import { extractJsonObject } from "@interview/shared/utils";
 import { abortableDelay, isAbortError, throwIfAborted } from "./abort";
 import {
   KimiProvider,
+  DeepSeekProvider,
   LocalProvider,
   MiniMaxProvider,
   OpenAIProvider,
@@ -314,6 +315,7 @@ export function createLlmTransport(
       new LocalProvider(),
       new KimiProvider(),
       new MiniMaxProvider(),
+      new DeepSeekProvider(),
       new OpenAIProvider(),
     ],
   );

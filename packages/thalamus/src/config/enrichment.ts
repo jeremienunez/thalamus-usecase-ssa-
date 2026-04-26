@@ -31,6 +31,13 @@ export interface MiniMaxConfig {
   maxTokens: number;
 }
 
+export interface DeepSeekConfig {
+  url: string;
+  apiKey: string;
+  model: string;
+  maxTokens: number;
+}
+
 function toKimiConfig(cfg: ThalamusTransportConfig): KimiConfig {
   return {
     url: cfg.kimiApiUrl,
@@ -65,6 +72,15 @@ function toMiniMaxConfig(cfg: ThalamusTransportConfig): MiniMaxConfig {
     apiKey: cfg.minimaxApiKey,
     model: cfg.minimaxModel,
     maxTokens: cfg.minimaxMaxTokens,
+  };
+}
+
+function toDeepSeekConfig(cfg: ThalamusTransportConfig): DeepSeekConfig {
+  return {
+    url: cfg.deepseekApiUrl,
+    apiKey: cfg.deepseekApiKey,
+    model: cfg.deepseekModel,
+    maxTokens: cfg.deepseekMaxTokens,
   };
 }
 
@@ -108,3 +124,14 @@ export function getMinimaxConfigSnapshot(): MiniMaxConfig {
 
 export const isMinimaxEnabled = (): boolean =>
   Boolean(getMinimaxConfigSnapshot().apiKey);
+
+export async function getDeepSeekConfig(): Promise<DeepSeekConfig> {
+  return toDeepSeekConfig(await getThalamusTransportConfig());
+}
+
+export function getDeepSeekConfigSnapshot(): DeepSeekConfig {
+  return toDeepSeekConfig(getThalamusTransportConfigSnapshot());
+}
+
+export const isDeepSeekEnabled = (): boolean =>
+  Boolean(getDeepSeekConfigSnapshot().apiKey);

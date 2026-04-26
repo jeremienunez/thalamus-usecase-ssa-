@@ -112,7 +112,13 @@ export async function analyzeCortexData(input: CortexLlmInput): Promise<{
   }
 
   const pickProvider = (v: string | undefined): ProviderName | undefined => {
-    if (v === "local" || v === "kimi" || v === "openai" || v === "minimax") {
+    if (
+      v === "local" ||
+      v === "kimi" ||
+      v === "openai" ||
+      v === "minimax" ||
+      v === "deepseek"
+    ) {
       return v;
     }
     return undefined;

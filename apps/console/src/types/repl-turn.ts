@@ -42,6 +42,10 @@ export type WhyStats = {
 };
 
 export type PcCluster = {
+  label?: string;
+  memberFishIndexes?: number[];
+  exemplarFishIndex?: number;
+  exemplarSimRunId?: number | null;
   mode: string;
   flags: string[];
   pcRange: [number, number];

@@ -139,6 +139,15 @@ console: ## Run console-api + console dev server in parallel (Palantir UI on :51
 	 pnpm --filter @interview/console dev & \
 	 wait)
 
+.PHONY: console-full
+console-full: ## Run console-api + console UI + sim workers in parallel
+	@echo "▶ console-api :4000 · console :5173 · sim workers"
+	@(trap 'kill 0' INT TERM; \
+	 pnpm --filter @interview/console-api dev & \
+	 pnpm --filter @interview/console-api sim:workers & \
+	 pnpm --filter @interview/console dev & \
+	 wait)
+
 .PHONY: console-api
 console-api: ## Run the read-only Fastify API backing the console
 	pnpm --filter @interview/console-api dev
@@ -146,6 +155,10 @@ console-api: ## Run the read-only Fastify API backing the console
 .PHONY: console-ui
 console-ui: ## Run the Vite dev server for the console only
 	pnpm --filter @interview/console dev
+
+.PHONY: sim-workers
+sim-workers: ## Run sim BullMQ workers for swarm fish and aggregation
+	pnpm --filter @interview/console-api sim:workers
 
 ##@ Quality
 # ── Quality ──────────────────────────────────────────────────────────────────

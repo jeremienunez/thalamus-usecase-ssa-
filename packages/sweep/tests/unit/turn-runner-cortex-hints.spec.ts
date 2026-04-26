@@ -89,4 +89,65 @@ describe("callTurnAgent cortex selection hints", () => {
       },
     });
   });
+
+  it("accepts a direct action object when the model omits the turn envelope", async () => {
+    thalamus.callNanoWithMode.mockResolvedValueOnce({
+      ok: true,
+      text: JSON.stringify({
+        kind: "noop",
+        reason: "direct action rationale",
+      }),
+    });
+
+    const response = await callTurnAgent({
+      deps: {
+        cortexRegistry: fakePort<CortexRegistry>({
+          get: vi.fn(() => ({
+            header: {
+              name: "pc_estimator_agent",
+              description: "PC estimator",
+              sqlHelper: "",
+              params: {},
+            },
+            body: "pc skill",
+            filePath: "test://pc-estimator-agent.md",
+          })),
+        }),
+        prompt: { render: vi.fn(() => "turn prompt") },
+        cortexSelector: { pickCortexName: vi.fn(() => "pc_estimator_agent") },
+        schemaProvider: {
+          actionSchema: () =>
+            z.object({
+              kind: z.literal("noop"),
+              reason: z.string().min(1),
+            }),
+        },
+      },
+      ctx: {
+        simRunId: 10,
+        agentId: 20,
+        agentIndex: 0,
+        turnIndex: 0,
+        persona: "operator",
+        goals: [],
+        constraints: {},
+        topMemories: [],
+        observable: [],
+        godEvents: [],
+        subjectSnapshot: null,
+        scenarioContext: {},
+      },
+      simKind: "uc_pc_estimator",
+      logger: { warn: vi.fn() },
+    });
+
+    expect(response).toEqual({
+      action: {
+        kind: "noop",
+        reason: "direct action rationale",
+      },
+      rationale: "direct action rationale",
+      observableSummary: "Returned noop action directly.",
+    });
+  });
 });

@@ -21,6 +21,13 @@ export {
 } from "./useAutonomyControlMutations";
 export { useCyclesQuery } from "./useCyclesQuery";
 export { useLaunchCycleMutation } from "./useLaunchCycleMutation";
+export { useOperatorSwarmsQuery } from "./useOperatorSwarmsQuery";
+export { useOperatorSwarmStatusQuery } from "./useOperatorSwarmStatusQuery";
+export { useOperatorSwarmClustersQuery } from "./useOperatorSwarmClustersQuery";
+export { useOperatorSwarmTerminalsQuery } from "./useOperatorSwarmTerminalsQuery";
+export { useOperatorFishTimelineQuery } from "./useOperatorFishTimelineQuery";
+export { useSimReviewEvidenceQuery } from "./useSimReviewEvidenceQuery";
+export { useSimReviewQuestionMutation } from "./useSimReviewQuestionMutation";
 export { qk } from "./keys";
 
 // Legacy aliases kept for the migration window; new code should use the

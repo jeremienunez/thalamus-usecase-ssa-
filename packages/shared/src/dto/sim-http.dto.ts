@@ -152,6 +152,7 @@ export interface SimFishTerminalDto {
 
 export interface SimFishTerminalActionDto {
   simRunId: string;
+  fishIndex: number;
   runStatus: SimRunStatusDto;
   action: Record<string, unknown> | null;
 }
@@ -247,12 +248,55 @@ export interface FishTimelineDto {
   completedAt: string | null;
 }
 
-export interface SwarmClustersDto {
-  swarmId: string;
-  source: "aggregate" | "pcAggregate" | "telemetryAggregate" | null;
-  clusters: Array<Record<string, unknown>>;
-  summary: Record<string, unknown>;
+export interface SwarmClusterDto {
+  label?: string;
+  fraction?: number;
+  memberFishIndexes?: number[];
+  exemplarFishIndex?: number | null;
+  exemplarSimRunId?: string | null;
+  [key: string]: unknown;
 }
+
+export interface PcAggregateClusterDto {
+  label: string;
+  memberFishIndexes: number[];
+  exemplarFishIndex: number;
+  exemplarSimRunId: string | null;
+  fishCount: number;
+  pcRange: [number, number];
+  mode: string;
+  flags: string[];
+  [key: string]: unknown;
+}
+
+export interface PcAggregateSummaryDto {
+  conjunctionId?: number;
+  medianPc?: number;
+  sigmaPc?: number;
+  p5Pc?: number;
+  p95Pc?: number;
+  fishCount?: number;
+  samples?: number[];
+  severity?: "high" | "medium" | "info";
+  quorumMet?: boolean;
+  succeededFish?: number;
+  failedFish?: number;
+  [key: string]: unknown;
+}
+
+export type SwarmClustersDto =
+  | {
+      swarmId: string;
+      source: "pcAggregate";
+      clusters: PcAggregateClusterDto[];
+      summary: PcAggregateSummaryDto;
+    }
+  | {
+      swarmId: string;
+      source: "aggregate" | "telemetryAggregate" | null;
+      clusters: SwarmClusterDto[];
+      summary: Record<string, unknown>;
+    };
 
 export interface FishTraceDto extends FishTimelineDto {
   exportedAt: string;

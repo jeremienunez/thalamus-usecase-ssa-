@@ -97,6 +97,7 @@ export class SimSwarmStoreService implements SimSwarmStore {
     );
     return rows.map((row) => ({
       simRunId: Number(row.simRunId),
+      fishIndex: row.fishIndex,
       runStatus: row.runStatus,
       action: row.action,
     }));

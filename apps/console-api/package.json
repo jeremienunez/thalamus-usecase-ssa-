@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "node --env-file=../../.env --import tsx --watch src/server.ts",
+    "sim:workers": "node --env-file=../../.env --import tsx src/sim-workers.boot.ts",
     "start": "node --env-file=../../.env --import tsx src/server.ts",
     "typecheck": "tsc --noEmit"
   },

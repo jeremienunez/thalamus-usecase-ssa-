@@ -32,7 +32,10 @@ export function registerSimSwarmRoutes(
     "/api/sim/swarms/:id/aggregate",
     simSnapshotAggregateController(s.swarmStore),
   );
-  app.post("/api/sim/swarms/:id/close", simCloseSwarmController(s.swarmStore));
+  app.post(
+    "/api/sim/swarms/:id/close",
+    simCloseSwarmController(s.swarmStore, s.operator),
+  );
   app.get("/api/sim/swarms/:id/terminals", simTerminalsController(s.swarm, s.terminal));
   app.get(
     "/api/sim/swarms/:id/terminal-actions",

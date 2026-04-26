@@ -59,6 +59,56 @@ function throwIfAborted(signal?: AbortSignal): void {
   throw abortError(typeof reason === "string" ? reason : "Operation aborted");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown, minLength: number): string | null {
+  return typeof value === "string" && value.trim().length >= minLength
+    ? value.trim()
+    : null;
+}
+
+function actionKind(action: unknown): string {
+  return isRecord(action) && typeof action.kind === "string"
+    ? action.kind
+    : "unknown";
+}
+
+function fallbackObservableSummary(action: unknown): string {
+  return `Returned ${actionKind(action)} action directly.`;
+}
+
+function parseTurnResponseFromRaw(
+  raw: unknown,
+  actionSchema: ReturnType<TurnRunnerDeps["schemaProvider"]["actionSchema"]>,
+): TurnResponse {
+  const responseSchema = buildTurnResponseSchema(actionSchema);
+  const envelope = responseSchema.safeParse(raw);
+  if (envelope.success) return envelope.data as TurnResponse;
+
+  const directAction = actionSchema.safeParse(raw);
+  if (directAction.success) {
+    const rawRecord = isRecord(raw) ? raw : {};
+    const rationale =
+      nonEmptyString(rawRecord.rationale, 10) ??
+      nonEmptyString(rawRecord.reason, 10) ??
+      `Accepted direct ${actionKind(directAction.data)} action response.`;
+    const observableSummary =
+      nonEmptyString(rawRecord.observableSummary, 5) ??
+      nonEmptyString(rawRecord.summary, 5) ??
+      fallbackObservableSummary(directAction.data);
+
+    return responseSchema.parse({
+      action: directAction.data,
+      rationale,
+      observableSummary,
+    }) as TurnResponse;
+  }
+
+  throw envelope.error;
+}
+
 export async function callTurnAgent(args: {
   deps: Pick<
     TurnRunnerDeps,
@@ -113,6 +163,7 @@ export async function callTurnAgent(args: {
         reasoningEffort: fishCfg.reasoningEffort,
         maxOutputTokens: fishCfg.maxOutputTokens,
         temperature: fishCfg.temperature,
+        thinking: fishCfg.thinking,
       },
     });
 
@@ -134,11 +185,11 @@ export async function callTurnAgent(args: {
 
     try {
       const raw = extractJsonObject(res.text);
-      const responseSchema = buildTurnResponseSchema(
+      const parsed = parseTurnResponseFromRaw(
+        raw,
         args.deps.schemaProvider.actionSchema(),
       );
-      const parsed = responseSchema.parse(raw);
-      return parsed as TurnResponse;
+      return parsed;
     } catch (err) {
       throwIfAborted(args.signal);
       lastError = err as Error;
@@ -181,10 +232,6 @@ function buildCortexSelectionHints(ctx: AgentContext): Record<string, unknown> {
     subjectDisplayName: ctx.subjectSnapshot?.displayName ?? null,
     subjectAttributeKeys: Object.keys(subjectAttributes).sort(),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 export async function buildTurnAgentContext(args: {

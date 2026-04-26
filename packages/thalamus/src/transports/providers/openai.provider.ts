@@ -7,6 +7,7 @@
  */
 
 import { createLogger } from "@interview/shared/observability";
+import { modelSupportsTemperature } from "@interview/shared/config";
 import {
   getEnrichmentFallbackConfig,
   getEnrichmentFallbackConfigSnapshot,
@@ -62,7 +63,7 @@ export class OpenAIProvider implements LlmProvider {
     if (opts.maxOutputTokens && opts.maxOutputTokens > 0) {
       body.max_output_tokens = opts.maxOutputTokens;
     }
-    if (typeof opts.temperature === "number") {
+    if (typeof opts.temperature === "number" && modelSupportsTemperature(model)) {
       body.temperature = opts.temperature;
     }
 

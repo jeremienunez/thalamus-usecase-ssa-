@@ -8,7 +8,8 @@ const modes = [
   { to: "/ops", label: "OPS", icon: Globe2, hint: "⌘1" },
   { to: "/thalamus", label: "THALAMUS", icon: Network, hint: "⌘2" },
   { to: "/sweep", label: "SWEEP", icon: Radar, hint: "⌘3" },
-  { to: "/config", label: "CONFIG", icon: SlidersHorizontal, hint: "⌘4" },
+  { to: "/fish", label: "FISH", icon: Radar, hint: "⌘4" },
+  { to: "/config", label: "CONFIG", icon: SlidersHorizontal, hint: "⌘5" },
 ] as const;
 
 export function TopBar() {

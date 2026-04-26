@@ -120,12 +120,83 @@ export function makeStubApi(overrides: Partial<ApiClient> = {}): ApiClient {
       stop: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
       reset: async () => ({ ok: true, state: EMPTY_AUTONOMY_STATE }),
     },
+    simOperator: {
+      listSwarms: async () => ({ swarms: [], nextCursor: null }),
+      getStatus: async () => ({
+        swarmId: "0",
+        kind: "uc3_conjunction",
+        status: "done",
+        size: 0,
+        done: 0,
+        failed: 0,
+        timeout: 0,
+        running: 0,
+        pending: 0,
+        reportFindingId: null,
+        suggestionId: null,
+        aggregateKeys: [],
+      }),
+      getFishTimeline: async () => ({
+        swarmId: "0",
+        simRunId: "0",
+        fishIndex: 0,
+        kind: "uc3_conjunction",
+        status: "done",
+        seedApplied: {},
+        perturbation: { kind: "noop" },
+        config: {},
+        agents: [],
+        turns: [],
+        totalLlmCostUsd: null,
+        startedAt: "1970-01-01T00:00:00.000Z",
+        completedAt: null,
+      }),
+      getClusters: async () => ({
+        swarmId: "0",
+        source: null,
+        clusters: [],
+        summary: {},
+      }),
+      getFishTrace: async () => ({
+        swarmId: "0",
+        simRunId: "0",
+        fishIndex: 0,
+        kind: "uc3_conjunction",
+        status: "done",
+        seedApplied: {},
+        perturbation: { kind: "noop" },
+        config: {},
+        agents: [],
+        turns: [],
+        totalLlmCostUsd: null,
+        startedAt: "1970-01-01T00:00:00.000Z",
+        completedAt: null,
+        exportedAt: "1970-01-01T00:00:00.000Z",
+      }),
+      askQuestion: async (_swarmId, body) => ({
+        provider: "fixture",
+        evidence: {
+          id: "0",
+          swarmId: "0",
+          simRunId: null,
+          scope: body.scope ?? "swarm",
+          question: body.question,
+          answer: "",
+          evidenceRefs: [],
+          traceExcerpt: {},
+          createdBy: null,
+          createdAt: "1970-01-01T00:00:00.000Z",
+        },
+      }),
+      listEvidence: async () => [],
+    },
   };
   return { ...base, ...overrides };
 }
 
 export const stubSseClient: SseClient = {
   subscribe: () => ({ close: () => {} }),
+  subscribeEvents: () => ({ close: () => {} }),
 };
 
 export interface WrapDeps {
