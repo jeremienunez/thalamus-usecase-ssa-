@@ -46,6 +46,7 @@ export function workspaceAliases(root: string): WorkspaceAliasMap {
       "packages/thalamus/src/services/research-graph.service.ts",
     ),
     "@interview/db-schema": resolve(root, "packages/db-schema/src/index.ts"),
+    "@interview/temporal": resolve(root, "packages/temporal/src/index.ts"),
     "@interview/test-kit": resolve(root, "packages/test-kit/src/index.ts"),
     "@interview/thalamus": resolve(root, "packages/thalamus/src/index.ts"),
     "@interview/sweep/internal": resolve(root, "packages/sweep/src/internal.ts"),

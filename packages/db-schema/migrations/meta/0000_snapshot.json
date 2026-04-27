@@ -1,7 +1,5 @@
 {
-  "id": "57974d0d-103a-4988-9e88-936ee4d8bb8e",
-  "prevId": "00000000-0000-0000-0000-000000000000",
-  "version": "6",
+  "version": "7",
   "dialect": "postgresql",
   "tables": {
     "public.research_cycle": {
@@ -87,23 +85,42 @@
       },
       "indexes": {
         "idx_research_cycle_started": {
-          "name": "idx_research_cycle_started",
           "columns": [
-            "started_at"
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_cycle_started",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_research_cycle_status": {
-          "name": "idx_research_cycle_status",
           "columns": [
-            "status"
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_cycle_status",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.research_edge": {
       "name": "research_edge",
@@ -164,45 +181,77 @@
       },
       "indexes": {
         "idx_research_edge_finding": {
-          "name": "idx_research_edge_finding",
           "columns": [
-            "finding_id"
+            {
+              "expression": "finding_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_edge_finding",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_research_edge_entity": {
-          "name": "idx_research_edge_entity",
           "columns": [
-            "entity_type",
-            "entity_id"
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_edge_entity",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_research_edge_relation": {
-          "name": "idx_research_edge_relation",
           "columns": [
-            "relation"
+            {
+              "expression": "relation",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_edge_relation",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "research_edge_finding_id_research_finding_id_fk": {
           "name": "research_edge_finding_id_research_finding_id_fk",
           "tableFrom": "research_edge",
-          "tableTo": "research_finding",
           "columnsFrom": [
             "finding_id"
           ],
+          "tableTo": "research_finding",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.research_finding": {
       "name": "research_finding",
@@ -340,60 +389,113 @@
       },
       "indexes": {
         "idx_research_finding_cycle": {
-          "name": "idx_research_finding_cycle",
           "columns": [
-            "research_cycle_id"
+            {
+              "expression": "research_cycle_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_finding_cycle",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_research_finding_status_created": {
-          "name": "idx_research_finding_status_created",
           "columns": [
-            "status",
-            "created_at"
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_finding_status_created",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_research_finding_cortex_type": {
-          "name": "idx_research_finding_cortex_type",
           "columns": [
-            "cortex",
-            "finding_type"
+            {
+              "expression": "cortex",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "finding_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_finding_cortex_type",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "uniq_research_finding_dedup": {
-          "name": "uniq_research_finding_dedup",
           "columns": [
-            "dedup_hash"
+            {
+              "expression": "dedup_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "with": {},
+          "name": "uniq_research_finding_dedup",
+          "isUnique": true,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_research_finding_expires": {
-          "name": "idx_research_finding_expires",
           "columns": [
-            "expires_at"
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_research_finding_expires",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "research_finding_research_cycle_id_research_cycle_id_fk": {
           "name": "research_finding_research_cycle_id_research_cycle_id_fk",
           "tableFrom": "research_finding",
-          "tableTo": "research_cycle",
           "columnsFrom": [
             "research_cycle_id"
           ],
+          "tableTo": "research_cycle",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.operator": {
       "name": "operator",
@@ -439,7 +541,10 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.operator_country": {
       "name": "operator_country",
@@ -499,19 +604,22 @@
         "operator_country_orbit_regime_id_orbit_regime_id_fk": {
           "name": "operator_country_orbit_regime_id_orbit_regime_id_fk",
           "tableFrom": "operator_country",
-          "tableTo": "orbit_regime",
           "columnsFrom": [
             "orbit_regime_id"
           ],
+          "tableTo": "orbit_regime",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.orbit_regime": {
       "name": "orbit_regime",
@@ -539,7 +647,10 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.payload": {
       "name": "payload",
@@ -579,7 +690,10 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.platform_class": {
       "name": "platform_class",
@@ -601,7 +715,10 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.satellite": {
       "name": "satellite",
@@ -885,58 +1002,61 @@
         "satellite_operator_country_id_operator_country_id_fk": {
           "name": "satellite_operator_country_id_operator_country_id_fk",
           "tableFrom": "satellite",
-          "tableTo": "operator_country",
           "columnsFrom": [
             "operator_country_id"
           ],
+          "tableTo": "operator_country",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "satellite_platform_class_id_platform_class_id_fk": {
           "name": "satellite_platform_class_id_platform_class_id_fk",
           "tableFrom": "satellite",
-          "tableTo": "platform_class",
           "columnsFrom": [
             "platform_class_id"
           ],
+          "tableTo": "platform_class",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "satellite_operator_id_operator_id_fk": {
           "name": "satellite_operator_id_operator_id_fk",
           "tableFrom": "satellite",
-          "tableTo": "operator",
           "columnsFrom": [
             "operator_id"
           ],
+          "tableTo": "operator",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "satellite_satellite_bus_id_satellite_bus_id_fk": {
           "name": "satellite_satellite_bus_id_satellite_bus_id_fk",
           "tableFrom": "satellite",
-          "tableTo": "satellite_bus",
           "columnsFrom": [
             "satellite_bus_id"
           ],
+          "tableTo": "satellite_bus",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.satellite_bus": {
       "name": "satellite_bus",
@@ -1066,7 +1186,10 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.satellite_payload": {
       "name": "satellite_payload",
@@ -1108,32 +1231,35 @@
         "satellite_payload_satellite_id_satellite_id_fk": {
           "name": "satellite_payload_satellite_id_satellite_id_fk",
           "tableFrom": "satellite_payload",
-          "tableTo": "satellite",
           "columnsFrom": [
             "satellite_id"
           ],
+          "tableTo": "satellite",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "satellite_payload_payload_id_payload_id_fk": {
           "name": "satellite_payload_payload_id_payload_id_fk",
           "tableFrom": "satellite_payload",
-          "tableTo": "payload",
           "columnsFrom": [
             "payload_id"
           ],
+          "tableTo": "payload",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.launch": {
       "name": "launch",
@@ -1174,7 +1300,10 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.sweep_audit": {
       "name": "sweep_audit",
@@ -1302,52 +1431,92 @@
       },
       "indexes": {
         "idx_sweep_audit_category": {
-          "name": "idx_sweep_audit_category",
           "columns": [
-            "category"
+            {
+              "expression": "category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_sweep_audit_category",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_sweep_audit_severity": {
-          "name": "idx_sweep_audit_severity",
           "columns": [
-            "severity",
-            "created_at"
+            {
+              "expression": "severity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_sweep_audit_severity",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_sweep_audit_reviewed": {
-          "name": "idx_sweep_audit_reviewed",
           "columns": [
-            "reviewed_at"
+            {
+              "expression": "reviewed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_sweep_audit_reviewed",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_sweep_audit_suggestion": {
-          "name": "idx_sweep_audit_suggestion",
           "columns": [
-            "suggestion_id"
+            {
+              "expression": "suggestion_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_sweep_audit_suggestion",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "sweep_audit_operator_country_id_operator_country_id_fk": {
           "name": "sweep_audit_operator_country_id_operator_country_id_fk",
           "tableFrom": "sweep_audit",
-          "tableTo": "operator_country",
           "columnsFrom": [
             "operator_country_id"
           ],
+          "tableTo": "operator_country",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.article": {
       "name": "article",
@@ -1415,27 +1584,30 @@
         "article_author_id_user_id_fk": {
           "name": "article_author_id_user_id_fk",
           "tableFrom": "article",
-          "tableTo": "user",
           "columnsFrom": [
             "author_id"
           ],
+          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "article_slug_unique": {
           "name": "article_slug_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "slug"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
-      }
+      },
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.user": {
       "name": "user",
@@ -1493,12 +1665,15 @@
       "uniqueConstraints": {
         "user_email_unique": {
           "name": "user_email_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "email"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
-      }
+      },
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
     "public.exploration_log": {
       "name": "exploration_log",
@@ -1571,30 +1746,55 @@
       },
       "indexes": {
         "idx_exploration_created": {
-          "name": "idx_exploration_created",
           "columns": [
-            "created_at"
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_exploration_created",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_exploration_quality": {
-          "name": "idx_exploration_quality",
           "columns": [
-            "quality_score"
+            {
+              "expression": "quality_score",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_exploration_quality",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     }
   },
   "enums": {},
   "schemas": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
-  }
+    "tables": {},
+    "columns": {}
+  },
+  "id": "57974d0d-103a-4988-9e88-936ee4d8bb8e",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "sequences": {},
+  "policies": {},
+  "views": {},
+  "roles": {}
 }

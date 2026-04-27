@@ -179,6 +179,9 @@ importers:
       '@interview/sweep':
         specifier: workspace:*
         version: link:../../packages/sweep
+      '@interview/temporal':
+        specifier: workspace:*
+        version: link:../../packages/temporal
       '@interview/thalamus':
         specifier: workspace:*
         version: link:../../packages/thalamus
@@ -332,6 +335,15 @@ importers:
       zod:
         specifier: ^3.22.0
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
+  packages/temporal:
     devDependencies:
       '@types/node':
         specifier: ^20.11.0

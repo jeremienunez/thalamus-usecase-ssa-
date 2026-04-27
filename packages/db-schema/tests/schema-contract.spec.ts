@@ -37,6 +37,13 @@ import {
   operator,
 } from "../src/schema/satellite";
 import { explorationLog } from "../src/schema/exploration";
+import {
+  temporalEvent,
+  temporalLearningRun,
+  temporalPatternHypothesis,
+  temporalPatternExample,
+  temporalPatternSeededRun,
+} from "../src/schema/temporal";
 
 const SCHEMA_DIR = resolve(__dirname, "../src/schema");
 
@@ -174,6 +181,45 @@ describe("SPEC-DB-001 AC-3 — notNull columns are non-nullable in $inferSelect"
     expect(explorationLog.itemsPromoted.notNull).toBe(true);
     expect(explorationLog.qualityScore.notNull).toBe(false);
   });
+
+  it("temporal events require canonical identity and keep optional KG-adjacent refs nullable", () => {
+    expect(temporalEvent.id.notNull).toBe(true);
+    expect(temporalEvent.projectionRunId.notNull).toBe(true);
+    expect(temporalEvent.eventType.notNull).toBe(true);
+    expect(temporalEvent.eventSource.notNull).toBe(true);
+    expect(temporalEvent.occurredAt.notNull).toBe(true);
+    expect(temporalEvent.sourceDomain.notNull).toBe(true);
+    expect(temporalEvent.canonicalSignature.notNull).toBe(true);
+    expect(temporalEvent.sourceTable.notNull).toBe(true);
+    expect(temporalEvent.sourcePk.notNull).toBe(true);
+    expect(temporalEvent.payloadHash.notNull).toBe(true);
+    expect(temporalEvent.entityId.notNull).toBe(false);
+    expect(temporalEvent.embeddingId.notNull).toBe(false);
+  });
+
+  it("temporal hypotheses require scores, support, negative evidence, version and status", () => {
+    expect(temporalLearningRun.patternVersion.notNull).toBe(true);
+    expect(temporalLearningRun.inputSnapshotHash.notNull).toBe(true);
+    expect(temporalPatternHypothesis.patternHash.notNull).toBe(true);
+    expect(temporalPatternHypothesis.patternVersion.notNull).toBe(true);
+    expect(temporalPatternHypothesis.status.notNull).toBe(true);
+    expect(temporalPatternHypothesis.sourceDomain.notNull).toBe(true);
+    expect(temporalPatternHypothesis.terminalStatus.notNull).toBe(true);
+    expect(temporalPatternHypothesis.patternScore.notNull).toBe(true);
+    expect(temporalPatternHypothesis.supportCount.notNull).toBe(true);
+    expect(temporalPatternHypothesis.negativeSupportCount.notNull).toBe(true);
+    expect(temporalPatternHypothesis.scoreComponentsJson.notNull).toBe(true);
+  });
+
+  it("temporal examples and seeded runs link back to pattern hypotheses", () => {
+    expect(temporalPatternExample.patternId.dataType).toBe("bigint");
+    expect(temporalPatternExample.eventId.notNull).toBe(true);
+    expect(temporalPatternExample.role.notNull).toBe(true);
+    expect(temporalPatternSeededRun.patternId.dataType).toBe("bigint");
+    expect(temporalPatternSeededRun.simRunId.dataType).toBe("bigint");
+    expect(temporalPatternSeededRun.seedReason.notNull).toBe(true);
+    expect(temporalPatternSeededRun.sourceDomain.notNull).toBe(true);
+  });
 });
 
 // ─── AC-4: FK types match referenced PK types ─────────────────────
@@ -296,6 +342,12 @@ describe("SPEC-DB-001 AC-6 — schema hygiene", () => {
     "action",
     "evidence_refs",
     "trace_excerpt",
+    // temporal hypothesis layer
+    "metrics_json",
+    "metadata_json",
+    "params_json",
+    "score_components_json",
+    "baselines_json",
     // ITU filing raw payload (Phase 3f)
     "raw",
   ]);

@@ -5,3 +5,4 @@ export * from "./sim-orchestrator.dto";
 export * from "./sim-promotion.dto";
 export * from "./sim-subject.dto";
 export * from "./sim-target.dto";
+export * from "./temporal-memory.dto";

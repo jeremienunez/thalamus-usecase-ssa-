@@ -181,6 +181,7 @@ import { SimSwarmRepository } from "./repositories/sim-swarm.repository";
 import { SimMemoryRepository } from "./repositories/sim-memory.repository";
 import { SimTerminalRepository } from "./repositories/sim-terminal.repository";
 import { SimReviewEvidenceRepository } from "./repositories/sim-review-evidence.repository";
+import { TemporalPatternRepository } from "./repositories/temporal-pattern.repository";
 import { SimAgentService } from "./services/sim-agent.service";
 import { SimGodChannelService } from "./services/sim-god-channel.service";
 import { SimTargetService } from "./services/sim-target.service";
@@ -197,6 +198,7 @@ import { ModalSuggestionComposer } from "./services/modal-suggestion-composer.se
 import { SimOutcomePromotionService } from "./services/sim-outcome-promotion.service";
 import { TelemetryScalarPromoter } from "./services/telemetry-scalar-promoter.service";
 import { RuntimeConfigService } from "./services/runtime-config.service";
+import { TemporalMemoryService } from "./services/temporal-memory.service";
 import { SatelliteSweepChatRepository } from "./repositories/satellite-sweep-chat.repository";
 import { SatelliteSweepChatService } from "./services/satellite-sweep-chat.service";
 import { VizService } from "./services/viz.service";
@@ -473,6 +475,7 @@ export async function buildContainer(
   const simMemoryRepo = new SimMemoryRepository(db);
   const simTerminalRepo = new SimTerminalRepository(db);
   const simReviewEvidenceRepo = new SimReviewEvidenceRepository(db);
+  const temporalPatternRepo = new TemporalPatternRepository(db);
   const simTargetService = new SimTargetService(
     simRunRepo,
     satelliteDimensionRepo,
@@ -790,6 +793,9 @@ export async function buildContainer(
       promotion: simPromotionService,
     },
     runtimeConfig: runtimeConfigService,
+    temporalMemory: new TemporalMemoryService({
+      patternRepo: temporalPatternRepo,
+    }),
     satelliteSweepChat: satelliteSweepChatController,
   };
 
