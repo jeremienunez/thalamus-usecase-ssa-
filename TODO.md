@@ -8,6 +8,23 @@ closed Sprint 1 runtime items are also tracked in
 [DONE.md](DONE.md#sprint-closures--2026-04-25). This file now tracks confirmed
 open work only. `tasks/todo.md` is historical: all 59 items are done.
 
+**Re-audited 2026-04-27** by six parallel verification agents. Headline
+deltas vs the 2026-04-25 trim:
+
+- Sprint 2 (Operator API) closed; Sprint 3 (3D Fish UI) is in progress with
+  the R3F squid scene, HUD, Q&A panel, manual chunks, and lazy `/fish` route
+  landed (commits 6665966, 58149f8). Only Playwright/WebGL exit checks remain.
+- `EVAL-1` (real eval corpus + lock) and `EVAL-9` (multimodal honesty) are
+  done.
+- `/metrics` endpoint already exists on the API port (`server.ts:347-350`);
+  the open work is the five named instrumentation metrics, not the endpoint
+  itself.
+- `C2` sim-promotion grew to ~564 LOC; `M3` research-graph grew to ~577 LOC.
+  Architecture debt is moving in the wrong direction and should not be
+  deferred again.
+
+Roll-up: ~10 closures, ~18 partials, ~58 still open across the backlog.
+
 Current fast checks from the trim pass:
 
 - `pnpm test:policy` - green, 307 files scanned, 0 grandfather casts.
@@ -128,23 +145,42 @@ Exit checks:
 Goal: build the operator-facing 3D murmuration view for watching and questioning
 Fish swarms.
 
+Status: in progress as of 2026-04-27. Frontend R3F surface landed in commits
+6665966 and 58149f8. `apps/console/src/features/fish-operator/FishSwarmPlot.tsx`
+ships a full-bleed `<Canvas>` with `<instancedMesh>`, GLB squid model loader,
+deterministic beeswarm layout, OrbitControls, frustum culling, and a 300-fish
+sampling cap; `event.instanceId` is mapped back to `FishSceneNode.fishIndex`
+for picking. `FishOperatorHud.tsx` houses `FishFiltersPanel`,
+`FishInspectorPanel`, `FishEvidencePanel`, and `FishAskPanel`, with the latter
+calling `useSimReviewQuestionMutation` for swarm/cluster/fish scopes.
+`apps/console/src/routes/fish.tsx` registers `/fish` via `React.lazy`, and the
+`vendor-3d` / `vendor-graph` / `vendor-shell` manual chunks are wired through
+`apps/console/manual-chunks.ts` and `vite.config.ts`. Vitest DOM smoke covers
+200/300-fish render, instance-id picking, and sampling. Remaining: Playwright
+is not yet installed and there are no real WebGL exit checks (desktop/mobile
+screenshots, nonblank canvas pixel, real picking, camera control, 200-fish
+FPS). Fly camera mode is not implemented and is treated as optional.
+
 Scope:
 
-- `SIM-F7` full-bleed Three.js/R3F swarm scene.
-- Instanced/pickable fish meshes or particles.
-- Orbit/fly camera, timeline scrubber, cluster/status filters.
-- Fish/cluster/swarm interrogation panel.
-- Bundle split so 3D dependencies stay scoped to the operator surface.
-- TO-REVIEW bundle-size warning: route-level lazy loading and manual chunks for
-  3D, graph, and base-shell dependencies.
+- `SIM-F7` full-bleed Three.js/R3F swarm scene. Done.
+- Instanced/pickable fish meshes or particles. Done.
+- Orbit camera, timeline scrubber, cluster/status filters. Done. Fly mode is
+  not implemented (treat as optional).
+- Fish/cluster/swarm interrogation panel. Done.
+- Bundle split so 3D dependencies stay scoped to the operator surface. Done.
+- TO-REVIEW bundle-size warning: route-level lazy loading and manual chunks
+  for 3D, graph, and base-shell dependencies. Done.
 
 Exit checks:
 
-- Desktop and mobile Playwright screenshots.
-- Nonblank canvas pixel check.
-- Picking test.
-- Camera control test.
-- Stable performance with at least 200 fish.
+- Desktop and mobile Playwright screenshots. Open: Playwright not installed
+  in `apps/console/package.json`.
+- Nonblank canvas pixel check. Open: requires real WebGL.
+- Picking test. Open at WebGL level (covered by Vitest DOM smoke only).
+- Camera control test. Open.
+- Stable performance with at least 200 fish. Open at WebGL level (Vitest DOM
+  smoke renders 200/300 fish but cannot measure FPS).
 
 ### Sprint 4 - Evaluation Protocol
 
@@ -168,17 +204,43 @@ Exit checks:
 
 Goal: reduce package-boundary ambiguity before expanding more product surface.
 
-Scope:
+Plan figé 2026-04-27 in [tasks/sprint5-architecture-debt-plan.md](tasks/sprint5-architecture-debt-plan.md).
+Order is non-negotiable: writer unification (Phases 1-5) lands before any
+god-service split (Phases 6-7), because splitting before unification is what
+made `C2` grow +53 LOC and `M3` grow +11 LOC since Pass 1.
 
-- `C1`, `C2`, `C4`, `I5`, `I6`.
-- `M1`, `M2`, `M3`, `M4`, `M8`.
+Scope (in execution order):
+
+1. `I6` — dedupe app-side ports + rename divergent `SatellitesReadPort`.
+2. `M2` — relocate thalamus ports to `packages/thalamus/src/ports/`.
+3. `C1` step A — app-owned `ResearchWriteService` with business DTOs only
+   (no `$inferInsert` exposed to services).
+4. `C1` step B — kernel-only HTTP routes:
+   `POST /api/research/cycles`,
+   `POST /api/research/finding-emissions`,
+   `POST /api/research/cycles/:id/increment-findings`,
+   `POST /api/research/edges` (only if a real standalone caller survives).
+5. Migrate callers + **delete** (not privatize) the public write methods on
+   app-side `finding.repository.ts` / `research-edge.repository.ts`.
+6. `C2` — split `sim-promotion.service.ts` into outcome / modal-suggestion /
+   telemetry-suggestion services + two pure helpers, all consuming
+   `ResearchWritePort`. Old service deleted, no façade.
+7. `M3` — split `research-graph.service.ts` into finding-store / kg-query /
+   finding-lifecycle / finding-events. Imports migrated in the same PR; no
+   committed façade.
+8. `M1`, `M4`, `M8` — small items. **DONE 2026-04-28**.
+9. `I5`, `C4` — kernel / domain decoupling (sweep stops importing thalamus;
+   SSA tokens stripped from thalamus kernel).
 
 Exit checks:
 
-- Research KG writes go through one approved writer surface.
-- Sim promotion is split into smaller services/ports.
-- Sweep/Thalamus coupling is either accepted as a merge or extracted behind a
-  third shared kernel boundary.
+- Research KG writes go through one approved writer surface (HTTP routes +
+  one business writer; greps in the plan's Definition of Done all return
+  zero hits outside the writer).
+- Sim promotion and research-graph are deleted as monolithic services; new
+  split services exist with per-service unit tests.
+- Sweep/Thalamus coupling is removed from `packages/sweep/src` and
+  `packages/sweep/package.json`.
 - Redis full-list reads are bounded.
 
 ### Sprint 6 - Runtime Hardening And Coverage
@@ -261,53 +323,36 @@ section when draining old review notes into the sprint roadmap.
 
 ## Immediate Architecture Debt
 
-- [ ] **C1 - collapse writes to `research_*` tables behind one writer.**
-      Current writers still include:
-      - kernel repositories in `packages/thalamus/src/repositories/research-*.repository.ts`
-      - app-side write paths in
-        `apps/console-api/src/repositories/finding.repository.ts` and
-        `apps/console-api/src/repositories/research-edge.repository.ts`
-      - sim-promotion store adapter in `apps/console-api/src/container.ts`
-        (`createCycle`, `createFinding`, `linkCycleFinding`, `createEdge`,
-        `updateCycleFindingsCount`)
-      Fix by routing app/sim writes through kernel repos or through a single
-      HTTP/write-port surface.
-- [ ] **C2 - split `apps/console-api/src/services/sim-promotion.service.ts`.**
-      The service is still large (~526 LOC) and still knows the `research*`
-      table insert shapes through `SimPromotionStorePort`, though it no longer
-      takes a raw DB handle directly. Split into outcome promotion, modal
-      suggestion composition, telemetry scalar promotion, and shared write
-      ports.
-- [ ] **C4 - finish thalamus kernel de-domainization.** The old file-move work
-      is closed, but SSA-flavored defaults/comments remain in the kernel
-      (`thalamus-planner.service.ts`, `thalamus.service.ts`, `guardrails.ts`,
-      `cortices/config.ts`, prompt comments). Make defaults generic and inject
-      domain language from the app pack.
-- [ ] **I5 - sweep -> thalamus coupling.** `packages/sweep` still imports
-      `CortexRegistry`, `ConfidenceService`, and `callNanoWithMode` from
-      `@interview/thalamus`. Either merge the packages or extract a third
-      agnostic `cortex-kernel` package.
-- [ ] **I6 - extract duplicate app service ports.** Move duplicate
-      `CyclesPort` / `FindingsWritePort` / `EdgesWritePort` from
-      `enrichment-finding.service.ts` and `reflexion.service.ts` into
-      `apps/console-api/src/services/ports/`. Reconcile the divergent
-      `SatellitesReadPort` shapes in `satellite-view.service.ts` and
-      `sweep-task-planner.service.ts`.
-- [ ] **M1 - stats repository reads kernel-owned tables directly.**
-      `apps/console-api/src/repositories/stats.repository.ts` still counts
-      `research_cycle`, `research_finding`, and `research_edge` directly.
-      Revisit after C1.
-- [ ] **M2 - finish thalamus ports cleanup.** `packages/thalamus/src/ports/`
-      exists, but `CortexDataProvider`, `DomainConfig`, and
-      `CortexExecutionStrategy` still live under `cortices/*`.
-- [ ] **M3 - split `packages/thalamus/src/services/research-graph.service.ts`.**
-      It is still ~566 LOC and owns finding CRUD, semantic search, KG assembly,
-      entity queries, archive/expiry, and callbacks.
-- [ ] **M4 - promote the inline sim launcher closure.**
-      Move the inline closure in `apps/console-api/src/container.ts` into a
-      `SimLauncherService` with an explicit port.
-- [ ] **M8 - bound Redis pagination in `packages/sweep/src/repositories/sweep.repository.ts`.**
-      `zrevrange(IDX_ALL, 0, -1)` is still used for full-list reads.
+- [x] **C1 - collapse writes to `research_*` tables behind one writer.**
+      `db.insert(research*)` is isolated to
+      `apps/console-api/src/services/research-write.service.ts`, dormant
+      app-side write repos are deleted, and kernel-only HTTP endpoints use Zod
+      business DTO parsing plus route e2e coverage.
+- [x] **C2 - split `apps/console-api/src/services/sim-promotion.service.ts`.**
+      Old service deleted; outcome, modal suggestion, telemetry scalar, helper,
+      and shared port files now own the former responsibilities.
+- [x] **C4 - finish thalamus kernel de-domainization.** Targeted kernel files no
+      longer carry SSA/satellite/orbit/conjunction defaults or prompt text.
+- [x] **I5 - sweep -> thalamus coupling.** `packages/sweep/src` and
+      `packages/sweep/package.json` no longer import or depend on
+      `@interview/thalamus`.
+- [x] **I6 - extract duplicate app service ports.** Research write ports live in
+      `apps/console-api/src/services/ports/`, and the divergent satellite read
+      ports have explicit names.
+- [x] **M1 - stats repository reads kernel-owned tables directly.**
+      Stats now reads through `vw_research_stats_counts`,
+      `vw_research_findings_by_status`, and
+      `vw_research_findings_by_cortex`.
+- [x] **M2 - finish thalamus ports cleanup.** Cortex data provider, domain
+      config, and execution strategy ports live under
+      `packages/thalamus/src/ports/`.
+- [x] **M3 - split `packages/thalamus/src/services/research-graph.service.ts`.**
+      Old service deleted; finding-store, kg-query, archive, and shared graph
+      types now own the former responsibilities.
+- [x] **M4 - promote the inline sim launcher closure.**
+      `SimLauncherService` now owns telemetry/Pc launch orchestration.
+- [x] **M8 - bound Redis pagination in `packages/sweep/src/repositories/sweep.repository.ts`.**
+      Legacy all-index scans now page through bounded batches.
 
 ---
 
@@ -378,6 +423,7 @@ These were removed or softened in the architecture docs because the current
 code does not fully implement them yet. They are real implementation candidates,
 not documentation promises. `SIM-F3` through `SIM-F6` are closed and moved to
 DONE; only open candidates remain below.
+
 - [ ] **SIM-F7 - build a 3D operator Fish UI.** Add a dedicated Three.js/R3F UI
       for launching, watching, and interrogating a fish swarm. The primary view
       should be a full-bleed 3D murmuration: each fish is an instanced/pickable
@@ -435,76 +481,37 @@ DONE; only open candidates remain below.
       traceability rows pass under `pnpm spec:check` and the matching test
       suites are green.
 - [ ] Spec validation backlog - add unit + integration + e2e traceability for
-      every current contract spec before approving it:
-      - `SPEC-SH-001` `docs/specs/shared/try-async.tex`
-      - `SPEC-SH-002` `docs/specs/shared/app-error.tex`
-      - `SPEC-SH-003` `docs/specs/shared/completeness-scorer.tex`
-      - `SPEC-SH-004` `docs/specs/shared/domain-normalizer.tex`
-      - `SPEC-SH-005` `docs/specs/shared/observability.tex`
-      - `SPEC-DB-001` `docs/specs/db-schema/schema-contract.tex`
-      - `SPEC-DB-002` `docs/specs/db-schema/typed-repos.tex`
-      - `SPEC-TH-001` `docs/specs/thalamus/orchestrator.tex`
-      - `SPEC-TH-002` `docs/specs/thalamus/cortex-registry.tex`
-      - `SPEC-TH-003` `docs/specs/thalamus/cortex-pattern.tex`
-      - `SPEC-TH-010` `docs/specs/thalamus/nano-swarm.tex`
-      - `SPEC-TH-011` `docs/specs/thalamus/source-fetchers.tex`
-      - `SPEC-TH-012` `docs/specs/thalamus/curator.tex`
-      - `SPEC-TH-020` `docs/specs/thalamus/guardrails.tex`
-      - `SPEC-TH-030` `docs/specs/thalamus/knowledge-graph-write.tex`
-      - `SPEC-TH-031` `docs/specs/thalamus/skills-as-files.tex`
-      - `SPEC-TH-040` `docs/specs/thalamus/dual-stream-confidence.tex`
-      - `SPEC-TH-041` `docs/specs/thalamus/field-correlation.tex`
-      - `SPEC-SW-001` `docs/specs/sweep/nano-sweep.tex`
-      - `SPEC-SW-002` `docs/specs/sweep/finding-routing.tex`
-      - `SPEC-SW-003` `docs/specs/sweep/resolution.tex`
-      - `SPEC-SW-006` `docs/specs/sweep/multi-agent-sim.tex`
-      - `SPEC-SW-010` `docs/specs/sweep/feedback-loop.tex`
-      - `SPEC-SW-011` `docs/specs/sweep/editorial-copilot.tex`
-      - `SPEC-SW-012` `docs/specs/sweep/chat-rate-limit.tex`
+      every current contract spec before approving it: - `SPEC-SH-001` `docs/specs/shared/try-async.tex` - `SPEC-SH-002` `docs/specs/shared/app-error.tex` - `SPEC-SH-003` `docs/specs/shared/completeness-scorer.tex` - `SPEC-SH-004` `docs/specs/shared/domain-normalizer.tex` - `SPEC-SH-005` `docs/specs/shared/observability.tex` - `SPEC-DB-001` `docs/specs/db-schema/schema-contract.tex` - `SPEC-DB-002` `docs/specs/db-schema/typed-repos.tex` - `SPEC-TH-001` `docs/specs/thalamus/orchestrator.tex` - `SPEC-TH-002` `docs/specs/thalamus/cortex-registry.tex` - `SPEC-TH-003` `docs/specs/thalamus/cortex-pattern.tex` - `SPEC-TH-010` `docs/specs/thalamus/nano-swarm.tex` - `SPEC-TH-011` `docs/specs/thalamus/source-fetchers.tex` - `SPEC-TH-012` `docs/specs/thalamus/curator.tex` - `SPEC-TH-020` `docs/specs/thalamus/guardrails.tex` - `SPEC-TH-030` `docs/specs/thalamus/knowledge-graph-write.tex` - `SPEC-TH-031` `docs/specs/thalamus/skills-as-files.tex` - `SPEC-TH-040` `docs/specs/thalamus/dual-stream-confidence.tex` - `SPEC-TH-041` `docs/specs/thalamus/field-correlation.tex` - `SPEC-SW-001` `docs/specs/sweep/nano-sweep.tex` - `SPEC-SW-002` `docs/specs/sweep/finding-routing.tex` - `SPEC-SW-003` `docs/specs/sweep/resolution.tex` - `SPEC-SW-006` `docs/specs/sweep/multi-agent-sim.tex` - `SPEC-SW-010` `docs/specs/sweep/feedback-loop.tex` - `SPEC-SW-011` `docs/specs/sweep/editorial-copilot.tex` - `SPEC-SW-012` `docs/specs/sweep/chat-rate-limit.tex`
 - [ ] Overview docs are not validated specs until converted to AC-bearing
       specs with the same unit + integration + e2e traceability:
       `SPEC-ARCH-01` through `SPEC-ARCH-14`. Until then, keep them as
       `OVERVIEW` and do not count them as passed specs.
 - [ ] Must-have architecture spec backlog - convert the reader-facing
-      architecture PDFs advertised in `README.md` into AC-bearing contract specs:
-      - `SPEC-ARCH-01` `docs/specs/architecture/01-ontology.tex` - vocabulary,
-        artifact ownership, and hard boundaries between Thalamus, Sweep, fish,
-        findings, suggestions, and promotions.
-      - `SPEC-ARCH-02` `docs/specs/architecture/02-design-stance.tex` -
-        design principles, LLM-as-kernel constraints, and acceptable analogy
-        boundaries.
-      - `SPEC-ARCH-03` `docs/specs/architecture/03-layout.tex` - workspace
-        layout, app/package ownership, and five-layer backend convention.
-      - `SPEC-ARCH-04` `docs/specs/architecture/04-thalamus.tex` - orchestration
-        sequence, cortex anatomy, explorer/nano swarm, KG write cycle, and
-        reflexion loop.
-      - `SPEC-ARCH-05` `docs/specs/architecture/05-sweep.tex` - suggestion
-        lifecycle, resolution state machine, locks, handlers, adapters, and
-        audit trail.
-      - `SPEC-ARCH-06` `docs/specs/architecture/06-ssa-primary-build.tex` -
-        SSA dual-stream fusion, confidence propagation, cortices, and entity
-        model.
-      - `SPEC-ARCH-07` `docs/specs/architecture/07-transpositions.tex` -
-        domain-pack transposition rules for threat intel, pharmacovigilance,
-        IUU maritime, and regulatory review.
-      - `SPEC-ARCH-08` `docs/specs/architecture/08-three-swarms.tex` -
-        retrieval, audit, and counterfactual swarm contracts, including fish
-        isolation and aggregation semantics.
-      - `SPEC-ARCH-09` `docs/specs/architecture/09-shared-foundation.tex` -
-        shared utilities, db-schema contracts, and package-level five-layer
-        responsibilities.
-      - `SPEC-ARCH-10` `docs/specs/architecture/10-design-choices.tex` -
-        architectural decision records with invariants and regression tests.
-      - `SPEC-ARCH-11` `docs/specs/architecture/11-running-locally.tex` -
-        local run modes, fixture/cloud behavior, required services, and command
-        contracts.
-      - `SPEC-ARCH-12` `docs/specs/architecture/12-consoles.tex` - CLI REPL,
-        operator console, API contracts, and expected UI/backend coupling.
-      - `SPEC-ARCH-13` `docs/specs/architecture/13-references.tex` - reference
-        bibliography, claim provenance, and citation hygiene.
-      - `SPEC-ARCH-14` `docs/specs/architecture/14-package-onboarding.tex` -
-        package onboarding, dependency graph, import boundaries, and allowed
-        extension points.
+      architecture PDFs advertised in `README.md` into AC-bearing contract specs: - `SPEC-ARCH-01` `docs/specs/architecture/01-ontology.tex` - vocabulary,
+      artifact ownership, and hard boundaries between Thalamus, Sweep, fish,
+      findings, suggestions, and promotions. - `SPEC-ARCH-02` `docs/specs/architecture/02-design-stance.tex` -
+      design principles, LLM-as-kernel constraints, and acceptable analogy
+      boundaries. - `SPEC-ARCH-03` `docs/specs/architecture/03-layout.tex` - workspace
+      layout, app/package ownership, and five-layer backend convention. - `SPEC-ARCH-04` `docs/specs/architecture/04-thalamus.tex` - orchestration
+      sequence, cortex anatomy, explorer/nano swarm, KG write cycle, and
+      reflexion loop. - `SPEC-ARCH-05` `docs/specs/architecture/05-sweep.tex` - suggestion
+      lifecycle, resolution state machine, locks, handlers, adapters, and
+      audit trail. - `SPEC-ARCH-06` `docs/specs/architecture/06-ssa-primary-build.tex` -
+      SSA dual-stream fusion, confidence propagation, cortices, and entity
+      model. - `SPEC-ARCH-07` `docs/specs/architecture/07-transpositions.tex` -
+      domain-pack transposition rules for threat intel, pharmacovigilance,
+      IUU maritime, and regulatory review. - `SPEC-ARCH-08` `docs/specs/architecture/08-three-swarms.tex` -
+      retrieval, audit, and counterfactual swarm contracts, including fish
+      isolation and aggregation semantics. - `SPEC-ARCH-09` `docs/specs/architecture/09-shared-foundation.tex` -
+      shared utilities, db-schema contracts, and package-level five-layer
+      responsibilities. - `SPEC-ARCH-10` `docs/specs/architecture/10-design-choices.tex` -
+      architectural decision records with invariants and regression tests. - `SPEC-ARCH-11` `docs/specs/architecture/11-running-locally.tex` -
+      local run modes, fixture/cloud behavior, required services, and command
+      contracts. - `SPEC-ARCH-12` `docs/specs/architecture/12-consoles.tex` - CLI REPL,
+      operator console, API contracts, and expected UI/backend coupling. - `SPEC-ARCH-13` `docs/specs/architecture/13-references.tex` - reference
+      bibliography, claim provenance, and citation hygiene. - `SPEC-ARCH-14` `docs/specs/architecture/14-package-onboarding.tex` -
+      package onboarding, dependency graph, import boundaries, and allowed
+      extension points.
 - [ ] Sweep spec tests still missing as spec-named coverage:
       `nano-sweep.{batching,parser,callbacks,cost,cap}`,
       `nano-sweep.readonly`, `finding-routing`, `resolution`, `feedback-loop`,
@@ -524,10 +531,7 @@ DONE; only open candidates remain below.
       `typed-repos.spec.ts`.
 - [ ] Schema migration round-trip.
 - [ ] Strategic sweep tests still missing beyond the closed labelled resolution
-      proof:
-      - `nano-sweep.service` emits the finding shape expected by finding routing
-      - reject feedback appears in the next-run prompt
-      - rate-limit + dedupe in the chat repository
+      proof: - `nano-sweep.service` emits the finding shape expected by finding routing - reject feedback appears in the next-run prompt - rate-limit + dedupe in the chat repository
 - [ ] Unit tests for `applySatelliteFieldUpdate` + `applyKnnFill` (DB UPDATE +
       audit row write).
 - [ ] Fixture-mode fabrication-rejection test - go beyond the current detector
@@ -538,23 +542,33 @@ DONE; only open candidates remain below.
 
 ## Production-Grade Evaluation Protocol
 
-- [ ] **EVAL-1 - lock the real eval corpus.** Keep
-      `docs/evals/real-eval-manifest.json` as the source of truth and require
-      `data/evals/_manifest-lock.json` for every scored run. The full profile
-      must include ESA Kelvins CDM gold data, CelesTrak SATCAT/GP/SOCRATES,
-      NOAA SWPC, ARC-AGI-2, Sapient Sudoku Extreme, Sapient Maze 30x30, and
-      Sapient HRM reference code.
+- [x] **EVAL-1 - closed 2026-04-27.** Real eval corpus locked at
+      `docs/evals/real-eval-manifest.json` (270 lines, 8 datasets covering ESA
+      Kelvins CDM gold data, CelesTrak SATCAT/GP/SOCRATES, NOAA SWPC,
+      ARC-AGI-2, Sapient Sudoku Extreme, Sapient Maze 30x30, Sapient HRM
+      reference code) and `data/evals/_manifest-lock.json` (sha256 + md5 per
+      asset, profile `full`). Driver: `scripts/acquire-real-evals.ts` plus
+      `evals:list` / `evals:fetch:smoke` / `evals:fetch:full` package scripts.
+      Move to DONE.md on next trim.
 - [ ] **EVAL-2 - build the paired eval runner.** Add one runner that executes
       agentic and baseline strategies on the same cases, same data snapshot,
       same seeds, and same budget caps. Output JSONL per call plus one
       aggregate report per run.
-- [ ] **EVAL-3 - freeze baselines before tuning.** Define:
+- [ ] **EVAL-3 - freeze baselines before tuning.** Baselines are described
+      in `docs/evals/evaluation-protocol.md` lines 109-140 (Thalamus
+      single-pass, Sweep null-scan, Sim single-fish, HRM direct call) but no
+      `baseline.config.json` or strategy registry exists in code. Define
       Thalamus agentic loop vs single-pass/retrieval-only baseline, Sweep nano
       audit vs deterministic null-scan, Sim swarm vs one-fish verdict, and HRM
       agentic solver vs direct model call.
-- [ ] **EVAL-4 - use nondeterminism correctly.** Run paired seeds, then report
-      mean delta, median delta, win rate, bootstrap confidence interval, and
-      one-sided sign-test p-value. Never compare unrelated random samples.
+- [ ] **EVAL-4 - use nondeterminism correctly.** Stats are spec'd in
+      `docs/evals/evaluation-protocol.md` lines 217-238 and
+      `docs/evals/drafts/hrm-statistics-protocol.md` (mean/median delta, win
+      rate, bootstrap CI 95% with 5000-10000 resamples, one-sided sign-test).
+      No statistical implementation exists in source. Run paired seeds, then
+      report mean delta, median delta, win rate, bootstrap confidence
+      interval, and one-sided sign-test p-value. Never compare unrelated
+      random samples.
 - [ ] **EVAL-5 - implement SSA metrics.** Track entity-id exact recall,
       numeric-fidelity error rate, citation/source coverage, hallucinated-ID
       rate, ESA CDM final-risk MAE/RMSE, high-risk AUPRC, maneuver-decision F1,
@@ -562,23 +576,39 @@ DONE; only open candidates remain below.
 - [ ] **EVAL-6 - implement HRM metrics.** Track ARC exact accuracy/pass@2,
       Sudoku exact solution and invalid-grid rates, Maze exact/valid path rate,
       shortest-path optimality gap, latency, cost, and failure taxonomy.
-- [ ] **EVAL-7 - add cost and provider telemetry.** Log provider, model,
-      prompt/output/reasoning token estimates or real usage, web-search calls,
-      Voyage embedding calls, retries, timeout, provider failure, parsed-output
-      status, cost estimate, latency, and budget stop reason for every call.
-- [ ] **EVAL-8 - define budget tiers.** Support a `$25` smoke proof, `$50`
-      minimum defensible benchmark, `$100` comfortable internal benchmark, and
-      `$250+` paper-grade pass. Each tier must pin case counts, seeds, model
-      choices, and max web-search usage.
-- [ ] **EVAL-9 - document multimodal status honestly.** Current runtime config
-      is text-first (`kimi-k2-turbo-preview`, `gpt-5.4-nano`,
-      `gpt-5.4-mini`, `MiniMax-M2.7`, local Gemma, Voyage). If image-based
-      ARC/HRM or visual SSA eval is added, introduce an explicit multimodal
-      adapter and separate cost estimator instead of implying it exists.
-- [ ] **EVAL-10 - publish eval artifacts.** Commit protocol docs and example
-      reports, but keep downloaded datasets under ignored `data/evals/`. Each
-      report must include commit SHA, manifest hash, runtime config, model
-      versions, score tables, costs, and residual risks.
+- [ ] **EVAL-7 - add cost and provider telemetry.** JSONL fields are spec'd
+      in `docs/evals/evaluation-protocol.md` lines 268-289 and
+      `docs/evals/drafts/cost-observability-protocol.md`. Production telemetry
+      already exists for runtime cycles but is not wired to a per-call
+      `calls.jsonl` / `provider-model-usage.json` writer for evals. Log
+      provider, model, prompt/output/reasoning token estimates or real usage,
+      web-search calls, Voyage embedding calls, retries, timeout, provider
+      failure, parsed-output status, cost estimate, latency, and budget stop
+      reason for every call.
+- [ ] **EVAL-8 - define budget tiers.** Tiers $25 / $50 / $100 / $250+ are
+      described in `docs/evals/evaluation-protocol.md` lines 252-261 with
+      per-phase case counts at lines 367-391. No tier profile config files
+      and no tier flag in any runner. Support a `$25` smoke proof, `$50`
+      minimum defensible benchmark, `$100` comfortable internal benchmark,
+      and `$250+` paper-grade pass. Each tier must pin case counts, seeds,
+      model choices, and max web-search usage.
+- [x] **EVAL-9 - closed 2026-04-27.** Multimodal honesty captured in
+      `docs/evals/evaluation-protocol.md` (lines 240-265) and
+      `docs/evals/drafts/cost-observability-protocol.md` (lines 130-174):
+      runtime is documented as text-first (kimi-k2-turbo-preview,
+      gpt-5.4-nano, gpt-5.4-mini, gpt-5-nano, MiniMax-M2.7, local Gemma,
+      voyage-4-lite/large) with an explicit "le multimodal n'est pas encore
+      un chemin runtime explicite dans ce repo" caveat. Re-open if a
+      multimodal adapter is added. Move to DONE.md on next trim.
+- [ ] **EVAL-10 - publish eval artifacts.** Protocol docs are committed
+      (`docs/evals/README.md`, `evaluation-protocol.md`,
+      `real-eval-manifest.json`, drafts) and `data/evals/` is correctly
+      ignored. No example report directory or sample run with commit SHA,
+      manifest hash, scores, or costs has been committed yet. Commit protocol
+      docs and example reports, but keep downloaded datasets under ignored
+      `data/evals/`. Each report must include commit SHA, manifest hash,
+      runtime config, model versions, score tables, costs, and residual
+      risks.
 
 ---
 
@@ -596,8 +626,11 @@ DONE; only open candidates remain below.
       `packages/cli/src/boot.ts`, remove unnecessary heavy infra deps from
       `packages/cli/package.json`, and add `packages/cli/tests/arch-guard.spec.ts`.
 - [ ] `analyst_briefing` end-to-end in `runCycle` output.
-- [ ] HTTP `/metrics` endpoint on port 8080 serving `registry.metrics()`
-      (`prom-client` text format).
+- [ ] HTTP `/metrics` endpoint - already wired at
+      `apps/console-api/src/server.ts:347-350` on the API port (4000) using
+      `prom-client`. Decide whether to keep it on the API port or expose it
+      on a dedicated 8080 listener; today only generic `http_requests_total`
+      / `http_request_duration` are scraped.
 - [ ] Instrumentation at five points:
       `thalamus_cycles_total{status}`,
       `thalamus_cortex_duration_seconds{cortex}`,

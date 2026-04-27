@@ -8,16 +8,15 @@ import {
 } from "@interview/shared/enum";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { EntityCatalogPort } from "../src/ports/entity-catalog.port";
 import type { EmbedderPort } from "../src/ports/embedder.port";
+import { FindingStoreService } from "../src/services/finding-store.service";
 import {
-  ResearchGraphService,
   type CyclesGraphPort,
   type EdgesGraphPort,
   type FindingsGraphPort,
   type ResearchGraphTransactionPort,
   type StoreFindingInput,
-} from "../src/services/research-graph.service";
+} from "../src/services/research-graph.types";
 import type { ResearchEdge, ResearchFinding } from "../src/types/research.types";
 
 type Args<T extends (...args: any[]) => any> = Parameters<T>;
@@ -226,17 +225,11 @@ function createHarness() {
     embedQuery,
     embedDocuments,
   };
-  const entityCatalog: EntityCatalogPort = {
-    resolveNames: async () => new Map(),
-    cleanOrphans: async () => 0,
-  };
-
-  const service = new ResearchGraphService(
+  const service = new FindingStoreService(
     findingRepo,
     edgeRepo,
     cycleRepo,
     embedder,
-    entityCatalog,
   );
 
   return {
@@ -489,7 +482,7 @@ function createTransactionalHarness() {
     Result<EmbedderPort["embedDocuments"]>
   >(async (texts) => texts.map(() => null));
 
-  const service = new ResearchGraphService(
+  const service = new FindingStoreService(
     findingRepo,
     edgeRepo,
     cycleRepo,
@@ -497,10 +490,6 @@ function createTransactionalHarness() {
       isAvailable: () => true,
       embedQuery,
       embedDocuments,
-    },
-    {
-      resolveNames: async () => new Map(),
-      cleanOrphans: async () => 0,
     },
     transactionPort,
   );
@@ -524,7 +513,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("ResearchGraphService.storeFinding", () => {
+describe("FindingStoreService.storeFinding", () => {
   it("computes the anchored dedup hash from cortex + primary edge + finding type", async () => {
     const { service, embedQuery, upsertByDedupHash } = createHarness();
     const input = makeInput({

@@ -19,7 +19,6 @@ import { fakePort, typedSpy } from "@interview/test-kit";
 import type { CortexExecutor } from "../src/cortices/executor";
 import type { CortexFinding, CortexOutput } from "../src/cortices/types";
 import type { EmbedderPort } from "../src/ports/embedder.port";
-import type { EntityCatalogPort } from "../src/ports/entity-catalog.port";
 import {
   setBudgetsConfigProvider,
   setCortexConfigProvider,
@@ -28,12 +27,12 @@ import {
 } from "../src/config/runtime-config";
 import { CycleLoopRunner } from "../src/services/cycle-loop.service";
 import { FindingPersister } from "../src/services/finding-persister.service";
+import { FindingStoreService } from "../src/services/finding-store.service";
 import {
   type CyclesGraphPort,
   type EdgesGraphPort,
   type FindingsGraphPort,
-  ResearchGraphService,
-} from "../src/services/research-graph.service";
+} from "../src/services/research-graph.types";
 import { StopCriteriaEvaluator } from "../src/services/stop-criteria.service";
 import { ThalamusDAGExecutor } from "../src/services/thalamus-executor.service";
 import {
@@ -228,18 +227,12 @@ function createGraphHarness() {
     embedQuery,
     embedDocuments: async (texts) => texts.map(() => null),
   });
-  const entityCatalog = fakePort<EntityCatalogPort>({
-    resolveNames: async () => new Map(),
-    cleanOrphans: async () => 0,
-  });
-
   return {
-    service: new ResearchGraphService(
+    service: new FindingStoreService(
       findingRepo,
       edgeRepo,
       cycleRepo,
       embedder,
-      entityCatalog,
     ),
     storedFindings,
     storedEdges,

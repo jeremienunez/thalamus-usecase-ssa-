@@ -1,5 +1,5 @@
 /**
- * ResearchGraphService — Phase 3 · Task 3.2 of thalamus agnosticity cleanup.
+ * Research graph services — Phase 3 · Task 3.2 of thalamus agnosticity cleanup.
  *
  * The service stops owning the two SSA-specific concerns (edge cleanOrphans
  * SQL + ENTITY_TABLE_MAP name resolution). Both now go through
@@ -7,12 +7,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { ResearchGraphService } from "../src/services/research-graph.service";
+import { FindingArchiveService } from "../src/services/finding-archive.service";
+import { KgQueryService } from "../src/services/kg-query.service";
 import type {
   FindingsGraphPort,
   EdgesGraphPort,
-  CyclesGraphPort,
-} from "../src/services/research-graph.service";
+} from "../src/services/research-graph.types";
 import type {
   EntityCatalogPort,
   EntityRef,
@@ -82,11 +82,7 @@ function mkEdgeRepo(overrides: Partial<EdgesGraphPort> = {}): EdgesGraphPort {
   };
 }
 
-const noCycleRepo: CyclesGraphPort = {
-  incrementFindings: async () => undefined,
-};
-
-describe("ResearchGraphService.expireAndClean — delegates to EntityCatalogPort", () => {
+describe("FindingArchiveService.expireAndClean — delegates to EntityCatalogPort", () => {
   it("forwards cleanOrphans to the catalog port, not the edge repo", async () => {
     const portCalls: number[] = [];
     const catalog: EntityCatalogPort = {
@@ -97,11 +93,8 @@ describe("ResearchGraphService.expireAndClean — delegates to EntityCatalogPort
       },
     };
     const findingRepo = mkFindingRepo({ expireOld: async () => 7 });
-    const svc = new ResearchGraphService(
+    const svc = new FindingArchiveService(
       findingRepo,
-      mkEdgeRepo(),
-      noCycleRepo,
-      nullEmbedder,
       catalog,
     );
     const res = await svc.expireAndClean();
@@ -111,7 +104,7 @@ describe("ResearchGraphService.expireAndClean — delegates to EntityCatalogPort
   });
 });
 
-describe("ResearchGraphService.getKnowledgeGraph — delegates name resolution", () => {
+describe("KgQueryService.getKnowledgeGraph — delegates name resolution", () => {
   it("calls EntityCatalogPort.resolveNames with the batch of edge refs", async () => {
     let receivedRefs: EntityRef[] = [];
     const catalog: EntityCatalogPort = {
@@ -161,10 +154,9 @@ describe("ResearchGraphService.getKnowledgeGraph — delegates name resolution",
         },
       ],
     });
-    const svc = new ResearchGraphService(
+    const svc = new KgQueryService(
       findingRepo,
       edgeRepo,
-      noCycleRepo,
       nullEmbedder,
       catalog,
     );

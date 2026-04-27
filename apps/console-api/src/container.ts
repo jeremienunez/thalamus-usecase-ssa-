@@ -12,12 +12,8 @@ import { fileURLToPath } from "node:url";
 import { eq, type SQLWrapper } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type Redis from "ioredis";
-import {
-  researchCycle,
-  researchCycleFinding,
-  researchEdge,
-  researchFinding,
-} from "@interview/db-schema";
+import { createResearchWriter } from "./services/research-write.service";
+import { ResearchStatus } from "@interview/shared/enum";
 import type * as schema from "@interview/db-schema";
 import type { FastifyBaseLogger } from "fastify";
 import {
@@ -32,6 +28,7 @@ import {
   setThalamusTransportConfigProvider,
   setNanoSwarmProfile,
   setEntityExtractor,
+  callNanoWithMode,
   type WebSearchPort,
 } from "@interview/thalamus";
 import {
@@ -93,8 +90,6 @@ import {
   SsaPersonaComposer,
   SsaPerturbationPack,
   SsaPromptRenderer,
-  startPcEstimatorSwarm,
-  startTelemetrySwarm,
 } from "./agent/ssa/sim";
 
 export const SSA_SKILLS_DIR = resolve(
@@ -125,7 +120,7 @@ import { PayloadRepository } from "./repositories/payload.repository";
 import { ConjunctionRepository } from "./repositories/conjunction.repository";
 import { KgRepository } from "./repositories/kg.repository";
 import { FindingRepository } from "./repositories/finding.repository";
-import { ResearchEdgeRepository } from "./repositories/research-edge.repository";
+import { KgEdgeViewRepository } from "./repositories/kg-edge-view.repository";
 import { EnrichmentCycleRepository } from "./repositories/enrichment-cycle.repository";
 import { SweepAuditRepository } from "./repositories/sweep-audit.repository";
 import { SweepFeedbackRepository } from "./repositories/sweep-feedback.repository";
@@ -197,7 +192,10 @@ import { SimTurnService } from "./services/sim-turn.service";
 import { SimMemoryService } from "./services/sim-memory.service";
 import { SimTerminalService } from "./services/sim-terminal.service";
 import { SimOperatorService } from "./services/sim-operator.service";
-import { SimPromotionService } from "./services/sim-promotion.service";
+import { SimLauncherService } from "./services/sim-launcher.service";
+import { ModalSuggestionComposer } from "./services/modal-suggestion-composer.service";
+import { SimOutcomePromotionService } from "./services/sim-outcome-promotion.service";
+import { TelemetryScalarPromoter } from "./services/telemetry-scalar-promoter.service";
 import { RuntimeConfigService } from "./services/runtime-config.service";
 import { SatelliteSweepChatRepository } from "./repositories/satellite-sweep-chat.repository";
 import { SatelliteSweepChatService } from "./services/satellite-sweep-chat.service";
@@ -234,7 +232,7 @@ export async function buildContainer(
   const conjunctionRepo = new ConjunctionRepository(db);
   const kgRepo = new KgRepository(db);
   const findingRepo = new FindingRepository(db);
-  const edgeRepo = new ResearchEdgeRepository(db);
+  const edgeRepo = new KgEdgeViewRepository(db);
   const cycleRepo = new EnrichmentCycleRepository(db);
   const auditRepo = new SweepAuditRepository(db);
   const reflexionRepo = new ReflexionRepository(db);
@@ -365,6 +363,7 @@ export async function buildContainer(
 
   const thalamus = buildThalamusContainer({
     db,
+    createResearchWriter,
     skillsDir,
     dataProvider,
     domainConfig: buildSsaDomainConfig(),
@@ -373,6 +372,39 @@ export async function buildContainer(
     sourceFetcher: new SsaSourceFetcherAdapter(),
     embedder: new SsaVoyageEmbedderAdapter(config.voyageApiKey),
   });
+  const researchWriter = createResearchWriter(db);
+  const researchFindingsWriter = {
+    async insert(input: import("./types/finding.types").FindingInsertInput) {
+      const row = await researchWriter.createFinding({
+        researchCycleId: input.cycleId,
+        cortex: input.cortex,
+        findingType: input.findingType,
+        status: ResearchStatus.Active,
+        urgency: input.urgency,
+        title: input.title,
+        summary: input.summary,
+        evidence: input.evidence,
+        reasoning: input.reasoning,
+        confidence: input.confidence,
+        impactScore: input.impactScore,
+      });
+      return row.id;
+    },
+  };
+  const researchEdgesWriter = {
+    async insert(input: import("./types/finding.types").EdgeInsertInput) {
+      await researchWriter.createEdges([
+        {
+          findingId: input.findingId,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          relation: input.relation,
+          weight: input.weight,
+          context: input.context,
+        },
+      ]);
+    },
+  };
 
   // ─── Sweep SSA port wiring (Plan 1 Task 3.1) ─────────────────────
   //
@@ -419,11 +451,12 @@ export async function buildContainer(
   const sweepRepoHolder: {
     loadPastFeedback: () => Promise<SuggestionFeedbackRow[]>;
   } = {
-    loadPastFeedback: async () => {
-      throw new Error(
-        "sweepRepoHolder: sweep container not yet wired — audit called too early",
-      );
-    },
+    loadPastFeedback: () =>
+      Promise.reject(
+        new Error(
+          "sweepRepoHolder: sweep container not yet wired — audit called too early",
+        ),
+      ),
   };
   const ssaAuditProvider = new SsaAuditProvider({
     satelliteRepo: ssaAuditSatelliteRepo,
@@ -470,6 +503,7 @@ export async function buildContainer(
     redis,
     sim: {
       cortexRegistry: thalamus.registry,
+      nanoCaller: callNanoWithMode,
       embed: thalamus.embedder.embedQuery.bind(thalamus.embedder),
       llmMode: config.simLlmMode ?? "cloud",
       queue: simQueue,
@@ -509,8 +543,8 @@ export async function buildContainer(
   // services
   const enrichmentFinding = new EnrichmentFindingService(
     cycleRepo,
-    findingRepo,
-    edgeRepo,
+    researchFindingsWriter,
+    researchEdgesWriter,
     sweepFeedbackRepo,
   );
   const nanoResearch = new NanoResearchService();
@@ -591,42 +625,37 @@ export async function buildContainer(
     swarmStatus: sweep.sim.swarmService,
     llm: llmFactory,
   });
-  const simPromotionService = new SimPromotionService({
-    store: {
-      async createCycle(value) {
-        const [row] = await db
-          .insert(researchCycle)
-          .values(value)
-          .returning({ id: researchCycle.id });
-        if (!row) throw new Error("insert research_cycle returned no row");
-        return row;
-      },
-      async createFinding(value) {
-        const [row] = await db
-          .insert(researchFinding)
-          .values(value)
-          .returning({ id: researchFinding.id });
-        if (!row) throw new Error("insert research_finding returned no row");
-        return row;
-      },
-      async linkCycleFinding(value) {
-        await db.insert(researchCycleFinding).values(value);
-      },
-      async createEdge(value) {
-        await db.insert(researchEdge).values(value);
-      },
-      async updateCycleFindingsCount(cycleId, findingsCount) {
-        await db
-          .update(researchCycle)
-          .set({ findingsCount })
-          .where(eq(researchCycle.id, cycleId));
-      },
-    },
+  const simLauncherService = new SimLauncherService({
+    satelliteRepo: satelliteDimensionRepo,
+    conjunctionRepo,
+    swarmService: sweep.sim!.swarmService,
+  });
+  const simOutcomePromotionService = new SimOutcomePromotionService({
+    sweepRepo: sweep.sweepRepo,
+  });
+  const modalSuggestionComposer = new ModalSuggestionComposer({
+    writer: researchWriter,
     sweepRepo: sweep.sweepRepo,
     satelliteRepo: simPromotionSatelliteRepo,
     swarmRepo: simSwarmRepo,
     embed: thalamus.embedder.embedQuery.bind(thalamus.embedder),
   });
+  const telemetryScalarPromoter = new TelemetryScalarPromoter({
+    sweepRepo: sweep.sweepRepo,
+    satelliteRepo: simPromotionSatelliteRepo,
+    swarmRepo: simSwarmRepo,
+  });
+  const simPromotionService = {
+    promote: simOutcomePromotionService.promote.bind(simOutcomePromotionService),
+    emitSuggestionFromModal:
+      modalSuggestionComposer.emitSuggestionFromModal.bind(
+        modalSuggestionComposer,
+      ),
+    emitTelemetrySuggestions:
+      telemetryScalarPromoter.emitTelemetrySuggestions.bind(
+        telemetryScalarPromoter,
+      ),
+  };
   const replFollowUpDeps = {
     thalamusService: thalamus.thalamusService,
     findingRepo: thalamus.findingRepo,
@@ -644,18 +673,7 @@ export async function buildContainer(
           return row !== null;
         },
       },
-      launcher: {
-        startTelemetry: (opts: { satelliteId: number; fishCount?: number }) =>
-          startTelemetrySwarm(
-            { satelliteRepo: satelliteDimensionRepo, swarmService: sweep.sim!.swarmService },
-            opts,
-          ),
-        startPc: (opts: { conjunctionId: number; fishCount?: number }) =>
-          startPcEstimatorSwarm(
-            { conjunctionRepo, swarmService: sweep.sim!.swarmService },
-            opts,
-          ),
-      },
+      launcher: simLauncherService,
       swarm: simSwarmService,
     },
     sweep: {
@@ -697,6 +715,7 @@ export async function buildContainer(
   );
 
   const services: AppServices = {
+    researchWriter,
     satelliteView: new SatelliteViewService(satelliteViewRepo),
     payloadView: new PayloadViewService(payloadRepo),
     conjunctionView: conjunctionViewService,
@@ -707,8 +726,8 @@ export async function buildContainer(
     reflexion: new ReflexionService(
       reflexionRepo,
       cycleRepo,
-      findingRepo,
-      edgeRepo,
+      researchFindingsWriter,
+      researchEdgesWriter,
     ),
     knnPropagation: new KnnPropagationService(
       knnSatelliteRepo,
@@ -764,21 +783,7 @@ export async function buildContainer(
           );
         },
       },
-      launcher: {
-        startTelemetry: (opts) =>
-          startTelemetrySwarm(
-            {
-              satelliteRepo: satelliteDimensionRepo,
-              swarmService: sweep.sim!.swarmService,
-            },
-            opts,
-          ),
-        startPc: (opts) =>
-          startPcEstimatorSwarm(
-            { conjunctionRepo, swarmService: sweep.sim!.swarmService },
-            opts,
-          ),
-      },
+      launcher: simLauncherService,
       godChannel: simGodChannelService,
       target: simTargetService,
       fleet: simFleetService,

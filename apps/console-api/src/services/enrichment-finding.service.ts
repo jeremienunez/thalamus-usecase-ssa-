@@ -5,24 +5,18 @@ import {
 } from "../transformers/enrichment-finding.transformer";
 import type { EmitArgs, SweepFeedbackEntry } from "../types/sweep.types";
 import type {
-  FindingInsertInput,
-  EdgeInsertInput,
-} from "../types/finding.types";
+  CyclesPort,
+  FindingsWritePort,
+  EdgesWritePort,
+} from "./ports/research-write.port";
+import { ResearchEntityType, ResearchRelation } from "@interview/shared/enum";
 
 export type { EmitArgs } from "../types/sweep.types";
-
-// ── Ports (structural — repos satisfy these by duck typing) ────────
-export interface CyclesPort {
-  getOrCreate(): Promise<bigint>;
-}
-
-export interface FindingsWritePort {
-  insert(input: FindingInsertInput): Promise<bigint>;
-}
-
-export interface EdgesWritePort {
-  insert(input: EdgeInsertInput): Promise<void>;
-}
+export type {
+  CyclesPort,
+  FindingsWritePort,
+  EdgesWritePort,
+} from "./ports/research-write.port";
 
 export interface SweepFeedbackPort {
   push(entry: SweepFeedbackEntry): Promise<void>;
@@ -56,9 +50,9 @@ export class EnrichmentFindingService {
 
     await this.edges.insert({
       findingId,
-      entityType: "satellite",
+      entityType: ResearchEntityType.Satellite,
       entityId: satBig,
-      relation: "about",
+      relation: ResearchRelation.About,
       weight: 1.0,
       context: { field: args.field, value: String(args.value) },
     });
@@ -67,9 +61,9 @@ export class EnrichmentFindingService {
       for (const nid of knnNeighbourIds) {
         await this.edges.insert({
           findingId,
-          entityType: "satellite",
+          entityType: ResearchEntityType.Satellite,
           entityId: nid,
-          relation: "similar_to",
+          relation: ResearchRelation.SimilarTo,
           weight: args.cosSim ?? 0.8,
           context: { role: "knn_neighbour", cosSim: args.cosSim ?? null },
         });

@@ -2,12 +2,14 @@ import type { Regime, SatelliteView } from "@interview/shared";
 import { toSatelliteView } from "../transformers/satellite-view.transformer";
 import type { SatelliteOrbitalRow } from "../types/satellite.types";
 
-export interface SatellitesReadPort {
+export interface SatelliteOrbitalReadPort {
   listWithOrbital(limit: number, regime?: Regime): Promise<SatelliteOrbitalRow[]>;
 }
 
+export type SatellitesReadPort = SatelliteOrbitalReadPort;
+
 export class SatelliteViewService {
-  constructor(private readonly repo: SatellitesReadPort) {}
+  constructor(private readonly repo: SatelliteOrbitalReadPort) {}
 
   async list(opts: {
     limit: number;

@@ -17,7 +17,7 @@ import {
 } from "../src/config/runtime-config";
 import type { CycleLoopRunner } from "../src/services/cycle-loop.service";
 import type { FindingPersister } from "../src/services/finding-persister.service";
-import type { ResearchGraphService } from "../src/services/research-graph.service";
+import type { ResearchGraphServicePort } from "../src/services/research-graph.types";
 import {
   type CyclesPort,
   ThalamusService,
@@ -80,7 +80,7 @@ function createHarness() {
   const create = typedSpy<CyclesPort["create"]>();
   const findById = typedSpy<CyclesPort["findById"]>();
   const updateStatus = typedSpy<CyclesPort["updateStatus"]>();
-  const expireAndClean = typedSpy<ResearchGraphService["expireAndClean"]>();
+  const expireAndClean = typedSpy<ResearchGraphServicePort["expireAndClean"]>();
 
   create.mockResolvedValue(makeCycle());
   findById.mockResolvedValue(
@@ -120,7 +120,7 @@ function createHarness() {
     fakePort<CycleLoopRunner>({ run }),
     fakePort<FindingPersister>({ persist }),
     fakePort<CyclesPort>({ create, findById, updateStatus }),
-    fakePort<ResearchGraphService>({ expireAndClean }),
+    fakePort<ResearchGraphServicePort>({ expireAndClean }),
   );
 
   return {

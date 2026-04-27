@@ -10,7 +10,6 @@
   "dependencies": {
     "@interview/db-schema": "workspace:*",
     "@interview/shared": "workspace:*",
-    "@interview/thalamus": "workspace:*",
     "bullmq": "^5.4.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",

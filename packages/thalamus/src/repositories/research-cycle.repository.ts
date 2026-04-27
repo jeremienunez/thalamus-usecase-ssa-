@@ -2,28 +2,24 @@
  * Research Cycle Repository — CRUD for Thalamus research cycles
  */
 
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { researchCycle, type DatabaseExecutor } from "@interview/db-schema";
-import type {
-  ResearchCycleEntity,
-  NewResearchCycleEntity,
-} from "../entities/research.entity";
 import type {
   ResearchCycle,
   NewResearchCycle,
 } from "../types/research.types";
 import { toResearchCycle } from "../transformers/research.transformer";
 import type { ResearchCycleStatus } from "@interview/shared/enum";
+import type { ResearchWriterPort } from "../ports/research-writer.port";
 
 export class ResearchCycleRepository {
-  constructor(private db: DatabaseExecutor) {}
+  constructor(
+    private db: DatabaseExecutor,
+    private writer: ResearchWriterPort,
+  ) {}
 
   async create(data: NewResearchCycle): Promise<ResearchCycle> {
-    const [result] = await this.db
-      .insert(researchCycle)
-      .values(data as NewResearchCycleEntity)
-      .returning();
-    return toResearchCycle(result);
+    return this.writer.createCycle(data);
   }
 
   async findById(id: bigint): Promise<ResearchCycle | null> {
@@ -52,12 +48,7 @@ export class ResearchCycleRepository {
   }
 
   async incrementFindings(id: bigint): Promise<void> {
-    await this.db
-      .update(researchCycle)
-      .set({
-        findingsCount: sql`${researchCycle.findingsCount} + 1`,
-      })
-      .where(eq(researchCycle.id, id));
+    await this.writer.incrementCycleFindings(id);
   }
 
   async findRecent(limit = 20): Promise<ResearchCycle[]> {

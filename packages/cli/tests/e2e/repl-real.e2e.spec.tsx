@@ -25,13 +25,10 @@ import React from "react";
 import { Pool } from "pg";
 import IORedis from "ioredis";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { sql, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { resolve } from "node:path";
 
 import {
-  researchCycle,
-  researchEdge,
-  researchFinding,
   operator,
   satellite,
 } from "@interview/db-schema";
@@ -48,6 +45,7 @@ import {
 import { App } from "../../src/app";
 import { buildRealAdapters } from "../../src/boot";
 import type { Adapters } from "../../src/router/dispatch";
+import { createResearchWriter } from "../../../../apps/console-api/src/services/research-write.service";
 
 // Ink 4's useInput uses stdin.ref()/unref(); ink-testing-library's Stdin stub
 // lacks them. Patch prototype so the hook doesn't throw. (Copied from repl.spec.tsx.)
@@ -274,44 +272,46 @@ async function seedFixture(): Promise<void> {
     .returning({ id: satellite.id });
   seededSatelliteId = satRow!.id as bigint;
 
-  // 1 research_cycle + 1 finding + 1 edge pointing at the satellite
-  const [cycleRow] = await db
-    .insert(researchCycle)
-    .values({
-      triggerType: ResearchCycleTrigger.User,
-      triggerSource: `${SEED_TAG}-trigger`,
-      status: ResearchCycleStatus.Completed,
-      findingsCount: 1,
-      totalCost: 0,
-      corticesUsed: [ResearchCortex.FleetAnalyst],
-      dagPlan: {},
-    })
-    .returning({ id: researchCycle.id });
-  seededCycleId = cycleRow!.id as bigint;
-
-  const [findingRow] = await db
-    .insert(researchFinding)
-    .values({
-      researchCycleId: seededCycleId,
-      cortex: ResearchCortex.FleetAnalyst,
-      findingType: ResearchFindingType.Insight,
-      status: ResearchStatus.Active,
-      title: `${SEED_TAG}-finding-title`,
-      summary: `${SEED_TAG} seeded for CLI e2e`,
-      evidence: [],
-      confidence: 0.9,
-      iteration: 1,
-    })
-    .returning({ id: researchFinding.id });
-  seededFindingId = findingRow!.id as bigint;
-
-  await db.insert(researchEdge).values({
-    findingId: seededFindingId,
-    entityType: ResearchEntityType.Satellite,
-    entityId: seededSatelliteId,
-    relation: ResearchRelation.About,
-    weight: 1.0,
+  const writer = createResearchWriter(db);
+  const cycleRow = await writer.createCycle({
+    triggerType: ResearchCycleTrigger.User,
+    triggerSource: `${SEED_TAG}-trigger`,
+    status: ResearchCycleStatus.Completed,
+    findingsCount: 1,
+    totalCost: 0,
+    corticesUsed: [ResearchCortex.FleetAnalyst],
+    dagPlan: {},
   });
+  seededCycleId = cycleRow.id;
+
+  const findingRow = await writer.createFinding({
+    researchCycleId: seededCycleId,
+    cortex: ResearchCortex.FleetAnalyst,
+    findingType: ResearchFindingType.Insight,
+    status: ResearchStatus.Active,
+    title: `${SEED_TAG}-finding-title`,
+    summary: `${SEED_TAG} seeded for CLI e2e`,
+    evidence: [],
+    confidence: 0.9,
+    iteration: 1,
+  });
+  seededFindingId = findingRow.id;
+
+  await writer.linkFindingToCycle({
+    cycleId: seededCycleId,
+    findingId: seededFindingId,
+    iteration: 1,
+    isDedupHit: false,
+  });
+  await writer.createEdges([
+    {
+      findingId: seededFindingId,
+      entityType: ResearchEntityType.Satellite,
+      entityId: seededSatelliteId,
+      relation: ResearchRelation.About,
+      weight: 1.0,
+    },
+  ]);
 }
 
 async function cleanE2E(): Promise<void> {

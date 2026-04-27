@@ -27,6 +27,7 @@ const TTL_DAYS = 90;
 const TTL_SECS = TTL_DAYS * 86400;
 const DOMAIN_BLOB = "domainBlob";
 const FILTER_SCAN_BATCH = 100;
+const LEGACY_INDEX_SCAN_BATCH = 500;
 
 const RESERVED_HASH_KEYS = new Set([
   "id",
@@ -376,26 +377,27 @@ export class SweepRepository {
     const totalSuggestions = await this.redis.zcard(IDX_ALL);
     const pending = await this.redis.scard(IDX_PENDING);
 
-    const ids = await this.redis.zrevrange(IDX_ALL, 0, -1);
-    const pipe = this.redis.pipeline();
-    for (const id of ids) {
-      pipe.hmget(`${PREFIX}:${id}`, "accepted", "severity", "category");
-    }
-    const results = await pipe.exec();
-
     let accepted = 0;
     let rejected = 0;
     const bySeverity: Record<string, number> = {};
     const byCategory: Record<string, number> = {};
 
-    for (const [err, data] of results ?? []) {
-      if (err || !data) continue;
-      const [flag, severity, category] = data as string[];
-      if (flag === "true") accepted++;
-      if (flag === "false") rejected++;
-      if (severity) bySeverity[severity] = (bySeverity[severity] ?? 0) + 1;
-      if (category) byCategory[category] = (byCategory[category] ?? 0) + 1;
-    }
+    await this.forEachLegacyIndexBatch(async (ids) => {
+      const pipe = this.redis.pipeline();
+      for (const id of ids) {
+        pipe.hmget(`${PREFIX}:${id}`, "accepted", "severity", "category");
+      }
+      const results = await pipe.exec();
+
+      for (const [err, data] of results ?? []) {
+        if (err || !data) continue;
+        const [flag, severity, category] = data as string[];
+        if (flag === "true") accepted++;
+        if (flag === "false") rejected++;
+        if (severity) bySeverity[severity] = (bySeverity[severity] ?? 0) + 1;
+        if (category) byCategory[category] = (byCategory[category] ?? 0) + 1;
+      }
+    });
 
     return {
       totalSuggestions,
@@ -534,26 +536,29 @@ export class SweepRepository {
   }
 
   private async rebuildRankedIndexesFromLegacy(): Promise<void> {
-    const ids = await this.redis.zrevrange(IDX_ALL, 0, -1);
-    const rows = await this.rowsByIds(ids);
     await Promise.all([
       this.deleteRankedScopeIndexes("all"),
       this.deleteRankedScopeIndexes("pending"),
       this.deleteRankedScopeIndexes("reviewed"),
     ]);
-    const pipe = this.redis.pipeline();
-    for (const row of rows) {
-      const hash = {
-        createdAt: row.createdAt,
-        severity: String(row.domainFields.severity ?? ""),
-        category: String(row.domainFields.category ?? ""),
-      };
-      this.indexSuggestion(pipe, row.id, hash, ["all"]);
-      this.indexSuggestion(pipe, row.id, hash, [
-        row.reviewedAt ? "reviewed" : "pending",
-      ]);
-    }
-    await pipe.exec();
+    await this.forEachLegacyIndexBatch(async (ids) => {
+      const rows = await this.rowsByIds(ids);
+      if (rows.length === 0) return;
+
+      const pipe = this.redis.pipeline();
+      for (const row of rows) {
+        const hash = {
+          createdAt: row.createdAt,
+          severity: String(row.domainFields.severity ?? ""),
+          category: String(row.domainFields.category ?? ""),
+        };
+        this.indexSuggestion(pipe, row.id, hash, ["all"]);
+        this.indexSuggestion(pipe, row.id, hash, [
+          row.reviewedAt ? "reviewed" : "pending",
+        ]);
+      }
+      await pipe.exec();
+    });
   }
 
   private async ensurePendingRankedIndexForRead(): Promise<void> {
@@ -625,6 +630,26 @@ export class SweepRepository {
 
     if (keys.length > 0) {
       await this.redis.del(...keys);
+    }
+  }
+
+  private async forEachLegacyIndexBatch(
+    visit: (ids: string[]) => Promise<void>,
+  ): Promise<void> {
+    let start = 0;
+
+    while (true) {
+      const ids = await this.redis.zrevrange(
+        IDX_ALL,
+        start,
+        start + LEGACY_INDEX_SCAN_BATCH - 1,
+      );
+      if (ids.length === 0) return;
+
+      await visit(ids);
+
+      if (ids.length < LEGACY_INDEX_SCAN_BATCH) return;
+      start += LEGACY_INDEX_SCAN_BATCH;
     }
   }
 }

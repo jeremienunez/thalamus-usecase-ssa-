@@ -9,7 +9,7 @@
  *     exists in the SSA entity tables.
  *
  * Owns the ENTITY_TABLE_MAP and the CASCADE CASE SQL. Replaces the kernel's
- * deleted `EntityNameResolver` + `ResearchEdgeRepository.cleanOrphans`.
+ * deleted entity-name resolver and legacy edge orphan cleanup.
  */
 
 import { sql } from "drizzle-orm";

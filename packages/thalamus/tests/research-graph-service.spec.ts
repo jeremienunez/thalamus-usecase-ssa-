@@ -9,13 +9,16 @@ import {
 import { InvalidEmbeddingDimensionError } from "../src/errors/embedding";
 import type { EmbedderPort } from "../src/ports/embedder.port";
 import type { EntityCatalogPort } from "../src/ports/entity-catalog.port";
+import { FindingArchiveService } from "../src/services/finding-archive.service";
+import { FindingStoreService } from "../src/services/finding-store.service";
+import { KgQueryService } from "../src/services/kg-query.service";
 import {
-  ResearchGraphService,
   type CyclesGraphPort,
   type EdgesGraphPort,
   type FindingsGraphPort,
+  type ResearchGraphServicePort,
   type StoreFindingInput,
-} from "../src/services/research-graph.service";
+} from "../src/services/research-graph.types";
 import type { ResearchFinding, ResearchEdge } from "../src/types/research.types";
 
 type SimilarFinding = ResearchFinding & { similarity: number };
@@ -174,40 +177,64 @@ function createHarness() {
     EntityCatalogPort["cleanOrphans"]
   >(async () => 0);
 
-  const service = new ResearchGraphService(
-    {
-      upsertByDedupHash,
-      findSimilar,
-      mergeFinding,
-      findById,
-      findByEntity,
-      searchBySimilarity,
-      findActive,
-      archive,
-      expireOld,
-      countByCortexAndType,
-      countRecent24h,
-      linkToCycle,
-    },
-    {
-      createMany,
-      findByFinding,
-      findByFindings,
-      countByEntityType,
-    },
-    {
-      incrementFindings,
-    },
-    {
-      isAvailable: () => true,
-      embedQuery,
-      embedDocuments,
-    },
-    {
-      resolveNames,
-      cleanOrphans,
-    },
+  const findingRepo: FindingsGraphPort = {
+    upsertByDedupHash,
+    findSimilar,
+    mergeFinding,
+    findById,
+    findByEntity,
+    searchBySimilarity,
+    findActive,
+    archive,
+    expireOld,
+    countByCortexAndType,
+    countRecent24h,
+    linkToCycle,
+  };
+  const edgeRepo: EdgesGraphPort = {
+    createMany,
+    findByFinding,
+    findByFindings,
+    countByEntityType,
+  };
+  const cycleRepo: CyclesGraphPort = { incrementFindings };
+  const embedder: EmbedderPort = {
+    isAvailable: () => true,
+    embedQuery,
+    embedDocuments,
+  };
+  const entityCatalog: EntityCatalogPort = {
+    resolveNames,
+    cleanOrphans,
+  };
+  const findingStore = new FindingStoreService(
+    findingRepo,
+    edgeRepo,
+    cycleRepo,
+    embedder,
   );
+  const kgQuery = new KgQueryService(
+    findingRepo,
+    edgeRepo,
+    embedder,
+    entityCatalog,
+  );
+  const findingArchive = new FindingArchiveService(
+    findingRepo,
+    entityCatalog,
+  );
+  const service = {
+    storeFinding: findingStore.storeFinding.bind(findingStore),
+    onFinding: findingStore.onFinding.bind(findingStore),
+    queryByEntity: kgQuery.queryByEntity.bind(kgQuery),
+    semanticSearch: kgQuery.semanticSearch.bind(kgQuery),
+    listFindings: kgQuery.listFindings.bind(kgQuery),
+    getFindingWithEdges: kgQuery.getFindingWithEdges.bind(kgQuery),
+    getKnowledgeGraph: kgQuery.getKnowledgeGraph.bind(kgQuery),
+    getGraphStats: kgQuery.getGraphStats.bind(kgQuery),
+    archiveFinding: findingArchive.archiveFinding.bind(findingArchive),
+    expireAndClean: findingArchive.expireAndClean.bind(findingArchive),
+  } satisfies ResearchGraphServicePort;
 
   return {
     service,
@@ -233,7 +260,7 @@ function createHarness() {
   };
 }
 
-describe("ResearchGraphService", () => {
+describe("research graph services", () => {
   it("merges with empty evidence when semantic dedup receives a non-array evidence payload", async () => {
     const {
       service,

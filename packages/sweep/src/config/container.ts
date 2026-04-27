@@ -12,7 +12,6 @@
  */
 
 import type IORedis from "ioredis";
-import type { CortexRegistry } from "@interview/thalamus";
 import type {
   FindingDomainSchema,
   DomainAuditProvider,
@@ -46,7 +45,10 @@ import { SimOrchestrator } from "../sim/sim-orchestrator.service";
 import { AggregatorService } from "../sim/aggregator.service";
 import { SwarmService } from "../sim/swarm.service";
 import { RedisSwarmAggregateGate } from "../sim/swarm-aggregate-gate";
-import { ConfidenceService } from "@interview/thalamus";
+import type {
+  CortexSkillRegistry,
+  NanoTurnCaller,
+} from "../sim/turn-runner.utils";
 
 export interface SimServices {
   memoryService: MemoryService;
@@ -55,12 +57,6 @@ export interface SimServices {
   orchestrator: SimOrchestrator;
   aggregator: AggregatorService;
   swarmService: SwarmService;
-  /**
-   * Shared ConfidenceService instance — in-memory for now (SPEC-TH-040
-   * pure algorithmic core). Passed to the sweep-resolution onSimUpdateAccepted
-   * hook so reviewer-accepted sim inferences get their source_class bumped.
-   */
-  confidenceService: ConfidenceService;
 }
 
 export interface SweepContainer {
@@ -79,7 +75,8 @@ export interface BuildSweepOpts {
    * concrete implementation — no sweep-internal fallback.
    */
   sim?: {
-    cortexRegistry: CortexRegistry;
+    cortexRegistry: CortexSkillRegistry;
+    nanoCaller: NanoTurnCaller;
     embed: EmbedFn;
     llmMode: "cloud" | "fixtures" | "record";
     queue: SimQueuePort;
@@ -161,6 +158,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       store: runtimeStore,
       memory: memoryService,
       cortexRegistry: opts.sim.cortexRegistry,
+      nanoCaller: opts.sim.nanoCaller,
       llmMode: opts.sim.llmMode,
       targets: scenarioContext,
       prompt,
@@ -171,6 +169,7 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       store: runtimeStore,
       memory: memoryService,
       cortexRegistry: opts.sim.cortexRegistry,
+      nanoCaller: opts.sim.nanoCaller,
       llmMode: opts.sim.llmMode,
       targets: scenarioContext,
       prompt,
@@ -202,8 +201,6 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
     // adapter. The legacy in-package simHook → registry chain
     // was removed when ports.promotion + ports.resolutionHandlers became
     // required (CLAUDE.md §3.2 — no second contract).
-    const confidenceService = new ConfidenceService();
-
     sim = {
       memoryService,
       sequentialRunner,
@@ -211,7 +208,6 @@ export function buildSweepContainer(opts: BuildSweepOpts): SweepContainer {
       orchestrator,
       aggregator,
       swarmService,
-      confidenceService,
     };
   }
 

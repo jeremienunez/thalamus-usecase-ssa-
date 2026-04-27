@@ -19,6 +19,7 @@ import {
 } from "@interview/db-schema";
 import {
   CortexRegistry,
+  callNanoWithMode,
   setThalamusTransportConfigProvider,
 } from "@interview/thalamus";
 import {
@@ -164,6 +165,7 @@ beforeAll(async () => {
     },
     sim: {
       cortexRegistry: registry,
+      nanoCaller: callNanoWithMode,
       embed: async () => null,
       llmMode: "fixtures",
       queue,

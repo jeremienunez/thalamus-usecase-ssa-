@@ -17,10 +17,24 @@ import type {
   ReflexionPassInput,
 } from "../types/reflexion.types";
 import type {
-  FindingInsertInput,
-  EdgeInsertInput,
-} from "../types/finding.types";
+  CyclesPort,
+  FindingsWritePort,
+  EdgesWritePort,
+} from "./ports/research-write.port";
 import { HttpError } from "../utils/http-error";
+import {
+  ResearchCortex,
+  ResearchEntityType,
+  ResearchFindingType,
+  ResearchRelation,
+  ResearchUrgency,
+} from "@interview/shared/enum";
+
+export type {
+  CyclesPort,
+  FindingsWritePort,
+  EdgesWritePort,
+} from "./ports/research-write.port";
 
 // ── Ports (structural — repos satisfy these by duck typing) ────────
 export interface ReflexionReadPort {
@@ -42,18 +56,6 @@ export interface ReflexionReadPort {
     inc: number,
     dIncMax: number,
   ): Promise<MilRow[]>;
-}
-
-export interface CyclesPort {
-  getOrCreate(): Promise<bigint>;
-}
-
-export interface FindingsWritePort {
-  insert(input: FindingInsertInput): Promise<bigint>;
-}
-
-export interface EdgesWritePort {
-  insert(input: EdgeInsertInput): Promise<void>;
 }
 
 export type ReflexionResult = {
@@ -209,14 +211,15 @@ export class ReflexionService {
         weight: 0.9,
       },
     ];
-    const urgency = mil.length >= 1 ? "high" : "medium";
+    const urgency =
+      mil.length >= 1 ? ResearchUrgency.High : ResearchUrgency.Medium;
     const reasoning =
       "Orbital fingerprint reflexion: SQL cross-tab on (inc, raan, meanMotion) against declared classification. No LLM. Provenance: every cited peer traced via similar_to edges.";
 
     const findingId = await this.findings.insert({
       cycleId,
-      cortex: "classification_auditor",
-      findingType: "anomaly",
+      cortex: ResearchCortex.ClassificationAuditor,
+      findingType: ResearchFindingType.Anomaly,
       urgency,
       title,
       summary,
@@ -228,9 +231,9 @@ export class ReflexionService {
 
     await this.edges.insert({
       findingId,
-      entityType: "satellite",
+      entityType: ResearchEntityType.Satellite,
       entityId: BigInt(t.id),
-      relation: "about",
+      relation: ResearchRelation.About,
       weight: 1.0,
       context: {
         noradId: norad,
@@ -244,9 +247,9 @@ export class ReflexionService {
     for (const m of mil.slice(0, 10)) {
       await this.edges.insert({
         findingId,
-        entityType: "satellite",
+        entityType: ResearchEntityType.Satellite,
         entityId: BigInt(m.id),
-        relation: "similar_to",
+        relation: ResearchRelation.SimilarTo,
         weight: 0.9,
         context: { role: "mil_lineage_peer", dInc: Number(m.d_inc.toFixed(3)) },
       });
@@ -254,9 +257,9 @@ export class ReflexionService {
     for (const r of strict.slice(0, 5)) {
       await this.edges.insert({
         findingId,
-        entityType: "satellite",
+        entityType: ResearchEntityType.Satellite,
         entityId: BigInt(r.id),
-        relation: "similar_to",
+        relation: ResearchRelation.SimilarTo,
         weight: 0.95,
         context: {
           role: "strict_coplane",

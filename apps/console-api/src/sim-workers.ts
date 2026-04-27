@@ -7,6 +7,7 @@ import {
 } from "@interview/shared/config";
 import {
   CortexRegistry,
+  callNanoWithMode,
   registerThalamusConfigDomains,
   setNanoConfigProvider,
   setThalamusTransportConfigProvider,
@@ -144,6 +145,7 @@ async function main(): Promise<void> {
     },
     sim: {
       cortexRegistry: registry,
+      nanoCaller: callNanoWithMode,
       embed: async () => null,
       llmMode: MODE,
       queue,

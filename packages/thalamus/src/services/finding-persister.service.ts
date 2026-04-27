@@ -11,7 +11,7 @@ import {
   ResearchStatus,
 } from "@interview/shared/enum";
 import type { CortexFinding } from "../cortices/types";
-import type { ResearchGraphService } from "./research-graph.service";
+import type { FindingStorePort } from "./research-graph.types";
 import type { DAGPlan } from "./thalamus-planner.service";
 import type { ResearchPersistenceResult } from "../types/research.types";
 
@@ -27,7 +27,7 @@ export interface PersistContext {
 export type PersistResult = ResearchPersistenceResult;
 
 export class FindingPersister {
-  constructor(private graphService: ResearchGraphService) {}
+  constructor(private graphService: FindingStorePort) {}
 
   /**
    * Persist each finding into the knowledge graph.

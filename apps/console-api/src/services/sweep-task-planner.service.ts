@@ -10,9 +10,11 @@ export type SweepListRow = {
 };
 
 // ── Port ────────────────────────────────────────────────────────────
-export interface SatellitesReadPort {
+export interface SatellitePayloadNameReadPort {
   findPayloadNamesByIds(ids: bigint[]): Promise<SatelliteNameRow[]>;
 }
+
+export type SatellitesReadPort = SatellitePayloadNameReadPort;
 
 /**
  * Pure planner: parses sweep `resolutionPayload` rows, validates the
@@ -20,7 +22,7 @@ export interface SatellitesReadPort {
  * `MissionTask` per (suggestion, satellite) pair ready for the worker.
  */
 export class SweepTaskPlanner {
-  constructor(private readonly satellites: SatellitesReadPort) {}
+  constructor(private readonly satellites: SatellitePayloadNameReadPort) {}
 
   async buildTasks(
     sweepRows: SweepListRow[],

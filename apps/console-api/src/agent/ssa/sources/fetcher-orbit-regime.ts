@@ -5,6 +5,18 @@ import { registerSource } from "./registry";
 const logger = createLogger("source-orbit-regime");
 const TIMEOUT_MS = 12_000;
 
+type DebrisDensityFeature = {
+  properties?: {
+    CLASS?: unknown;
+    DESCR?: unknown;
+    EPOCH?: unknown;
+  };
+};
+
+type DebrisDensityResponse = {
+  features?: DebrisDensityFeature[];
+};
+
 /**
  * Per-regime characterization feed. Pulls the orbital-debris density
  * map and an altitude profile at a given latitude/longitude (for a
@@ -23,18 +35,18 @@ async function fetchDebrisDensity(
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (!res.ok) return null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as DebrisDensityResponse;
     const feature = data.features?.[0];
     if (!feature) return null;
+    const properties = feature.properties ?? {};
     return {
       type: "debris_density",
       source: "ESA DISCOS WFS (1m debris density)",
       url,
       data: {
-        debrisClass: feature.properties?.CLASS ?? "unknown",
-        description: feature.properties?.DESCR ?? "",
-        epoch: feature.properties?.EPOCH ?? "",
+        debrisClass: asString(properties.CLASS, "unknown"),
+        description: asString(properties.DESCR, ""),
+        epoch: asString(properties.EPOCH, ""),
       },
       fetchedAt: new Date().toISOString(),
       latencyMs: Date.now() - start,
@@ -42,6 +54,10 @@ async function fetchDebrisDensity(
   } catch {
     return null;
   }
+}
+
+function asString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
 }
 
 async function fetchAltitudeProfile(

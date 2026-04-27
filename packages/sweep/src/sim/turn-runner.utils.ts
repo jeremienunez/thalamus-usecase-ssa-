@@ -1,5 +1,3 @@
-import type { CortexRegistry } from "@interview/thalamus";
-import { callNanoWithMode } from "@interview/thalamus";
 import { extractJsonObject } from "@interview/shared/utils";
 import { getSimFishConfig } from "../config/sim-fish-config";
 import type { MemoryService } from "./memory.service";
@@ -24,6 +22,24 @@ export interface TurnRunnerAgent {
   constraints: Record<string, unknown>;
 }
 
+export interface CortexSkillRegistry {
+  get(name: string): { body: string } | null | undefined;
+}
+
+export type NanoTurnCaller = (req: {
+  instructions: string;
+  input: string;
+  enableWebSearch?: boolean;
+  signal?: AbortSignal;
+  overrides?: {
+    model?: string;
+    reasoningEffort?: string;
+    maxOutputTokens?: number;
+    temperature?: number;
+    thinking?: boolean;
+  };
+}) => Promise<{ ok: boolean; text: string; error?: string }>;
+
 type LoggerLike = {
   warn(payload: Record<string, unknown>, message: string): void;
 };
@@ -31,7 +47,8 @@ type LoggerLike = {
 export interface TurnRunnerDeps {
   store: SimRuntimeStore;
   memory: MemoryService;
-  cortexRegistry: CortexRegistry;
+  cortexRegistry: CortexSkillRegistry;
+  nanoCaller: NanoTurnCaller;
   targets: SimScenarioContextProvider;
   prompt: SimPromptComposer;
   cortexSelector: SimCortexSelector;
@@ -112,7 +129,11 @@ function parseTurnResponseFromRaw(
 export async function callTurnAgent(args: {
   deps: Pick<
     TurnRunnerDeps,
-    "cortexRegistry" | "prompt" | "cortexSelector" | "schemaProvider"
+    | "cortexRegistry"
+    | "nanoCaller"
+    | "prompt"
+    | "cortexSelector"
+    | "schemaProvider"
   >;
   ctx: AgentContext;
   logger: LoggerLike;
@@ -153,7 +174,7 @@ export async function callTurnAgent(args: {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= MAX_JSON_RETRIES; attempt++) {
     throwIfAborted(args.signal);
-    const res = await callNanoWithMode({
+    const res = await args.deps.nanoCaller({
       instructions: skill.body,
       input: userPrompt,
       enableWebSearch: false,

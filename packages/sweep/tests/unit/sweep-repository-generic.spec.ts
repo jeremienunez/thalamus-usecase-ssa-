@@ -251,6 +251,73 @@ describe("SweepRepository generic contract", () => {
     ).toBe(false);
   });
 
+  it("computes stats from bounded legacy index pages", async () => {
+    const repo = makeRepo(false);
+    for (let i = 0; i < 3; i++) {
+      await repo.insertGeneric({
+        domain: "generic",
+        domainFields: {
+          title: `Suggestion ${i}`,
+          severity: i === 0 ? "critical" : "info",
+          category: "coverage",
+        },
+        resolutionPayload: null,
+      });
+    }
+
+    const zrevrange = vi.spyOn(redis, "zrevrange");
+    const stats = await repo.getStats();
+
+    expect(stats).toMatchObject({
+      totalSuggestions: 3,
+      pending: 3,
+      bySeverity: { critical: 1, info: 2 },
+      byCategory: { coverage: 3 },
+    });
+    expect(zrevrange).toHaveBeenCalledWith("sweep:index:all", 0, 499);
+    expect(
+      zrevrange.mock.calls.some(
+        ([key, start, end]) =>
+          key === "sweep:index:all" && start === 0 && end === -1,
+      ),
+    ).toBe(false);
+  });
+
+  it("rebuilds ranked indexes from legacy state using bounded pages", async () => {
+    const repo = makeRepo(false);
+    for (let i = 0; i < 3; i++) {
+      await repo.insertGeneric({
+        domain: "generic",
+        domainFields: {
+          title: `Suggestion ${i}`,
+          severity: "warning",
+          category: "legacy",
+        },
+        resolutionPayload: null,
+      });
+    }
+    await redis.del(
+      "sweep:index:ranked:all",
+      "sweep:index:ranked:all:severity:warning",
+      "sweep:index:ranked:all:category:legacy",
+      "sweep:index:ranked:pending",
+      "sweep:index:ranked:pending:severity:warning",
+      "sweep:index:ranked:pending:category:legacy",
+    );
+
+    const zrevrange = vi.spyOn(redis, "zrevrange");
+    const out = await repo.listGeneric({ reviewed: false, limit: 10 });
+
+    expect(out.total).toBe(3);
+    expect(zrevrange).toHaveBeenCalledWith("sweep:index:all", 0, 499);
+    expect(
+      zrevrange.mock.calls.some(
+        ([key, start, end]) =>
+          key === "sweep:index:all" && start === 0 && end === -1,
+      ),
+    ).toBe(false);
+  });
+
   it("moves reviewed suggestions from pending indexes to reviewed indexes", async () => {
     const repo = makeRepo(false);
     const criticalId = await repo.insertGeneric({

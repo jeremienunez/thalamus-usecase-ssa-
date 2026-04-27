@@ -36,6 +36,7 @@ import {
 } from "@interview/db-schema";
 import {
   CortexRegistry,
+  callNanoWithMode,
   setThalamusTransportConfigProvider,
 } from "@interview/thalamus";
 import {
@@ -189,6 +190,7 @@ beforeAll(async () => {
     },
     sim: {
       cortexRegistry: registry,
+      nanoCaller: callNanoWithMode,
       // Embed stub: return null so memory falls back to recency (deterministic
       // without Voyage, suitable for e2e). Aggregator falls back to action-kind
       // bucketing when fewer than 2 vectors, which works for size=3 swarms.

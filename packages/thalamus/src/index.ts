@@ -24,11 +24,24 @@ export {
 export { ThalamusService } from "./services/thalamus.service";
 export { ThalamusPlanner } from "./services/thalamus-planner.service";
 export { ThalamusDAGExecutor } from "./services/thalamus-executor.service";
-export { ResearchGraphService } from "./services/research-graph.service";
+export { FindingArchiveService } from "./services/finding-archive.service";
+export { FindingStoreService } from "./services/finding-store.service";
+export { KgQueryService } from "./services/kg-query.service";
 export type {
+  CyclesGraphPort,
+  EdgesGraphPort,
+  FindingArchivePort,
+  FindingStorePort,
+  FindingsGraphPort,
+  KnowledgeGraphLink,
+  KnowledgeGraphNode,
+  KgQueryPort,
+  QueryFindingsOptions,
+  ResearchGraphServicePort,
   ResearchGraphTransactionPort,
   ResearchGraphUnitOfWork,
-} from "./services/research-graph.service";
+  StoreFindingInput,
+} from "./services/research-graph.types";
 export type {
   PersistContext,
   PersistResult,
@@ -116,6 +129,19 @@ export {
 } from "./transports/openai-web-search.adapter";
 
 // Ports
+export type {
+  ResearchFindingEmissionInput,
+  ResearchFindingEmissionResult,
+  ResearchWriterPort,
+} from "./ports/research-writer.port";
+export type {
+  NewResearchCycle,
+  NewResearchEdge,
+  NewResearchFinding,
+  ResearchCycle,
+  ResearchEdge,
+  ResearchFinding,
+} from "./types/research.types";
 export type { WebSearchPort } from "./ports/web-search.port";
 export type { EntityCatalogPort, EntityRef } from "./ports/entity-catalog.port";
 export { NoopEntityCatalog } from "./entities/noop-entity-catalog";

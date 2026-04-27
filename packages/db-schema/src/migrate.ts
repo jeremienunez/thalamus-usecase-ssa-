@@ -17,7 +17,9 @@
  *        0003_sim_memory_hnsw.sql     │ (they reference tables)
  *        0011_source_item_trgm_gin.sql│
  *        0012_orbital_analytics_fns.sql
- *        0013_conjunction_knn_fn.sql  ┘
+ *        0013_conjunction_knn_fn.sql
+ *        0014_satellite_embedding.sql
+ *        0015_research_stats_views.sql ┘
  *      All of them are authored to be fully idempotent
  *      (`CREATE INDEX IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`,
  *      `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object`), so replaying
@@ -44,6 +46,7 @@ const POST_DRIZZLE_SQL = [
   "0012_orbital_analytics_fns.sql",
   "0013_conjunction_knn_fn.sql",
   "0014_satellite_embedding.sql",
+  "0015_research_stats_views.sql",
 ] as const;
 
 export type RunMigrationsOptions = {

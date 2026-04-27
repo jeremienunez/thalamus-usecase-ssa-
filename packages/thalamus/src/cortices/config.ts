@@ -3,10 +3,10 @@ import { DEFAULT_THALAMUS_BUDGETS_CONFIG } from "@interview/shared/config";
 /**
  * Thalamus Research Agent — Configuration & Budget Limits.
  *
- * Cost estimates based on live testing against the SSA catalog
- * (~O(30k) tracked objects, Kimi K2):
+ * Cost estimates based on live testing against a large domain catalog
+ * (Kimi K2):
  * - Average cycle: ~$0.003, ~45s, ~3 findings
- * - Full constellation/regime sweep: ~$0.14, ~27min
+ * - Full catalog sweep: ~$0.14, ~27min
  * - Monthly budget (daemon): ~$0.25
  *
  * TODO (SPEC-TH-025) — these constants must become runtime-tunable via the
@@ -76,10 +76,10 @@ export const THALAMUS_CONFIG = {
     domainRelevanceThreshold: 0.3, // Below = filtered as off-topic
   },
 
-  // ─── Correlation Thresholds (SSA) ─────────────────────────
+  // ─── Correlation Thresholds ───────────────────────────────
   correlation: {
-    // Promotion threshold to actionable conjunction event. Field corroboration
-    // from classified radar required to clear this bar.
+    // Promotion threshold to an actionable event. Field corroboration
+    // from a trusted source is required to clear this bar.
     probabilityOfCollisionAlert: 1e-4, // standard NASA convention
     osintConfidenceRange: [0.2, 0.5] as const,
     fieldConfidenceRange: [0.85, 1.0] as const,

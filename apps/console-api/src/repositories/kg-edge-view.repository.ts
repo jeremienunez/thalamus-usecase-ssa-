@@ -3,7 +3,6 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
 import type {
   EdgeRow,
-  EdgeInsertInput,
   FindingEdgeDisplayRow,
   GraphNeighbourhoodRow,
 } from "../types/finding.types";
@@ -17,12 +16,11 @@ import {
 
 export type {
   EdgeRow,
-  EdgeInsertInput,
   FindingEdgeDisplayRow,
   GraphNeighbourhoodRow,
 } from "../types/finding.types";
 
-export class ResearchEdgeRepository {
+export class KgEdgeViewRepository {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
   async findByFindingIds(ids: bigint[]): Promise<EdgeRow[]> {
@@ -110,13 +108,5 @@ export class ResearchEdgeRepository {
       LIMIT ${limit}
     `);
     return rows.rows;
-  }
-
-  async insert(input: EdgeInsertInput): Promise<void> {
-    await this.db.execute(sql`
-      INSERT INTO research_edge (finding_id, entity_type, entity_id, relation, weight, context)
-      VALUES (${input.findingId}::bigint, ${input.entityType}::entity_type, ${input.entityId}::bigint,
-              ${input.relation}::relation, ${input.weight}::real, ${JSON.stringify(input.context)}::jsonb)
-    `);
   }
 }

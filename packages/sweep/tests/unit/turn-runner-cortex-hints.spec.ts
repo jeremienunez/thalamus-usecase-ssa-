@@ -1,23 +1,19 @@
 import { z } from "zod";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fakePort, typedSpy } from "@interview/test-kit";
-import type { CortexRegistry } from "@interview/thalamus";
 import type { AgentContext } from "../../src/sim/types";
-
-const thalamus = vi.hoisted(() => ({
-  callNanoWithMode: vi.fn(),
-}));
-
-vi.mock("@interview/thalamus", () => ({
-  callNanoWithMode: thalamus.callNanoWithMode,
-}));
-
-import { callTurnAgent } from "../../src/sim/turn-runner.utils";
+import {
+  callTurnAgent,
+  type CortexSkillRegistry,
+  type NanoTurnCaller,
+} from "../../src/sim/turn-runner.utils";
 
 describe("callTurnAgent cortex selection hints", () => {
+  const nanoCaller = vi.fn<Parameters<NanoTurnCaller>, ReturnType<NanoTurnCaller>>();
+
   beforeEach(() => {
     vi.clearAllMocks();
-    thalamus.callNanoWithMode.mockResolvedValue({
+    nanoCaller.mockResolvedValue({
       ok: true,
       text: JSON.stringify({
         action: { kind: "noop" },
@@ -29,15 +25,8 @@ describe("callTurnAgent cortex selection hints", () => {
 
   it("passes scenario and subject hints into the cortex selector", async () => {
     const pickCortexName = vi.fn(() => "telemetry_inference_agent");
-    const getSkill = typedSpy<CortexRegistry["get"]>().mockReturnValue({
-      header: {
-        name: "telemetry_inference_agent",
-        description: "Telemetry inference",
-        sqlHelper: "",
-        params: {},
-      },
+    const getSkill = typedSpy<CortexSkillRegistry["get"]>().mockReturnValue({
       body: "telemetry skill",
-      filePath: "test://telemetry-inference-agent.md",
     });
     const ctx: AgentContext = {
       simRunId: 10,
@@ -62,7 +51,8 @@ describe("callTurnAgent cortex selection hints", () => {
 
     await callTurnAgent({
       deps: {
-        cortexRegistry: fakePort<CortexRegistry>({ get: getSkill }),
+        cortexRegistry: fakePort<CortexSkillRegistry>({ get: getSkill }),
+        nanoCaller,
         prompt: {
           render: vi.fn(() => "turn prompt"),
         },
@@ -91,7 +81,7 @@ describe("callTurnAgent cortex selection hints", () => {
   });
 
   it("accepts a direct action object when the model omits the turn envelope", async () => {
-    thalamus.callNanoWithMode.mockResolvedValueOnce({
+    nanoCaller.mockResolvedValueOnce({
       ok: true,
       text: JSON.stringify({
         kind: "noop",
@@ -101,18 +91,12 @@ describe("callTurnAgent cortex selection hints", () => {
 
     const response = await callTurnAgent({
       deps: {
-        cortexRegistry: fakePort<CortexRegistry>({
+        cortexRegistry: fakePort<CortexSkillRegistry>({
           get: vi.fn(() => ({
-            header: {
-              name: "pc_estimator_agent",
-              description: "PC estimator",
-              sqlHelper: "",
-              params: {},
-            },
             body: "pc skill",
-            filePath: "test://pc-estimator-agent.md",
           })),
         }),
+        nanoCaller,
         prompt: { render: vi.fn(() => "turn prompt") },
         cortexSelector: { pickCortexName: vi.fn(() => "pc_estimator_agent") },
         schemaProvider: {

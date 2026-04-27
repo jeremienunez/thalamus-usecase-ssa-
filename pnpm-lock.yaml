@@ -348,9 +348,6 @@ importers:
       '@interview/shared':
         specifier: workspace:*
         version: link:../shared
-      '@interview/thalamus':
-        specifier: workspace:*
-        version: link:../thalamus
       bullmq:
         specifier: ^5.4.0
         version: 5.71.1

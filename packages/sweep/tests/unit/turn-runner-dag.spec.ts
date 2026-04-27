@@ -1,27 +1,25 @@
 import { z } from "zod";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fakePort } from "@interview/test-kit";
-import type { CortexRegistry } from "@interview/thalamus";
 import type { MemoryService } from "../../src/sim/memory.service";
 import type {
   SimRuntimeStore,
   SimScenarioContextProvider,
 } from "../../src/sim/ports";
 import { DagTurnRunner } from "../../src/sim/turn-runner-dag";
-
-const thalamus = vi.hoisted(() => ({
-  callNanoWithMode: vi.fn(),
-}));
-
-vi.mock("@interview/thalamus", () => ({
-  callNanoWithMode: thalamus.callNanoWithMode,
-}));
+import type {
+  CortexSkillRegistry,
+  NanoTurnCaller,
+} from "../../src/sim/turn-runner.utils";
 
 describe("DagTurnRunner", () => {
+  const nanoCaller = vi.fn<Parameters<NanoTurnCaller>, ReturnType<NanoTurnCaller>>();
+
   beforeEach(() => {
     vi.clearAllMocks();
-    thalamus.callNanoWithMode.mockResolvedValue({
+    nanoCaller.mockResolvedValue({
       ok: false,
+      text: "",
       error: "HTTP 400",
     });
   });
@@ -50,18 +48,12 @@ describe("DagTurnRunner", () => {
       targets: fakePort<SimScenarioContextProvider>({
         loadContext: vi.fn(async () => ({})),
       }),
-      cortexRegistry: fakePort<CortexRegistry>({
+      cortexRegistry: fakePort<CortexSkillRegistry>({
         get: vi.fn(() => ({
-          header: {
-            name: "pc_estimator_agent",
-            description: "PC estimator",
-            sqlHelper: "",
-            params: {},
-          },
           body: "skill body",
-          filePath: "test://pc-estimator.md",
         })),
       }),
+      nanoCaller,
       prompt: { render: vi.fn(() => "turn prompt") },
       cortexSelector: { pickCortexName: vi.fn(() => "pc_estimator_agent") },
       schemaProvider: { actionSchema: () => z.object({ kind: z.literal("noop") }) },

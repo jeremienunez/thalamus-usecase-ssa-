@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 
 import * as schema from "@interview/db-schema";
-import { ResearchEdgeRepository } from "../../../src/repositories/research-edge.repository";
+import { KgEdgeViewRepository } from "../../../src/repositories/kg-edge-view.repository";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -12,7 +12,7 @@ const DATABASE_URL =
 
 let pool: Pool;
 let db: NodePgDatabase<typeof schema>;
-let repo: ResearchEdgeRepository;
+let repo: KgEdgeViewRepository;
 
 async function recreateTempTables(): Promise<void> {
   await db.execute(sql.raw("DROP TABLE IF EXISTS pg_temp.research_edge"));
@@ -140,10 +140,10 @@ async function seedFixtures(): Promise<void> {
   `);
 }
 
-beforeAll(async () => {
+beforeAll(() => {
   pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
   db = drizzle<typeof schema>(pool, { schema });
-  repo = new ResearchEdgeRepository(db);
+  repo = new KgEdgeViewRepository(db);
 });
 
 beforeEach(async () => {
@@ -155,7 +155,7 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe("ResearchEdgeRepository", () => {
+describe("KgEdgeViewRepository", () => {
   it("findByFindingIds resolves operator and orbit regime ids to display names", async () => {
     const rows = (await repo.findByFindingIds([42n])).sort((a, b) =>
       `${a.entity_type}:${a.entity_id}`.localeCompare(

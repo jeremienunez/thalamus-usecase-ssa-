@@ -9,18 +9,22 @@ import type {
   TelemetryAggregate,
   TelemetryAggregatorService,
 } from "../agent/ssa/sim/aggregators/telemetry";
-import type { SimPromotionService } from "./sim-promotion.service";
 
 const MODAL_SUGGESTION_THRESHOLD = 0.5;
+
+export interface SimOutcomePromotionPort {
+  emitSuggestionFromModal(
+    swarmId: number,
+    aggregate: SwarmAggregate,
+  ): Promise<number | null>;
+  emitTelemetrySuggestions(aggregate: TelemetryAggregate): Promise<number[]>;
+}
 
 export interface SsaSimOutcomeResolverDeps {
   aggregator: Pick<AggregatorService, "aggregate">;
   telemetryAggregator: Pick<TelemetryAggregatorService, "aggregate">;
   pcAggregator: Pick<PcAggregatorService, "aggregate">;
-  promotionService: Pick<
-    SimPromotionService,
-    "emitSuggestionFromModal" | "emitTelemetrySuggestions"
-  >;
+  promotionService: SimOutcomePromotionPort;
 }
 
 export class SsaSimOutcomeResolverService implements SimOutcomeResolver {
@@ -29,11 +33,11 @@ export class SsaSimOutcomeResolverService implements SimOutcomeResolver {
   async resolve(args: Parameters<SimOutcomeResolver["resolve"]>[0]): Promise<SimResolvedOutcome> {
     switch (args.swarm.kind) {
       case "uc_telemetry_inference":
-        return await this.resolveTelemetry(args.swarmId);
+        return this.resolveTelemetry(args.swarmId);
       case "uc_pc_estimator":
-        return await this.resolvePc(args.swarmId, args.swarm, args.terminals);
+        return this.resolvePc(args.swarmId, args.swarm, args.terminals);
       default:
-        return await this.resolveNarrative(args.swarmId);
+        return this.resolveNarrative(args.swarmId);
     }
   }
 

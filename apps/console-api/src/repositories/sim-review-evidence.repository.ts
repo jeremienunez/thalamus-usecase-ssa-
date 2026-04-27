@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, gte, lt } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
 import { simReviewEvidence, type NewSimReviewEvidence } from "@interview/db-schema";
@@ -36,6 +36,20 @@ export class SimReviewEvidenceRepository {
       .select()
       .from(simReviewEvidence)
       .where(eq(simReviewEvidence.swarmId, swarmId))
+      .orderBy(asc(simReviewEvidence.createdAt), asc(simReviewEvidence.id));
+    return rows.map(toRow);
+  }
+
+  async listCreatedBetween(from: Date, to: Date): Promise<SimReviewEvidenceRow[]> {
+    const rows = await this.db
+      .select()
+      .from(simReviewEvidence)
+      .where(
+        and(
+          gte(simReviewEvidence.createdAt, from),
+          lt(simReviewEvidence.createdAt, to),
+        ),
+      )
       .orderBy(asc(simReviewEvidence.createdAt), asc(simReviewEvidence.id));
     return rows.map(toRow);
   }

@@ -1,8 +1,8 @@
 /**
  * Thalamus Planner — Generates DAG execution plans from research queries.
  *
- * Domain: SSA (Space Situational Awareness). Reads cortex skill headers and
- * produces a DAG of cortex activations with dependencies.
+ * Reads cortex skill headers and produces a DAG of cortex activations with
+ * dependencies.
  *
  * For daemon triggers, uses predefined DAGs (no LLM call needed).
  * For user queries, calls the LLM to decompose into an optimal cortex plan.
@@ -25,13 +25,12 @@ export type { DAGNode, DAGPlan, QueryComplexity } from "../cortices/types";
 
 /**
  * PlannerConfig — app-owned seams consumed by ThalamusPlanner. Every field
- * optional; defaults preserve pre-agnosticity behavior (SSA planner prompt +
- * hardcoded SSA 4-cortex fallback). Phase 5 of the agnosticity cleanup
- * drops those legacy defaults once SSA domain-config injects both.
+ * optional; defaults preserve generic behavior. Domain-specific planner
+ * prompts and fallback DAGs are injected by the consuming app.
  */
 export interface PlannerConfig {
   /** Daemon-trigger DAGs. Empty object by default; domains inject their
-   *  own map (e.g. SSA_DAEMON_DAGS from apps/console-api/src/agent/ssa/daemon-dags.ts). */
+   *  own map from the app layer. */
   daemonDags?: Record<string, DAGPlan>;
   /** Cortices requiring a userId in params (fleet-scoped work). */
   userScopedCortices?: Set<string>;
@@ -93,7 +92,7 @@ export class ThalamusPlanner {
 
   /**
    * Build the planner system prompt. Uses the injected builder when
-   * provided, otherwise the legacy SSA-flavored default.
+   * provided, otherwise the generic default.
    */
   buildSystemPrompt(input: {
     headers: string;
@@ -104,7 +103,7 @@ export class ThalamusPlanner {
 
   /**
    * Select the fallback DAG. Priority: injected `fallbackPlan` >
-   * flat `fallbackCortices` > legacy SSA default. Exposed for unit
+   * flat `fallbackCortices` > empty generic fallback. Exposed for unit
    * testing the seam selection; also called by `plan()` on empty/failed
    * LLM output.
    */

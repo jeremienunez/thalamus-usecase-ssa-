@@ -22,6 +22,7 @@ const POST_DRIZZLE_SQL = [
   "0012_orbital_analytics_fns.sql",
   "0013_conjunction_knn_fn.sql",
   "0014_satellite_embedding.sql",
+  "0015_research_stats_views.sql",
 ] as const;
 
 export interface IntegrationHarness {

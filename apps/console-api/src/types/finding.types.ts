@@ -1,4 +1,12 @@
 // apps/console-api/src/types/finding.types.ts
+import type {
+  ResearchCortex,
+  ResearchEntityType,
+  ResearchFindingType,
+  ResearchRelation,
+  ResearchUrgency,
+} from "@interview/shared/enum";
+
 // ── Finding DTOs ────────────────────────────────────────────────────
 export type FindingRow = {
   id: string;
@@ -15,9 +23,9 @@ export type FindingDetailRow = FindingRow & { evidence: unknown };
 
 export type FindingInsertInput = {
   cycleId: bigint;
-  cortex: string;
-  findingType: string;
-  urgency: string;
+  cortex: ResearchCortex;
+  findingType: ResearchFindingType;
+  urgency: ResearchUrgency;
   title: string;
   summary: string;
   evidence: unknown;
@@ -50,18 +58,17 @@ export type GraphNeighbourhoodRow = {
 export type EdgeInsertInput = {
   findingId: bigint;
   entityType:
-    | "satellite"
-    | "operator"
-    | "operator_country"
-    | "payload"
-    | "orbit_regime";
+    | ResearchEntityType.Satellite
+    | ResearchEntityType.Operator
+    | ResearchEntityType.OperatorCountry
+    | ResearchEntityType.Payload
+    | ResearchEntityType.OrbitRegime;
   entityId: bigint;
   relation:
-    | "about"
-    | "supports"
-    | "contradicts"
-    | "similar_to"
-    | "derived_from";
+    | ResearchRelation.About
+    | ResearchRelation.Supports
+    | ResearchRelation.Contradicts
+    | ResearchRelation.SimilarTo;
   weight: number;
   context: unknown;
 };

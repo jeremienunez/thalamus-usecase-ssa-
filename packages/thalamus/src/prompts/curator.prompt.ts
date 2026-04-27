@@ -2,7 +2,6 @@
  * ExplorerCurator — agnostic default prompt.
  *
  * Generic relevance/novelty scoring rubric. Domain-specific rubrics
- * (e.g. SSA operational value, satellite entities, orbital regimes)
  * are injected via `setCuratorPrompt()` at container boot.
  */
 

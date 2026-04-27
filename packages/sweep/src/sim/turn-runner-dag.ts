@@ -18,7 +18,6 @@
  */
 
 import type { TurnAction, TurnResponse } from "./types";
-import type { CortexRegistry } from "@interview/thalamus";
 import { createLogger, stepLog } from "@interview/shared/observability";
 import { MemoryService } from "./memory.service";
 import type { SimSubjectSnapshot } from "./ports";

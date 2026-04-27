@@ -11,25 +11,26 @@ export class StatsRepository {
   async aggregates(): Promise<AggregateCounts> {
     const r = await this.db.execute<AggregateCounts>(sql`
       SELECT
-        (SELECT count(*)::int FROM satellite)            AS satellites,
-        (SELECT count(*)::int FROM conjunction_event)    AS conjunctions,
-        (SELECT count(*)::int FROM research_finding)     AS findings,
-        (SELECT count(*)::int FROM research_edge)        AS kg_edges,
-        (SELECT count(*)::int FROM research_cycle)       AS research_cycles
+        satellites,
+        conjunctions,
+        findings,
+        kg_edges,
+        research_cycles
+      FROM vw_research_stats_counts
     `);
     return r.rows[0]!;
   }
 
   async findingsByStatus(): Promise<Array<{ status: string; count: number }>> {
     const r = await this.db.execute<{ status: string; count: number }>(sql`
-      SELECT status::text, count(*)::int FROM research_finding GROUP BY status
+      SELECT status, count FROM vw_research_findings_by_status
     `);
     return r.rows;
   }
 
   async findingsByCortex(): Promise<Array<{ cortex: string; count: number }>> {
     const r = await this.db.execute<{ cortex: string; count: number }>(sql`
-      SELECT cortex::text, count(*)::int FROM research_finding GROUP BY cortex
+      SELECT cortex, count FROM vw_research_findings_by_cortex
     `);
     return r.rows;
   }

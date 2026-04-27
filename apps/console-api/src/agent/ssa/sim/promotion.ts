@@ -4,26 +4,40 @@ import type {
   SimPromotionAdapter,
   SwarmAggregate,
 } from "@interview/sweep";
-import type { SimPromotionService } from "../../../services/sim-promotion.service";
 import type { TelemetryAggregate } from "./aggregators/telemetry";
 
+export interface SimPromotePort {
+  promote(input: SimPromoteInput): Promise<SimPromoteResult>;
+}
+
+export interface ModalSuggestionPort {
+  emitSuggestionFromModal(
+    swarmId: number,
+    aggregate: SwarmAggregate,
+  ): Promise<number | null>;
+}
+
+export interface TelemetrySuggestionPort {
+  emitTelemetrySuggestions(aggregate: TelemetryAggregate): Promise<number[]>;
+}
+
 export interface SsaSimPromotionDeps {
-  promotionService: Pick<SimPromotionService, "promote">;
+  promotionService: SimPromotePort;
 }
 
 export interface EmitSuggestionDeps {
-  promotionService: Pick<SimPromotionService, "emitSuggestionFromModal">;
+  promotionService: ModalSuggestionPort;
 }
 
 export interface EmitTelemetrySuggestionsDeps {
-  promotionService: Pick<SimPromotionService, "emitTelemetrySuggestions">;
+  promotionService: TelemetrySuggestionPort;
 }
 
 export class SsaSimPromotionAdapter implements SimPromotionAdapter {
   constructor(private readonly deps: SsaSimPromotionDeps) {}
 
   async promote(input: SimPromoteInput): Promise<SimPromoteResult> {
-    return await this.deps.promotionService.promote(input);
+    return this.deps.promotionService.promote(input);
   }
 }
 
@@ -32,7 +46,7 @@ export async function emitSuggestionFromModal(
   swarmId: number,
   aggregate: SwarmAggregate,
 ): Promise<number | null> {
-  return await deps.promotionService.emitSuggestionFromModal(
+  return deps.promotionService.emitSuggestionFromModal(
     swarmId,
     aggregate,
   );
@@ -42,5 +56,5 @@ export async function emitTelemetrySuggestions(
   deps: EmitTelemetrySuggestionsDeps,
   aggregate: TelemetryAggregate,
 ): Promise<number[]> {
-  return await deps.promotionService.emitTelemetrySuggestions(aggregate);
+  return deps.promotionService.emitTelemetrySuggestions(aggregate);
 }

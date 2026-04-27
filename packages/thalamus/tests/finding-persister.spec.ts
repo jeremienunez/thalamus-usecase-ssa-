@@ -9,7 +9,7 @@ import {
 import type { CortexFinding, DAGPlan } from "../src/cortices/types";
 import type { ResearchFinding } from "../src/types/research.types";
 import { FindingPersister } from "../src/services/finding-persister.service";
-import type { ResearchGraphService } from "../src/services/research-graph.service";
+import type { FindingStorePort } from "../src/services/research-graph.types";
 
 function makePlan(cortices: string[]): DAGPlan {
   return {
@@ -84,11 +84,11 @@ describe("FindingPersister.persist", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-22T10:00:00.000Z"));
 
-    const storeFinding = typedSpy<ResearchGraphService["storeFinding"]>();
+    const storeFinding = typedSpy<FindingStorePort["storeFinding"]>();
     storeFinding.mockResolvedValue(makeStoredFinding());
 
     const persister = new FindingPersister(
-      fakePort<ResearchGraphService>({ storeFinding }),
+      fakePort<FindingStorePort>({ storeFinding }),
     );
 
     const result = await persister.persist(
@@ -143,11 +143,11 @@ describe("FindingPersister.persist", () => {
   });
 
   it("falls back to the first plan cortex when a finding is not stamped", async () => {
-    const storeFinding = typedSpy<ResearchGraphService["storeFinding"]>();
+    const storeFinding = typedSpy<FindingStorePort["storeFinding"]>();
     storeFinding.mockResolvedValue(makeStoredFinding());
 
     const persister = new FindingPersister(
-      fakePort<ResearchGraphService>({ storeFinding }),
+      fakePort<FindingStorePort>({ storeFinding }),
     );
 
     const result = await persister.persist(
@@ -195,11 +195,11 @@ describe("FindingPersister.persist", () => {
   });
 
   it("maps a missing edge context to null on the normal edge path", async () => {
-    const storeFinding = typedSpy<ResearchGraphService["storeFinding"]>();
+    const storeFinding = typedSpy<FindingStorePort["storeFinding"]>();
     storeFinding.mockResolvedValue(makeStoredFinding());
 
     const persister = new FindingPersister(
-      fakePort<ResearchGraphService>({ storeFinding }),
+      fakePort<FindingStorePort>({ storeFinding }),
     );
 
     const result = await persister.persist(
@@ -241,11 +241,11 @@ describe("FindingPersister.persist", () => {
   });
 
   it("uses the entity override and the unknown fallback when the plan has no nodes", async () => {
-    const storeFinding = typedSpy<ResearchGraphService["storeFinding"]>();
+    const storeFinding = typedSpy<FindingStorePort["storeFinding"]>();
     storeFinding.mockResolvedValue(makeStoredFinding());
 
     const persister = new FindingPersister(
-      fakePort<ResearchGraphService>({ storeFinding }),
+      fakePort<FindingStorePort>({ storeFinding }),
     );
 
     const result = await persister.persist(
@@ -294,11 +294,11 @@ describe("FindingPersister.persist", () => {
   });
 
   it("treats blank cortex names as missing and falls back to unknown", async () => {
-    const storeFinding = typedSpy<ResearchGraphService["storeFinding"]>();
+    const storeFinding = typedSpy<FindingStorePort["storeFinding"]>();
     storeFinding.mockResolvedValue(makeStoredFinding());
 
     const persister = new FindingPersister(
-      fakePort<ResearchGraphService>({ storeFinding }),
+      fakePort<FindingStorePort>({ storeFinding }),
     );
 
     const result = await persister.persist(
@@ -327,13 +327,13 @@ describe("FindingPersister.persist", () => {
   });
 
   it("swallows per-finding storage errors and keeps persisting later findings", async () => {
-    const storeFinding = typedSpy<ResearchGraphService["storeFinding"]>();
+    const storeFinding = typedSpy<FindingStorePort["storeFinding"]>();
     storeFinding
       .mockRejectedValueOnce(new Error("write failed"))
       .mockResolvedValueOnce(makeStoredFinding({ id: 202n }));
 
     const persister = new FindingPersister(
-      fakePort<ResearchGraphService>({ storeFinding }),
+      fakePort<FindingStorePort>({ storeFinding }),
     );
 
     const result = await persister.persist(

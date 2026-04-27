@@ -101,30 +101,6 @@ async function seedFixtures(): Promise<void> {
 }
 
 describe("FindingRepository", () => {
-  it("inserts a finding and returns the generated id", async () => {
-    const id = await repo.insert({
-      cycleId: 1n,
-      cortex: "orbital_analyst",
-      findingType: "insight",
-      urgency: "medium",
-      title: "Inserted finding",
-      summary: "Inserted summary",
-      evidence: [{ url: "https://inserted" }],
-      reasoning: "inserted reasoning",
-      confidence: 0.77,
-      impactScore: 0.5,
-    });
-
-    const inserted = await repo.findById(id);
-    expect(inserted).toMatchObject({
-      id: id.toString(),
-      title: "Inserted finding",
-      summary: "Inserted summary",
-      cortex: "orbital_analyst",
-      status: "active",
-    });
-  });
-
   it("lists findings with status and cortex filters", async () => {
     const active = await repo.list({ status: "active" });
     expect(active.map((row) => row.id)).toEqual(["10"]);
@@ -133,26 +109,12 @@ describe("FindingRepository", () => {
     expect(orbital.map((row) => row.id)).toEqual(["12", "10"]);
   });
 
-  it("finds detail rows and exposes cycle-oriented reads", async () => {
+  it("finds detail rows", async () => {
     const detail = await repo.findById(10n);
     expect(detail).toMatchObject({
       id: "10",
       title: "Primary finding",
       evidence: [{ url: "https://alpha" }],
-    });
-
-    const byCycle = await repo.listByCycle(1n, 10);
-    expect(byCycle.map((row) => row.id)).toEqual(["10", "11"]);
-
-    const recent = await repo.listRecent(2);
-    expect(recent.map((row) => row.id)).toEqual(["12", "11"]);
-
-    const detailView = await repo.findDetailById(11n);
-    expect(detailView).toMatchObject({
-      id: "11",
-      title: "Archived finding",
-      cortex: "strategist",
-      confidence: 0.63,
     });
   });
 

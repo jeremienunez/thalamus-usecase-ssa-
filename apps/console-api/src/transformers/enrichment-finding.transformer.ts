@@ -5,6 +5,11 @@ import type {
   EnrichmentFindingEvidence,
   EnrichmentFindingInsert,
 } from "../types/sweep.types";
+import {
+  ResearchCortex,
+  ResearchFindingType,
+  ResearchUrgency,
+} from "@interview/shared/enum";
 
 export function toEnrichmentFindingInsert(
   args: EmitArgs,
@@ -43,9 +48,9 @@ export function toEnrichmentFindingInsert(
 
   return {
     cycleId,
-    cortex: "data_auditor",
-    findingType: "insight",
-    urgency: "low",
+    cortex: ResearchCortex.DataAuditor,
+    findingType: ResearchFindingType.Insight,
+    urgency: ResearchUrgency.Low,
     title,
     summary,
     evidence,

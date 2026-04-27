@@ -5,7 +5,7 @@
  *   - `services/sim-launch.service.ts` → insert on swarm launch
  *   - `controllers/sim.controller.ts` → findById + state transitions wired
  *     to routes under §5.2 of docs/superpowers/plans/2026-04-18-plan5-sim-http-contract.md
- *   - `services/sim-promotion.service.ts` → linkOutcome after aggregator promotes
+ *   - `services/modal-suggestion-composer.service.ts` → linkOutcome after aggregator promotes
  *
  * SRP: this repo owns sim_swarm writes plus the one atomic abort cascade
  * that must fail the swarm and its still-open sim_run rows together.

@@ -17,7 +17,7 @@
  * Introduced: Plan 5 Task 1.A.2.
  */
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@interview/db-schema";
 import type {
@@ -146,6 +146,21 @@ export class SimRunRepository {
       }
     }
     return out;
+  }
+
+  async listTerminalCompletedBetween(from: Date, to: Date): Promise<SimRunRow[]> {
+    const rows = await this.db
+      .select()
+      .from(simRun)
+      .where(
+        and(
+          inArray(simRun.status, ["done", "failed", "timeout"] as SimRunStatus[]),
+          gte(simRun.completedAt, from),
+          lt(simRun.completedAt, to),
+        ),
+      )
+      .orderBy(asc(simRun.completedAt), asc(simRun.id));
+    return rows.map(toRow);
   }
 
   async claimPendingFishForSwarm(

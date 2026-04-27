@@ -1,5 +1,5 @@
 /**
- * Thalamus Service — Thin orchestrator for autonomous SSA research.
+ * Thalamus Service — Thin orchestrator for autonomous research.
  *
  * Resolves a DAG plan, delegates the recursive loop to `CycleLoopRunner`,
  * delegates persistence to `FindingPersister`, then updates the cycle
@@ -22,7 +22,7 @@ import {
   ResearchCycleTrigger,
   ResearchCycleStatus,
 } from "@interview/shared/enum";
-import type { ResearchGraphService } from "./research-graph.service";
+import type { ResearchGraphServicePort } from "./research-graph.types";
 import type {
   ResearchCycle,
   ResearchCycleRunResult,
@@ -70,7 +70,7 @@ export class ThalamusService {
     private cycleLoop: CycleLoopRunner,
     private persister: FindingPersister,
     private cycleRepo: CyclesPort,
-    private graphService: ResearchGraphService,
+    private graphService: ResearchGraphServicePort,
   ) {}
 
   /**

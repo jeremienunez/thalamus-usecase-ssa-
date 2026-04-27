@@ -11,8 +11,8 @@
 
 /**
  * ExplorationQuery — hoisted from explorer/scout.ts so the NanoSwarmProfile
- * contract stays kernel-owned even after the SSA explorer pack moves to
- * apps/console-api/src/agent/ssa/explorer. Shape matches what scout emits.
+ * contract stays kernel-owned even when domain explorer packs live in the
+ * consuming app. Shape matches what scout emits.
  */
 export interface ExplorationQuery {
   query: string;

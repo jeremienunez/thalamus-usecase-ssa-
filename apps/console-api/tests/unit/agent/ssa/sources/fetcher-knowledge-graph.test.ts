@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakePort, typedSpy } from "@interview/test-kit";
-import type { ResearchGraphService } from "@interview/thalamus";
+import type { ResearchGraphServicePort } from "@interview/thalamus";
 import type { SourceKind as RegisteredSourceKind } from "../../../../../src/agent/ssa/sources/types";
 import {
   ResearchEntityType,
@@ -9,7 +9,7 @@ import {
 } from "@interview/shared/enum";
 
 type GraphFinding = Awaited<
-  ReturnType<ResearchGraphService["queryByEntity"]>
+  ReturnType<ResearchGraphServicePort["queryByEntity"]>
 >[number];
 
 async function loadFetcher(
@@ -78,8 +78,8 @@ describe("knowledge-graph fetcher", () => {
   });
 
   it("combines entity findings with semantic matches and de-duplicates repeated finding ids", async () => {
-    const queryByEntity = typedSpy<ResearchGraphService["queryByEntity"]>();
-    const semanticSearch = typedSpy<ResearchGraphService["semanticSearch"]>();
+    const queryByEntity = typedSpy<ResearchGraphServicePort["queryByEntity"]>();
+    const semanticSearch = typedSpy<ResearchGraphServicePort["semanticSearch"]>();
     queryByEntity.mockResolvedValue([
       makeFinding(1n, {
         title: "Entity finding",
@@ -114,7 +114,7 @@ describe("knowledge-graph fetcher", () => {
       "../../../../../src/agent/ssa/sources/fetcher-knowledge-graph",
     );
     mod.setGraphService(
-      fakePort<ResearchGraphService>({
+      fakePort<ResearchGraphServicePort>({
         queryByEntity,
         semanticSearch,
       }),
@@ -159,8 +159,8 @@ describe("knowledge-graph fetcher", () => {
   });
 
   it("keeps semantic matches when the entity query fails for a valid entity", async () => {
-    const queryByEntity = typedSpy<ResearchGraphService["queryByEntity"]>();
-    const semanticSearch = typedSpy<ResearchGraphService["semanticSearch"]>();
+    const queryByEntity = typedSpy<ResearchGraphServicePort["queryByEntity"]>();
+    const semanticSearch = typedSpy<ResearchGraphServicePort["semanticSearch"]>();
     queryByEntity.mockRejectedValue(new Error("kg entity query failed"));
     semanticSearch.mockResolvedValue([
       {
@@ -179,7 +179,7 @@ describe("knowledge-graph fetcher", () => {
       "../../../../../src/agent/ssa/sources/fetcher-knowledge-graph",
     );
     mod.setGraphService(
-      fakePort<ResearchGraphService>({
+      fakePort<ResearchGraphServicePort>({
         queryByEntity,
         semanticSearch,
       }),
@@ -211,8 +211,8 @@ describe("knowledge-graph fetcher", () => {
   });
 
   it("skips invalid entity types, falls back to the generic satellite query label, and swallows graph errors", async () => {
-    const queryByEntity = typedSpy<ResearchGraphService["queryByEntity"]>();
-    const semanticSearch = typedSpy<ResearchGraphService["semanticSearch"]>();
+    const queryByEntity = typedSpy<ResearchGraphServicePort["queryByEntity"]>();
+    const semanticSearch = typedSpy<ResearchGraphServicePort["semanticSearch"]>();
     semanticSearch.mockRejectedValue(new Error("embeddings down"));
 
     const { fetcher, mod } = await loadFetcher(
@@ -220,7 +220,7 @@ describe("knowledge-graph fetcher", () => {
       "../../../../../src/agent/ssa/sources/fetcher-knowledge-graph",
     );
     mod.setGraphService(
-      fakePort<ResearchGraphService>({
+      fakePort<ResearchGraphServicePort>({
         queryByEntity,
         semanticSearch,
       }),
@@ -239,15 +239,15 @@ describe("knowledge-graph fetcher", () => {
   });
 
   it("returns [] when no entity and no search inputs are provided", async () => {
-    const queryByEntity = typedSpy<ResearchGraphService["queryByEntity"]>();
-    const semanticSearch = typedSpy<ResearchGraphService["semanticSearch"]>();
+    const queryByEntity = typedSpy<ResearchGraphServicePort["queryByEntity"]>();
+    const semanticSearch = typedSpy<ResearchGraphServicePort["semanticSearch"]>();
 
     const { fetcher, mod } = await loadFetcher(
       "knowledge-graph",
       "../../../../../src/agent/ssa/sources/fetcher-knowledge-graph",
     );
     mod.setGraphService(
-      fakePort<ResearchGraphService>({
+      fakePort<ResearchGraphServicePort>({
         queryByEntity,
         semanticSearch,
       }),

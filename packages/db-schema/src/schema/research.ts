@@ -37,8 +37,8 @@ import { vector, EMBEDDING_DIMENSIONS } from "./_vector";
  *
  * Design: generic machinery (Research*) produces, links, and invalidates findings.
  * The SSA vocabulary lives downstream in `satellite.ts` and the enum values. Edges
- * are polymorphic ({entityType, entityId}) — no FK; orphan cleanup runs in SQL via
- * [research-edge.repository.ts#cleanOrphans](../../../thalamus/src/repositories/research-edge.repository.ts).
+ * are polymorphic ({entityType, entityId}) — no FK; orphan cleanup is owned by
+ * `EntityCatalogPort` adapters on the app side.
  *
  * Types: $inferSelect / $inferInsert derive Drizzle types carrying the pgEnum
  * literal unions narrowed to the shared TS enums via `.$type<...>()`.

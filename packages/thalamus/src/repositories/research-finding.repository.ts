@@ -9,7 +9,6 @@ import {
   researchCycleFinding,
   type DatabaseExecutor,
 } from "@interview/db-schema";
-import type { NewResearchFindingEntity } from "../entities/research.entity";
 import type {
   ResearchFinding,
   NewResearchFinding,
@@ -23,6 +22,7 @@ import {
   assertEmbeddingDimension,
   type EmbeddingOperation,
 } from "../errors/embedding";
+import type { ResearchWriterPort } from "../ports/research-writer.port";
 
 export interface FindActiveOptions {
   cortex?: string;
@@ -33,15 +33,14 @@ export interface FindActiveOptions {
 }
 
 export class ResearchFindingRepository {
-  constructor(private db: DatabaseExecutor) {}
+  constructor(
+    private db: DatabaseExecutor,
+    private writer: ResearchWriterPort,
+  ) {}
 
   async create(data: NewResearchFinding): Promise<ResearchFinding> {
     validateRepositoryEmbedding(data.embedding, "createFinding");
-    const [result] = await this.db
-      .insert(researchFinding)
-      .values(data as NewResearchFindingEntity)
-      .returning();
-    return toResearchFinding(result);
+    return this.writer.createFinding(data);
   }
 
   /**
@@ -57,37 +56,14 @@ export class ResearchFindingRepository {
     if (!data.dedupHash) {
       return { finding: await this.create(data), inserted: true };
     }
-
-    const [inserted] = await this.db
-      .insert(researchFinding)
-      .values(data as NewResearchFindingEntity)
-      .onConflictDoNothing({
-        target: researchFinding.dedupHash,
-        where: sql`dedup_hash IS NOT NULL`,
-      })
-      .returning();
-
-    if (inserted) {
-      return { finding: toResearchFinding(inserted), inserted: true };
-    }
-
-    const [updated] = await this.db
-      .update(researchFinding)
-      .set({
-        confidence: data.confidence,
-        evidence: data.evidence,
-        summary: data.summary,
-        embedding: data.embedding,
-        status: data.status ?? ResearchStatus.Active,
-        updatedAt: new Date(),
-        iteration: sql`${researchFinding.iteration} + 1`,
-      })
-      .where(eq(researchFinding.dedupHash, data.dedupHash))
-      .returning();
-    if (!updated) {
-      throw new Error("Failed to upsert research finding by dedup hash");
-    }
-    return { finding: toResearchFinding(updated), inserted: false };
+    const result = await this.writer.upsertFindingByDedupHash({
+      ...data,
+      status: data.status ?? ResearchStatus.Active,
+    });
+    return {
+      finding: result.row,
+      inserted: result.inserted,
+    };
   }
 
   async findById(id: bigint): Promise<ResearchFinding | null> {
@@ -127,25 +103,13 @@ export class ResearchFindingRepository {
    * graph service invoke this on every storeFinding regardless of whether
    * the underlying finding row was inserted or dedup-merged.
    */
-  async linkToCycle(opts: {
+  linkToCycle(opts: {
     cycleId: bigint;
     findingId: bigint;
     iteration: number;
     isDedupHit: boolean;
   }): Promise<boolean> {
-    const rows = await this.db
-      .insert(researchCycleFinding)
-      .values({
-        researchCycleId: opts.cycleId,
-        researchFindingId: opts.findingId,
-        iteration: opts.iteration,
-        isDedupHit: opts.isDedupHit,
-      })
-      .onConflictDoNothing()
-      .returning({
-        researchFindingId: researchCycleFinding.researchFindingId,
-      });
-    return rows.length > 0;
+    return this.writer.linkFindingToCycle(opts);
   }
 
   /**

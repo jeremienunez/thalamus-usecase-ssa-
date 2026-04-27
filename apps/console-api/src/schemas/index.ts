@@ -15,3 +15,4 @@ export * from "./orbital.schema";
 export * from "./satellite-audit.schema";
 export * from "./opacity.schema";
 export * from "./sim.schema";
+export * from "./research-write.schema";

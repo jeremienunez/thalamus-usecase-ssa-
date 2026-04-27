@@ -7,7 +7,7 @@
  *     insertGodTurn, batch, listGodEventsAtOrBefore, lastTurnCreatedAt)
  *   - `services/sim-orchestrator.service.ts` → god-event inject + standalone
  *     turn writes
- *   - `services/sim-promotion.service.ts` → loadSimTurn by id (findById)
+ *   - `services/sim-outcome-promotion.service.ts` → loadSimTurn by id (findById)
  *
  * `persistTurnBatch` atomically writes N sim_turn rows + M sim_agent_memory
  * rows inside one transaction. It's the primary hot-path route exercised

@@ -37,6 +37,8 @@ import { registerReflexionRoutes } from "./reflexion.routes";
 import { registerKnnPropagationRoutes } from "./knn-propagation.routes";
 import { registerAutonomyRoutes } from "./autonomy.routes";
 import { registerCyclesRoutes } from "./cycles.routes";
+import { registerResearchWriteRoutes } from "./research-write.routes";
+import type { ResearchWriterPort } from "@interview/thalamus";
 import { registerReplRoutes } from "./repl.routes";
 import { registerSourceRoutes } from "./sources.routes";
 import { registerSatelliteAuditRoutes } from "./satellite-audit.routes";
@@ -75,6 +77,7 @@ export type AppServices = {
   sim: SimRouteServices;
   runtimeConfig: RuntimeConfigService;
   satelliteSweepChat: SatelliteSweepChatController;
+  researchWriter: ResearchWriterPort;
 };
 
 type RouteConfig = {
@@ -99,6 +102,9 @@ export function registerAllRoutes(
   registerKnnPropagationRoutes(app, s.knnPropagation);
   registerAutonomyRoutes(app, s.autonomy);
   registerCyclesRoutes(app, s.cycles);
+  registerResearchWriteRoutes(app, s.researchWriter, {
+    simKernelSharedSecret: config.simKernelSharedSecret,
+  });
   registerReplRoutes(app, s.replChat, s.replFollowUps, s.replTurn);
   registerSourceRoutes(app, s.sourceData);
   registerSatelliteAuditRoutes(app, s.satelliteAudit);

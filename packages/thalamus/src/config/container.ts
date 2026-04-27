@@ -5,7 +5,8 @@
  * the eventual server bootstrap. The caller owns the `Database` lifetime.
  */
 
-import type { Database } from "@interview/db-schema";
+import type { Database, DatabaseExecutor } from "@interview/db-schema";
+import type { ResearchWriterPort } from "../ports/research-writer.port";
 import { CortexRegistry } from "../cortices/registry";
 import { CortexExecutor } from "../cortices/executor";
 import {
@@ -17,10 +18,13 @@ import type { CortexDataProvider, DomainConfig } from "../cortices/types";
 import { noopDomainConfig } from "../cortices/types";
 import type { WebSearchPort } from "../ports/web-search.port";
 import { NullWebSearchAdapter } from "../transports/openai-web-search.adapter";
-import {
-  ResearchGraphService,
-  type ResearchGraphTransactionPort,
-} from "../services/research-graph.service";
+import { FindingArchiveService } from "../services/finding-archive.service";
+import { FindingStoreService } from "../services/finding-store.service";
+import { KgQueryService } from "../services/kg-query.service";
+import type {
+  ResearchGraphServicePort,
+  ResearchGraphTransactionPort,
+} from "../services/research-graph.types";
 import { ThalamusService } from "../services/thalamus.service";
 import { ThalamusPlanner } from "../services/thalamus-planner.service";
 import { ThalamusDAGExecutor } from "../services/thalamus-executor.service";
@@ -40,7 +44,7 @@ import { NoopSourceFetcher } from "../entities/noop-source-fetcher";
 
 export interface ThalamusContainer {
   thalamusService: ThalamusService;
-  graphService: ResearchGraphService;
+  graphService: ResearchGraphServicePort;
   registry: CortexRegistry;
   executor: CortexExecutor;
   cycleRepo: ResearchCycleRepository;
@@ -51,6 +55,13 @@ export interface ThalamusContainer {
 
 export interface BuildThalamusOpts {
   db: Database;
+  /**
+   * Required: factory producing a `ResearchWriterPort` bound to a given
+   * executor. The same factory is invoked once for the top-level db and
+   * again for each transaction so writes funnel through the single
+   * `apps/console-api/src/services/research-write.service.ts` surface.
+   */
+  createResearchWriter: (db: DatabaseExecutor) => ResearchWriterPort;
   /** Required: path to the caller's cortex-skill directory (domain pack). */
   skillsDir: string;
   /** Required: app-provided data provider map (sqlHelper name → fetcher fn). */
@@ -76,7 +87,7 @@ export interface BuildThalamusOpts {
   strategies?: CortexExecutionStrategy[];
   /**
    * Domain-owned embedder adapter. Defaults to `NullEmbedder` which
-   * returns `null` for every query — `ResearchGraphService` then skips
+   * returns `null` for every query — the graph services then skip
    * semantic dedup and cross-linking. Apps ship a real adapter (e.g.
    * `SsaVoyageEmbedderAdapter`) at their composition root so the kernel
    * never learns which provider or API key powers embeddings.
@@ -100,20 +111,22 @@ export interface BuildThalamusOpts {
 export function buildThalamusContainer(
   opts: BuildThalamusOpts,
 ): ThalamusContainer {
-  const { db } = opts;
+  const { db, createResearchWriter } = opts;
 
-  const cycleRepo = new ResearchCycleRepository(db);
-  const findingRepo = new ResearchFindingRepository(db);
-  const edgeRepo = new ResearchEdgeRepository(db);
+  const writer = createResearchWriter(db);
+  const cycleRepo = new ResearchCycleRepository(db, writer);
+  const findingRepo = new ResearchFindingRepository(db, writer);
+  const edgeRepo = new ResearchEdgeRepository(db, writer);
   const graphTransactions: ResearchGraphTransactionPort = {
     runInTransaction: (work) =>
-      db.transaction(async (tx) =>
-        work({
-          findingRepo: new ResearchFindingRepository(tx),
-          edgeRepo: new ResearchEdgeRepository(tx),
-          cycleRepo: new ResearchCycleRepository(tx),
-        }),
-      ),
+      db.transaction((tx) => {
+        const txWriter = createResearchWriter(tx);
+        return work({
+          findingRepo: new ResearchFindingRepository(tx, txWriter),
+          edgeRepo: new ResearchEdgeRepository(tx, txWriter),
+          cycleRepo: new ResearchCycleRepository(tx, txWriter),
+        });
+      }),
   };
   const entityCatalog = opts.entityCatalog ?? new NoopEntityCatalog();
   const sourceFetcher = opts.sourceFetcher ?? new NoopSourceFetcher();
@@ -139,14 +152,38 @@ export function buildThalamusContainer(
 
   const executor = new CortexExecutor(registry, strategies);
 
-  const graphService = new ResearchGraphService(
+  const findingStoreService = new FindingStoreService(
     findingRepo,
     edgeRepo,
     cycleRepo,
     embedder,
-    entityCatalog,
     graphTransactions,
   );
+  const kgQueryService = new KgQueryService(
+    findingRepo,
+    edgeRepo,
+    embedder,
+    entityCatalog,
+  );
+  const findingArchiveService = new FindingArchiveService(
+    findingRepo,
+    entityCatalog,
+  );
+  const graphService = {
+    storeFinding: findingStoreService.storeFinding.bind(findingStoreService),
+    onFinding: findingStoreService.onFinding.bind(findingStoreService),
+    queryByEntity: kgQueryService.queryByEntity.bind(kgQueryService),
+    semanticSearch: kgQueryService.semanticSearch.bind(kgQueryService),
+    listFindings: kgQueryService.listFindings.bind(kgQueryService),
+    getFindingWithEdges:
+      kgQueryService.getFindingWithEdges.bind(kgQueryService),
+    getKnowledgeGraph: kgQueryService.getKnowledgeGraph.bind(kgQueryService),
+    getGraphStats: kgQueryService.getGraphStats.bind(kgQueryService),
+    archiveFinding:
+      findingArchiveService.archiveFinding.bind(findingArchiveService),
+    expireAndClean:
+      findingArchiveService.expireAndClean.bind(findingArchiveService),
+  } satisfies ResearchGraphServicePort;
 
   // Thalamus service collaborators — wired here so the service itself
   // never `new`s concrete dependencies (DIP).

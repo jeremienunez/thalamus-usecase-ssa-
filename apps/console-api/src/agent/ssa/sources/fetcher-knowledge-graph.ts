@@ -9,14 +9,14 @@
 import { createLogger } from "@interview/shared/observability";
 import type { SourceResult } from "./types";
 import { registerSource } from "./registry";
-import type { ResearchGraphService } from "@interview/thalamus";
+import type { ResearchGraphServicePort } from "@interview/thalamus";
 import { ResearchEntityType } from "@interview/shared/enum";
 
 const logger = createLogger("source-knowledge-graph");
 
-let graphService: ResearchGraphService | null = null;
+let graphService: ResearchGraphServicePort | null = null;
 
-export function setGraphService(svc: ResearchGraphService): void {
+export function setGraphService(svc: ResearchGraphServicePort): void {
   graphService = svc;
   logger.info("Knowledge graph source fetcher wired");
 }
@@ -33,45 +33,42 @@ async function fetchKGFindings(
   const results: SourceResult[] = [];
 
   // 1. Entity-specific findings
-  const entityType = params.entityType as string | undefined;
-  const entityId = params.entityId as number | undefined;
+  const entityType = parseResearchEntityType(params.entityType);
+  const entityId = parseEntityId(params.entityId);
 
   if (entityType && entityId) {
-    const validTypes = Object.values(ResearchEntityType) as string[];
-    if (validTypes.includes(entityType)) {
-      try {
-        const findings = await graphService.queryByEntity(
-          entityType as ResearchEntityType,
-          BigInt(entityId),
-          { minConfidence: 0.5, limit: 15 },
-        );
+    try {
+      const findings = await graphService.queryByEntity(
+        entityType,
+        entityId,
+        { minConfidence: 0.5, limit: 15 },
+      );
 
-        for (const f of findings) {
-          results.push({
-            type: "knowledge_graph",
-            source: `kg:entity:${entityType}:${entityId}`,
-            data: {
-              findingId: String(f.id),
-              cortex: f.cortex,
-              title: f.title,
-              summary: f.summary,
-              confidence: f.confidence,
-              findingType: f.findingType,
-              evidence: f.evidence,
-              impactScore: f.impactScore,
-            },
-            fetchedAt: new Date().toISOString(),
-            latencyMs: Date.now() - start,
-          });
-        }
-
-        logger.info(
-          { entityType, entityId, found: findings.length },
-          "KG entity findings fetched",
-        );
-      } catch (err) {
-        logger.debug({ entityType, entityId, err }, "KG entity query failed");
+      for (const f of findings) {
+        results.push({
+          type: "knowledge_graph",
+          source: `kg:entity:${entityType}:${entityId}`,
+          data: {
+            findingId: String(f.id),
+            cortex: f.cortex,
+            title: f.title,
+            summary: f.summary,
+            confidence: f.confidence,
+            findingType: f.findingType,
+            evidence: f.evidence,
+            impactScore: f.impactScore,
+          },
+          fetchedAt: new Date().toISOString(),
+          latencyMs: Date.now() - start,
+        });
       }
+
+      logger.info(
+        { entityType, entityId, found: findings.length },
+        "KG entity findings fetched",
+      );
+    } catch (err) {
+      logger.debug({ entityType, entityId, err }, "KG entity query failed");
     }
   }
 
@@ -116,6 +113,44 @@ async function fetchKGFindings(
   }
 
   return results;
+}
+
+function parseResearchEntityType(value: unknown): ResearchEntityType | null {
+  switch (value) {
+    case ResearchEntityType.Satellite:
+      return ResearchEntityType.Satellite;
+    case ResearchEntityType.OperatorCountry:
+      return ResearchEntityType.OperatorCountry;
+    case ResearchEntityType.Operator:
+      return ResearchEntityType.Operator;
+    case ResearchEntityType.Launch:
+      return ResearchEntityType.Launch;
+    case ResearchEntityType.SatelliteBus:
+      return ResearchEntityType.SatelliteBus;
+    case ResearchEntityType.Payload:
+      return ResearchEntityType.Payload;
+    case ResearchEntityType.OrbitRegime:
+      return ResearchEntityType.OrbitRegime;
+    case ResearchEntityType.ConjunctionEvent:
+      return ResearchEntityType.ConjunctionEvent;
+    case ResearchEntityType.Maneuver:
+      return ResearchEntityType.Maneuver;
+    case ResearchEntityType.Finding:
+      return ResearchEntityType.Finding;
+    default:
+      return null;
+  }
+}
+
+function parseEntityId(value: unknown): bigint | null {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return BigInt(value);
+  }
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    return BigInt(value);
+  }
+  return null;
 }
 
 function buildSearchQuery(params: Record<string, unknown>): string | null {

@@ -1,17 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { stepContextStore, type StepEvent } from "@interview/shared/observability";
 import {
-  researchCycle,
-  researchCycleFinding,
-  researchEdge,
-  researchFinding,
-} from "@interview/db-schema";
+  ResearchCortex,
+  ResearchCycleStatus,
+  ResearchCycleTrigger,
+  ResearchEntityType,
+  ResearchFindingType,
+  ResearchRelation,
+  ResearchStatus,
+} from "@interview/shared/enum";
 import type { SwarmAggregate } from "@interview/sweep";
-import {
-  SimPromotionService,
-  type SimPromotionStorePort,
-  type SimPromotionServiceDeps,
-} from "../../../src/services/sim-promotion.service";
+import { ModalSuggestionComposer } from "../../../src/services/modal-suggestion-composer.service";
+import type { SimPromotionResearchWriterPort } from "../../../src/services/sim-promotion.types";
 
 function buildAggregate(): SwarmAggregate {
   return {
@@ -49,15 +49,61 @@ function buildAggregate(): SwarmAggregate {
   };
 }
 
-describe("SimPromotionService.emitSuggestionFromModal", () => {
+describe("ModalSuggestionComposer.emitSuggestionFromModal", () => {
   it("links the promoted finding back to the emitted cycle through research_cycle_finding", async () => {
-    const store = {
-      createCycle: vi.fn(async () => ({ id: 101n })),
-      createFinding: vi.fn(async () => ({ id: 202n })),
-      linkCycleFinding: vi.fn(async () => undefined),
-      createEdge: vi.fn(async () => undefined),
+    const now = new Date("2026-04-28T00:00:00.000Z");
+    const writer = {
+      createCycle: vi.fn(async () => ({
+        id: 101n,
+        triggerType: ResearchCycleTrigger.System,
+        triggerSource: "sim-modal",
+        userId: null,
+        dagPlan: null,
+        corticesUsed: [ResearchCortex.ConjunctionAnalysis],
+        status: ResearchCycleStatus.Completed,
+        findingsCount: 0,
+        totalCost: null,
+        error: null,
+        startedAt: now,
+        completedAt: now,
+      })),
+      createFinding: vi.fn(async () => ({
+        id: 202n,
+        researchCycleId: 101n,
+        cortex: ResearchCortex.ConjunctionAnalysis,
+        findingType: ResearchFindingType.Strategy,
+        status: ResearchStatus.Active,
+        urgency: null,
+        title: "Modal action consensus",
+        summary: "Modal action consensus",
+        evidence: [],
+        reasoning: null,
+        confidence: 0.75,
+        impactScore: null,
+        extensions: null,
+        reflexionNotes: null,
+        iteration: 0,
+        dedupHash: null,
+        embedding: null,
+        expiresAt: null,
+        createdAt: now,
+        updatedAt: now,
+      })),
+      linkFindingToCycle: vi.fn(async () => true),
+      createEdges: vi.fn(async () => [
+        {
+          id: 404n,
+          findingId: 202n,
+          entityType: ResearchEntityType.Satellite,
+          entityId: 123n,
+          relation: ResearchRelation.About,
+          weight: 1,
+          context: null,
+          createdAt: now,
+        },
+      ]),
       updateCycleFindingsCount: vi.fn(async () => undefined),
-    } satisfies SimPromotionStorePort;
+    } satisfies SimPromotionResearchWriterPort;
     const sweepRepo = {
       insertGeneric: vi.fn(async () => "303"),
     };
@@ -85,8 +131,8 @@ describe("SimPromotionService.emitSuggestionFromModal", () => {
       linkOutcome: vi.fn(async () => undefined),
     };
 
-    const service = new SimPromotionService({
-      store,
+    const service = new ModalSuggestionComposer({
+      writer,
       sweepRepo,
       satelliteRepo,
       swarmRepo,
@@ -112,14 +158,16 @@ describe("SimPromotionService.emitSuggestionFromModal", () => {
         }),
       ]),
     );
-    expect(store.createCycle).toHaveBeenCalledOnce();
-    expect(store.createFinding).toHaveBeenCalledOnce();
-    expect(store.linkCycleFinding).toHaveBeenCalledWith({
-      researchCycleId: 101n,
-      researchFindingId: 202n,
+    expect(writer.createCycle).toHaveBeenCalledOnce();
+    expect(writer.createFinding).toHaveBeenCalledOnce();
+    expect(writer.linkFindingToCycle).toHaveBeenCalledWith({
+      cycleId: 101n,
+      findingId: 202n,
+      iteration: 0,
+      isDedupHit: false,
     });
-    expect(store.createEdge).toHaveBeenCalledOnce();
-    expect(store.updateCycleFindingsCount).toHaveBeenCalledWith(101n, 1);
+    expect(writer.createEdges).toHaveBeenCalledOnce();
+    expect(writer.updateCycleFindingsCount).toHaveBeenCalledWith(101n, 1);
     expect(swarmRepo.linkOutcome).toHaveBeenCalledWith(42n, {
       suggestionId: 303n,
       reportFindingId: 202n,

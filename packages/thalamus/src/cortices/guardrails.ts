@@ -3,7 +3,7 @@
  *
  * 3 layers:
  * 1. Strip prompt-injection patterns from RSS / external text.
- * 2. Filter off-topic content (SSA relevance gate).
+ * 2. Filter off-topic content with caller-provided relevance keywords.
  * 3. Truncate + escape data payloads.
  */
 
