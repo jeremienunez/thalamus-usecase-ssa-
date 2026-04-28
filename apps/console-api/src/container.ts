@@ -181,7 +181,10 @@ import { SimSwarmRepository } from "./repositories/sim-swarm.repository";
 import { SimMemoryRepository } from "./repositories/sim-memory.repository";
 import { SimTerminalRepository } from "./repositories/sim-terminal.repository";
 import { SimReviewEvidenceRepository } from "./repositories/sim-review-evidence.repository";
+import { TemporalEventRepository } from "./repositories/temporal-event.repository";
+import { TemporalLearningRunRepository } from "./repositories/temporal-learning-run.repository";
 import { TemporalPatternRepository } from "./repositories/temporal-pattern.repository";
+import { TemporalProjectionRunRepository } from "./repositories/temporal-projection-run.repository";
 import { SimAgentService } from "./services/sim-agent.service";
 import { SimGodChannelService } from "./services/sim-god-channel.service";
 import { SimTargetService } from "./services/sim-target.service";
@@ -198,7 +201,10 @@ import { ModalSuggestionComposer } from "./services/modal-suggestion-composer.se
 import { SimOutcomePromotionService } from "./services/sim-outcome-promotion.service";
 import { TelemetryScalarPromoter } from "./services/telemetry-scalar-promoter.service";
 import { RuntimeConfigService } from "./services/runtime-config.service";
+import { TemporalLearningService } from "./services/temporal-learning.service";
 import { TemporalMemoryService } from "./services/temporal-memory.service";
+import { TemporalProjectionService } from "./services/temporal-projection.service";
+import { TemporalShadowRunService } from "./services/temporal-shadow-run.service";
 import { SatelliteSweepChatRepository } from "./repositories/satellite-sweep-chat.repository";
 import { SatelliteSweepChatService } from "./services/satellite-sweep-chat.service";
 import { VizService } from "./services/viz.service";
@@ -213,6 +219,34 @@ import { SsaVoyageEmbedderAdapter } from "./agent/ssa/ssa-voyage-embedder.adapte
 
 import type { AppServices } from "./routes";
 import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
+
+export function buildTemporalRouteServices(db: NodePgDatabase<typeof schema>): {
+  memory: TemporalMemoryService;
+  shadow: TemporalShadowRunService;
+} {
+  const simRunRepo = new SimRunRepository(db);
+  const reviewEvidenceRepo = new SimReviewEvidenceRepository(db);
+  const temporalEventRepo = new TemporalEventRepository(db);
+  const temporalLearningRunRepo = new TemporalLearningRunRepository(db);
+  const temporalPatternRepo = new TemporalPatternRepository(db);
+  const temporalProjectionRunRepo = new TemporalProjectionRunRepository(db);
+  const projection = new TemporalProjectionService({
+    projectionRunRepo: temporalProjectionRunRepo,
+    eventRepo: temporalEventRepo,
+    reviewEvidenceRepo,
+    simRunRepo,
+  });
+  const learning = new TemporalLearningService({
+    eventRepo: temporalEventRepo,
+    learningRunRepo: temporalLearningRunRepo,
+    patternRepo: temporalPatternRepo,
+  });
+
+  return {
+    memory: new TemporalMemoryService({ patternRepo: temporalPatternRepo }),
+    shadow: new TemporalShadowRunService({ projection, learning }),
+  };
+}
 
 export async function buildContainer(
   config: ContainerConfig,
@@ -475,7 +509,6 @@ export async function buildContainer(
   const simMemoryRepo = new SimMemoryRepository(db);
   const simTerminalRepo = new SimTerminalRepository(db);
   const simReviewEvidenceRepo = new SimReviewEvidenceRepository(db);
-  const temporalPatternRepo = new TemporalPatternRepository(db);
   const simTargetService = new SimTargetService(
     simRunRepo,
     satelliteDimensionRepo,
@@ -702,6 +735,7 @@ export async function buildContainer(
     replFollowUps,
     replBriefingAggregator,
   );
+  const temporal = buildTemporalRouteServices(db);
 
   // Satellite sweep chat — per-satellite LLM chat with SSE streaming + HITL
   // finding extraction. Consumes stubbed Viz/Satellite services + dedicated
@@ -793,9 +827,8 @@ export async function buildContainer(
       promotion: simPromotionService,
     },
     runtimeConfig: runtimeConfigService,
-    temporalMemory: new TemporalMemoryService({
-      patternRepo: temporalPatternRepo,
-    }),
+    temporalMemory: temporal.memory,
+    temporalShadow: temporal.shadow,
     satelliteSweepChat: satelliteSweepChatController,
   };
 

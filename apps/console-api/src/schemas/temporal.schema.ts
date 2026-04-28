@@ -27,3 +27,31 @@ export const TemporalPatternQuerySchema = z.object({
 });
 
 export type TemporalPatternQuery = z.infer<typeof TemporalPatternQuerySchema>;
+
+const dateString = z
+  .string()
+  .datetime({ offset: true })
+  .transform((value) => new Date(value));
+
+export const TemporalShadowRunBodySchema = z.object({
+  from: dateString,
+  to: dateString,
+  sourceDomain: TemporalSourceDomainSchema.exclude(["mixed"]).default("simulation"),
+  targetOutcomes: z.array(z.string().min(1).max(64)).max(16).optional(),
+  sourceScope: z.string().min(1).max(128).optional(),
+  projectionVersion: z.string().min(1).max(128).optional(),
+  params: z
+    .object({
+      pattern_window_ms: z.number().int().positive().optional(),
+      pre_trace_decay_ms: z.number().int().positive().optional(),
+      learning_rate: z.number().positive().max(1).optional(),
+      activation_threshold: z.number().min(0).max(1).optional(),
+      min_support: z.number().int().positive().optional(),
+      max_steps: z.number().int().positive().max(8).optional(),
+      pattern_version: z.string().min(1).max(128).optional(),
+    })
+    .strict()
+    .optional(),
+});
+
+export type TemporalShadowRunBody = z.infer<typeof TemporalShadowRunBodySchema>;

@@ -23,6 +23,7 @@ import type { OpacityService } from "../services/opacity.service";
 import type { IngestionService } from "../services/ingestion.service";
 import type { RuntimeConfigService } from "../services/runtime-config.service";
 import type { TemporalMemoryService } from "../services/temporal-memory.service";
+import type { TemporalShadowRunService } from "../services/temporal-shadow-run.service";
 import type { SatelliteSweepChatController } from "../controllers/satellite-sweep-chat.controller";
 
 import { registerHealthRoutes } from "./health.routes";
@@ -79,6 +80,7 @@ export type AppServices = {
   sim: SimRouteServices;
   runtimeConfig: RuntimeConfigService;
   temporalMemory: TemporalMemoryService;
+  temporalShadow: TemporalShadowRunService;
   satelliteSweepChat: SatelliteSweepChatController;
   researchWriter: ResearchWriterPort;
 };
@@ -119,7 +121,10 @@ export function registerAllRoutes(
     simKernelSharedSecret: config.simKernelSharedSecret,
   });
   registerRuntimeConfigRoutes(app, s.runtimeConfig);
-  registerTemporalRoutes(app, s.temporalMemory);
+  registerTemporalRoutes(app, {
+    memory: s.temporalMemory,
+    shadow: s.temporalShadow,
+  });
 
   // Per-satellite chat with its own auth scope (authenticate + requireTier).
   // Mounted via app.register so the preHandlers installed inside the plugin

@@ -133,4 +133,41 @@ export interface TemporalLearningSummary {
   persistedPatternCount: number;
 }
 
+export interface RunTemporalShadowInput {
+  from: Date;
+  to: Date;
+  sourceDomain?: Exclude<TemporalSourceDomain, "mixed">;
+  params?: Partial<STDPParams>;
+  targetOutcomes?: string[];
+  sourceScope?: string;
+  projectionVersion?: string;
+}
+
+export interface TemporalShadowRunSummary {
+  mode: "shadow";
+  from: string;
+  to: string;
+  sourceDomain: Exclude<TemporalSourceDomain, "mixed">;
+  params: STDPParams;
+  projection: {
+    projectionRunId: string;
+    projectionVersion: string;
+    sourceScope: string;
+    inputSnapshotHash: string;
+    reviewEvidenceCount: number;
+    simRunCount: number;
+    eventCount: number;
+    insertedEventCount: number;
+  };
+  learning: {
+    learningRunId: string;
+    inputSnapshotHash: string;
+    eventCount: number;
+    patternCount: number;
+    persistedPatternCount: number;
+  };
+  kgWriteAttempted: false;
+  actionAuthority: false;
+}
+
 export type TemporalPatternHypothesisRow = TemporalPatternHypothesis;
