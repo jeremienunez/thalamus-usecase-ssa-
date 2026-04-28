@@ -1,7 +1,7 @@
 # DONE
 
 Items verified as fully implemented. Audited 2026-04-19 against the live tree;
-TODO trim updated 2026-04-25.
+TODO trim updated 2026-04-28.
 
 Sister files: [TODO.md](TODO.md) (open), [TO-REVIEW.md](TO-REVIEW.md) (partial).
 
@@ -73,6 +73,114 @@ Sister files: [TODO.md](TODO.md) (open), [TO-REVIEW.md](TO-REVIEW.md) (partial).
       and reads operator list/status/SSE/timeline/clusters/NDJSON trace.
       Q&A persistence/no-memory-write behavior is covered by operator service
       unit tests and `sim_review_evidence` integration coverage.
+
+## Sprint closures - 2026-04-28
+
+### Sprint 3 - Fish Operator UI implementation slice
+
+- [x] **SIM-F7 implementation landed.** The `/fish` route is lazy-loaded and
+      backed by the R3F Fish operator surface: full-bleed `<Canvas>`,
+      instanced/pickable fish scene, deterministic layout, OrbitControls,
+      status/cluster filters, HUD/inspector/evidence panels, and scoped
+      swarm/cluster/fish Q&A via review evidence.
+- [x] **3D bundle containment landed.** `vendor-3d`, `vendor-graph`, and
+      `vendor-shell` manual chunks are wired for the console build so the 3D
+      operator dependencies stay scoped to the operator surface.
+- [x] **DOM smoke coverage landed.** Fish operator tests cover 200/300-fish
+      render, sampling, and instance-id picking in the Vitest DOM harness.
+      Real browser/WebGL Playwright exit checks remain open in `TODO.md`.
+
+### Sprint 5 - Core Architecture Debt
+
+- [x] **C1 - collapse writes to `research_*` tables behind one writer.**
+      `db.insert(research*)` is isolated to
+      `apps/console-api/src/services/research-write.service.ts`, dormant
+      app-side write repos are deleted, and kernel-only HTTP endpoints use Zod
+      business DTO parsing plus route e2e coverage.
+- [x] **C2 - split `apps/console-api/src/services/sim-promotion.service.ts`.**
+      Old service deleted; outcome, modal suggestion, telemetry scalar, helper,
+      and shared port files now own the former responsibilities.
+- [x] **C4 - finish thalamus kernel de-domainization.** Targeted kernel files no
+      longer carry SSA/satellite/orbit/conjunction defaults or prompt text.
+- [x] **I5 - sweep -> thalamus coupling.** `packages/sweep/src` and
+      `packages/sweep/package.json` no longer import or depend on
+      `@interview/thalamus`.
+- [x] **I6 - extract duplicate app service ports.** Research write ports live in
+      `apps/console-api/src/services/ports/`, and the divergent satellite read
+      ports have explicit names.
+- [x] **M1 - stats repository reads kernel-owned tables through views.**
+      `StatsRepository` reads through `vw_research_stats_counts`,
+      `vw_research_findings_by_status`, and
+      `vw_research_findings_by_cortex`; migration `0015` is wired through the
+      repo migration runner and has been applied locally.
+- [x] **M2 - finish thalamus ports cleanup.** Cortex data provider, domain
+      config, and execution strategy ports live under
+      `packages/thalamus/src/ports/`.
+- [x] **M3 - split `packages/thalamus/src/services/research-graph.service.ts`.**
+      Old service deleted; finding-store, kg-query, archive, and shared graph
+      types now own the former responsibilities.
+- [x] **M4 - promote the inline sim launcher closure.**
+      `SimLauncherService` now owns telemetry/PC launch orchestration.
+- [x] **M8 - bound Redis pagination in `packages/sweep/src/repositories/sweep.repository.ts`.**
+      Legacy all-index scans now page through bounded batches.
+
+### Evaluation protocol closures
+
+- [x] **EVAL-1 - real eval corpus locked.** `docs/evals/real-eval-manifest.json`
+      and `data/evals/_manifest-lock.json` pin the real eval assets. The
+      acquisition driver lives in `scripts/acquire-real-evals.ts` with
+      `evals:list`, `evals:fetch:smoke`, and `evals:fetch:full` scripts.
+- [x] **EVAL-9 - multimodal honesty documented.**
+      `docs/evals/evaluation-protocol.md` and
+      `docs/evals/drafts/cost-observability-protocol.md` document the current
+      runtime as text-first and explicitly state that multimodal is not yet an
+      executable runtime path in this repo.
+
+### Temporal Hypothesis Layer implementation slice
+
+- [x] **Product framing and spec landed.**
+      `docs/specs/2026-04-27-temporal-hypothesis-layer.md` defines THL as a
+      separate hypothesis layer: temporal episode mining with STDP-like decay,
+      correlation-only outputs, read-only consumers, no KG fact writes, and
+      anti-contamination through `seeded_by_pattern_id`.
+- [x] **Pure deterministic temporal package landed.**
+      `packages/temporal` owns canonical signatures, stable sorting,
+      closed-window episode mining, negative evidence, STDP-like scoring,
+      deterministic pattern hashes, and DoD edge-case coverage. Architecture
+      tests keep the package free of DB, app, KG, and network imports.
+- [x] **Temporal schema and migration landed.**
+      `packages/db-schema/src/schema/temporal.ts` plus
+      `packages/db-schema/migrations/0013_busy_avengers.sql` introduce
+      `temporal_projection_run`, `temporal_event`,
+      `temporal_learning_run`, `temporal_pattern_hypothesis`, steps, edges,
+      examples, reviews, seeded-run links, query logs, and evaluation tables.
+- [x] **Console API temporal services landed.**
+      Projection, learning, and memory services project canonical events from
+      closed windows, persist pattern hypotheses, and expose
+      `GET /api/cortex/temporal-patterns` as a read-only cortex route. The
+      response carries `hypothesis: true` and `decisionAuthority: false`.
+- [x] **Shadow run endpoint landed.**
+      `POST /api/temporal/shadow-runs` runs projection then learning over a
+      bounded closed window and returns a summary with `kgWriteAttempted: false`
+      and `actionAuthority: false`.
+- [x] **Temporal review route landed.**
+      `POST /api/temporal/patterns/:id/review` records a review row and updates
+      hypothesis status transactionally. Acceptance is blocked unless the
+      pattern has positive examples plus negative evidence or counterexamples;
+      mixed-domain patterns cannot be accepted without a domain breakdown.
+- [x] **FollowUp consumes THL as read-only evidence.**
+      The follow-up planner queries accepted temporal hypotheses, filters out
+      unaccepted patterns in normal mode, and can attach accepted THL evidence to
+      PC/telemetry/Fish follow-ups without granting decision authority.
+- [x] **Fish seeding anti-contamination landed.**
+      PC and telemetry swarm seeds carry `seeded_by_pattern_id` when launched
+      from THL evidence, and `SimRunService` persists an idempotent
+      `temporal_pattern_seeded_run` link for numeric pattern IDs.
+- [x] **Seeded simulations stay isolated.**
+      The scorer excludes `simulation_seeded` events from production learning
+      and can score them only in the `simulation_seeded` domain. Unit and
+      integration tests cover the separation and the seeded-run persistence
+      path.
 
 ## Migrated from TODO - 2026-04-25 trim
 

@@ -1,12 +1,22 @@
 import type { FastifyRequest } from "fastify";
 import type { RunTemporalShadowInput } from "../types/temporal.types";
 import type { TemporalMemoryService } from "../services/temporal-memory.service";
+import type { TemporalPatternReviewService } from "../services/temporal-pattern-review.service";
 import type { TemporalShadowRunService } from "../services/temporal-shadow-run.service";
-import { TemporalPatternQuerySchema, TemporalShadowRunBodySchema } from "../schemas";
+import {
+  TemporalPatternIdParamsSchema,
+  TemporalPatternQuerySchema,
+  TemporalPatternReviewBodySchema,
+  TemporalShadowRunBodySchema,
+} from "../schemas";
 import { asyncHandler } from "../utils/async-handler";
 import { parseOrReply } from "../utils/parse-request";
 
 export type TemporalControllerPort = Pick<TemporalMemoryService, "queryPatterns">;
+export type TemporalPatternReviewControllerPort = Pick<
+  TemporalPatternReviewService,
+  "reviewPattern"
+>;
 export type TemporalShadowControllerPort = Pick<
   TemporalShadowRunService,
   "runClosedWindow"
@@ -20,6 +30,27 @@ export function temporalPatternsController(service: TemporalControllerPort) {
       return service.queryPatterns(query);
     },
   );
+}
+
+export function temporalPatternReviewController(
+  service: TemporalPatternReviewControllerPort,
+) {
+  return asyncHandler<
+    FastifyRequest<{ Params: unknown; Body: unknown }>
+  >(async (req, reply) => {
+    const params = parseOrReply(req.params, TemporalPatternIdParamsSchema, reply);
+    if (params === null) return;
+    const body = parseOrReply(req.body, TemporalPatternReviewBodySchema, reply);
+    if (body === null) return;
+
+    return service.reviewPattern({
+      patternId: BigInt(params.id),
+      status: body.status,
+      reviewerId: body.reviewerId,
+      reviewOutcome: body.reviewOutcome,
+      notes: body.notes,
+    });
+  });
 }
 
 export function temporalShadowRunController(service: TemporalShadowControllerPort) {

@@ -2,6 +2,7 @@ import type {
   TemporalPatternExample,
   TemporalLearningStatus,
   TemporalPatternHypothesis,
+  TemporalPatternReview,
   TemporalPatternSeededRun,
   TemporalPatternStep,
   TemporalPatternStatus,
@@ -172,7 +173,38 @@ export interface TemporalShadowRunSummary {
 }
 
 export type TemporalPatternHypothesisRow = TemporalPatternHypothesis;
+export type TemporalPatternReviewRow = TemporalPatternReview;
 export type TemporalPatternSeededRunRow = TemporalPatternSeededRun;
+
+export type TemporalPatternReviewStatus = Exclude<
+  TemporalPatternStatus,
+  "candidate"
+>;
+
+export type TemporalPatternReviewOutcome =
+  | "accepted"
+  | "rejected"
+  | "deprecated"
+  | "needs_more_evidence";
+
+export interface TemporalPatternReviewTarget {
+  hypothesis: TemporalPatternHypothesisRow;
+  positiveExampleCount: number;
+  counterexampleCount: number;
+}
+
+export interface ApplyTemporalPatternReviewInput {
+  patternId: bigint;
+  status: TemporalPatternReviewStatus;
+  reviewerId?: bigint | null;
+  reviewOutcome: TemporalPatternReviewOutcome;
+  notes?: string | null;
+}
+
+export interface AppliedTemporalPatternReview {
+  hypothesis: TemporalPatternHypothesisRow;
+  review: TemporalPatternReviewRow;
+}
 
 export interface InsertTemporalPatternSeededRunInput {
   patternId: bigint;

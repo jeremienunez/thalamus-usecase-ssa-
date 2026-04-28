@@ -2,175 +2,72 @@
 
 Portfolio-readiness checklist for Thalamus + Sweep.
 
-**Trimmed 2026-04-25** - verified-done and stale entries moved to
-[DONE.md](DONE.md#migrated-from-todo--2026-04-25-trim). Sprint 0 and the
-closed Sprint 1 runtime items are also tracked in
-[DONE.md](DONE.md#sprint-closures--2026-04-25). This file now tracks confirmed
-open work only. `tasks/todo.md` is historical: all 59 items are done.
+**Trimmed 2026-04-28** - completed sprint work moved to [DONE.md](DONE.md).
+This file tracks confirmed open work only. `tasks/todo.md` is historical: all
+59 items are done.
 
-**Re-audited 2026-04-27** by six parallel verification agents. Headline
-deltas vs the 2026-04-25 trim:
+Current state after the Sprint 5 close and the first Temporal Hypothesis Layer
+slice:
 
-- Sprint 2 (Operator API) closed; Sprint 3 (3D Fish UI) is in progress with
-  the R3F squid scene, HUD, Q&A panel, manual chunks, and lazy `/fish` route
-  landed (commits 6665966, 58149f8). Only Playwright/WebGL exit checks remain.
-- `EVAL-1` (real eval corpus + lock) and `EVAL-9` (multimodal honesty) are
-  done.
-- `/metrics` endpoint already exists on the API port (`server.ts:347-350`);
-  the open work is the five named instrumentation metrics, not the endpoint
-  itself.
-- `C2` sim-promotion grew to ~564 LOC; `M3` research-graph grew to ~577 LOC.
-  Architecture debt is moving in the wrong direction and should not be
-  deferred again.
-
-Roll-up: ~10 closures, ~18 partials, ~58 still open across the backlog.
+- Sprints 0, 1, and 2 are archived in
+  [DONE.md](DONE.md#sprint-closures--2026-04-25); Sprint 5 is archived in
+  [DONE.md](DONE.md#sprint-closures--2026-04-28).
+- Sprint 3 implementation landed; only real Playwright/WebGL exit checks remain.
+- Sprint 4 has `EVAL-1` and `EVAL-9` closed; `EVAL-2` through `EVAL-8` and
+  `EVAL-10` remain open.
+- Temporal Hypothesis Layer foundation is in `main`: spec, pure scorer,
+  temporal schema, closed-window shadow run route, read-only cortex query,
+  review route, FollowUp seeding, and seeded Fish run persistence are archived in
+  [DONE.md](DONE.md#temporal-hypothesis-layer-implementation-slice).
+- `/metrics` already exists on the API port (`server.ts:347-350`); the open
+  work is named product instrumentation, not the endpoint itself.
+- Research stats views are wired through the repo migration runner and were
+  applied locally via `pnpm tsx scripts/test-db-migrate.ts`.
 
 Current fast checks from the trim pass:
 
-- `pnpm test:policy` - green, 307 files scanned, 0 grandfather casts.
-- `pnpm spec:check` - green, but 39 specs are still DRAFT/REVIEW and 0 are
-  enforced.
-- `pnpm sim:smoke` - green for fixture-backed telemetry, PC, and UC3 swarms.
-- Sim LLM config boundary tests are green: sim launch/run config rejects
-  provider/model/reasoning/token/temperature knobs; executable fish LLM tuning
-  stays in the centralized `sim.fish` / Thalamus config path.
+- Latest pre-commit on `e618afc` passed `pnpm test:policy`, typecheck,
+  `pnpm spec:check`, and `pnpm test` (1802 tests passed, 10 skipped).
+- DB migration runner passed against local Postgres; the research stats views
+  are present and queryable.
+- `pnpm sim:smoke` remains the fixture-backed sim smoke command for telemetry,
+  PC, and UC3 swarms.
 
 ---
 
 ## Sprint Roadmap
 
-This is the execution order. The detailed backlog remains below; sprint entries
-reference the named items in the backlog. Do not start a downstream UI/eval
-sprint until the runtime/API exit checks from the earlier sprint are green.
-`TO-REVIEW.md` is treated as review intake: actionable items are mapped into
-this sprint roadmap, while stale/resolved review notes stay there as archive.
+This is the current portfolio roadmap. Closed sprint sections are summaries;
+open work is tracked in the detailed backlog below. `TO-REVIEW.md` is treated
+as review intake: actionable items are mapped into this sprint roadmap, while
+stale/resolved review notes stay there as archive.
 
 ### Sprint 0 - Done - Spec Gate Implementation
 
-Goal: turn the documentation surface into enforceable contracts instead of
-reader-only PDFs.
+Closed 2026-04-25. Closure details live in
+[DONE.md](DONE.md#sprint-closures--2026-04-25). Remaining spec hardening work
+is tracked under "Spec, Test, And CI Gaps".
 
-Status: implementation closed 2026-04-25. The gate, CI jobs, strategic proof
-tests, and preamble/template exclusions moved to
-[DONE.md](DONE.md#sprint-closures--2026-04-25). Converting every current spec
-to APPROVED/IMPLEMENTED remains open under "Spec, Test, And CI Gaps".
+### Sprint 1 - Done - Fish Runtime Truth
 
-Scope:
+Closed 2026-04-25. Closure details live in
+[DONE.md](DONE.md#sprint-closures--2026-04-25). Fixture sim smoke remains
+available through `pnpm sim:smoke` / `make sim-smoke`.
 
-- `SPEC-GATE`, tri-layer traceability, spec validation CI, and DRAFT -> REVIEW
-  -> APPROVED policy.
-- `scripts/spec-check.ts` preamble exclusion and spec-build CI.
-- Minimum sweep/spec smoke coverage needed before any spec is called validated.
-- TO-REVIEW strategic-test gaps: labelled Thalamus query -> executor -> graph
-  write proof, labelled Sweep trigger -> finding -> reviewer accept -> audit
-  proof, and seeded sim determinism assertion.
+### Sprint 2 - Done - Fish Operator API
 
-Exit checks:
-
-- `pnpm spec:check`
-- `make -C docs/specs all`
-- `pnpm test:unit`
-- `pnpm test:integration`
-- `pnpm test:e2e`
-
-### Sprint 1 - Fish Runtime Truth
-
-Goal: make Fish behavior match the architecture we want to present.
-
-Status: closed 2026-04-25. `SIM-F2` is closed as an architecture rejection:
-per-swarm LLM tuning is not allowed; `sim.fish` / Thalamus remains the unique
-executable LLM source of truth. `SIM-F3` through `SIM-F6` are implemented and
-moved to [DONE.md](DONE.md#sprint-closures--2026-04-25).
-
-Scope:
-
-- `SIM-F1` fish timeout and cancellation. Done.
-- `SIM-F2` per-swarm LLM config. Rejected/reframed: add guards, do not
-  duplicate `model`, `temperature`, `reasoningEffort`, or token knobs in sim
-  launch/run config.
-- `SIM-F3` real or explicitly removed fish concurrency semantics.
-- `SIM-F4` rich selector hints for specialized fish skills.
-- `SIM-F5` baseline/control fish policy.
-- `SIM-F6` fixture-backed sim smoke commands.
-
-Exit checks:
-
-- Fixture swarm launches and reaches aggregation without live cloud spend. Done
-  for current e2e fixture coverage.
-- Timed-out fish become `timeout` and still unblock aggregation. Done.
-- Telemetry/PC swarms select specialized skills when the seed exposes targets.
-  Done.
-- `fishConcurrency` is implemented as a real per-swarm claim/enqueue
-  constraint. Done.
-- Baseline/control fish policy is explicit: fish 0 must be `{ kind: "noop" }`.
-  Done.
-- Runnable sim smoke commands exist for fixture-backed telemetry, PC, and
-  conjunction swarms. Done: `pnpm sim:smoke` / `make sim-smoke`.
-
-### Sprint 2 - Fish Operator API
-
-Goal: expose enough backend surface for an operator to inspect and interrogate a
-swarm without touching DB internals.
-
-Status: closed 2026-04-25. The operator API now exposes swarm list/status/SSE,
-fish timelines, aggregate-backed clusters, trace export, and terminal post-run
-Q&A through durable review evidence. It reuses existing sim read models and the
-central Thalamus LLM transport; no private DB shortcut or duplicate clustering
-path was introduced. Closure details moved to
+Closed 2026-04-25. Closure details live in
 [DONE.md](DONE.md#sprint-2---fish-operator-api).
-
-Scope:
-
-- Swarm list/status stream. Done.
-- Fish turn timeline API. Done.
-- Terminal cluster API. Done.
-- Per-fish trace export. Done.
-- Read-only post-run Q&A endpoint. Done.
-- Aggregator / swarm-service / promotion `stepLog` emission. Done.
-- Fish/provider/model/cost metadata in traces where available. Done where the
-  current turn rows expose provider/cost metadata.
-
-Exit checks:
-
-- One API-level test launches a fixture swarm and reads status, timeline,
-  clusters, and trace export. Done:
-  `apps/console-api/tests/e2e/swarm-uc3.e2e.spec.ts`.
-- Q&A is persisted as review evidence and does not mutate fish memory unless a
-  promotion path explicitly does so. Done: `sim_review_evidence` integration
-  coverage plus operator service unit coverage for terminal-only Q&A and
-  no memory writes.
 
 ### Sprint 3 - 3D Fish Operator UI
 
 Goal: build the operator-facing 3D murmuration view for watching and questioning
 Fish swarms.
 
-Status: in progress as of 2026-04-27. Frontend R3F surface landed in commits
-6665966 and 58149f8. `apps/console/src/features/fish-operator/FishSwarmPlot.tsx`
-ships a full-bleed `<Canvas>` with `<instancedMesh>`, GLB squid model loader,
-deterministic beeswarm layout, OrbitControls, frustum culling, and a 300-fish
-sampling cap; `event.instanceId` is mapped back to `FishSceneNode.fishIndex`
-for picking. `FishOperatorHud.tsx` houses `FishFiltersPanel`,
-`FishInspectorPanel`, `FishEvidencePanel`, and `FishAskPanel`, with the latter
-calling `useSimReviewQuestionMutation` for swarm/cluster/fish scopes.
-`apps/console/src/routes/fish.tsx` registers `/fish` via `React.lazy`, and the
-`vendor-3d` / `vendor-graph` / `vendor-shell` manual chunks are wired through
-`apps/console/manual-chunks.ts` and `vite.config.ts`. Vitest DOM smoke covers
-200/300-fish render, instance-id picking, and sampling. Remaining: Playwright
-is not yet installed and there are no real WebGL exit checks (desktop/mobile
-screenshots, nonblank canvas pixel, real picking, camera control, 200-fish
-FPS). Fly camera mode is not implemented and is treated as optional.
-
-Scope:
-
-- `SIM-F7` full-bleed Three.js/R3F swarm scene. Done.
-- Instanced/pickable fish meshes or particles. Done.
-- Orbit camera, timeline scrubber, cluster/status filters. Done. Fly mode is
-  not implemented (treat as optional).
-- Fish/cluster/swarm interrogation panel. Done.
-- Bundle split so 3D dependencies stay scoped to the operator surface. Done.
-- TO-REVIEW bundle-size warning: route-level lazy loading and manual chunks
-  for 3D, graph, and base-shell dependencies. Done.
+Status: implementation landed and archived in
+[DONE.md](DONE.md#sprint-closures--2026-04-28). The only remaining work is real
+browser/WebGL verification; Vitest DOM smoke already covers 200/300-fish render,
+instance-id picking, and sampling.
 
 Exit checks:
 
@@ -189,8 +86,7 @@ demos.
 
 Scope:
 
-- `EVAL-1` through `EVAL-10`.
-- Real eval corpus lock and manifest.
+- `EVAL-2` through `EVAL-8`, plus `EVAL-10`.
 - Paired runner, frozen baselines, nondeterminism statistics.
 - SSA + HRM metrics, provider telemetry, budget tiers, reports.
 
@@ -200,48 +96,11 @@ Exit checks:
 - Report includes commit SHA, manifest hash, model config, costs, scores, and
   residual risks.
 
-### Sprint 5 - Core Architecture Debt
+### Sprint 5 - Done - Core Architecture Debt
 
-Goal: reduce package-boundary ambiguity before expanding more product surface.
-
-Plan figé 2026-04-27 in [tasks/sprint5-architecture-debt-plan.md](tasks/sprint5-architecture-debt-plan.md).
-Order is non-negotiable: writer unification (Phases 1-5) lands before any
-god-service split (Phases 6-7), because splitting before unification is what
-made `C2` grow +53 LOC and `M3` grow +11 LOC since Pass 1.
-
-Scope (in execution order):
-
-1. `I6` — dedupe app-side ports + rename divergent `SatellitesReadPort`.
-2. `M2` — relocate thalamus ports to `packages/thalamus/src/ports/`.
-3. `C1` step A — app-owned `ResearchWriteService` with business DTOs only
-   (no `$inferInsert` exposed to services).
-4. `C1` step B — kernel-only HTTP routes:
-   `POST /api/research/cycles`,
-   `POST /api/research/finding-emissions`,
-   `POST /api/research/cycles/:id/increment-findings`,
-   `POST /api/research/edges` (only if a real standalone caller survives).
-5. Migrate callers + **delete** (not privatize) the public write methods on
-   app-side `finding.repository.ts` / `research-edge.repository.ts`.
-6. `C2` — split `sim-promotion.service.ts` into outcome / modal-suggestion /
-   telemetry-suggestion services + two pure helpers, all consuming
-   `ResearchWritePort`. Old service deleted, no façade.
-7. `M3` — split `research-graph.service.ts` into finding-store / kg-query /
-   finding-lifecycle / finding-events. Imports migrated in the same PR; no
-   committed façade.
-8. `M1`, `M4`, `M8` — small items. **DONE 2026-04-28**.
-9. `I5`, `C4` — kernel / domain decoupling (sweep stops importing thalamus;
-   SSA tokens stripped from thalamus kernel).
-
-Exit checks:
-
-- Research KG writes go through one approved writer surface (HTTP routes +
-  one business writer; greps in the plan's Definition of Done all return
-  zero hits outside the writer).
-- Sim promotion and research-graph are deleted as monolithic services; new
-  split services exist with per-service unit tests.
-- Sweep/Thalamus coupling is removed from `packages/sweep/src` and
-  `packages/sweep/package.json`.
-- Redis full-list reads are bounded.
+Closed 2026-04-28. Closure details live in
+[DONE.md](DONE.md#sprint-closures--2026-04-28), and the frozen execution plan is
+kept in [tasks/sprint5-architecture-debt-plan.md](tasks/sprint5-architecture-debt-plan.md).
 
 ### Sprint 6 - Runtime Hardening And Coverage
 
@@ -294,6 +153,35 @@ Exit checks:
 - One clean browser/operator walkthrough exercises REPL, Sweep suggestions,
   reflexion, and Fish UI without known stream/API mismatch.
 
+### Sprint 8 - Temporal Hypothesis Layer Productization
+
+Goal: turn the THL foundation into a reviewed predictive evidence loop without
+contaminating KG facts or production scores.
+
+Status: foundation landed and archived in
+[DONE.md](DONE.md#temporal-hypothesis-layer-implementation-slice). The open
+work is now review, evaluation, UI, and richer projection coverage.
+
+Scope:
+
+- Sweep automated review workflow for temporal patterns.
+- Production-grade canonical projection/backfill beyond the initial shadow
+  fixtures.
+- Temporal evaluation harness with frequency, HNSW-only, THL-only, HNSW+THL,
+  THL+Sweep, and THL+Fish baselines.
+- Temporal Pattern Explorer for sequence, score, evidence, counterexamples,
+  domain breakdown, and seeded-run links.
+- Query logging and usage reports that stay isolated from learning.
+
+Exit checks:
+
+- Accepted patterns require positive examples, counterexamples or negative
+  evidence, and review history.
+- Fish runs launched from THL always carry `seeded_by_pattern_id` and never
+  enter the production score.
+- A strict temporal split report shows precision@k, lift, lead time, false
+  positives, and pattern acceptance rate.
+
 ---
 
 ## TO-REVIEW Intake Map
@@ -301,16 +189,16 @@ Exit checks:
 `TO-REVIEW.md` is ignored by Git, so the active mapping is tracked here. Use this
 section when draining old review notes into the sprint roadmap.
 
-- Bundle size warning -> Sprint 3 / Sprint 7 bundle split and lazy route
-  loading.
+- Bundle size warning -> Sprint 7 remaining bundle split and lazy route
+  follow-ups. The Fish `/fish` route and 3D manual chunks are already done.
 - Zustand drawer concern -> Sprint 7 and "Shared drawer routing review".
 - SGP4 cache -> Sprint 7 and "SGP4 cache LRU".
 - FindingReadout / FindingsPanel duplication -> Sprint 7 and "Finding card
   extraction trigger".
 - REPL follow-up gaps -> Sprint 7, "Live browser SSE sanity check", and
   "Broaden targeted sweep auto-runs beyond `operator_country`".
-- Plan 5 / Plan 6 sim-kernel notes -> mostly resolved or superseded by C1/C2/M4
-  plus Sprint 1 Fish runtime work.
+- Plan 5 / Plan 6 sim-kernel notes -> resolved by Sprint 5 plus Sprint 1 Fish
+  runtime work.
 - CLI Plan 3 leftovers -> Sprint 7 and "CLI Plan 3 cleanup".
 - Remaining strategic sweep gaps -> Sprint 6 and the strategic test backlog.
 - Fish quick-wins -> `SIM-F8`.
@@ -321,38 +209,29 @@ section when draining old review notes into the sprint roadmap.
 
 ---
 
-## Immediate Architecture Debt
+## Temporal Hypothesis Layer Follow-Ups
 
-- [x] **C1 - collapse writes to `research_*` tables behind one writer.**
-      `db.insert(research*)` is isolated to
-      `apps/console-api/src/services/research-write.service.ts`, dormant
-      app-side write repos are deleted, and kernel-only HTTP endpoints use Zod
-      business DTO parsing plus route e2e coverage.
-- [x] **C2 - split `apps/console-api/src/services/sim-promotion.service.ts`.**
-      Old service deleted; outcome, modal suggestion, telemetry scalar, helper,
-      and shared port files now own the former responsibilities.
-- [x] **C4 - finish thalamus kernel de-domainization.** Targeted kernel files no
-      longer carry SSA/satellite/orbit/conjunction defaults or prompt text.
-- [x] **I5 - sweep -> thalamus coupling.** `packages/sweep/src` and
-      `packages/sweep/package.json` no longer import or depend on
-      `@interview/thalamus`.
-- [x] **I6 - extract duplicate app service ports.** Research write ports live in
-      `apps/console-api/src/services/ports/`, and the divergent satellite read
-      ports have explicit names.
-- [x] **M1 - stats repository reads kernel-owned tables directly.**
-      Stats now reads through `vw_research_stats_counts`,
-      `vw_research_findings_by_status`, and
-      `vw_research_findings_by_cortex`.
-- [x] **M2 - finish thalamus ports cleanup.** Cortex data provider, domain
-      config, and execution strategy ports live under
-      `packages/thalamus/src/ports/`.
-- [x] **M3 - split `packages/thalamus/src/services/research-graph.service.ts`.**
-      Old service deleted; finding-store, kg-query, archive, and shared graph
-      types now own the former responsibilities.
-- [x] **M4 - promote the inline sim launcher closure.**
-      `SimLauncherService` now owns telemetry/Pc launch orchestration.
-- [x] **M8 - bound Redis pagination in `packages/sweep/src/repositories/sweep.repository.ts`.**
-      Legacy all-index scans now page through bounded batches.
+- [ ] Sweep automated temporal auditor - wire Sweep policy to the existing
+      `POST /api/temporal/patterns/:id/review` path so automated audits can
+      accept, reject, deprecate, or request more evidence without bypassing the
+      THL review service.
+- [ ] Production projection/backfill - expand canonical projection beyond the
+      initial `sim_review_evidence` + terminal `sim_run` shadow slice. Keep
+      event types whitelisted, quarantine invalid/future timestamps, preserve
+      source provenance, and document retention.
+- [ ] Temporal evaluation harness - compare frequency, manual rules, HNSW-only,
+      THL-only, HNSW+THL, THL+Sweep, and THL+Fish on a strict train/validation/
+      test temporal split. Report precision@k, recall@k, lift, lead time, false
+      positives, pattern churn, and acceptance rate.
+- [ ] Temporal Pattern Explorer - build an audit UI for sequence steps, score
+      components, positive examples, counterexamples, source-domain breakdown,
+      reviews, and `temporal_pattern_seeded_run` links.
+- [ ] Query logging and usage isolation - wire `temporal_pattern_query_log` for
+      read-only consultations and seed usage reports. Query logs must never
+      influence learning or pattern scores.
+- [ ] HNSW coherence enrichment - add optional semantic-neighbor context for
+      audit and evaluation only. Keep temporal score and semantic similarity in
+      separate fields.
 
 ---
 
@@ -369,9 +248,12 @@ section when draining old review notes into the sprint roadmap.
 - [ ] Env keys - document `MINIMAX_API_KEY`, `MINIMAX_API_URL`,
       `MINIMAX_MODEL`, `LOCAL_LLM_URL`, and `LOCAL_LLM_MODEL` in
       `.env.example`.
-- [ ] Bundle split - `build.rollupOptions.output.manualChunks` per mode
-      (3D libs for ops only, sigma/graphology for thalamus only) plus lazy
-      TanStack Router file routes per mode.
+- [ ] Bundle split follow-up - Fish `/fish` lazy loading and 3D manual chunks
+      are done. Finish any remaining per-mode manual chunks and lazy TanStack
+      Router file routes outside the Fish operator surface.
+- [ ] Fish operator WebGL exit checks - add Playwright coverage for desktop and
+      mobile screenshots, nonblank canvas pixel, real instance picking, orbit
+      camera control, and a 200-fish performance sanity check.
 - [ ] Shared drawer routing review - `shared/ui/uiStore.ts` currently owns a
       cross-feature `drawerId` used by Ops, Thalamus, and Sweep. Decide whether
       drawer state should become route-driven for back/forward/deep-link support,
@@ -397,7 +279,8 @@ section when draining old review notes into the sprint roadmap.
       parent summary is emitted first, child follow-up events follow, and the UI
       stream contract has no mismatch.
 - [ ] Broaden targeted sweep auto-runs beyond `operator_country`. The REPL
-      follow-up stack can launch current narrow targeted audits; add more target
+      follow-up stack can launch current narrow targeted audits, and THL already
+      seeds accepted temporal hypotheses into Fish follow-ups. Add more target
       policies only when each has deterministic fixture coverage and reviewer
       outcome traces.
 - [ ] Keep the kernel generic as follow-up logic expands. Extend generic
@@ -421,24 +304,9 @@ section when draining old review notes into the sprint roadmap.
 
 These were removed or softened in the architecture docs because the current
 code does not fully implement them yet. They are real implementation candidates,
-not documentation promises. `SIM-F3` through `SIM-F6` are closed and moved to
+not documentation promises. `SIM-F3` through `SIM-F7` are closed and moved to
 DONE; only open candidates remain below.
 
-- [ ] **SIM-F7 - build a 3D operator Fish UI.** Add a dedicated Three.js/R3F UI
-      for launching, watching, and interrogating a fish swarm. The primary view
-      should be a full-bleed 3D murmuration: each fish is an instanced/pickable
-      particle or lightweight mesh; motion/position/color encode status,
-      divergence, cluster, confidence, and terminal action. The operator can
-      orbit/fly the camera, scrub time, filter by cluster/status, click a fish
-      to inspect its seed, perturbation, persona, timeline, memory snippets,
-      provider/model metadata, and terminal rationale, then ask follow-up
-      questions to one fish, a selected cluster, or the whole swarm. Persist
-      question/answer as review evidence without contaminating fish memory unless
-      explicitly promoted. Required backend surfaces: swarm list/status stream,
-      fish turn timeline, terminal clusters, per-fish trace export, and a
-      read-only Q&A endpoint for post-run interrogation. Required frontend
-      checks: desktop/mobile screenshots, nonblank canvas pixel check, picking
-      test, camera control test, and stable performance for at least 200 fish.
 - [ ] **SIM-F8 - convert Fish quick-wins into scoped product specs.** The
       `TO-REVIEW.md` quick-win list is valuable but too broad to implement as
       one lump. Split into specs for: maneuver cost estimator with Pareto front,
@@ -542,14 +410,6 @@ DONE; only open candidates remain below.
 
 ## Production-Grade Evaluation Protocol
 
-- [x] **EVAL-1 - closed 2026-04-27.** Real eval corpus locked at
-      `docs/evals/real-eval-manifest.json` (270 lines, 8 datasets covering ESA
-      Kelvins CDM gold data, CelesTrak SATCAT/GP/SOCRATES, NOAA SWPC,
-      ARC-AGI-2, Sapient Sudoku Extreme, Sapient Maze 30x30, Sapient HRM
-      reference code) and `data/evals/_manifest-lock.json` (sha256 + md5 per
-      asset, profile `full`). Driver: `scripts/acquire-real-evals.ts` plus
-      `evals:list` / `evals:fetch:smoke` / `evals:fetch:full` package scripts.
-      Move to DONE.md on next trim.
 - [ ] **EVAL-2 - build the paired eval runner.** Add one runner that executes
       agentic and baseline strategies on the same cases, same data snapshot,
       same seeds, and same budget caps. Output JSONL per call plus one
@@ -592,14 +452,6 @@ DONE; only open candidates remain below.
       minimum defensible benchmark, `$100` comfortable internal benchmark,
       and `$250+` paper-grade pass. Each tier must pin case counts, seeds,
       model choices, and max web-search usage.
-- [x] **EVAL-9 - closed 2026-04-27.** Multimodal honesty captured in
-      `docs/evals/evaluation-protocol.md` (lines 240-265) and
-      `docs/evals/drafts/cost-observability-protocol.md` (lines 130-174):
-      runtime is documented as text-first (kimi-k2-turbo-preview,
-      gpt-5.4-nano, gpt-5.4-mini, gpt-5-nano, MiniMax-M2.7, local Gemma,
-      voyage-4-lite/large) with an explicit "le multimodal n'est pas encore
-      un chemin runtime explicite dans ce repo" caveat. Re-open if a
-      multimodal adapter is added. Move to DONE.md on next trim.
 - [ ] **EVAL-10 - publish eval artifacts.** Protocol docs are committed
       (`docs/evals/README.md`, `evaluation-protocol.md`,
       `real-eval-manifest.json`, drafts) and `data/evals/` is correctly
@@ -671,10 +523,12 @@ DONE; only open candidates remain below.
 
 ## Operational Reminder
 
-Manual SQL migrations 0012 and 0013 are raw SQL functions and are not
-drizzle-generated. Apply with:
+Raw SQL functions/views are wired into the repo migration runner. Apply database
+migrations through the Drizzle path:
 
 ```sh
-psql "$DATABASE_URL" -f packages/db-schema/migrations/0012_orbital_analytics_fns.sql
-psql "$DATABASE_URL" -f packages/db-schema/migrations/0013_conjunction_knn_fn.sql
+DATABASE_URL=postgres://thalamus:thalamus@localhost:5433/thalamus pnpm tsx scripts/test-db-migrate.ts
 ```
+
+Do not apply individual migration files manually except while debugging one
+migration in isolation.

@@ -8,6 +8,24 @@ const TemporalSourceDomainSchema = z.enum([
   "mixed",
 ]);
 
+const TemporalReviewStatusSchema = z.enum([
+  "reviewable",
+  "accepted",
+  "rejected",
+  "deprecated",
+]);
+
+const TemporalReviewOutcomeSchema = z.enum([
+  "accepted",
+  "rejected",
+  "deprecated",
+  "needs_more_evidence",
+]);
+
+const positiveBigIntString = z.string().regex(/^[1-9]\d*$/, {
+  message: "must be a positive integer id",
+});
+
 const booleanLike = z.preprocess((value) => {
   if (value === undefined) return undefined;
   if (typeof value === "boolean") return value;
@@ -27,6 +45,25 @@ export const TemporalPatternQuerySchema = z.object({
 });
 
 export type TemporalPatternQuery = z.infer<typeof TemporalPatternQuerySchema>;
+
+export const TemporalPatternIdParamsSchema = z.object({
+  id: positiveBigIntString,
+});
+
+export const TemporalPatternReviewBodySchema = z
+  .object({
+    status: TemporalReviewStatusSchema,
+    reviewOutcome: TemporalReviewOutcomeSchema.optional(),
+    reviewerId: positiveBigIntString
+      .transform((value) => BigInt(value))
+      .optional(),
+    notes: z.string().trim().min(1).max(4000).optional(),
+  })
+  .strict();
+
+export type TemporalPatternReviewBody = z.infer<
+  typeof TemporalPatternReviewBodySchema
+>;
 
 const dateString = z
   .string()

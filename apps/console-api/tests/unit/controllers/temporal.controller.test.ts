@@ -52,7 +52,67 @@ describe("registerTemporalRoutes", () => {
 
     expect(res.statusCode).toBe(404);
     expect(services.memory.queryPatterns).not.toHaveBeenCalled();
+    expect(services.review.reviewPattern).not.toHaveBeenCalled();
     expect(services.shadow.runClosedWindow).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("reviews temporal patterns through the audit route", async () => {
+    const services = makeServices({
+      reviewResult: {
+        patternId: "123",
+        status: "accepted",
+        reviewId: "99",
+        reviewOutcome: "accepted",
+        hypothesis: true,
+        decisionAuthority: false,
+      },
+    });
+    const app = Fastify({ logger: false });
+    registerTemporalRoutes(app, services);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/temporal/patterns/123/review",
+      payload: {
+        status: "accepted",
+        reviewerId: "42",
+        notes: "negative evidence verified",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(services.review.reviewPattern).toHaveBeenCalledWith({
+      patternId: 123n,
+      status: "accepted",
+      reviewerId: 42n,
+      reviewOutcome: undefined,
+      notes: "negative evidence verified",
+    });
+    expect(res.json()).toEqual({
+      patternId: "123",
+      status: "accepted",
+      reviewId: "99",
+      reviewOutcome: "accepted",
+      hypothesis: true,
+      decisionAuthority: false,
+    });
+    await app.close();
+  });
+
+  it("returns 400 for malformed temporal review requests", async () => {
+    const services = makeServices();
+    const app = Fastify({ logger: false });
+    registerTemporalRoutes(app, services);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/temporal/patterns/not-an-id/review",
+      payload: { status: "accepted" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(services.review.reviewPattern).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -152,12 +212,18 @@ describe("registerTemporalRoutes", () => {
   });
 });
 
-function makeServices(input: { shadowResult?: unknown } = {}): Parameters<
+function makeServices(input: {
+  reviewResult?: unknown;
+  shadowResult?: unknown;
+} = {}): Parameters<
   typeof registerTemporalRoutes
 >[1] {
   return {
     memory: {
       queryPatterns: vi.fn().mockResolvedValue({ patterns: [], nextCursor: null }),
+    },
+    review: {
+      reviewPattern: vi.fn().mockResolvedValue(input.reviewResult ?? {}),
     },
     shadow: {
       runClosedWindow: vi.fn().mockResolvedValue(input.shadowResult ?? {}),

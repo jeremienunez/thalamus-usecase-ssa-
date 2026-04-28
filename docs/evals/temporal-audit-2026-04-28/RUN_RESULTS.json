@@ -1,0 +1,354 @@
+{
+  "auditDate": "2026-04-28",
+  "repoCommitObservedInRunMetadata": "e618afcc8d97a9154d30bbe631d63ae0bcdb0ace",
+  "dataset": {
+    "name": "esa-kelvins-collision-avoidance",
+    "sourceDescription": "zip:/tmp/kelvins_train_data.zip::train_data.csv",
+    "sourceArtifactHash": "ba47ce80580d5d6ff523ddc1d724901dbdfb3a5afdc5e755f0ca2bcefe6e4eb6",
+    "rowCount": 162634,
+    "eventIdCount": 13154
+  },
+  "protocol": {
+    "splitPolicy": "event_id_grouped_outcome_stratified_hash_no_row_leakage",
+    "splitSeed": "temporal-kelvins-v0.1.0",
+    "splitRatios": {
+      "train": 0.6,
+      "validation": 0.2,
+      "test": 0.2
+    },
+    "selectionPolicy": "validation_max_f1_score_threshold",
+    "popperCriteria": {
+      "minTestPrecision": 0.2,
+      "minTestF1": 0.2,
+      "minF1LiftOverBestBaseline": 0.02
+    },
+    "bootstrap": {
+      "metric": "f1_lift_over_best_baseline",
+      "iterations": 500,
+      "confidence": 0.95
+    },
+    "warnings": [
+      "minLeadTimeDays is 0; blind prediction excludes the final CDM but does not enforce a positive lead-time horizon"
+    ]
+  },
+  "runs": [
+    {
+      "name": "high_risk_default",
+      "targetOutcome": "high_risk",
+      "variant": "default",
+      "status": "falsified",
+      "inputHash": "bfe9774833b29f2320d2f9bcc10cbb523eca4c4151391c47cafac40feff73325",
+      "splitLock": {
+        "eventIdsHash": "c0b3bac1611b445c81322a2b782aff38cb72f7928205ec780bc4f089c5daad9e",
+        "trainEventIdsHash": "85f57c02e7a076e7156cec54c9e7fd02218df912708d33378c34c902afb6f403",
+        "validationEventIdsHash": "4b26efeee926b01776e92ac1ac3bf11fe31d91f8aba2556311da37eacda00028",
+        "testEventIdsHash": "c798fd5c60c3c77d098d4985eb1ed937545af72fc2ed5fbd4358a37647e6807f",
+        "targetOutcomesBySplit": {
+          "train": 219,
+          "validation": 73,
+          "test": 73
+        },
+        "nonTargetOutcomesBySplit": {
+          "train": 7673,
+          "validation": 2557,
+          "test": 2559
+        }
+      },
+      "thl": {
+        "precision": 0.144254,
+        "recall": 0.808219,
+        "f1": 0.244813,
+        "accuracy": 0.861702,
+        "selectedPatternCount": 3
+      },
+      "bestBaseline": {
+        "name": "frequency_single_event",
+        "precision": 0.181058,
+        "recall": 0.890411,
+        "f1": 0.300926,
+        "accuracy": 0.885258
+      },
+      "f1LiftOverBestBaseline": -0.056113,
+      "f1LiftBootstrap95CI": {
+        "lower95": -0.0786,
+        "upper95": -0.036012,
+        "mean": -0.056208
+      },
+      "selectedPatterns": [
+        {
+          "score": 0.060606,
+          "support": 6,
+          "negativeSupport": 93,
+          "lift": 2.184032,
+          "sequence": [
+            "kelvins.object_type_rocket_body|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.020958,
+          "support": 9,
+          "negativeSupport": 283,
+          "lift": 1.110715,
+          "sequence": [
+            "kelvins.mahalanobis_low|ssa_kelvins|cdm_projection|none",
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.object_type_debris|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.02036,
+          "support": 23,
+          "negativeSupport": 736,
+          "lift": 1.092016,
+          "sequence": [
+            "kelvins.risk_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.max_risk_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "high_risk_physics_only",
+      "targetOutcome": "high_risk",
+      "variant": "physics_only",
+      "status": "falsified",
+      "inputHash": "21bad48f4c0e1d62ee110d26d69f563c379197ff8a031add420ff1c5be67da84",
+      "splitLock": {
+        "eventIdsHash": "c0b3bac1611b445c81322a2b782aff38cb72f7928205ec780bc4f089c5daad9e",
+        "trainEventIdsHash": "85f57c02e7a076e7156cec54c9e7fd02218df912708d33378c34c902afb6f403",
+        "validationEventIdsHash": "4b26efeee926b01776e92ac1ac3bf11fe31d91f8aba2556311da37eacda00028",
+        "testEventIdsHash": "c798fd5c60c3c77d098d4985eb1ed937545af72fc2ed5fbd4358a37647e6807f",
+        "targetOutcomesBySplit": {
+          "train": 219,
+          "validation": 73,
+          "test": 73
+        },
+        "nonTargetOutcomesBySplit": {
+          "train": 7673,
+          "validation": 2557,
+          "test": 2559
+        }
+      },
+      "thl": {
+        "precision": 0.070064,
+        "recall": 0.150685,
+        "f1": 0.095652,
+        "accuracy": 0.920973,
+        "selectedPatternCount": 1
+      },
+      "bestBaseline": {
+        "name": "frequency_single_event",
+        "precision": 0.067039,
+        "recall": 0.328767,
+        "f1": 0.111369,
+        "accuracy": 0.854483
+      },
+      "f1LiftOverBestBaseline": -0.015717,
+      "f1LiftBootstrap95CI": {
+        "lower95": -0.071111,
+        "upper95": 0.032953,
+        "mean": -0.016971
+      },
+      "selectedPatterns": [
+        {
+          "score": 0.042095,
+          "support": 19,
+          "negativeSupport": 387,
+          "lift": 1.686439,
+          "sequence": [
+            "kelvins.mahalanobis_low|ssa_kelvins|cdm_projection|none",
+            "kelvins.relative_speed_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "risk_escalation_default",
+      "targetOutcome": "risk_escalation",
+      "variant": "default",
+      "status": "falsified",
+      "inputHash": "f065a0e36011f3293f4ab64d09f55a21320fb96552db8fec8ef089d8707b7175",
+      "splitLock": {
+        "eventIdsHash": "c0b3bac1611b445c81322a2b782aff38cb72f7928205ec780bc4f089c5daad9e",
+        "trainEventIdsHash": "60bf14ae2280bd39a2fa3450be0eeb38e92112df70b1ca42f2ac5cddaf9d6e8f",
+        "validationEventIdsHash": "931bcc77b02542a20c41b94c248643a43fc504f2a310340285ffcd564d0eaae5",
+        "testEventIdsHash": "5fefee3f0fb8b41397533827bc17f8537a2238c5d95561590b7d102b8e859739",
+        "targetOutcomesBySplit": {
+          "train": 455,
+          "validation": 151,
+          "test": 153
+        },
+        "nonTargetOutcomesBySplit": {
+          "train": 7437,
+          "validation": 2479,
+          "test": 2479
+        }
+      },
+      "thl": {
+        "precision": 0.084848,
+        "recall": 0.183007,
+        "f1": 0.115942,
+        "accuracy": 0.837766,
+        "selectedPatternCount": 6
+      },
+      "bestBaseline": {
+        "name": "risk_increase_rule",
+        "precision": 0.064244,
+        "recall": 0.647059,
+        "f1": 0.116883,
+        "accuracy": 0.431611
+      },
+      "f1LiftOverBestBaseline": -0.000941,
+      "f1LiftBootstrap95CI": {
+        "lower95": -0.043913,
+        "upper95": 0.039292,
+        "mean": -0.000972
+      },
+      "selectedPatterns": [
+        {
+          "score": 0.101111,
+          "support": 98,
+          "negativeSupport": 824,
+          "lift": 1.843618,
+          "sequence": [
+            "kelvins.object_type_payload|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.087764,
+          "support": 19,
+          "negativeSupport": 176,
+          "lift": 1.690031,
+          "sequence": [
+            "kelvins.relative_speed_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.object_type_payload|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.065544,
+          "support": 36,
+          "negativeSupport": 405,
+          "lift": 1.415923,
+          "sequence": [
+            "kelvins.max_risk_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.object_type_payload|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.065544,
+          "support": 36,
+          "negativeSupport": 405,
+          "lift": 1.415923,
+          "sequence": [
+            "kelvins.cdm_observed|ssa_kelvins|cdm_projection|none",
+            "kelvins.max_risk_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.object_type_payload|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.05883,
+          "support": 29,
+          "negativeSupport": 350,
+          "lift": 1.327194,
+          "sequence": [
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.object_type_payload|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.048675,
+          "support": 8,
+          "negativeSupport": 109,
+          "lift": 1.185987,
+          "sequence": [
+            "kelvins.target_covariance_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.object_type_debris|ssa_kelvins|cdm_projection|none"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "risk_escalation_physics_only",
+      "targetOutcome": "risk_escalation",
+      "variant": "physics_only",
+      "status": "falsified",
+      "inputHash": "bf14e29e93a283aede64027ed879bdf13794803c210c502bb59adb50f5404ae9",
+      "splitLock": {
+        "eventIdsHash": "c0b3bac1611b445c81322a2b782aff38cb72f7928205ec780bc4f089c5daad9e",
+        "trainEventIdsHash": "60bf14ae2280bd39a2fa3450be0eeb38e92112df70b1ca42f2ac5cddaf9d6e8f",
+        "validationEventIdsHash": "931bcc77b02542a20c41b94c248643a43fc504f2a310340285ffcd564d0eaae5",
+        "testEventIdsHash": "5fefee3f0fb8b41397533827bc17f8537a2238c5d95561590b7d102b8e859739",
+        "targetOutcomesBySplit": {
+          "train": 455,
+          "validation": 151,
+          "test": 153
+        },
+        "nonTargetOutcomesBySplit": {
+          "train": 7437,
+          "validation": 2479,
+          "test": 2479
+        }
+      },
+      "thl": {
+        "precision": 0.084906,
+        "recall": 0.117647,
+        "f1": 0.09863,
+        "accuracy": 0.875,
+        "selectedPatternCount": 3
+      },
+      "bestBaseline": {
+        "name": "frequency_single_event",
+        "precision": 0.059081,
+        "recall": 0.882353,
+        "f1": 0.110747,
+        "accuracy": 0.176292
+      },
+      "f1LiftOverBestBaseline": -0.012117,
+      "f1LiftBootstrap95CI": {
+        "lower95": -0.049768,
+        "upper95": 0.030845,
+        "mean": -0.013207
+      },
+      "selectedPatterns": [
+        {
+          "score": 0.040385,
+          "support": 25,
+          "negativeSupport": 383,
+          "lift": 1.06281,
+          "sequence": [
+            "kelvins.mahalanobis_low|ssa_kelvins|cdm_projection|none",
+            "kelvins.relative_speed_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.038766,
+          "support": 7,
+          "negativeSupport": 110,
+          "lift": 1.037738,
+          "sequence": [
+            "kelvins.relative_speed_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.target_covariance_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none"
+          ]
+        },
+        {
+          "score": 0.036792,
+          "support": 13,
+          "negativeSupport": 211,
+          "lift": 1.006633,
+          "sequence": [
+            "kelvins.target_covariance_high|ssa_kelvins|cdm_projection|none",
+            "kelvins.chaser_covariance_high|ssa_kelvins|cdm_projection|none"
+          ]
+        }
+      ]
+    }
+  ],
+  "overallConclusion": "All hardened runs are falsified. THL does not currently provide predictive value over simple baselines on Kelvins."
+}
+

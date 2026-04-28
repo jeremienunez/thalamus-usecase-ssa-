@@ -26,6 +26,9 @@
     "evals:list": "node --import tsx scripts/acquire-real-evals.ts --list",
     "evals:fetch:smoke": "node --import tsx scripts/acquire-real-evals.ts --download --profile smoke",
     "evals:fetch:full": "node --import tsx scripts/acquire-real-evals.ts --download --profile full",
+    "evals:prepare:temporal:ssa": "tsx --tsconfig tsconfig.base.json scripts/prepare-ssa-kelvins-temporal-dataset.ts",
+    "evals:temporal:ssa:blind": "tsx --tsconfig tsconfig.base.json scripts/run-ssa-kelvins-blind-temporal-experiment.ts",
+    "evals:temporal:ssa": "tsx --tsconfig tsconfig.base.json scripts/run-ssa-kelvins-temporal-eval.ts",
     "spec:check": "tsx scripts/spec-check.ts",
     "hooks:install": "git config core.hooksPath .githooks && echo '  ✓ git hooks installed (.githooks/)'",
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || echo '  (skipped hooks install — not a git repo yet)'"
