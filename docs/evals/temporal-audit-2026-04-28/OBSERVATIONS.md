@@ -4,6 +4,13 @@
 
 The current Temporal Hypothesis Layer implementation should not be promoted as predictive evidence on Kelvins.
 
+Product decision:
+
+- No-go for `THL predicts Kelvins outcomes`.
+- Go only for `THL mines reviewable temporal hypotheses / Fish branch seeds`.
+
+This is not a failure of the THL infrastructure. It is a falsification of the current predictive claim on this dataset and target.
+
 Across the hardened full `train_data.csv` runs:
 
 - All Popper verdicts are `falsified`.
@@ -16,6 +23,17 @@ The practical read:
 - THL can extract temporal patterns.
 - Those patterns are not strong enough on this dataset.
 - Kelvins appears better captured by simple instantaneous or single-event signals than by the current temporal episode scorer.
+- Many selected THL patterns look like combinations of already-strong features, not clear incremental temporal value.
+
+Missing critical metric:
+
+```text
+incremental_temporal_lift =
+  P(outcome | sequence)
+  - max(P(outcome | each individual event in sequence))
+```
+
+Without this metric, THL may simply re-express a frequent single-event baseline as a temporal sequence.
 
 ## Hardened Full Dataset Runs
 
@@ -215,4 +233,3 @@ Keep it as experimental infrastructure only if it helps:
 - seed Fish branches,
 - inspect trajectory motifs,
 - support future early-warning experiments.
-

@@ -23,6 +23,9 @@ The current empirical conclusion:
 - `RUN_RESULTS.json`: structured metrics from the hardened full dataset runs.
 - `SUBAGENT_FINDINGS.md`: review findings from the 4 xhigh agents and what was fixed.
 - `AUDIT_QUESTIONS.md`: questions for GPT-5.5 Pro audit.
+- `PRODUCT_DECISION.md`: final product decision and allowed/forbidden usages.
+- `EVALUATION_GUARDRAILS.md`: required next guardrails for temporal value claims.
+- `NEXT_EXPERIMENTS.md`: next experimental tracks after the no-go predictive verdict.
 - `COMMANDS.md`: commands run and verification status.
 
 ## Code Entry Points
@@ -55,3 +58,20 @@ Remaining caveats:
 - Prepare script writes artifacts non-atomically.
 - Results are not auto-persisted as raw JSON files by the CLI yet.
 
+## Product Decision
+
+No-go:
+
+- `THL predicts Kelvins outcomes`
+- THL as direct predictive evidence
+- THL as an agent decision signal
+- THL as KG evidence or promotion input
+
+Go, experimental only:
+
+- `THL mines reviewable temporal hypotheses`
+- THL as a Fish branch seed generator
+- THL as Sweep/human audit material
+- THL as a shadow-mode follow-up planner hint
+
+This is not a failure of the THL infrastructure. It is a falsification of the current predictive claim on this dataset and target.
