@@ -8,13 +8,17 @@ import type {
   FollowUpVerification,
   SsaReplFollowUpKind,
   SsaReplFollowUpDeps,
+  FollowUpTemporalPattern,
 } from "./repl-followup.types.ssa";
 
 export class SsaReplFollowUpPolicy {
   private readonly usedDeepResearchSignatures = new Set<string>();
 
   constructor(
-    private readonly deps: Pick<SsaReplFollowUpDeps, "edgeRepo" | "sim" | "sweep">,
+    private readonly deps: Pick<
+      SsaReplFollowUpDeps,
+      "edgeRepo" | "sim" | "sweep" | "temporalMemory"
+    >,
   ) {}
 
   async plan(input: {
@@ -33,6 +37,7 @@ export class SsaReplFollowUpPolicy {
       .map((f) => parseBigIntOrNull(f.id))
       .filter((id): id is bigint => id !== null);
     const edges = await this.deps.edgeRepo.findByFindingIds(ids);
+    const temporalPatterns = await this.loadAcceptedTemporalPatterns(verification);
     const deepResearchAlreadyUsed = this.usedDeepResearchSignatures.has(
       deepResearchSignature(input.query),
     );
@@ -45,7 +50,11 @@ export class SsaReplFollowUpPolicy {
           edges,
           input.findings,
         ),
-      ].map((candidate) => scoreCandidate(candidate, verification)),
+      ]
+        .map((candidate) => scoreCandidate(candidate, verification))
+        .map((candidate) =>
+          applyTemporalHypothesis(candidate, temporalPatterns),
+        ),
     )
       .filter(
         (candidate) =>
@@ -118,6 +127,18 @@ export class SsaReplFollowUpPolicy {
           this.deps.sweep?.nanoSweepService != null &&
           candidate.target?.entityType === "operator_country"
         );
+    }
+  }
+
+  private async loadAcceptedTemporalPatterns(
+    verification: FollowUpVerification,
+  ): Promise<FollowUpTemporalPattern[]> {
+    if (!verification.needsVerification || !this.deps.temporalMemory) return [];
+    try {
+      const result = await this.deps.temporalMemory.queryPatterns({ limit: 5 });
+      return result.patterns.filter(isAcceptedTemporalHypothesis);
+    } catch {
+      return [];
     }
   }
 }
@@ -425,6 +446,107 @@ function scoreCandidate(
     gateScore: roundScore(gateScore),
     autoEligible,
   };
+}
+
+function applyTemporalHypothesis(
+  candidate: FollowUpCandidate,
+  patterns: FollowUpTemporalPattern[],
+): FollowUpCandidate {
+  if (!isFishVerification(candidate.kind)) return candidate;
+  const pattern = bestTemporalPattern(patterns, candidate.kind);
+  if (!pattern || !candidate.target) return candidate;
+
+  const refs = {
+    ...(candidate.target.refs ?? {}),
+    seededByPatternId: pattern.patternId,
+    temporalPatternId: pattern.patternId,
+    temporalPatternHash: pattern.patternHash,
+  };
+  return {
+    ...candidate,
+    reasonCodes: addUnique(candidate.reasonCodes, "temporal_hypothesis"),
+    rationale: `${candidate.rationale} ${temporalRationale(pattern)}`,
+    target: {
+      ...candidate.target,
+      refs,
+    },
+  };
+}
+
+function isFishVerification(kind: SsaReplFollowUpKind): boolean {
+  return kind === "sim_pc_verification" || kind === "sim_telemetry_verification";
+}
+
+function bestTemporalPattern(
+  patterns: FollowUpTemporalPattern[],
+  kind: SsaReplFollowUpKind,
+): FollowUpTemporalPattern | null {
+  const ranked = patterns
+    .filter((pattern) => pattern.status === "accepted")
+    .filter((pattern) => pattern.hypothesis === true)
+    .filter((pattern) => pattern.decisionAuthority === false)
+    .map((pattern) => ({
+      pattern,
+      rank: temporalPatternRank(pattern, kind),
+    }))
+    .filter((row) => row.rank > 0)
+    .sort((left, right) => {
+      if (right.rank !== left.rank) return right.rank - left.rank;
+      return right.pattern.patternScore - left.pattern.patternScore;
+    });
+  return ranked[0]?.pattern ?? null;
+}
+
+function temporalPatternRank(
+  pattern: FollowUpTemporalPattern,
+  kind: SsaReplFollowUpKind,
+): number {
+  const haystack = [
+    pattern.terminalStatus,
+    ...pattern.sequence.map((step) => step.eventSignature),
+  ]
+    .join("\n")
+    .toLowerCase();
+  let rank = 1 + pattern.patternScore;
+  if (kind === "sim_pc_verification") {
+    if (haystack.includes("pc") || haystack.includes("relative_velocity")) {
+      rank += 1;
+    }
+  }
+  if (kind === "sim_telemetry_verification") {
+    if (haystack.includes("telemetry") || haystack.includes("data_gap")) {
+      rank += 1;
+    }
+  }
+  if (pattern.sourceDomain === "simulation_seeded") rank -= 1;
+  return rank;
+}
+
+function temporalRationale(pattern: FollowUpTemporalPattern): string {
+  const lift =
+    typeof pattern.lift === "number" && Number.isFinite(pattern.lift)
+      ? `, lift ${roundScore(pattern.lift)}`
+      : "";
+  return (
+    `Temporal hypothesis ${pattern.patternId} is accepted read-only evidence for ` +
+    `${pattern.terminalStatus} trajectories (score ${roundScore(pattern.patternScore)}, ` +
+    `support ${pattern.supportCount}, negative ${pattern.negativeSupportCount}${lift}); ` +
+    "it has no decision authority."
+  );
+}
+
+function isAcceptedTemporalHypothesis(
+  pattern: FollowUpTemporalPattern,
+): boolean {
+  return (
+    pattern.status === "accepted" &&
+    pattern.hypothesis === true &&
+    pattern.decisionAuthority === false
+  );
+}
+
+function addUnique(values: string[], value: string): string[] {
+  return values.includes(value) ? values : [...values, value];
 }
 
 function deduplicateCandidates(

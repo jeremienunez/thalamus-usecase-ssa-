@@ -1,4 +1,9 @@
 import type { ReplFollowUpPlanItem } from "@interview/shared";
+import type {
+  TemporalPatternMemoryDto,
+  TemporalPatternQueryDto,
+  TemporalPatternQueryResultDto,
+} from "@interview/shared/dto";
 import { ResearchCycleTrigger } from "@interview/shared";
 import type { EdgeRow } from "../../../types/finding.types";
 
@@ -55,6 +60,7 @@ export type ChildCycleResult = {
 };
 
 export type FollowUpEdgeRow = EdgeRow;
+export type FollowUpTemporalPattern = TemporalPatternMemoryDto;
 
 export interface SsaReplFollowUpDeps {
   thalamusService: {
@@ -88,10 +94,12 @@ export interface SsaReplFollowUpDeps {
       startTelemetry(opts: {
         satelliteId: number;
         fishCount?: number;
+        seededByPatternId?: string;
       }): Promise<{ swarmId: number; fishCount: number }>;
       startPc(opts: {
         conjunctionId: number;
         fishCount?: number;
+        seededByPatternId?: string;
       }): Promise<{ swarmId: number; fishCount: number; conjunctionId: number }>;
     };
     swarm: {
@@ -126,5 +134,10 @@ export interface SsaReplFollowUpDeps {
         },
       ): Promise<{ suggestionsStored: number; wallTimeMs: number }>;
     };
+  };
+  temporalMemory?: {
+    queryPatterns(
+      input?: TemporalPatternQueryDto,
+    ): Promise<TemporalPatternQueryResultDto>;
   };
 }

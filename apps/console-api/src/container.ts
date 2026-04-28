@@ -634,6 +634,7 @@ export async function buildContainer(
   const cycleStreamPump = new CycleStreamPump();
   const cycleSummariser = new CycleSummariser(llmFactory);
   const replBriefingAggregator = new ReplBriefingAggregator(llmFactory);
+  const temporal = buildTemporalRouteServices(db);
 
   const simGodChannelService = new SimGodChannelService(
     simRunRepo,
@@ -715,6 +716,7 @@ export async function buildContainer(
     sweep: {
       nanoSweepService: sweep.nanoSweepService,
     },
+    temporalMemory: temporal.memory,
   };
   const replFollowUpPolicy = new SsaReplFollowUpPolicy(replFollowUpDeps);
   const replFollowUpExecutor = new SsaReplFollowUpExecutor(
@@ -735,7 +737,6 @@ export async function buildContainer(
     replFollowUps,
     replBriefingAggregator,
   );
-  const temporal = buildTemporalRouteServices(db);
 
   // Satellite sweep chat — per-satellite LLM chat with SSE streaming + HITL
   // finding extraction. Consumes stubbed Viz/Satellite services + dedicated

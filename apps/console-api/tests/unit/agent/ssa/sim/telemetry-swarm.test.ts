@@ -195,4 +195,29 @@ describe("startTelemetrySwarm", () => {
     expect(arg.perturbations).toEqual([{ kind: "noop" }]);
     expect(arg.config.fishConcurrency).toBe(1);
   });
+
+  it("tags swarms seeded from temporal hypotheses in the base seed", async () => {
+    const satelliteRepo = mockSatelliteRepo({
+      id: 6,
+      name: "SeededSat",
+      operatorId: 12,
+      busName: "SSL-1300",
+    });
+    const { svc, launch } = mockSwarmService();
+
+    await startTelemetrySwarm(
+      { satelliteRepo, swarmService: svc },
+      {
+        satelliteId: 6,
+        fishCount: 1,
+        seededByPatternId: "123",
+      },
+    );
+
+    const arg = launch.mock.calls[0]![0];
+    expect(arg.baseSeed).toMatchObject({
+      telemetryTargetSatelliteId: 6,
+      seeded_by_pattern_id: "123",
+    });
+  });
 });

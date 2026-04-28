@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ReplStreamEvent } from "@interview/shared";
+import type { TemporalPatternMemoryDto } from "@interview/shared/dto";
 import { typedSpy } from "@interview/test-kit";
 import { ReplFollowUpService } from "../../../src/services/repl-followup.service";
 import { CycleStreamPump } from "../../../src/services/cycle-stream-pump.service";
@@ -31,7 +32,10 @@ function buildSummariser(
   return new CycleSummariser(llm);
 }
 
-function buildService(edges: EdgeRow[] = []) {
+function buildService(
+  edges: EdgeRow[] = [],
+  options: { temporalPatterns?: TemporalPatternMemoryDto[] } = {},
+) {
   const runCycle = typedSpy<SsaReplFollowUpDeps["thalamusService"]["runCycle"]>();
   runCycle.mockResolvedValue({ id: "cyc:child" });
   const findByCycleId = typedSpy<
@@ -82,6 +86,13 @@ function buildService(edges: EdgeRow[] = []) {
   });
   const sweep = typedSpy<SweepDeps["nanoSweepService"]["sweep"]>();
   sweep.mockResolvedValue({ suggestionsStored: 1, wallTimeMs: 5 });
+  const queryTemporalPatterns = typedSpy<
+    NonNullable<SsaReplFollowUpDeps["temporalMemory"]>["queryPatterns"]
+  >();
+  queryTemporalPatterns.mockResolvedValue({
+    patterns: options.temporalPatterns ?? [],
+    nextCursor: null,
+  });
 
   const deps: SsaReplFollowUpDeps = {
     thalamusService: {
@@ -113,6 +124,9 @@ function buildService(edges: EdgeRow[] = []) {
         sweep,
       },
     },
+    temporalMemory: {
+      queryPatterns: queryTemporalPatterns,
+    },
   };
 
   const service = new ReplFollowUpService(
@@ -137,6 +151,7 @@ function buildService(edges: EdgeRow[] = []) {
     findSwarmById,
     countFishByStatus,
     sweep,
+    queryTemporalPatterns,
   };
 }
 
@@ -390,6 +405,77 @@ describe("ReplFollowUpService.plan", () => {
       ]),
     );
   });
+
+  it("attaches accepted temporal hypotheses to Fish follow-ups as read-only seed evidence", async () => {
+    const acceptedPattern = temporalPattern({
+      patternId: "123",
+      patternHash: "pattern-hash-accepted",
+      terminalStatus: "timeout",
+      patternScore: 0.91,
+      supportCount: 8,
+      negativeSupportCount: 1,
+      sequence: [
+        {
+          stepIndex: 0,
+          eventSignature: "pc_estimate_below_algorithm|fish|none|none",
+          avgDeltaMs: 2000,
+          supportCount: 8,
+        },
+      ],
+    });
+    const reviewablePattern = temporalPattern({
+      patternId: "999",
+      patternHash: "pattern-hash-reviewable",
+      status: "reviewable",
+      patternScore: 0.99,
+    });
+    const { service, queryTemporalPatterns } = buildService([], {
+      temporalPatterns: [reviewablePattern, acceptedPattern],
+    });
+
+    const plan = await service.plan({
+      query: "Analyse une conjonction risquee",
+      parentCycleId: "422",
+      verification: {
+        needsVerification: true,
+        reasonCodes: ["needs_monitoring"],
+        confidence: 0.78,
+        targetHints: [
+          {
+            entityType: "conjunction_event",
+            entityId: "41",
+            sourceCortex: "strategist",
+            sourceTitle: "Pc drift",
+            confidence: 0.8,
+          },
+        ],
+      },
+      findings: [],
+    });
+
+    const pcItem = [...plan.autoLaunched, ...plan.proposed, ...plan.dropped].find(
+      (item) => item.kind === "sim_pc_verification",
+    );
+    expect(queryTemporalPatterns).toHaveBeenCalledWith({ limit: 5 });
+    expect(pcItem).toMatchObject({
+      kind: "sim_pc_verification",
+      reasonCodes: expect.arrayContaining([
+        "needs_monitoring",
+        "temporal_hypothesis",
+      ]),
+      target: expect.objectContaining({
+        refs: expect.objectContaining({
+          conjunctionId: "41",
+          seededByPatternId: "123",
+          temporalPatternId: "123",
+          temporalPatternHash: "pattern-hash-accepted",
+        }),
+      }),
+    });
+    expect(pcItem?.rationale).toContain("Temporal hypothesis 123");
+    expect(pcItem?.rationale).toContain("no decision authority");
+    expect(pcItem?.target?.refs?.seededByPatternId).not.toBe("999");
+  });
 });
 
 describe("ReplFollowUpService.executeSelected", () => {
@@ -521,4 +607,91 @@ describe("ReplFollowUpService.executeSelected", () => {
       },
     ]);
   });
+
+  it("passes temporal pattern seeds to Fish launchers without granting decision authority", async () => {
+    const { service, startTelemetry } = buildService();
+
+    const events: ReplStreamEvent[] = [];
+    for await (const event of service.executeSelected({
+      item: {
+        followupId: "fu-thl-telemetry",
+        kind: "sim_telemetry_verification",
+        auto: false,
+        title: "Verify telemetry gaps on satellite 27424",
+        rationale: "Temporal hypothesis 123 is read-only evidence.",
+        score: 0.75,
+        gateScore: 0.84,
+        costClass: "medium",
+        reasonCodes: ["data_gap", "temporal_hypothesis"],
+        target: {
+          entityType: "satellite",
+          entityId: "27424",
+          refs: {
+            satelliteId: "27424",
+            seededByPatternId: "123",
+          },
+        },
+      },
+      query: "Analyse les trous de telemetrie",
+      parentCycleId: "423",
+    })) {
+      events.push(event);
+    }
+
+    expect(startTelemetry).toHaveBeenCalledWith({
+      satelliteId: 27424,
+      fishCount: undefined,
+      seededByPatternId: "123",
+    });
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "followup.done",
+          data: expect.objectContaining({
+            followupId: "fu-thl-telemetry",
+            status: "completed",
+          }),
+        }),
+      ]),
+    );
+  });
 });
+
+function temporalPattern(
+  overrides: Partial<TemporalPatternMemoryDto> = {},
+): TemporalPatternMemoryDto {
+  return {
+    patternId: "1",
+    patternHash: "pattern-hash",
+    status: "accepted",
+    sourceDomain: "production",
+    terminalStatus: "timeout",
+    patternScore: 0.7,
+    supportCount: 5,
+    negativeSupportCount: 1,
+    baselineRate: 0.1,
+    lift: 2.4,
+    patternWindowMs: 900_000,
+    patternVersion: "temporal-v0.2.0",
+    sequence: [
+      {
+        stepIndex: 0,
+        eventSignature: "agent.timeout|agent|none|none",
+        avgDeltaMs: 1000,
+        supportCount: 5,
+      },
+    ],
+    examples: [],
+    counterexamples: [],
+    scoreComponents: {
+      temporalWeight: 0.8,
+      supportFactor: 0.9,
+      liftFactor: 0.7,
+      negativePenalty: 0.8,
+      stabilityFactor: 1,
+    },
+    hypothesis: true,
+    decisionAuthority: false,
+    ...overrides,
+  };
+}

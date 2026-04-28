@@ -34,6 +34,7 @@ export interface PcEstimatorSwarmOpts {
   fishCount?: number;
   config?: Partial<SwarmConfig>;
   createdBy?: number;
+  seededByPatternId?: string;
 }
 
 export interface PcSwarmConjunctionReadPort {
@@ -104,6 +105,9 @@ export async function startPcEstimatorSwarm(
       subjectIds: meta.primaryOperatorId != null ? [meta.primaryOperatorId] : [],
       subjectKind: "operator",
       pcEstimatorTarget: opts.conjunctionId,
+      ...(opts.seededByPatternId
+        ? { seeded_by_pattern_id: opts.seededByPatternId }
+        : {}),
     };
 
     const perturbations = buildPerturbations(fishCount);

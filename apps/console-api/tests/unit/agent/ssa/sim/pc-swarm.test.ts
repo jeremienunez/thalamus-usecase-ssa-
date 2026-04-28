@@ -106,6 +106,26 @@ describe("startPcEstimatorSwarm", () => {
     expect(arg.config.fishConcurrency).toBe(1);
   });
 
+  it("tags swarms seeded from temporal hypotheses in the base seed", async () => {
+    const conjunctionRepo = mockConjunction(makeConjunction());
+    const { swarmService, launchSwarm } = mockSwarmService();
+
+    await startPcEstimatorSwarm(
+      { conjunctionRepo, swarmService },
+      {
+        conjunctionId: 7,
+        fishCount: 1,
+        seededByPatternId: "123",
+      },
+    );
+
+    const arg = launchSwarm.mock.calls[0]![0];
+    expect(arg.baseSeed).toMatchObject({
+      pcEstimatorTarget: 7,
+      seeded_by_pattern_id: "123",
+    });
+  });
+
   it("throws when the conjunction is not found", async () => {
     const conjunctionRepo = mockConjunction(null);
     const { swarmService } = mockSwarmService();

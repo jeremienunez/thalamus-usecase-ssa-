@@ -32,6 +32,7 @@ export interface TelemetrySwarmOpts {
   priorJitter?: number;
   config?: Partial<SwarmConfig>;
   createdBy?: number;
+  seededByPatternId?: string;
 }
 
 type RiskProfile = "conservative" | "balanced" | "aggressive";
@@ -107,6 +108,9 @@ export async function startTelemetrySwarm(
       subjectKind: "operator",
       telemetryTargetSatelliteId: opts.satelliteId,
       busDatasheetPrior: priorLookup.prior ?? undefined,
+      ...(opts.seededByPatternId
+        ? { seeded_by_pattern_id: opts.seededByPatternId }
+        : {}),
     };
 
     const personas = pickPersonas(Math.max(0, fishCount - 1));

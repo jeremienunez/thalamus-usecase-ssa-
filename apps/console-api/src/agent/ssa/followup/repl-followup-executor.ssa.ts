@@ -196,7 +196,12 @@ export class SsaReplFollowUpExecutor {
       resolveTargetId: (target) =>
         Number(target?.refs?.conjunctionId ?? target?.entityId),
       launch: (launcher, targetId, fishCount) =>
-        launcher.startPc({ conjunctionId: targetId, fishCount }),
+        launcher.startPc({
+          conjunctionId: targetId,
+          fishCount,
+          seededByPatternId:
+            getTargetRef(item.target, "seededByPatternId") ?? undefined,
+        }),
     });
   }
 
@@ -211,7 +216,12 @@ export class SsaReplFollowUpExecutor {
       resolveTargetId: (target) =>
         Number(target?.refs?.satelliteId ?? target?.entityId),
       launch: (launcher, targetId, fishCount) =>
-        launcher.startTelemetry({ satelliteId: targetId, fishCount }),
+        launcher.startTelemetry({
+          satelliteId: targetId,
+          fishCount,
+          seededByPatternId:
+            getTargetRef(item.target, "seededByPatternId") ?? undefined,
+        }),
     });
   }
 
@@ -543,4 +553,12 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     };
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+function getTargetRef(
+  target: ReplFollowUpPlanItem["target"] | undefined,
+  key: string,
+): string | null {
+  const value = target?.refs?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
