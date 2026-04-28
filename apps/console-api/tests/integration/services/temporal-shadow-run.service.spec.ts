@@ -103,13 +103,13 @@ describe("TemporalShadowRunService integration", () => {
       SELECT status, terminal_status, support_count, negative_support_count
       FROM temporal_pattern_hypothesis
     `);
-    expect(patterns.rows).toEqual([
-      {
-        status: "reviewable",
-        terminal_status: "resolved",
-        support_count: 2,
-        negative_support_count: 0,
-      },
+      expect(patterns.rows).toEqual([
+        {
+          status: "candidate",
+          terminal_status: "resolved",
+          support_count: 2,
+          negative_support_count: 0,
+        },
     ]);
 
     const kgWrites = await harness.db.execute<{ c: number }>(sql`

@@ -11,6 +11,12 @@ export type TemporalSourceDomainDto =
   | "simulation_seeded"
   | "mixed";
 
+export type TemporalOrderQualityDto =
+  | "real_time_ordered"
+  | "turn_ordered"
+  | "same_timestamp_ordered"
+  | "synthetic_ordered";
+
 export interface TemporalPatternStepDto {
   stepIndex: number;
   eventSignature: string;
@@ -47,7 +53,17 @@ export interface TemporalPatternMemoryDto {
   supportCount: number;
   negativeSupportCount: number;
   baselineRate?: number | null;
+  patternRate?: number | null;
   lift?: number | null;
+  bestComponentSignature?: string | null;
+  bestComponentRate?: number | null;
+  sequenceLiftOverBestComponent?: number | null;
+  leadTimeMsAvg?: number | null;
+  leadTimeMsP50?: number | null;
+  leadTimeMsP95?: number | null;
+  temporalOrderQuality: TemporalOrderQualityDto;
+  containsTargetProxy: boolean;
+  containsSingletonOnly: boolean;
   patternWindowMs: number;
   patternVersion: string;
   sequence: TemporalPatternStepDto[];

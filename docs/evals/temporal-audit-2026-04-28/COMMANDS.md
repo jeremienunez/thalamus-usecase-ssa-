@@ -3,16 +3,26 @@
 ## Unit And Type Checks
 
 ```bash
-pnpm exec vitest run --project unit apps/console-api/tests/unit/agent/ssa/temporal/kelvins-temporal-eval.test.ts
+pnpm exec vitest run --project unit packages/temporal/tests/thl-dod-edge-cases.spec.ts apps/console-api/tests/unit/agent/ssa/temporal/kelvins-temporal-eval.test.ts
 ```
 
 Result:
 
-- 1 test file passed
-- 18 tests passed
+- 2 test files passed
+- 38 tests passed
 
 ```bash
-pnpm --filter @interview/console-api typecheck
+pnpm test:unit
+```
+
+Result:
+
+- 232 test files passed
+- 1489 tests passed
+- Node emitted a `MaxListenersExceededWarning` during Vitest, but the suite completed successfully.
+
+```bash
+pnpm run typecheck
 ```
 
 Result:
@@ -48,12 +58,14 @@ Result:
 - Passed
 - Help now exposes `--limit-events`
 
-## Hardened Full Dataset Runs
+## Episode Miner V2 / Hard Baseline Rerun
+
+These are the current reference commands. They use the big-memory script and emit progress/ETA telemetry to `stderr` while keeping JSON on `stdout`.
 
 ### high_risk default
 
 ```bash
-pnpm evals:temporal:ssa:blind -- \
+pnpm evals:temporal:ssa:blind:big -- \
   --zip /tmp/kelvins_train_data.zip \
   --inner train_data.csv \
   --high-risk-threshold -6 \
@@ -63,15 +75,15 @@ pnpm evals:temporal:ssa:blind -- \
 Result:
 
 - Verdict: `falsified`
-- THL F1: `0.244813`
-- Best baseline: `frequency_single_event`
-- Best baseline F1: `0.300926`
-- Bootstrap 95% CI: `[-0.0786, -0.036012]`
+- THL F1: `0.250896`
+- Best baseline: `timestamp_shuffled_thl`
+- Best baseline F1: `0.306954`
+- Bootstrap 95% CI: `[-0.107115, -0.00543]`
 
 ### high_risk physics_only
 
 ```bash
-pnpm evals:temporal:ssa:blind -- \
+pnpm evals:temporal:ssa:blind:big -- \
   --zip /tmp/kelvins_train_data.zip \
   --inner train_data.csv \
   --high-risk-threshold -6 \
@@ -82,15 +94,15 @@ pnpm evals:temporal:ssa:blind -- \
 Result:
 
 - Verdict: `falsified`
-- THL F1: `0.095652`
-- Best baseline: `frequency_single_event`
-- Best baseline F1: `0.111369`
-- Bootstrap 95% CI: `[-0.071111, 0.032953]`
+- THL F1: `0.177515`
+- Best baseline: `prefixspan_no_decay`
+- Best baseline F1: `0.192308`
+- Bootstrap 95% CI: `[-0.02577, -0.006056]`
 
 ### risk_escalation default
 
 ```bash
-pnpm evals:temporal:ssa:blind -- \
+pnpm evals:temporal:ssa:blind:big -- \
   --zip /tmp/kelvins_train_data.zip \
   --inner train_data.csv \
   --target-outcome risk_escalation \
@@ -102,15 +114,15 @@ pnpm evals:temporal:ssa:blind -- \
 Result:
 
 - Verdict: `falsified`
-- THL F1: `0.115942`
-- Best baseline: `risk_increase_rule`
-- Best baseline F1: `0.116883`
-- Bootstrap 95% CI: `[-0.043913, 0.039292]`
+- THL F1: `0.113761`
+- Best baseline: `timestamp_shuffled_thl`
+- Best baseline F1: `0.133117`
+- Bootstrap 95% CI: `[-0.040906, -0.002448]`
 
 ### risk_escalation physics_only
 
 ```bash
-pnpm evals:temporal:ssa:blind -- \
+pnpm evals:temporal:ssa:blind:big -- \
   --zip /tmp/kelvins_train_data.zip \
   --inner train_data.csv \
   --target-outcome risk_escalation \
@@ -123,12 +135,15 @@ pnpm evals:temporal:ssa:blind -- \
 Result:
 
 - Verdict: `falsified`
-- THL F1: `0.09863`
-- Best baseline: `frequency_single_event`
-- Best baseline F1: `0.110747`
-- Bootstrap 95% CI: `[-0.049768, 0.030845]`
+- THL F1: `0.105263`
+- Best baseline: `prefixspan_no_decay`
+- Best baseline F1: `0.118467`
+- Bootstrap 95% CI: `[-0.044876, 0.023293]`
+
+## Legacy Hardened Full Dataset Runs
+
+The original `pnpm evals:temporal:ssa:blind` runs are superseded by the `:big` V2 rerun above because the baseline set and telemetry changed.
 
 ## Known Environment Note
 
 Direct `pnpm exec tsx scripts/...` failed in sandbox because `tsx` attempted to create an IPC pipe under `/tmp`. Running through the package scripts with `tsx --tsconfig tsconfig.base.json` worked.
-

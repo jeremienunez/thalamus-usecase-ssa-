@@ -1,0 +1,154 @@
+{
+  "auditDate": "2026-04-28",
+  "repoCommitObservedInRunMetadata": "8b551e3af54217864ea7c6c95c9886a713380926",
+  "dataset": {
+    "name": "esa-kelvins-collision-avoidance",
+    "sourceDescription": "zip:/tmp/kelvins_train_data.zip::train_data.csv",
+    "sourceArtifactHash": "ba47ce80580d5d6ff523ddc1d724901dbdfb3a5afdc5e755f0ca2bcefe6e4eb6",
+    "rowCount": 162634,
+    "eventIdCount": 13154
+  },
+  "protocol": {
+    "splitPolicy": "event_id_grouped_outcome_stratified_hash_no_row_leakage",
+    "splitRatios": {
+      "train": 0.6,
+      "validation": 0.2,
+      "test": 0.2
+    },
+    "selectionPolicy": "validation_max_f1_score_threshold",
+    "popperCriteria": {
+      "minTestPrecision": 0.2,
+      "minTestF1": 0.2,
+      "minF1LiftOverBestBaseline": 0.02
+    },
+    "requiredHardBaselines": [
+      "majority_negative",
+      "risk_signal_rule",
+      "risk_increase_rule",
+      "covariance_rule",
+      "frequency_single_event",
+      "prefixspan_no_decay",
+      "timestamp_shuffled_thl"
+    ],
+    "bootstrap": {
+      "metric": "f1_lift_over_best_baseline",
+      "iterations": 500,
+      "confidence": 0.95,
+      "grouping": "event_id"
+    },
+    "warnings": [
+      "minLeadTimeDays is 0; blind prediction excludes the final CDM but does not enforce a positive lead-time horizon"
+    ]
+  },
+  "runs": [
+    {
+      "name": "high_risk_default",
+      "targetOutcome": "high_risk",
+      "variant": "default",
+      "status": "falsified",
+      "trainPatternCount": 898,
+      "selectedPatternCount": 50,
+      "thl": {
+        "precision": 0.169903,
+        "recall": 0.479452,
+        "f1": 0.250896
+      },
+      "bestBaseline": {
+        "name": "timestamp_shuffled_thl",
+        "precision": 0.186047,
+        "recall": 0.876712,
+        "f1": 0.306954
+      },
+      "f1LiftOverBestBaseline": -0.056058,
+      "f1LiftBootstrap95CI": {
+        "lower95": -0.107115,
+        "upper95": -0.00543
+      },
+      "interpretation": "Timestamp-shuffled THL beats real THL; default signal is dominated by co-presence/proxy structure rather than robust temporal order."
+    },
+    {
+      "name": "high_risk_physics_only",
+      "targetOutcome": "high_risk",
+      "variant": "physics_only",
+      "status": "falsified",
+      "trainPatternCount": 80,
+      "selectedPatternCount": 7,
+      "thl": {
+        "precision": 0.15625,
+        "recall": 0.205479,
+        "f1": 0.177515
+      },
+      "bestBaseline": {
+        "name": "prefixspan_no_decay",
+        "precision": 0.180723,
+        "recall": 0.205479,
+        "f1": 0.192308
+      },
+      "f1LiftOverBestBaseline": -0.014793,
+      "f1LiftBootstrap95CI": {
+        "lower95": -0.02577,
+        "upper95": -0.006056
+      },
+      "interpretation": "Clean physical-only patterns are plausible but the STDP-like decay scorer underperforms the no-decay episode baseline."
+    },
+    {
+      "name": "risk_escalation_default",
+      "targetOutcome": "risk_escalation",
+      "variant": "default",
+      "status": "falsified",
+      "trainPatternCount": 1190,
+      "selectedPatternCount": 36,
+      "thl": {
+        "precision": 0.079082,
+        "recall": 0.202614,
+        "f1": 0.113761
+      },
+      "bestBaseline": {
+        "name": "timestamp_shuffled_thl",
+        "precision": 0.088553,
+        "recall": 0.267974,
+        "f1": 0.133117
+      },
+      "f1LiftOverBestBaseline": -0.019356,
+      "f1LiftBootstrap95CI": {
+        "lower95": -0.040906,
+        "upper95": -0.002448
+      },
+      "interpretation": "Default risk-escalation patterns still lose to timestamp-shuffled THL, which weakens the claim that ordering adds predictive value."
+    },
+    {
+      "name": "risk_escalation_physics_only",
+      "targetOutcome": "risk_escalation",
+      "variant": "physics_only",
+      "status": "falsified",
+      "trainPatternCount": 124,
+      "selectedPatternCount": 18,
+      "thl": {
+        "precision": 0.095238,
+        "recall": 0.117647,
+        "f1": 0.105263
+      },
+      "bestBaseline": {
+        "name": "prefixspan_no_decay",
+        "precision": 0.08076,
+        "recall": 0.222222,
+        "f1": 0.118467
+      },
+      "f1LiftOverBestBaseline": -0.013204,
+      "f1LiftBootstrap95CI": {
+        "lower95": -0.044876,
+        "upper95": 0.023293
+      },
+      "interpretation": "The clean physical-only risk-escalation test remains below the no-decay episode baseline; precision improves but coverage is too low."
+    }
+  ],
+  "overallConclusion": {
+    "predictiveFeatureIntegration": "no",
+    "agentDecisionSignal": "no",
+    "kgEvidence": "no",
+    "reviewableHypothesisMining": "yes",
+    "fishBranchSeeding": "yes_experimental",
+    "followUpPlannerHint": "shadow_or_audit_only",
+    "summary": "The episode-miner V2 rerun reinforces the no-go product decision for direct Kelvins predictive evidence. THL remains useful as auditable hypothesis mining infrastructure only."
+  }
+}

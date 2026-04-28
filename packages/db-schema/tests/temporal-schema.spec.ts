@@ -56,6 +56,12 @@ describe("Temporal Hypothesis Layer schema contract", () => {
     expect(columns.scoreComponentsJson.notNull).toBe(true);
     expect(columns.supportCount.notNull).toBe(true);
     expect(columns.negativeSupportCount.notNull).toBe(true);
+    expect(columns.temporalOrderQuality.notNull).toBe(true);
+    expect(columns.containsTargetProxy.notNull).toBe(true);
+    expect(columns.containsSingletonOnly.notNull).toBe(true);
+    expect(columns.patternRate.notNull).toBe(false);
+    expect(columns.bestComponentSignature.notNull).toBe(false);
+    expect(columns.sequenceLiftOverBestComponent.notNull).toBe(false);
     expect(columns).not.toHaveProperty("researchFindingId");
     expect(columns).not.toHaveProperty("kgEntityId");
   });

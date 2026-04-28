@@ -20,7 +20,8 @@ The current empirical conclusion:
 ## Files
 
 - `OBSERVATIONS.md`: human-readable summary of all important observations.
-- `RUN_RESULTS.json`: structured metrics from the hardened full dataset runs.
+- `RUN_RESULTS_EPISODE_MINER_V2.json`: current structured metrics from the hard-baseline rerun.
+- `RUN_RESULTS.json`: legacy structured metrics from the earlier hardened full dataset runs.
 - `SUBAGENT_FINDINGS.md`: review findings from the 4 xhigh agents and what was fixed.
 - `AUDIT_QUESTIONS.md`: questions for GPT-5.5 Pro audit.
 - `PRODUCT_DECISION.md`: final product decision and allowed/forbidden usages.
@@ -48,6 +49,8 @@ Implemented hardening:
 - Blind runner checks precursor events for outcome leakage.
 - Prediction matching is bounded by `pattern_window_ms`.
 - Popper verdict includes deterministic bootstrap 95% CI for F1 lift over best baseline.
+- V2 hard controls include `prefixspan_no_decay` and `timestamp_shuffled_thl`.
+- Long eval phases now emit progress/ETA telemetry.
 
 Remaining caveats:
 

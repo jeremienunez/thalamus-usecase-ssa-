@@ -35,7 +35,60 @@ incremental_temporal_lift =
 
 Without this metric, THL may simply re-express a frequent single-event baseline as a temporal sequence.
 
-## Hardened Full Dataset Runs
+## Reference Rerun: Episode Miner V2 And Hard Baselines
+
+This rerun supersedes the earlier hardened metrics below. It adds the hard controls we wanted after the first audit:
+
+- `prefixspan_no_decay` as an order-only/no-decay episode baseline.
+- `timestamp_shuffled_thl` as a temporal-order falsification control.
+- selected pattern reporting with component lift, target proxy flags, lead-time stats and temporal order quality.
+- progress/ETA telemetry so the long phases are inspectable.
+- big-memory package script: `pnpm evals:temporal:ssa:blind:big`.
+
+Common setup:
+
+- Row count: `162634`
+- Event ID count: `13154`
+- Split policy: `event_id_grouped_outcome_stratified_hash_no_row_leakage`
+- Split ratios: train `0.6`, validation `0.2`, test `0.2`
+- Popper criteria:
+  - `minTestPrecision >= 0.2`
+  - `minTestF1 >= 0.2`
+  - `minF1LiftOverBestBaseline >= 0.02`
+- Bootstrap: deterministic, 500 iterations, 95% CI over F1 lift vs best baseline.
+
+### V2 result summary
+
+| Run | Verdict | THL F1 | Best baseline | Baseline F1 | F1 lift | Bootstrap 95% CI |
+|---|---:|---:|---|---:|---:|---|
+| `high_risk default` | `falsified` | `0.250896` | `timestamp_shuffled_thl` | `0.306954` | `-0.056058` | `[-0.107115, -0.00543]` |
+| `high_risk physics_only` | `falsified` | `0.177515` | `prefixspan_no_decay` | `0.192308` | `-0.014793` | `[-0.02577, -0.006056]` |
+| `risk_escalation default` | `falsified` | `0.113761` | `timestamp_shuffled_thl` | `0.133117` | `-0.019356` | `[-0.040906, -0.002448]` |
+| `risk_escalation physics_only` | `falsified` | `0.105263` | `prefixspan_no_decay` | `0.118467` | `-0.013204` | `[-0.044876, 0.023293]` |
+
+### V2 interpretation
+
+The no-go is stronger after the rerun.
+
+The default runs losing to `timestamp_shuffled_thl` is the most important signal. It means the current pipeline is not proving temporal-order value; it is likely mining co-presence, static context or target-proxy structure.
+
+The `physics_only` runs are cleaner, but both lose to `prefixspan_no_decay`. That means even when target proxies and object-type shortcuts are removed, the STDP-like decay scorer has not demonstrated value over a simpler episode baseline.
+
+This does not invalidate the THL infrastructure. It falsifies the product claim:
+
+```text
+THL predicts Kelvins outcomes.
+```
+
+The still-valid product framing is:
+
+```text
+THL mines reviewable trajectory hypotheses that may seed Fish branches.
+```
+
+Structured V2 metrics are in `RUN_RESULTS_EPISODE_MINER_V2.json`.
+
+## Legacy Hardened Full Dataset Runs
 
 Common setup:
 

@@ -118,12 +118,42 @@ function toCoreTemporalEvent(row: TemporalEventRow): CoreTemporalEvent {
     embedding_id: row.embeddingId ?? undefined,
     seeded_by_pattern_id: row.seededByPatternId ?? undefined,
     source_domain: row.sourceDomain,
+    order_index: numberMetadata(row.metadataJson, "order_index") ?? undefined,
+    temporal_order_quality:
+      temporalOrderQualityMetadata(row.metadataJson, "temporal_order_quality") ??
+      undefined,
     canonical_signature: row.canonicalSignature,
     source_table: row.sourceTable,
     source_pk: row.sourcePk,
     payload_hash: row.payloadHash,
     metadata: row.metadataJson,
   };
+}
+
+function numberMetadata(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+): number | null {
+  const value = metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function temporalOrderQualityMetadata(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+):
+  | CoreTemporalEvent["temporal_order_quality"]
+  | null {
+  const value = metadata?.[key];
+  if (
+    value === "real_time_ordered" ||
+    value === "turn_ordered" ||
+    value === "same_timestamp_ordered" ||
+    value === "synthetic_ordered"
+  ) {
+    return value;
+  }
+  return null;
 }
 
 type ClosedLearningInput = RunTemporalLearningInput & {

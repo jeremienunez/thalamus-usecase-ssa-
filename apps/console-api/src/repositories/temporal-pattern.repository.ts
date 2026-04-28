@@ -39,7 +39,18 @@ export class TemporalPatternRepository {
         supportCount: pattern.support_count,
         negativeSupportCount: pattern.negative_support_count,
         baselineRate: pattern.baseline_rate,
+        patternRate: pattern.pattern_rate,
         lift: pattern.lift,
+        bestComponentSignature: pattern.best_component_signature ?? null,
+        bestComponentRate: pattern.best_component_rate ?? null,
+        sequenceLiftOverBestComponent:
+          pattern.sequence_lift_over_best_component ?? null,
+        leadTimeMsAvg: pattern.lead_time_ms_avg ?? null,
+        leadTimeMsP50: pattern.lead_time_ms_p50 ?? null,
+        leadTimeMsP95: pattern.lead_time_ms_p95 ?? null,
+        temporalOrderQuality: pattern.temporal_order_quality,
+        containsTargetProxy: pattern.contains_target_proxy,
+        containsSingletonOnly: pattern.contains_singleton_only,
         scoreComponentsJson: pattern.score_components,
         createdFromLearningRunId: input.learningRunId,
       };

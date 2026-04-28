@@ -35,6 +35,12 @@ export type TemporalPatternExampleRole =
   | "negative"
   | "counterexample";
 
+export type TemporalOrderQuality =
+  | "real_time_ordered"
+  | "turn_ordered"
+  | "same_timestamp_ordered"
+  | "synthetic_ordered";
+
 export interface TemporalScoreComponents {
   temporal_weight: number;
   support_factor: number;
@@ -185,7 +191,22 @@ export const temporalPatternHypothesis = pgTable(
     supportCount: integer("support_count").notNull(),
     negativeSupportCount: integer("negative_support_count").notNull().default(0),
     baselineRate: real("baseline_rate"),
+    patternRate: real("pattern_rate"),
     lift: real("lift"),
+    bestComponentSignature: text("best_component_signature"),
+    bestComponentRate: real("best_component_rate"),
+    sequenceLiftOverBestComponent: real("sequence_lift_over_best_component"),
+    leadTimeMsAvg: integer("lead_time_ms_avg"),
+    leadTimeMsP50: integer("lead_time_ms_p50"),
+    leadTimeMsP95: integer("lead_time_ms_p95"),
+    temporalOrderQuality: text("temporal_order_quality")
+      .$type<TemporalOrderQuality>()
+      .notNull()
+      .default("real_time_ordered"),
+    containsTargetProxy: boolean("contains_target_proxy").notNull().default(false),
+    containsSingletonOnly: boolean("contains_singleton_only")
+      .notNull()
+      .default(false),
     scoreComponentsJson: jsonb("score_components_json")
       .$type<TemporalScoreComponents>()
       .notNull()

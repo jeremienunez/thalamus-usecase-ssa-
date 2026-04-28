@@ -42,38 +42,41 @@ For Kelvins specifically:
 
 ## Why This Is A No-Go For Predictive Evidence
 
-The strongest negative case is `high_risk default`:
+The strongest negative case in the current V2 rerun is `high_risk default`:
 
 ```text
-THL F1:            0.244813
-best baseline F1:  0.300926
-F1 lift:          -0.056113
-bootstrap 95% CI: [-0.0786, -0.036012]
+THL F1:            0.250896
+best baseline:      timestamp_shuffled_thl
+best baseline F1:  0.306954
+F1 lift:          -0.056058
+bootstrap 95% CI: [-0.107115, -0.00543]
 ```
 
-The interval is entirely negative. This is not merely "not good enough"; it is evidence that THL underperforms a simple single-event baseline for this claim.
+The interval is entirely negative, and the best baseline is the timestamp-shuffled THL control. This is not merely "not good enough"; it directly weakens the temporal-order claim.
 
 The clean conceptual case is `high_risk physics_only`:
 
 ```text
-THL F1:            0.095652
-best baseline F1:  0.111369
-F1 lift:          -0.015717
-bootstrap 95% CI: [-0.071111, 0.032953]
+THL F1:            0.177515
+best baseline:      prefixspan_no_decay
+best baseline F1:  0.192308
+F1 lift:          -0.014793
+bootstrap 95% CI: [-0.02577, -0.006056]
 ```
 
-The selected pattern is physically plausible, but not discriminative enough.
+The selected physical patterns are plausible, but the STDP-like decay scorer underperforms the simpler no-decay episode baseline.
 
 The closest case is `risk_escalation default`:
 
 ```text
-THL F1:            0.115942
-best baseline F1:  0.116883
-F1 lift:          -0.000941
-bootstrap 95% CI: [-0.043913, 0.039292]
+THL F1:            0.113761
+best baseline:      timestamp_shuffled_thl
+best baseline F1:  0.133117
+F1 lift:          -0.019356
+bootstrap 95% CI: [-0.040906, -0.002448]
 ```
 
-At best, the gain is not demonstrated.
+The gain is not demonstrated; the shuffled control wins again.
 
 ## Core Interpretation
 
@@ -110,4 +113,3 @@ Stronger requirement:
 ```text
 bootstrap CI lower bound for sequence_lift_over_best_component > 0
 ```
-

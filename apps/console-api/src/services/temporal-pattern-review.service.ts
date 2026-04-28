@@ -86,6 +86,29 @@ function assertAcceptable(target: TemporalPatternReviewTarget): void {
       "accepting mixed-domain temporal pattern requires source-domain breakdown",
     );
   }
+  if (target.hypothesis.containsSingletonOnly) {
+    throw HttpError.conflict(
+      "accepting temporal pattern requires a sequence length greater than one",
+    );
+  }
+  if (target.hypothesis.containsTargetProxy) {
+    throw HttpError.conflict(
+      "accepting temporal pattern requires target-proxy-free evidence",
+    );
+  }
+  if (
+    target.hypothesis.sequenceLiftOverBestComponent == null ||
+    target.hypothesis.sequenceLiftOverBestComponent <= 0
+  ) {
+    throw HttpError.conflict(
+      "accepting temporal pattern requires lift over its strongest component",
+    );
+  }
+  if (target.hypothesis.temporalOrderQuality === "synthetic_ordered") {
+    throw HttpError.conflict(
+      "accepting temporal pattern requires non-synthetic temporal order",
+    );
+  }
 }
 
 function defaultReviewOutcome(

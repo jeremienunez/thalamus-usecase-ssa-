@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
 import {
-  canonicalEventSignature,
   learnTemporalPatterns,
+  mineOrderedTemporalEpisodes,
+  preEventSignature,
   sortTemporalEventsStable,
+  startTemporalProgressPhase,
   type STDPParams,
   type TemporalEvent,
   type TemporalPatternHypothesis,
+  type TemporalProgressReporter,
   type TemporalSourceDomain,
 } from "@interview/temporal";
 
@@ -207,6 +210,7 @@ export interface KelvinsBlindTemporalExperimentOptions
   targetOutcome?: KelvinsTargetOutcome;
   maxCandidatePatterns?: number;
   experimentVariant?: KelvinsPopperExperimentVariant;
+  progress?: TemporalProgressReporter;
 }
 
 export interface KelvinsBlindTemporalPrediction {
@@ -239,7 +243,9 @@ export type KelvinsBaselineName =
   | "risk_signal_rule"
   | "risk_increase_rule"
   | "covariance_rule"
-  | "frequency_single_event";
+  | "frequency_single_event"
+  | "prefixspan_no_decay"
+  | "timestamp_shuffled_thl";
 
 export interface KelvinsBaselineReport {
   name: KelvinsBaselineName;
@@ -248,6 +254,8 @@ export interface KelvinsBaselineReport {
   testMetrics: KelvinsBlindTemporalMetrics;
   selectedScoreThreshold?: number;
   selectedEventSignatures?: string[];
+  selectedEpisodeSignatures?: string[][];
+  selectedPatternIds?: string[];
   validationPredictions: KelvinsBlindTemporalPrediction[];
   testPredictions: KelvinsBlindTemporalPrediction[];
 }
@@ -394,6 +402,8 @@ const REQUIRED_BASELINES: KelvinsBaselineName[] = [
   "risk_increase_rule",
   "covariance_rule",
   "frequency_single_event",
+  "prefixspan_no_decay",
+  "timestamp_shuffled_thl",
 ];
 
 export function runKelvinsTemporalEvaluation(
@@ -716,12 +726,19 @@ export function runKelvinsBlindTemporalExperiment(
   rows: KelvinsCdmRow[],
   options: KelvinsBlindTemporalExperimentOptions,
 ): KelvinsBlindTemporalExperimentReport {
+  const progress = options.progress;
   const targetOutcome = options.targetOutcome ?? "high_risk";
   const experimentVariant = options.experimentVariant ?? "default";
   const riskRemoved =
     experimentVariant === "risk_features_removed" ||
     experimentVariant === "physics_only";
   const physicsOnly = experimentVariant === "physics_only";
+  const prepareTracker = startTemporalProgressPhase({
+    phase: "kelvins.prepare_dataset",
+    reporter: progress,
+    total: rows.length,
+    message: "project Kelvins rows and build blind splits",
+  });
   const dataset = prepareKelvinsTemporalDataset(rows, {
     ...options,
     excludeRiskFeatureEvents: riskRemoved
@@ -735,17 +752,34 @@ export function runKelvinsBlindTemporalExperiment(
       : options.includeCdmObservedEvent,
     eventGapMs: options.eventGapMs ?? options.params.pattern_window_ms + DAY_MS,
   });
+  prepareTracker.complete({
+    rows: dataset.manifest.rowCount,
+    event_ids: dataset.manifest.eventIdCount,
+    temporal_events: dataset.manifest.temporalEventCount,
+  });
   assertBlindExperimentDataset({ dataset, targetOutcome });
+  const appendOutcomeTracker = startTemporalProgressPhase({
+    phase: "kelvins.append_train_outcomes",
+    reporter: progress,
+    total: dataset.outcomesBySplit.train.length,
+    message: "append hidden train outcomes for batch learning only",
+  });
   const trainEvents = appendKelvinsOutcomesForLearning({
     precursorEvents: dataset.precursorEventsBySplit.train,
     outcomes: dataset.outcomesBySplit.train,
     patternWindowMs: options.params.pattern_window_ms,
+  });
+  appendOutcomeTracker.complete({
+    train_events: trainEvents.length,
+    outcomes: dataset.outcomesBySplit.train.length,
   });
   const trainPatterns = learnTemporalPatterns({
     events: trainEvents,
     params: options.params,
     source_domain: options.sourceDomain ?? DEFAULT_PROJECTION_OPTIONS.sourceDomain,
     target_outcomes: [targetOutcome],
+    progress,
+    progress_phase_prefix: "kelvins.thl_train",
   });
   const maxCandidatePatterns = Math.max(
     1,
@@ -791,6 +825,8 @@ export function runKelvinsBlindTemporalExperiment(
   const baselineReports = buildKelvinsBaselineReports({
     dataset,
     targetOutcome,
+    params: options.params,
+    progress,
   });
   const popperManifest = buildKelvinsPopperManifest({
     targetOutcome,
@@ -930,7 +966,10 @@ export function projectKelvinsRowsToTemporalEvents(
             eventType,
             eventId,
             sourceDomain: opts.sourceDomain,
-            timestamp: timestamp + eventIndex,
+            timestamp,
+            orderIndex: eventIndex,
+            temporalOrderQuality:
+              rowEvents.length > 1 ? "same_timestamp_ordered" : "real_time_ordered",
             rowIndex,
             row,
           }),
@@ -1064,7 +1103,10 @@ function projectKelvinsPrecursorEventsForEvent(input: {
           eventType,
           eventId: input.eventId,
           sourceDomain: input.options.sourceDomain,
-          timestamp: timestamp + eventIndex,
+          timestamp,
+          orderIndex: eventIndex,
+          temporalOrderQuality:
+            rowEvents.length > 1 ? "same_timestamp_ordered" : "real_time_ordered",
           rowIndex: precursor.rowIndex,
           row: precursor.row,
         }),
@@ -1183,6 +1225,8 @@ function makeKelvinsTerminalEvent(input: {
 function buildKelvinsBaselineReports(input: {
   dataset: KelvinsTemporalDataset;
   targetOutcome: KelvinsTargetOutcome;
+  params: STDPParams;
+  progress?: TemporalProgressReporter;
 }): KelvinsBaselineReport[] {
   const targetLabel =
     input.targetOutcome === "risk_escalation" ? "risk-escalation" : "high-risk";
@@ -1226,6 +1270,8 @@ function buildKelvinsBaselineReports(input: {
         ),
     }),
     buildFrequencySingleEventBaselineReport(input),
+    buildPrefixspanNoDecayBaselineReport(input),
+    buildTimestampShuffledThlBaselineReport(input),
   ];
 }
 
@@ -1272,11 +1318,13 @@ function buildStaticBaselineReport(input: {
 function buildFrequencySingleEventBaselineReport(input: {
   dataset: KelvinsTemporalDataset;
   targetOutcome: KelvinsTargetOutcome;
+  progress?: TemporalProgressReporter;
 }): KelvinsBaselineReport {
   const candidates = learnFrequencySingleEventCandidates({
     events: input.dataset.precursorEventsBySplit.train,
     outcomes: input.dataset.outcomesBySplit.train,
     targetOutcome: input.targetOutcome,
+    progress: input.progress,
   });
   const threshold = chooseFrequencyBaselineThreshold({
     candidates,
@@ -1324,8 +1372,167 @@ function buildFrequencySingleEventBaselineReport(input: {
   };
 }
 
+function buildPrefixspanNoDecayBaselineReport(input: {
+  dataset: KelvinsTemporalDataset;
+  targetOutcome: KelvinsTargetOutcome;
+  params: STDPParams;
+  progress?: TemporalProgressReporter;
+}): KelvinsBaselineReport {
+  const candidates = learnNoDecayEpisodeCandidates({
+    events: input.dataset.precursorEventsBySplit.train,
+    outcomes: input.dataset.outcomesBySplit.train,
+    targetOutcome: input.targetOutcome,
+    params: input.params,
+    progress: input.progress,
+  });
+  const threshold = chooseEpisodeBaselineThreshold({
+    candidates,
+    events: input.dataset.precursorEventsBySplit.validation,
+    outcomes: input.dataset.outcomesBySplit.validation,
+    targetOutcome: input.targetOutcome,
+    params: input.params,
+    progress: input.progress,
+    phase: "kelvins.baseline.prefixspan_no_decay.select_threshold",
+  });
+  const selected =
+    threshold == null
+      ? []
+      : candidates.filter((candidate) => candidate.score >= threshold);
+  const selectedSequences = selected.map((candidate) => candidate.sequence);
+  const validationPredictions = predictKelvinsOutcomesWithEpisodeSequences({
+    split: "validation",
+    eventIds: input.dataset.splits.validation,
+    events: input.dataset.precursorEventsBySplit.validation,
+    targetOutcome: input.targetOutcome,
+    episodeSequences: selectedSequences,
+    params: input.params,
+  });
+  const testPredictions = predictKelvinsOutcomesWithEpisodeSequences({
+    split: "test",
+    eventIds: input.dataset.splits.test,
+    events: input.dataset.precursorEventsBySplit.test,
+    targetOutcome: input.targetOutcome,
+    episodeSequences: selectedSequences,
+    params: input.params,
+  });
+
+  return {
+    name: "prefixspan_no_decay",
+    description:
+      "Mine ordered frequent episodes on train without STDP-like decay, then select score threshold on validation.",
+    validationMetrics: evaluateKelvinsPredictions({
+      predictions: validationPredictions,
+      outcomes: input.dataset.outcomesBySplit.validation,
+      targetOutcome: input.targetOutcome,
+    }),
+    testMetrics: evaluateKelvinsPredictions({
+      predictions: testPredictions,
+      outcomes: input.dataset.outcomesBySplit.test,
+      targetOutcome: input.targetOutcome,
+    }),
+    selectedScoreThreshold: threshold ?? undefined,
+    selectedEpisodeSignatures: selectedSequences.slice(0, 25),
+    validationPredictions,
+    testPredictions,
+  };
+}
+
+function buildTimestampShuffledThlBaselineReport(input: {
+  dataset: KelvinsTemporalDataset;
+  targetOutcome: KelvinsTargetOutcome;
+  params: STDPParams;
+  progress?: TemporalProgressReporter;
+}): KelvinsBaselineReport {
+  const shuffleTracker = startTemporalProgressPhase({
+    phase: "kelvins.baseline.timestamp_shuffled_thl.shuffle_train",
+    reporter: input.progress,
+    total: input.dataset.precursorEventsBySplit.train.length,
+    message: "deterministically shuffle train precursor timestamps",
+  });
+  const shuffledTrainPrecursors = shuffleTemporalTimestampsByEntity({
+    events: input.dataset.precursorEventsBySplit.train,
+    seed: `kelvins-timestamp-shuffle:${input.targetOutcome}`,
+  });
+  shuffleTracker.complete({ events: shuffledTrainPrecursors.length });
+  const trainEvents = appendKelvinsOutcomesForLearning({
+    precursorEvents: shuffledTrainPrecursors,
+    outcomes: input.dataset.outcomesBySplit.train,
+    patternWindowMs: input.params.pattern_window_ms,
+  });
+  const candidateSourceDomain =
+    input.dataset.precursorEventsBySplit.train[0]?.source_domain;
+  const sourceDomain =
+    candidateSourceDomain == null || candidateSourceDomain === "mixed"
+      ? DEFAULT_PROJECTION_OPTIONS.sourceDomain
+      : candidateSourceDomain;
+  const candidatePatterns = learnTemporalPatterns({
+    events: trainEvents,
+    params: input.params,
+    source_domain: sourceDomain,
+    target_outcomes: [input.targetOutcome],
+    progress: input.progress,
+    progress_phase_prefix: "kelvins.baseline.timestamp_shuffled_thl",
+  })
+    .filter((pattern) => !pattern.contains_singleton_only)
+    .slice(0, 50);
+  const threshold = chooseValidationScoreThreshold({
+    patterns: candidatePatterns,
+    events: input.dataset.precursorEventsBySplit.validation,
+    outcomes: input.dataset.outcomesBySplit.validation,
+    targetOutcome: input.targetOutcome,
+  });
+  const selectedPatterns =
+    threshold == null
+      ? []
+      : candidatePatterns.filter((pattern) => pattern.pattern_score >= threshold);
+  const validationPredictions = predictKelvinsOutcomesFromPatterns({
+    split: "validation",
+    eventIds: input.dataset.splits.validation,
+    events: input.dataset.precursorEventsBySplit.validation,
+    patterns: selectedPatterns,
+    targetOutcome: input.targetOutcome,
+  });
+  const testPredictions = predictKelvinsOutcomesFromPatterns({
+    split: "test",
+    eventIds: input.dataset.splits.test,
+    events: input.dataset.precursorEventsBySplit.test,
+    patterns: selectedPatterns,
+    targetOutcome: input.targetOutcome,
+  });
+
+  return {
+    name: "timestamp_shuffled_thl",
+    description:
+      "Train THL after deterministic timestamp shuffling; this is a temporal-control baseline, not product evidence.",
+    validationMetrics: evaluateKelvinsPredictions({
+      predictions: validationPredictions,
+      outcomes: input.dataset.outcomesBySplit.validation,
+      targetOutcome: input.targetOutcome,
+    }),
+    testMetrics: evaluateKelvinsPredictions({
+      predictions: testPredictions,
+      outcomes: input.dataset.outcomesBySplit.test,
+      targetOutcome: input.targetOutcome,
+    }),
+    selectedScoreThreshold: threshold ?? undefined,
+    selectedPatternIds: selectedPatterns.map((pattern) => pattern.pattern_id).slice(0, 25),
+    validationPredictions,
+    testPredictions,
+  };
+}
+
 interface FrequencySingleEventCandidate {
   eventSignature: string;
+  score: number;
+  supportCount: number;
+  negativeSupportCount: number;
+  precision: number;
+  lift: number;
+}
+
+interface NoDecayEpisodeCandidate {
+  key: string;
+  sequence: string[];
   score: number;
   supportCount: number;
   negativeSupportCount: number;
@@ -1337,14 +1544,21 @@ function learnFrequencySingleEventCandidates(input: {
   events: TemporalEvent[];
   outcomes: KelvinsTemporalOutcome[];
   targetOutcome: KelvinsTargetOutcome;
+  progress?: TemporalProgressReporter;
 }): FrequencySingleEventCandidate[] {
   const signaturesByEventId = eventSignatureSetsByEntity(input.events);
   const baselineRate =
     input.outcomes.filter((outcome) => outcome.terminalStatus === input.targetOutcome).length /
     Math.max(1, input.outcomes.length);
   const counts = new Map<string, { positive: number; negative: number }>();
+  const tracker = startTemporalProgressPhase({
+    phase: "kelvins.baseline.frequency_single_event.learn",
+    reporter: input.progress,
+    total: input.outcomes.length,
+    message: "learn single-event frequency baseline candidates",
+  });
 
-  for (const outcome of input.outcomes) {
+  input.outcomes.forEach((outcome, outcomeIndex) => {
     const signatures = signaturesByEventId.get(outcome.eventId) ?? new Set<string>();
     for (const signature of signatures) {
       const count = counts.get(signature) ?? { positive: 0, negative: 0 };
@@ -1355,7 +1569,9 @@ function learnFrequencySingleEventCandidates(input: {
       }
       counts.set(signature, count);
     }
-  }
+    tracker.progress(outcomeIndex + 1, { candidates: counts.size });
+  });
+  tracker.complete({ candidates: counts.size });
 
   return [...counts.entries()]
     .map(([eventSignature, count]) => {
@@ -1377,6 +1593,76 @@ function learnFrequencySingleEventCandidates(input: {
         right.score - left.score ||
         right.supportCount - left.supportCount ||
         left.eventSignature.localeCompare(right.eventSignature),
+    );
+}
+
+function learnNoDecayEpisodeCandidates(input: {
+  events: TemporalEvent[];
+  outcomes: KelvinsTemporalOutcome[];
+  targetOutcome: KelvinsTargetOutcome;
+  params: STDPParams;
+  progress?: TemporalProgressReporter;
+}): NoDecayEpisodeCandidate[] {
+  const eventsByEntity = groupTemporalEventsByEntityId(input.events);
+  const baselineRate =
+    input.outcomes.filter((outcome) => outcome.terminalStatus === input.targetOutcome).length /
+    Math.max(1, input.outcomes.length);
+  const counts = new Map<string, { sequence: string[]; positive: number; negative: number }>();
+  const tracker = startTemporalProgressPhase({
+    phase: "kelvins.baseline.prefixspan_no_decay.mine_train",
+    reporter: input.progress,
+    total: input.outcomes.length,
+    message: "mine ordered no-decay episode baseline candidates",
+  });
+
+  input.outcomes.forEach((outcome, outcomeIndex) => {
+    const eventEpisodes = mineOrderedTemporalEpisodes(
+      eventsByEntity.get(outcome.eventId) ?? [],
+      {
+        max_steps: input.params.max_steps,
+        max_span_ms: input.params.max_span_ms ?? input.params.pattern_window_ms,
+        max_gap_ms: input.params.max_gap_ms,
+        max_candidates_per_window: input.params.max_candidates_per_window,
+      },
+    ).filter((episode) => episode.sequence.length >= 2);
+    for (const episode of eventEpisodes) {
+      const count = counts.get(episode.key) ?? {
+        sequence: episode.sequence,
+        positive: 0,
+        negative: 0,
+      };
+      if (outcome.terminalStatus === input.targetOutcome) {
+        count.positive += 1;
+      } else {
+        count.negative += 1;
+      }
+      counts.set(episode.key, count);
+    }
+    tracker.progress(outcomeIndex + 1, { candidates: counts.size });
+  });
+  tracker.complete({ candidates: counts.size });
+
+  return [...counts.values()]
+    .map((count) => {
+      const precision = count.positive / Math.max(1, count.positive + count.negative);
+      const lift = precision / Math.max(0.000001, baselineRate);
+      const supportFactor = Math.min(1, count.positive / input.params.min_support);
+      return {
+        key: count.sequence.join("\u001f"),
+        sequence: count.sequence,
+        score: round(precision * Math.log1p(lift) * supportFactor),
+        supportCount: count.positive,
+        negativeSupportCount: count.negative,
+        precision: round(precision),
+        lift: round(lift),
+      };
+    })
+    .filter((candidate) => candidate.supportCount > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        right.supportCount - left.supportCount ||
+        left.sequence.join("\u001f").localeCompare(right.sequence.join("\u001f")),
     );
 }
 
@@ -1419,6 +1705,74 @@ function chooseFrequencyBaselineThreshold(input: {
       best = { threshold, metrics };
     }
   }
+
+  return best?.threshold ?? null;
+}
+
+function chooseEpisodeBaselineThreshold(input: {
+  candidates: NoDecayEpisodeCandidate[];
+  events: TemporalEvent[];
+  outcomes: KelvinsTemporalOutcome[];
+  targetOutcome: KelvinsTargetOutcome;
+  params: STDPParams;
+  progress?: TemporalProgressReporter;
+  phase: string;
+}): number | null {
+  const thresholds = [...new Set(input.candidates.map((candidate) => candidate.score))]
+    .sort((left, right) => right - left);
+  if (thresholds.length === 0) return null;
+  let best:
+    | { threshold: number; metrics: KelvinsBlindTemporalMetrics }
+    | null = null;
+  const eventIds = input.outcomes.map((outcome) => outcome.eventId);
+  const episodeEventIdsByKey = episodeEventIdsByKeyForSplit({
+    eventIds,
+    events: input.events,
+    params: input.params,
+    progress: input.progress,
+    phase: `${input.phase}.index_validation`,
+  });
+  const candidatesByScore = new Map<number, NoDecayEpisodeCandidate[]>();
+  for (const candidate of input.candidates) {
+    const scoreCandidates = candidatesByScore.get(candidate.score) ?? [];
+    scoreCandidates.push(candidate);
+    candidatesByScore.set(candidate.score, scoreCandidates);
+  }
+  const predictedPositiveEventIds = new Set<string>();
+  const tracker = startTemporalProgressPhase({
+    phase: input.phase,
+    reporter: input.progress,
+    total: thresholds.length,
+    message: "select no-decay episode threshold on validation",
+  });
+
+  thresholds.forEach((threshold, thresholdIndex) => {
+    for (const candidate of candidatesByScore.get(threshold) ?? []) {
+      for (const eventId of episodeEventIdsByKey.get(candidate.key) ?? []) {
+        predictedPositiveEventIds.add(eventId);
+      }
+    }
+    const metrics = evaluateKelvinsPredictedEventSet({
+      predictedPositiveEventIds,
+      outcomes: input.outcomes,
+      targetOutcome: input.targetOutcome,
+    });
+    if (
+      best == null ||
+      metrics.f1 > best.metrics.f1 ||
+      (metrics.f1 === best.metrics.f1 && metrics.precision > best.metrics.precision) ||
+      (metrics.f1 === best.metrics.f1 &&
+        metrics.precision === best.metrics.precision &&
+        threshold > best.threshold)
+    ) {
+      best = { threshold, metrics };
+    }
+    tracker.progress(thresholdIndex + 1, {
+      predicted_positive_events: predictedPositiveEventIds.size,
+      best_f1: best?.metrics.f1 ?? 0,
+    });
+  });
+  tracker.complete({ best_f1: best?.metrics.f1 ?? 0 });
 
   return best?.threshold ?? null;
 }
@@ -1475,6 +1829,146 @@ function predictKelvinsOutcomesWithSignatures(input: {
       };
     },
   );
+}
+
+function predictKelvinsOutcomesWithEpisodeSequences(input: {
+  split: "validation" | "test";
+  eventIds: string[];
+  events: TemporalEvent[];
+  targetOutcome: KelvinsTargetOutcome;
+  episodeSequences: string[][];
+  params: STDPParams;
+}): KelvinsBlindTemporalPrediction[] {
+  const selectedKeys = new Set(
+    input.episodeSequences.map((sequence) => sequence.join("\u001f")),
+  );
+  const episodeKeysByEventId = episodeKeySetsByEventIdForSplit({
+    eventIds: input.eventIds,
+    events: input.events,
+    params: input.params,
+  });
+  return [...input.eventIds].sort((left, right) => left.localeCompare(right)).map(
+    (eventId) => {
+      const eventKeys = episodeKeysByEventId.get(eventId) ?? new Set<string>();
+      const matchedKeys = [...selectedKeys].filter((key) => eventKeys.has(key));
+      return {
+        eventId,
+        split: input.split,
+        targetOutcome: input.targetOutcome,
+        predictedPositive: matchedKeys.length > 0,
+        matchedPatternIds: matchedKeys.map((key) => `episode:${stableHash(key)}`),
+        maxPatternScore: 0,
+        matchedPatternCount: matchedKeys.length,
+        outcomeHiddenDuringPrediction: true,
+      };
+    },
+  );
+}
+
+function episodeEventIdsByKeyForSplit(input: {
+  eventIds: string[];
+  events: TemporalEvent[];
+  params: STDPParams;
+  progress?: TemporalProgressReporter;
+  phase: string;
+}): Map<string, Set<string>> {
+  const episodeKeysByEventId = episodeKeySetsByEventIdForSplit(input);
+  const eventIdsByKey = new Map<string, Set<string>>();
+  for (const [eventId, episodeKeys] of episodeKeysByEventId) {
+    for (const episodeKey of episodeKeys) {
+      const eventIds = eventIdsByKey.get(episodeKey) ?? new Set<string>();
+      eventIds.add(eventId);
+      eventIdsByKey.set(episodeKey, eventIds);
+    }
+  }
+  return eventIdsByKey;
+}
+
+function episodeKeySetsByEventIdForSplit(input: {
+  eventIds: string[];
+  events: TemporalEvent[];
+  params: STDPParams;
+  progress?: TemporalProgressReporter;
+  phase?: string;
+}): Map<string, Set<string>> {
+  const groupedEvents = groupTemporalEventsByEntityId(input.events);
+  const sortedEventIds = [...input.eventIds].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  const tracker = startTemporalProgressPhase({
+    phase: input.phase ?? "kelvins.episode_index",
+    reporter: input.progress,
+    total: sortedEventIds.length,
+    message: "index mined episode keys by event_id",
+  });
+  const episodeKeysByEventId = new Map<string, Set<string>>();
+
+  sortedEventIds.forEach((eventId, index) => {
+    const episodes = mineOrderedTemporalEpisodes(
+      groupedEvents.get(eventId) ?? [],
+      {
+        max_steps: input.params.max_steps,
+        max_span_ms: input.params.max_span_ms ?? input.params.pattern_window_ms,
+        max_gap_ms: input.params.max_gap_ms,
+        max_candidates_per_window: input.params.max_candidates_per_window,
+      },
+    ).filter((episode) => episode.sequence.length >= 2);
+    episodeKeysByEventId.set(
+      eventId,
+      new Set(episodes.map((episode) => episode.key)),
+    );
+    tracker.progress(index + 1, {
+      indexed_events: index + 1,
+      last_episode_count: episodes.length,
+    });
+  });
+  tracker.complete({ indexed_events: sortedEventIds.length });
+
+  return episodeKeysByEventId;
+}
+
+function shuffleTemporalTimestampsByEntity(input: {
+  events: TemporalEvent[];
+  seed: string;
+}): TemporalEvent[] {
+  const groupedEvents = groupTemporalEventsByEntityId(input.events);
+  const shuffled: TemporalEvent[] = [];
+
+  for (const [entityId, events] of [...groupedEvents.entries()].sort((left, right) =>
+    left[0].localeCompare(right[0]),
+  )) {
+    const ordered = sortTemporalEventsStable(events);
+    const timestamps = deterministicShuffle(
+      ordered.map((event) => event.timestamp),
+      `${input.seed}:${entityId}`,
+    );
+    ordered.forEach((event, index) => {
+      shuffled.push({
+        ...event,
+        timestamp: timestamps[index]!,
+        temporal_order_quality: "synthetic_ordered",
+        metadata: {
+          ...event.metadata,
+          temporal_order_quality: "synthetic_ordered",
+          timestamp_shuffle_seed: input.seed,
+        },
+      });
+    });
+  }
+
+  return sortTemporalEventsStable(shuffled);
+}
+
+function deterministicShuffle(values: number[], seed: string): number[] {
+  const shuffled = [...values];
+  const random = seededRandom(seed);
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    const current = shuffled[index]!;
+    shuffled[index] = shuffled[swapIndex]!;
+    shuffled[swapIndex] = current;
+  }
+  return shuffled;
 }
 
 function buildKelvinsPopperManifest(input: {
@@ -1709,6 +2203,27 @@ function evaluateKelvinsPredictions(input: {
   };
 }
 
+function evaluateKelvinsPredictedEventSet(input: {
+  predictedPositiveEventIds: ReadonlySet<string>;
+  outcomes: KelvinsTemporalOutcome[];
+  targetOutcome: KelvinsTargetOutcome;
+}): KelvinsBlindTemporalMetrics {
+  return evaluateKelvinsPredictions({
+    predictions: input.outcomes.map((outcome) => ({
+      eventId: outcome.eventId,
+      split: outcome.split === "test" ? "test" : "validation",
+      targetOutcome: input.targetOutcome,
+      predictedPositive: input.predictedPositiveEventIds.has(outcome.eventId),
+      matchedPatternIds: [] as string[],
+      maxPatternScore: 0,
+      matchedPatternCount: input.predictedPositiveEventIds.has(outcome.eventId) ? 1 : 0,
+      outcomeHiddenDuringPrediction: true,
+    })),
+    outcomes: input.outcomes,
+    targetOutcome: input.targetOutcome,
+  });
+}
+
 function bootstrapF1LiftOverBaseline(input: {
   outcomes: KelvinsTemporalOutcome[];
   targetOutcome: KelvinsTargetOutcome;
@@ -1898,7 +2413,7 @@ function eventSignatureSetsByEntity(
   for (const event of events) {
     if (!event.entity_id || event.terminal_status != null) continue;
     const group = groups.get(event.entity_id) ?? new Set<string>();
-    group.add(canonicalEventSignature(event));
+    group.add(preEventSignature(event));
     groups.set(event.entity_id, group);
   }
   return groups;
@@ -1907,7 +2422,8 @@ function eventSignatureSetsByEntity(
 function containsOrderedEpisodeWithinWindow(
   events: TemporalEvent[],
   sequence: string[],
-  patternWindowMs: number,
+  maxSpanMs: number,
+  maxGapMs?: number,
 ): boolean {
   if (sequence.length === 0) return false;
   const sortedEvents = sortTemporalEventsStable(events).filter(
@@ -1915,26 +2431,31 @@ function containsOrderedEpisodeWithinWindow(
   );
 
   for (let startIndex = 0; startIndex < sortedEvents.length; startIndex += 1) {
-    if (canonicalEventSignature(sortedEvents[startIndex]!) !== sequence[0]) {
+    if (preEventSignature(sortedEvents[startIndex]!) !== sequence[0]) {
       continue;
     }
     let sequenceIndex = 1;
     const startTimestamp = sortedEvents[startIndex]!.timestamp;
     let endTimestamp = startTimestamp;
+    let previousMatchedTimestamp = startTimestamp;
     for (
       let eventIndex = startIndex + 1;
       eventIndex < sortedEvents.length && sequenceIndex < sequence.length;
       eventIndex += 1
     ) {
       const event = sortedEvents[eventIndex]!;
-      if (event.timestamp - startTimestamp > patternWindowMs) break;
-      if (canonicalEventSignature(event) !== sequence[sequenceIndex]) continue;
+      if (event.timestamp - startTimestamp > maxSpanMs) break;
+      if (preEventSignature(event) !== sequence[sequenceIndex]) continue;
+      if (maxGapMs != null && event.timestamp - previousMatchedTimestamp > maxGapMs) {
+        break;
+      }
       sequenceIndex += 1;
       endTimestamp = event.timestamp;
+      previousMatchedTimestamp = event.timestamp;
     }
     if (
       sequenceIndex === sequence.length &&
-      endTimestamp - startTimestamp <= patternWindowMs
+      endTimestamp - startTimestamp <= maxSpanMs
     ) {
       return true;
     }
@@ -2032,7 +2553,7 @@ function buildFrequencyBaseline(input: {
             event.timestamp >= outcome.timestamp - input.patternWindowMs &&
             event.timestamp < outcome.timestamp,
         )
-        .map(canonicalEventSignature),
+        .map(preEventSignature),
     );
     for (const signature of signatures) {
       const accumulator =
@@ -2077,6 +2598,8 @@ function makeTemporalEvent(input: {
   eventId: string;
   sourceDomain: Exclude<TemporalSourceDomain, "mixed">;
   timestamp: number;
+  orderIndex?: number;
+  temporalOrderQuality?: TemporalEvent["temporal_order_quality"];
   rowIndex: number;
   row: KelvinsCdmRow;
   terminalStatus?: string;
@@ -2091,9 +2614,11 @@ function makeTemporalEvent(input: {
       : "ssa_kelvins",
     entity_id: input.eventId,
     timestamp: input.timestamp,
+    order_index: input.orderIndex,
     action_kind: "cdm_projection",
     confidence_after: input.row.riskLog10,
     terminal_status: input.terminalStatus,
+    temporal_order_quality: input.temporalOrderQuality,
     source_domain: input.sourceDomain,
     source_table: "esa_kelvins_cdm",
     source_pk: sourcePk,
@@ -2106,6 +2631,8 @@ function makeTemporalEvent(input: {
       }),
     ),
     metadata: {
+      order_index: input.orderIndex ?? null,
+      temporal_order_quality: input.temporalOrderQuality ?? null,
       mission_id: input.row.missionId,
       time_to_tca_days: input.row.timeToTcaDays,
       object_type: input.row.objectType,

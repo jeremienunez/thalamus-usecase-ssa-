@@ -98,6 +98,66 @@ describe("TemporalPatternReviewService", () => {
     expect(applyReview).not.toHaveBeenCalled();
   });
 
+  it("rejects acceptance for singletons and non-incremental sequences", async () => {
+    const singleton = buildService({
+      target: reviewTarget({
+        hypothesis: hypothesis({
+          containsSingletonOnly: true,
+          sequenceLiftOverBestComponent: 0.4,
+        }),
+      }),
+    });
+
+    await expect(
+      singleton.service.reviewPattern({ patternId: 123n, status: "accepted" }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: "accepting temporal pattern requires a sequence length greater than one",
+    });
+
+    const noLift = buildService({
+      target: reviewTarget({
+        hypothesis: hypothesis({ sequenceLiftOverBestComponent: 0 }),
+      }),
+    });
+
+    await expect(
+      noLift.service.reviewPattern({ patternId: 123n, status: "accepted" }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message:
+        "accepting temporal pattern requires lift over its strongest component",
+    });
+  });
+
+  it("rejects acceptance for target proxies and synthetic order", async () => {
+    const targetProxy = buildService({
+      target: reviewTarget({
+        hypothesis: hypothesis({ containsTargetProxy: true }),
+      }),
+    });
+
+    await expect(
+      targetProxy.service.reviewPattern({ patternId: 123n, status: "accepted" }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: "accepting temporal pattern requires target-proxy-free evidence",
+    });
+
+    const synthetic = buildService({
+      target: reviewTarget({
+        hypothesis: hypothesis({ temporalOrderQuality: "synthetic_ordered" }),
+      }),
+    });
+
+    await expect(
+      synthetic.service.reviewPattern({ patternId: 123n, status: "accepted" }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: "accepting temporal pattern requires non-synthetic temporal order",
+    });
+  });
+
   it("returns 404 when the pattern is unknown", async () => {
     const { service, applyReview } = buildService({ target: null });
 
@@ -183,7 +243,17 @@ function hypothesis(
     supportCount: 8,
     negativeSupportCount: 1,
     baselineRate: 0.2,
+    patternRate: 0.89,
     lift: 2.1,
+    bestComponentSignature: "review.missing_relative_velocity|review|none|none",
+    bestComponentRate: 0.4,
+    sequenceLiftOverBestComponent: 0.49,
+    leadTimeMsAvg: 300_000,
+    leadTimeMsP50: 240_000,
+    leadTimeMsP95: 600_000,
+    temporalOrderQuality: "real_time_ordered",
+    containsTargetProxy: false,
+    containsSingletonOnly: false,
     scoreComponentsJson: {
       temporal_weight: 0.9,
       support_factor: 1,

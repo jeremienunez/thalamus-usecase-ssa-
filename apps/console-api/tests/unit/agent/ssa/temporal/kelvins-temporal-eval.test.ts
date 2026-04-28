@@ -300,6 +300,8 @@ describe("Kelvins temporal evaluation projection", () => {
         "risk_increase_rule",
         "covariance_rule",
         "frequency_single_event",
+        "prefixspan_no_decay",
+        "timestamp_shuffled_thl",
       ],
     });
     expect(report.trainPatternCount).toBeGreaterThan(0);
@@ -310,7 +312,17 @@ describe("Kelvins temporal evaluation projection", () => {
       "risk_increase_rule",
       "covariance_rule",
       "frequency_single_event",
+      "prefixspan_no_decay",
+      "timestamp_shuffled_thl",
     ]);
+    expect(
+      report.baselineReports.find((baseline) => baseline.name === "prefixspan_no_decay")
+        ?.testPredictions,
+    ).toHaveLength(report.manifest.splitCounts.test.eventIds);
+    expect(
+      report.baselineReports.find((baseline) => baseline.name === "timestamp_shuffled_thl")
+        ?.testPredictions,
+    ).toHaveLength(report.manifest.splitCounts.test.eventIds);
     expect(["survived", "falsified", "inconclusive"]).toContain(
       report.popperVerdict.status,
     );

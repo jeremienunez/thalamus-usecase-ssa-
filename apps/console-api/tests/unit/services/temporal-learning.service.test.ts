@@ -81,7 +81,7 @@ describe("TemporalLearningService", () => {
       pattern_version: params.pattern_version,
       source_domain: "simulation",
       terminal_status: "timeout",
-      status: "reviewable",
+      status: "candidate",
       support_count: 2,
       hypothesis: true,
       decisionAuthority: false,

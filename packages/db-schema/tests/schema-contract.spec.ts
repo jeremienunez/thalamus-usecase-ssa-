@@ -208,6 +208,9 @@ describe("SPEC-DB-001 AC-3 — notNull columns are non-nullable in $inferSelect"
     expect(temporalPatternHypothesis.patternScore.notNull).toBe(true);
     expect(temporalPatternHypothesis.supportCount.notNull).toBe(true);
     expect(temporalPatternHypothesis.negativeSupportCount.notNull).toBe(true);
+    expect(temporalPatternHypothesis.temporalOrderQuality.notNull).toBe(true);
+    expect(temporalPatternHypothesis.containsTargetProxy.notNull).toBe(true);
+    expect(temporalPatternHypothesis.containsSingletonOnly.notNull).toBe(true);
     expect(temporalPatternHypothesis.scoreComponentsJson.notNull).toBe(true);
   });
 

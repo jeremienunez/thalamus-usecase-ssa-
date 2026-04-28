@@ -8,6 +8,7 @@ import {
   loadKelvinsRowsFromCsv,
   runKelvinsBlindTemporalExperiment,
 } from "../apps/console-api/src/agent/ssa/temporal/kelvins-temporal-eval";
+import { createConsoleEtaReporter } from "./eval-telemetry";
 import type { STDPParams } from "@interview/temporal";
 
 const DEFAULT_ZIP_PATH =
@@ -37,6 +38,7 @@ interface CliOptions {
   maxCandidatePatterns: number;
   experimentVariant: "default" | "risk_features_removed" | "physics_only";
   generatedAt: string;
+  progress: boolean;
 }
 
 async function main(): Promise<void> {
@@ -56,6 +58,7 @@ async function main(): Promise<void> {
     maxCandidatePatterns: options.maxCandidatePatterns,
     experimentVariant: options.experimentVariant,
     generatedAt: options.generatedAt,
+    progress: createConsoleEtaReporter({ enabled: options.progress }),
     sourceArtifactHash: source.sourceArtifactHash,
     sourceArtifactDescription: source.sourceArtifactDescription,
     evalCommand: buildEvalCommand(),
@@ -94,6 +97,11 @@ async function main(): Promise<void> {
           testMetrics: baseline.testMetrics,
           selectedScoreThreshold: baseline.selectedScoreThreshold,
           selectedEventSignatures: baseline.selectedEventSignatures?.slice(0, 10),
+          selectedEpisodeSignatures: baseline.selectedEpisodeSignatures?.slice(
+            0,
+            10,
+          ),
+          selectedPatternIds: baseline.selectedPatternIds?.slice(0, 10),
         })),
         popperVerdict: report.popperVerdict,
         selectedPatterns: report.selectedPatterns.slice(0, 10).map((pattern) => ({
@@ -101,7 +109,18 @@ async function main(): Promise<void> {
           score: pattern.pattern_score,
           support: pattern.support_count,
           negativeSupport: pattern.negative_support_count,
+          patternRate: pattern.pattern_rate,
           lift: pattern.lift,
+          bestComponentSignature: pattern.best_component_signature,
+          bestComponentRate: pattern.best_component_rate,
+          sequenceLiftOverBestComponent:
+            pattern.sequence_lift_over_best_component,
+          leadTimeMsAvg: pattern.lead_time_ms_avg,
+          leadTimeMsP50: pattern.lead_time_ms_p50,
+          leadTimeMsP95: pattern.lead_time_ms_p95,
+          temporalOrderQuality: pattern.temporal_order_quality,
+          containsTargetProxy: pattern.contains_target_proxy,
+          containsSingletonOnly: pattern.contains_singleton_only,
           sequence: pattern.sequence.map((step) => step.event_signature),
         })),
         hypothesisOnly: report.hypothesisOnly,
@@ -124,6 +143,7 @@ function parseArgs(args: string[]): CliOptions {
     maxCandidatePatterns: 50,
     experimentVariant: "default",
     generatedAt: new Date().toISOString(),
+    progress: true,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -185,6 +205,8 @@ function parseArgs(args: string[]): CliOptions {
     } else if (arg === "--generated-at" && value) {
       options.generatedAt = value;
       index += 1;
+    } else if (arg === "--no-progress") {
+      options.progress = false;
     } else if (arg === "--help") {
       printHelp();
       process.exit(0);
@@ -275,6 +297,7 @@ Options:
   --max-candidate-patterns <n>    Max train patterns considered by validation, default 50.
   --experiment <name>             default, risk_features_removed, or physics_only.
   --generated-at <iso>            Freeze manifest timestamp for reproducibility.
+  --no-progress                   Disable ETA/progress telemetry on stderr.
 `);
 }
 
