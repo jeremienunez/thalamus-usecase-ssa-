@@ -185,6 +185,7 @@ import { TemporalEventRepository } from "./repositories/temporal-event.repositor
 import { TemporalLearningRunRepository } from "./repositories/temporal-learning-run.repository";
 import { TemporalPatternRepository } from "./repositories/temporal-pattern.repository";
 import { TemporalProjectionRunRepository } from "./repositories/temporal-projection-run.repository";
+import { TemporalSeededRunRepository } from "./repositories/temporal-seeded-run.repository";
 import { SimAgentService } from "./services/sim-agent.service";
 import { SimGodChannelService } from "./services/sim-god-channel.service";
 import { SimTargetService } from "./services/sim-target.service";
@@ -223,6 +224,7 @@ import { snapshotHealth, type HealthSnapshot } from "./infra/health-snapshot";
 export function buildTemporalRouteServices(db: NodePgDatabase<typeof schema>): {
   memory: TemporalMemoryService;
   shadow: TemporalShadowRunService;
+  seededRun: TemporalSeededRunRepository;
 } {
   const simRunRepo = new SimRunRepository(db);
   const reviewEvidenceRepo = new SimReviewEvidenceRepository(db);
@@ -230,6 +232,7 @@ export function buildTemporalRouteServices(db: NodePgDatabase<typeof schema>): {
   const temporalLearningRunRepo = new TemporalLearningRunRepository(db);
   const temporalPatternRepo = new TemporalPatternRepository(db);
   const temporalProjectionRunRepo = new TemporalProjectionRunRepository(db);
+  const temporalSeededRunRepo = new TemporalSeededRunRepository(db);
   const projection = new TemporalProjectionService({
     projectionRunRepo: temporalProjectionRunRepo,
     eventRepo: temporalEventRepo,
@@ -245,6 +248,7 @@ export function buildTemporalRouteServices(db: NodePgDatabase<typeof schema>): {
   return {
     memory: new TemporalMemoryService({ patternRepo: temporalPatternRepo }),
     shadow: new TemporalShadowRunService({ projection, learning }),
+    seededRun: temporalSeededRunRepo,
   };
 }
 
@@ -646,6 +650,7 @@ export async function buildContainer(
     simRunRepo,
     simAgentRepo,
     simTurnRepo,
+    temporal.seededRun,
   );
   const simAgentService = new SimAgentService(simAgentRepo);
   const simSwarmService = new SimSwarmService(simSwarmRepo, simRunRepo);

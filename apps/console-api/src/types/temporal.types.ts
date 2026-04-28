@@ -2,6 +2,7 @@ import type {
   TemporalPatternExample,
   TemporalLearningStatus,
   TemporalPatternHypothesis,
+  TemporalPatternSeededRun,
   TemporalPatternStep,
   TemporalPatternStatus,
   TemporalProjectionStatus,
@@ -171,3 +172,11 @@ export interface TemporalShadowRunSummary {
 }
 
 export type TemporalPatternHypothesisRow = TemporalPatternHypothesis;
+export type TemporalPatternSeededRunRow = TemporalPatternSeededRun;
+
+export interface InsertTemporalPatternSeededRunInput {
+  patternId: bigint;
+  simRunId: bigint;
+  seedReason: string;
+  sourceDomain: Exclude<TemporalSourceDomain, "production" | "mixed">;
+}
